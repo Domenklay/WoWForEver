@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t('html_title', server=server_name) }}</title>
+  <meta name="description" content="{{ t('meta_description', server=server_name) }}">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true">
+    <div class="bg scene-1"></div>
+    <div class="bg scene-2"></div>
+    <div class="bg scene-3"></div>
+    <div class="shade"></div>
+  </div>
+
+  <header class="topbar">
+    <a href="/" class="top-logo"><strong>FOREVER</strong><small>WoW 1.60 private server</small></a>
+    <nav>
+      <a href="#compte">{{ t('nav_account') }}</a>
+      <a href="#jouer">{{ t('nav_play') }}</a>
+      <a href="#nouveautes">{{ t('nav_news') }}</a>
+    </nav>
+    <div class="langs" aria-label="Language">
+      {% for code, name in languages.items() %}<a href="?lang={{ code }}"{% if code == lang %} class="on" aria-current="true"{% endif %} hreflang="{{ code }}">{{ name }}</a>{% endfor %}
+    </div>
+    <div class="status" id="status" data-online="{{ 'yes' if status and status.online else ('no' if status else 'unknown') }}">
+      <span class="dot"></span>
+      <span id="status-text">
+        {% if status is none %}{{ t('status_unknown') }}
+        {% elif status.online %}{{ t('status_online') }}{% if status.players is not none %} · {{ t('players_one' if status.players == 1 else 'players_many', n=status.players) }}{% endif %}
+        {% else %}{{ t('status_offline') }}{% endif %}
+      </span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" id="compte">
+      <div class="pitch">
+        <span class="label">{{ t('pitch_label') }}</span>
+        <h1>{{ t('pitch_title', server=server_name) }}</h1>
+        <p>{{ t('pitch_text', version=game_version) }}</p>
+        <div class="cta">
+          <a class="btn primary big" id="download-main" href="#jouer" hidden>{{ t('download_launcher') }}</a>
+          <a class="btn outline" href="#jouer">{{ t('how_to_play') }}</a>
+        </div>
+      </div>
+
+      <div class="card signup" aria-labelledby="signup-title">
+        {% if created %}
+          <div class="success">
+            <h2 id="signup-title">{{ t('created_title') }}</h2>
+            <p>{{ t('created_text', email=created) }}</p>
+            <a class="btn primary" href="#jouer">{{ t('download_launcher') }}</a>
+            <a class="link" href="/">{{ t('another_account') }}</a>
+          </div>
+        {% else %}
+          <h2 id="signup-title">{{ t('signup_title') }}</h2>
+          <p class="muted">{{ t('signup_hint') }}</p>
+          {% if error %}<p class="alert" role="alert">{{ t(error) }}</p>{% endif %}
+          <form method="post" action="/register" autocomplete="on">
+            <label>{{ t('email') }}
+              <input type="email" name="email" required maxlength="320" autocomplete="email"
+                     value="{{ form.email if form else '' }}" placeholder="{{ t('email_placeholder') }}">
+            </label>
+            <label>{{ t('password') }}
+              <input type="password" name="password" required minlength="8" maxlength="64"
+                     pattern="[\x21-\x7E]{8,64}" autocomplete="new-password"
+                     title="{{ t('password_rule') }}">
+            </label>
+            <label>{{ t('confirm') }}
+              <input type="password" name="confirm" required minlength="8" maxlength="64" autocomplete="new-password">
+            </label>
+            <label class="hp" aria-hidden="true">Site web <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+            <button class="btn primary big" type="submit">{{ t('signup_button') }}</button>
+            <p class="hint">{{ t('signup_note') }}</p>
+          </form>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="block" id="jouer" aria-labelledby="play-title">
+      <span class="label">{{ t('steps_label') }}</span>
+      <h2 id="play-title">{{ t('how_to_play') }}</h2>
+      <ol class="steps">
+        <li class="card">
+          <span class="num">1</span>
+          <h3>{{ t('step1_title') }}</h3>
+          <p>{{ t('step1_text', version=game_version) }}</p>
+        </li>
+        <li class="card">
+          <span class="num">2</span>
+          <h3>{{ t('step2_title') }}</h3>
+          <p>{{ t('step2_text') }}</p>
+          <div class="downloads" id="downloads">
+            {% for d in downloads %}
+              {% if d.available %}<a class="btn small os" data-os="{{ d.id }}" href="/download/{{ d.id }}"><img src="/static/img/os-{{ d.id }}.svg" alt="" width="16" height="16">{{ d.name }}</a>
+              {% else %}<span class="btn small os disabled" data-os="{{ d.id }}" title="{{ t('soon') }}"><img src="/static/img/os-{{ d.id }}.svg" alt="" width="16" height="16">{{ d.name }} · {{ t('soon') }}</span>{% endif %}
+            {% endfor %}
+          </div>
+        </li>
+        <li class="card">
+          <span class="num">3</span>
+          <h3>{{ t('step3_title') }}</h3>
+          <p>{{ t('step3_text') }}</p>
+        </li>
+      </ol>
+      <div class="mac-note card" id="mac-note">
+        <p>{{ t('mac_note') }}</p>
+        <div class="cmd">
+          <code id="mac-cmd">xattr -cr "/Applications/Forever Launcher.app"</code>
+          <button class="btn small" type="button" id="copy-mac">{{ t('copy') }}</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="nouveautes" aria-labelledby="news-title">
+      <span class="label">{{ t('news_label') }}</span>
+      <h2 id="news-title">{{ t('nav_news') }}</h2>
+      <div class="news">
+        <article class="news-card">
+          <div class="thumb">F</div>
+          <div class="body"><span class="tag">{{ t('news1_tag') }}</span><strong>{{ t('news1', server=server_name) }}</strong></div>
+        </article>
+        <article class="news-card">
+          <div class="thumb">F</div>
+          <div class="body"><span class="tag">{{ t('news2_tag') }}</span><strong>{{ t('news2') }}</strong></div>
+        </article>
+        <article class="news-card">
+          <div class="thumb">F</div>
+          <div class="body"><span class="tag">{{ t('news3_tag') }}</span><strong>{{ t('news3') }}</strong></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer>{{ t('footer') }}</footer>
+
+  <script>
+    // background slideshow, and the status pill refreshed every 30 s
+    (function () {
+      const T = {{ js_texts|tojson }};
+      const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, k) => values[k]);
+      const slides = [...document.querySelectorAll('.backdrop .bg')];
+      let current = Math.floor(Math.random() * slides.length);
+      slides[current].classList.add('on');
+      setInterval(() => {
+        slides[current].classList.remove('on');
+        current = (current + 1) % slides.length;
+        slides[current].classList.add('on');
+      }, 20000);
+
+      // download button for the visitor's system (the other systems stay listed in the steps)
+      const ua = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent;
+      const os = /win/i.test(ua) ? 'windows' : /mac|iphone|ipad/i.test(ua) ? 'macos' : /linux|x11/i.test(ua) && !/android/i.test(navigator.userAgent) ? 'linux' : null;
+      const mine = os && document.querySelector(`#downloads a[data-os="${os}"]`);
+      if (mine) {
+        const main = document.getElementById('download-main');
+        const icon = mine.querySelector('img').cloneNode();
+        icon.width = icon.height = 20;
+        main.href = mine.href;
+        main.classList.add('os');
+        main.replaceChildren(icon, fill(T.download_for, { os: mine.textContent.trim() }));
+        main.hidden = false;
+        mine.classList.add('primary');
+      }
+
+      if (os === 'macos') document.getElementById('mac-note').classList.add('mine');
+      document.getElementById('copy-mac').addEventListener('click', async (ev) => {
+        try {
+          await navigator.clipboard.writeText(document.getElementById('mac-cmd').textContent);
+          ev.target.textContent = T.copied;
+          setTimeout(() => (ev.target.textContent = T.copy), 2000);
+        } catch (e) { /* clipboard blocked: the command stays selectable */ }
+      });
+
+      const pill = document.getElementById('status'), text = document.getElementById('status-text');
+      async function refresh() {
+        try {
+          const s = await (await fetch('/api/status', {cache: 'no-store'})).json();
+          pill.dataset.online = s.online ? 'yes' : 'no';
+          text.textContent = s.online
+            ? T.status_online + (s.players == null ? '' : ' · ' + fill(s.players === 1 ? T.players_one : T.players_many, { n: s.players }))
+            : T.status_offline;
+        } catch (e) { /* keep the last state */ }
+      }
+      if (pill.dataset.online === 'unknown') refresh();
+      setInterval(refresh, 30000);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# Copy to bnetserver.conf (same folder): each "Key = Value" line is applied to the generated bnetserver.conf.
+# WrongPass.MaxCount = 5

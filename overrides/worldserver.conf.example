@@ -1,0 +1,5 @@
+# Copy to worldserver.conf (same folder): each "Key = Value" line replaces
+# the value generated in worldserver.conf when the container starts.
+# Rate.XP.Kill = 2
+# Rate.Drop.Money = 2
+# GM.StartLevel = 1

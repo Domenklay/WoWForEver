@@ -1,0 +1,12 @@
+.env
+data/*
+!data/.gitkeep
+certs/*
+!certs/.gitkeep
+downloads/*
+!downloads/.gitkeep
+overrides/*.conf
+!overrides/*.example
+backups/
+__pycache__/
+*.pyc
