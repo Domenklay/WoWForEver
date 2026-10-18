@@ -7,13 +7,12 @@ I made it to play the free beta with my friends. It is built on the
 [`forever` branch of TrinityCore](https://github.com/advocaite/TrinityCore/tree/forever), packaged with Docker, plus
 a few fixes of my own found with packet logs.
 
-![Launcher](docs/screenshots/launcher.png)
+![In game](docs/screenshots/game.jpg)
 
-<!-- in-game screenshot: docs/screenshots/game.png -->
-
-| Website | Launcher login |
+| Launcher | Website |
 |---|---|
-| ![Website](docs/screenshots/website.png) | ![Launcher login](docs/screenshots/launcher-login.png) |
+| ![Launcher](docs/screenshots/launcher.png) | ![Website](docs/screenshots/website.png) |
+| ![Launcher login](docs/screenshots/launcher-login.png) | ![Character selection](docs/screenshots/game-characters.jpg) |
 
 ## How it works
 
@@ -31,8 +30,9 @@ or browser language.
 **Requirements on the player side**: the game client in exactly build **1.60.1.70450** (World of Warcraft Forever
 beta, installed with Battle.net). Another build will not connect.
 
-**No Blizzard assets**: this repository contains no game client, data, artwork or logo. The launcher and the website
-use neutral visuals drawn in CSS. The game data the server needs is extracted from your own client.
+**No Blizzard assets**: this repository contains no game client, game data, artwork or logo (only screenshots of the
+game running on this server). The launcher and the website use neutral visuals drawn in CSS. The game data the
+server needs is extracted from your own client.
 
 ## Run the server
 
