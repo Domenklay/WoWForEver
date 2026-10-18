@@ -1,11 +1,32 @@
 name: Launcher
 
-# Needs app/src-tauri/resources/forever_root_ca.crt (your server's CA) in the repository.
-# Run it by hand (Actions tab), or push a v* tag (e.g. v1.0.0) to also publish a GitHub release with the three builds.
+# Builds the launcher for your server on Windows, Linux and macOS and publishes them in a GitHub release.
+#
+# Settings > Secrets and variables > Actions > Variables (repository variables, not secrets):
+#   FOREVER_CA_CERT         required: the text of certs/ca/forever_root_ca.crt (public certificate, never the .key)
+#   FOREVER_SERVER_ADDRESS  required: public IP or DNS name of the server
+#   FOREVER_WEBSITE         optional: https://... (sign-up link and news in the launcher)
+#   FOREVER_SERVER_NAME     optional: realm name shown in the launcher (default Forever)
+#
+# Actions > Launcher > Run workflow, with a version (e.g. 1.0.0) to publish the release v1.0.0; without a version
+# the builds are only kept as run artifacts. Pushing a v* tag publishes a release too.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 1.0.0); empty = build only"
+        required: false
+        default: ""
   push:
     tags: ["v*"]
+
+env:
+  FOREVER_CA_CERT: ${{ vars.FOREVER_CA_CERT }}
+  FOREVER_SERVER_ADDRESS: ${{ vars.FOREVER_SERVER_ADDRESS }}
+  FOREVER_WEBSITE: ${{ vars.FOREVER_WEBSITE }}
+  FOREVER_SERVER_NAME: ${{ vars.FOREVER_SERVER_NAME }}
+  # release version: the typed one, else the tag without its v
+  VERSION: ${{ inputs.version || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || '' }}
 
 jobs:
   build:
@@ -32,6 +53,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check the repository variables
+        shell: bash
+        run: |
+          if [ -z "$FOREVER_CA_CERT" ] && [ ! -f app/src-tauri/resources/forever_root_ca.crt ]; then
+            echo "::error::Set the FOREVER_CA_CERT repository variable (text of certs/ca/forever_root_ca.crt)"; exit 1
+          fi
+          if [ -z "$FOREVER_SERVER_ADDRESS" ]; then
+            echo "::warning::FOREVER_SERVER_ADDRESS is not set: the launcher will point to 127.0.0.1"
+          fi
+
       - name: Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -56,7 +87,12 @@ jobs:
 
       - name: Build
         working-directory: app
-        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+        run: |
+          version="${VERSION#v}"
+          config=()
+          [ -n "$version" ] && config=(--config "{\"version\":\"$version\"}")
+          npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }} "${config[@]}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -65,7 +101,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: inputs.version != '' || startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -76,9 +112,17 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Release tag
+        shell: bash
+        run: |
+          v="${VERSION#v}"
+          echo "TAG=v$v" >> "$GITHUB_ENV"
+
       - uses: softprops/action-gh-release@v2
         with:
-          name: Forever Launcher ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Forever Launcher ${{ env.TAG }}
           generate_release_notes: true
           files: dist/*
           fail_on_unmatched_files: true

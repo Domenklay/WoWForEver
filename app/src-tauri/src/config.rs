@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 /// Public half of the Ed25519 key built into stock TrinityCore (used by the forever branch too).
 pub const STOCK_PUBLIC_KEY: &str = "02596F0D0C061A8B30745988FD72C59E29EC367FB0F341F28E0F08D037BAFC69";
 /// Public certificate of the server's private CA (never the key).
-pub const CA_PEM: &str = include_str!("../resources/forever_root_ca.crt");
+pub const CA_PEM: &str = include_str!(concat!(env!("OUT_DIR"), "/forever_root_ca.crt"));
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -24,20 +24,25 @@ pub struct Server {
     pub website: String,
 }
 
-/// Your server: set `address` (public IP or DNS name) and `website` before building the launcher for your players.
+/// A build-time setting (FOREVER_SERVER_ADDRESS...), set by GitHub Actions from the repository variables.
+fn built_in(value: Option<&'static str>, default: &str) -> String {
+    value.filter(|v| !v.trim().is_empty()).unwrap_or(default).trim().to_string()
+}
+
+/// Your server, from the FOREVER_SERVER_NAME / FOREVER_SERVER_ADDRESS / FOREVER_WEBSITE variables at build time.
 /// Players can still change them in Settings > Server (advanced).
 impl Default for Server {
     fn default() -> Self {
         Self {
-            name: "Forever".into(),
+            name: built_in(option_env!("FOREVER_SERVER_NAME"), "Forever"),
             portal: "trinity.actual.battle.net".into(),
-            address: "127.0.0.1".into(),
+            address: built_in(option_env!("FOREVER_SERVER_ADDRESS"), "127.0.0.1"),
             bnet_port: 1119,
             rest_port: 8081,
             world_port: 8085,
             public_key: STOCK_PUBLIC_KEY.into(),
             region_group: 8,
-            website: String::new(),
+            website: built_in(option_env!("FOREVER_WEBSITE"), ""),
         }
     }
 }

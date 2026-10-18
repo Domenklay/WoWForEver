@@ -80,22 +80,33 @@ docker compose attach worldserver   # leave with Ctrl+P, Ctrl+Q
 bnetaccount create mail@example.com Password
 ```
 
-## Build the launcher for your server
+## Publish the launcher for your server
 
-The launcher is a [Tauri](https://tauri.app) app in `app/` (Rust + HTML/CSS/JS). It is tied to your server:
+The launcher is a [Tauri](https://tauri.app) app in `app/` (Rust + HTML/CSS/JS). It holds your server's address
+and certificate, so each server publishes its own build. GitHub does it for you, no code to edit:
 
-1. Copy your CA certificate: `cp certs/ca/forever_root_ca.crt app/src-tauri/resources/` (the public `.crt`, never the
-   `.key`). The build stops if it is missing.
-2. Set your server in `app/src-tauri/src/config.rs` (`Server::default`): `address` (public IP or DNS name) and
-   `website`. Players can also change them in Settings > Server (advanced).
-3. Build:
-   - **GitHub Actions** (`.github/workflows/launcher.yml`, in your fork with your certificate committed): run it from
-     the Actions tab, or push a tag like `v1.0.0` to publish a release with the Windows installer, the Linux
-     AppImage and the macOS dmg.
-   - **By hand**: `cd app && npx @tauri-apps/cli@2 build` (Linux needs `libwebkit2gtk-4.1-dev`).
+1. **Fork** this repository on GitHub, then open the **Actions** tab of your fork and enable the workflows
+   (GitHub turns them off on forks).
+2. In your fork, **Settings > Secrets and variables > Actions > Variables**, add these repository variables:
 
-To offer the launchers on the website, see the download settings in `.env.example` (direct links, a `downloads`
-folder, or your latest GitHub release).
+   | Variable | Value |
+   |---|---|
+   | `FOREVER_CA_CERT` | the whole text of `certs/ca/forever_root_ca.crt` (the public certificate, **never** the `.key`) |
+   | `FOREVER_SERVER_ADDRESS` | public IP or DNS name of your server (`PUBLIC_ADDRESS` in `.env`) |
+   | `FOREVER_WEBSITE` | optional, `https://...` of your website (sign-up link and news in the launcher) |
+   | `FOREVER_SERVER_NAME` | optional, realm name shown in the launcher (default `Forever`) |
+
+3. **Actions > Launcher > Run workflow**, type a version (e.g. `1.0.0`) and run. About 15 minutes later the
+   release **v1.0.0** holds the Windows installer, the Linux AppImage and the macOS dmg. (Pushing a `v*` tag works
+   too; without a version, the builds are only kept on the run page.)
+4. Point your website at it: `LAUNCHER_REPO=<you>/<fork>` in `.env` (plus `GITHUB_TOKEN` if the fork is private).
+   The website then offers each visitor the right file. Other options in `.env.example`.
+
+Players can still change the server in Settings > Server (advanced).
+
+**Building by hand**: set the same variables in your shell (or copy the certificate to
+`app/src-tauri/resources/forever_root_ca.crt`), then `cd app && npx @tauri-apps/cli@2 build`
+(Linux needs `libwebkit2gtk-4.1-dev`).
 
 The macOS launcher works differently because of Apple's protections: [docs/MACOS.md](docs/MACOS.md). It is not
 signed by Apple, so players run `xattr -cr "/Applications/Forever Launcher.app"` once.
@@ -107,6 +118,7 @@ signed by Apple, so players run `xattr -cr "/Applications/Forever Launcher.app"`
 - **Config overrides**: `Key = Value` lines in `overrides/worldserver.conf` or `overrides/bnetserver.conf`.
 - **Update**: `docker compose build --no-cache && docker compose up -d`; new SQL updates are applied on start.
   If the branch merges one of the patches, the build stops at that patch: delete it.
+- **Using an AI assistant**: [AGENTS.md](AGENTS.md) explains the project and the steps to it.
 - **Newer game client**: set `CLIENT_BUILD` in `.env` to the new build number (experimental until the branch
   supports it).
 
