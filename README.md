@@ -49,7 +49,18 @@ docker compose up -d
 docker compose logs -f worldserver # the first start imports the database (a few minutes)
 ```
 
-Open **TCP 1119, 8081 and 8085** to the players. Never expose MySQL (3306) or SOAP (7878).
+### Ports
+
+Forward these ports to the server on your router / firewall (**TCP only**, no UDP needed):
+
+| Port | Service | What for |
+|---|---|---|
+| 1119 | bnetserver | Battle.net login (TLS) |
+| 8081 | bnetserver | login REST API (launcher login, game login ticket) |
+| 8085 | worldserver | the game itself, once in the realm |
+| 80, 443 | Traefik / Dokploy | the website (HTTP for Let's Encrypt, HTTPS), only if you publish it |
+
+Never expose MySQL (3306) or SOAP (7878): they stay on the internal Docker network.
 
 ### The website
 
