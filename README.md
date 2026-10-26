@@ -1,130 +1,269 @@
-# Forever
+# WoWForEver
 
-A ready-to-run private server for the **World of Warcraft Forever** beta, client build **1.60.1.70450**, with an
-account sign-up website and a launcher for Windows, Linux and macOS.
+Сервер **World of Warcraft Forever Beta** на основе
+[ветки forever проекта TrinityCore](https://github.com/advocaite/TrinityCore/tree/forever).
+В комплект входят Docker-конфигурация, MySQL, сервер авторизации, игровой сервер,
+сайт регистрации и исходники лаунчера для Windows, Linux и macOS.
 
-I made it to play the free beta with my friends. It is built on the
-[`forever` branch of TrinityCore](https://github.com/advocaite/TrinityCore/tree/forever), packaged with Docker, plus
-a few fixes of my own found with packet logs.
+Основа нашего репозитория — [jibay442/forever_docker](https://github.com/jibay442/forever_docker).
+История исходного проекта и лицензия сохранены.
 
-![In game](docs/screenshots/game.jpg)
+**Документированная сборка клиента: 1.60.1.70450.** У нас клиент **1.60.1.70532**:
+его совместимость пока не подтверждена. Настройка `CLIENT_BUILD=70532` только
+меняет записи версии в базе; она не исправляет различия протокола и игровых данных.
+Ни запуск сервера, ни подключение клиента 70532 в нашем окружении пока не проверены.
 
-| Launcher | Website |
+![Игра](docs/screenshots/game.jpg)
+
+| Лаунчер | Сайт |
 |---|---|
-| ![Launcher](docs/screenshots/launcher.png) | ![Website](docs/screenshots/website.png) |
-| ![Launcher login](docs/screenshots/launcher-login.png) | ![Character selection](docs/screenshots/game-characters.jpg) |
+| ![Главный экран](docs/screenshots/launcher.png) | ![Главная страница](docs/screenshots/website.png) |
+| ![Авторизация](docs/screenshots/launcher-login.png) | ![Выбор персонажа](docs/screenshots/game-characters.jpg) |
 
-## How it works
+## Как устроен проект
 
-1. **The server** runs in Docker: MySQL, `worldserver`, `bnetserver` (Battle.net login over TLS) and the website.
-2. **Players create their account on the website** (open sign-up, rate limited per IP). The website asks the
-   worldserver to create it, exactly like the `bnetaccount create` console command.
-3. **Players download the launcher** from the website, which offers the right file for their system. On first use
-   the launcher prepares the PC: it adds the server to the hosts file and trusts the server's certificate.
-4. **They log in once in the launcher and click Play**. The launcher remembers them for 30 days, logs them into
-   the game automatically and puts the server's key in the game client (in memory, the game files are not changed).
+1. Docker запускает MySQL, `worldserver`, `bnetserver` и сайт.
+2. Сайт создаёт учётные записи через SOAP игрового сервера. Регистрация ограничена по IP.
+3. Собственный лаунчер настраивает подключение: запись hosts, доверие к сертификату
+   нашего сервера и ключ клиента в памяти. Игровые файлы при этом не изменяются.
+4. Игрок входит через лаунчер и запускает игру. По описанию исходного проекта
+   лаунчер запоминает вход на 30 дней.
 
-The launcher and the website are in English, French, Spanish and Portuguese (Latin America), following the system
-or browser language.
+Сайт и лаунчер поддерживают английский, французский, испанский и португальский
+языки. Этот README переведён на русский; интерфейс приложения не переводился.
+Репозиторий не содержит клиента или игровых данных Blizzard: нужные серверу
+данные извлекаются из собственного клиента.
 
-**Requirements on the player side**: the game client in exactly build **1.60.1.70450** (World of Warcraft Forever
-beta, installed with Battle.net). Another build will not connect.
+## Требования
 
-**No Blizzard assets**: this repository contains no game client, game data, artwork or logo (only screenshots of the
-game running on this server). The launcher and the website use neutral visuals drawn in CSS. The game data the
-server needs is extracted from your own client.
+- Linux с Docker Engine и Docker Compose v2, Git и OpenSSL.
+- По оценке исходного проекта: 8 ГБ ОЗУ для сборки, 4 ГБ для работы и около
+  20 ГБ диска под сервер. Клиенту и временным файлам нужен дополнительный запас места.
+- Клиент нужной сборки с доступными ресурсами для извлечения карт.
+  Потоковая установка, которая лишь запускает игру, не гарантирует наличие всех ресурсов.
+- Интернет для загрузки контейнеров, исходников и серверной базы данных.
 
-## Run the server
+На Windows можно начать с Docker Desktop с Linux-контейнерами и WSL2 Ubuntu.
+Команды ниже выполняются в Linux/WSL, а не в PowerShell. Исходный проект
+документирует Linux; этот вариант запуска через WSL в нашем окружении не проверялся.
 
-You need a Linux server with **Docker** and Docker Compose, 8 GB of RAM to build (4 GB to run), about 20 GB of disk,
-and the game client (to extract its data).
+## Тестовый запуск на своём компьютере
 
-```sh
-git clone <this repository> forever && cd forever
-cp .env.example .env               # passwords, PUBLIC_ADDRESS (public IP or DNS name), WOW_DIR
-./scripts/gen-certs.sh             # your own CA + server certificate (never share certs/ca/forever_root_ca.key)
-docker compose build               # compiles TrinityCore, takes a while
-docker compose run --rm extractor  # extracts the game data from your client into ./data
+Для первой проверки не нужны домен, VPS и проброс портов на роутере.
+
+### 1. Получить проект
+
+```bash
+git clone https://github.com/Domenklay/WoWForEver.git
+cd WoWForEver
+cp .env.example .env
+```
+
+Если проект уже скачан, откройте его каталог и обновите его через `git pull --ff-only`.
+Не перезаписывайте существующий `.env`.
+
+### 2. Заполнить .env
+
+Задайте **собственные разные пароли** для `MYSQL_ROOT_PASSWORD`, `DB_PASSWORD`
+и `SOAP_PASSWORD`; не оставляйте `change-me-*`. По ограничениям исходного проекта
+не используйте в паролях одинарные и двойные кавычки. Файл `.env` не добавляется в Git.
+
+Остальные параметры для локального теста:
+
+```dotenv
+PUBLIC_ADDRESS=127.0.0.1
+REALM_LOCAL_ADDRESS=127.0.0.1
+CLIENT_BUILD=70450
+BUILD_JOBS=2
+WOW_DIR=/mnt/e
+EXTRACT_MMAPS=0
+MMAP_PATHFINDING=0
+LAUNCHER_REPO=Domenklay/WoWForEver
+```
+
+`WOW_DIR=/mnt/e` подходит **только если** в корне диска E: действительно находятся
+`Data`, `.build.info` и `_classic_beta_`. Если клиент лежит в другой папке,
+укажите её путь в Linux. Нельзя указывать только каталог `_classic_beta_`.
+Например, `E:/Games/World of Warcraft` в WSL будет `/mnt/e/Games/World of Warcraft`.
+
+Укажите `HOST_UID` и `HOST_GID` согласно выводу `id -u` и `id -g` в Linux/WSL,
+чтобы extractor мог писать в `data/`.
+
+Для нашего клиента **70532** значение `CLIENT_BUILD=70532` допустимо только как
+экспериментальная попытка подключения. Сборка 70450 — исходная документированная
+цель; подмена числа не делает клиент 70532 совместимым с ней.
+
+Проверьте окружение и каталог клиента:
+
+```bash
+docker version
+docker compose version
+ls -la /mnt/e/.build.info /mnt/e/Data
+```
+
+Замените `/mnt/e` своим путём. Извлечение ресурсов требует больше данных, чем
+минимальная потоковая установка клиента; при отсутствующих ресурсах сначала
+завершите установку/проверку собственного клиента.
+
+### 3. Создать сертификаты, собрать сервер, извлечь данные
+
+```bash
+./scripts/gen-certs.sh
+docker compose config -q
+docker compose build
+docker compose run --rm extractor
+```
+
+Сборка TrinityCore занимает время. `BUILD_JOBS=2` уменьшает расход памяти;
+исходная оценка — около 2 ГБ ОЗУ на процесс компиляции крупных файлов.
+
+Extractor должен завершиться успешно и создать в `data/` каталоги `dbc`, `gt`,
+`cameras`, `maps`, `vmaps`. Для отключённого поиска пути `mmaps` не нужны.
+При ошибке извлечения не переходите к запуску: сохраните полный текст ошибки.
+
+Сертификаты создаются для нашего сервера. **Никому не передавайте**
+`certs/ca/forever_root_ca.key`, `certs/forever.key.pem` и `.env`.
+Публичный `certs/ca/forever_root_ca.crt` понадобится лаунчеру.
+
+### 4. Запустить и проверить сервер
+
+```bash
 docker compose up -d
-docker compose logs -f worldserver # the first start imports the database (a few minutes)
+docker compose ps
+docker compose logs -f worldserver bnetserver
 ```
 
-### Ports
+Первый запуск импортирует базу. Не перезапускайте сервер и не запускайте обновление
+во время этого импорта. `Ctrl+C` закрывает просмотр логов, но не останавливает контейнеры.
 
-Forward these ports to the server on your router / firewall (**TCP only**, no UDP needed):
+После завершения импорта проверьте сайт локально на порту 8088 и создайте тестовую
+учётную запись. Открытый сайт сам по себе не доказывает работоспособность игрового сервера.
+Если сайт ещё не может создать аккаунт, проверьте логи `worldserver` и `web`.
 
-| Port | Service | What for |
-|---|---|---|
-| 1119 | bnetserver | Battle.net login (TLS) |
-| 8081 | bnetserver | login REST API (launcher login, game login ticket) |
-| 8085 | worldserver | the game itself, once in the realm |
-| 80, 443 | Traefik / Dokploy | the website (HTTP for Let's Encrypt, HTTPS), only if you publish it |
+Альтернативный способ создать аккаунт — интерактивная консоль:
 
-Never expose MySQL (3306) or SOAP (7878): they stay on the internal Docker network.
-
-### The website
-
-It listens on `127.0.0.1:8088`. To publish it on a domain with HTTPS:
-
-- **Traefik**: set `SITE_DOMAIN` in `.env` (and the Traefik network/entrypoint/resolver names if yours differ), then
-  ```sh
-  docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
-  ```
-- **Dokploy** (what I use, it is simpler): Dokploy builds and runs the compose file from your repository and handles
-  the domain with its own Traefik. Step by step: [docs/DOKPLOY.md](docs/DOKPLOY.md).
-
-### Accounts from the console
-
-```sh
-docker compose attach worldserver   # leave with Ctrl+P, Ctrl+Q
-bnetaccount create mail@example.com Password
+```bash
+docker compose attach worldserver
 ```
 
-## Publish the launcher for your server
+В консоли сервера выполните команду со своими тестовыми данными:
 
-The launcher is a [Tauri](https://tauri.app) app in `app/` (Rust + HTML/CSS/JS). It holds your server's address
-and certificate, so each server publishes its own build. GitHub does it for you, no code to edit:
+```text
+bnetaccount create mail@example.com YourUniqueTestPassword
+```
 
-1. **Fork** this repository on GitHub, then open the **Actions** tab of your fork and enable the workflows
-   (GitHub turns them off on forks).
-2. In your fork, **Settings > Secrets and variables > Actions > Variables**, add these repository variables:
+Отсоединиться от консоли без остановки сервера: **Ctrl+P, затем Ctrl+Q**.
 
-   | Variable | Value |
+### 5. Подготовить лаунчер именно для нашего сервера
+
+`LAUNCHER_REPO` сам по себе не создаёт установщик. Для сборки лаунчера:
+
+1. Откройте **Actions** нашего GitHub-репозитория и включите workflows, если требуется.
+2. В **Settings → Secrets and variables → Actions → Variables** добавьте:
+
+   | Переменная | Значение |
    |---|---|
-   | `FOREVER_CA_CERT` | the whole text of `certs/ca/forever_root_ca.crt` (the public certificate, **never** the `.key`) |
-   | `FOREVER_SERVER_ADDRESS` | public IP or DNS name of your server (`PUBLIC_ADDRESS` in `.env`) |
-   | `FOREVER_WEBSITE` | optional, `https://...` of your website (sign-up link and news in the launcher) |
-   | `FOREVER_SERVER_NAME` | optional, realm name shown in the launcher (default `Forever`) |
+   | `FOREVER_CA_CERT` | Полный текст публичного `certs/ca/forever_root_ca.crt`, не приватного ключа |
+   | `FOREVER_SERVER_ADDRESS` | `127.0.0.1` для теста на том же ПК |
+   | `FOREVER_SERVER_NAME` | Необязательно: имя сервера, например `WoWForEver` |
+   | `FOREVER_WEBSITE` | Необязательно: адрес сайта для игроков |
 
-3. **Actions > Launcher > Run workflow**, type a version (e.g. `1.0.0`) and run. About 15 minutes later the
-   release **v1.0.0** holds the Windows installer, the Linux AppImage and the macOS dmg. (Pushing a `v*` tag works
-   too; without a version, the builds are only kept on the run page.)
-4. Point your website at it: `LAUNCHER_REPO=<you>/<fork>` in `.env` (plus `GITHUB_TOKEN` if the fork is private).
-   The website then offers each visitor the right file. Other options in `.env.example`.
+3. В **Actions → Launcher → Run workflow** укажите версию, например `1.0.0`.
+4. После успешной сборки скачайте Windows-установщик из Releases. Сборка также
+   создаёт Linux AppImage и macOS dmg. Публикация тега `v*` тоже запускает workflow.
+5. Установите лаунчер нашего сервера, настройте путь к клиенту и проверьте подключение.
+   На первом запуске он настраивает hosts и доверие к нашему сертификату.
 
-Players can still change the server in Settings > Server (advanced).
+В исходном проекте лаунчер ориентирован на 70450. Не считаем его совместимым с
+70532 до отдельной проверки. Уже имеющийся **Burralis/Forever Beta Launcher**
+настроен на `logon.foreverwow.biz:1119`: запуск через него не доказывает подключение
+к нашему серверу. Поддержка собственного адреса, сертификата и сборки должна быть проверена отдельно.
 
-**Building by hand**: set the same variables in your shell (or copy the certificate to
-`app/src-tauri/resources/forever_root_ca.crt`), then `cd app && npx @tauri-apps/cli@2 build`
-(Linux needs `libwebkit2gtk-4.1-dev`).
+Проверка успеха: вход в свой аккаунт, список миров, создание персонажа, вход в мир,
+движение, взаимодействие с NPC и бой. При сбое сохраните ошибку клиента и логи:
 
-The macOS launcher works differently because of Apple's protections: [docs/MACOS.md](docs/MACOS.md). It is not
-signed by Apple, so players run `xattr -cr "/Applications/Forever Launcher.app"` once.
+```bash
+docker compose logs --tail=200 worldserver bnetserver web
+```
 
-## Good to know
+Перед передачей логов удалите из них пароли, токены и персональные данные.
 
-- **Fixes on top of the forever branch**: `docker/patches/` (friend list, party invites and names with surnames,
-  360 action bar slots for the gamepad bars), each described in [its README](docker/patches/README.md).
-- **Config overrides**: `Key = Value` lines in `overrides/worldserver.conf` or `overrides/bnetserver.conf`.
-- **Update**: `docker compose build --no-cache && docker compose up -d`; new SQL updates are applied on start.
-  If the branch merges one of the patches, the build stops at that patch: delete it.
-- **Using an AI assistant**: [AGENTS.md](AGENTS.md) explains the project and the steps to it.
-- **Newer game client**: set `CLIENT_BUILD` in `.env` to the new build number (experimental until the branch
-  supports it).
+### 6. Остановить тест
 
-## License
+```bash
+docker compose stop
+```
 
-GNU GPL v2.0 or later, like TrinityCore. See [LICENSE](LICENSE).
+Контейнеры можно снова запустить через `docker compose up -d`.
+`docker compose down` удаляет контейнеры и сеть, сохраняя именованный том MySQL.
+**Не используйте `docker compose down -v`, если хотите сохранить базу и персонажей.**
 
-Not affiliated with or endorsed by Blizzard Entertainment. World of Warcraft is a trademark of Blizzard
-Entertainment, Inc. You need your own access to the game.
+## Подключение из локальной сети или интернета
+
+Если сервер и игровой клиент находятся на разных ПК, `127.0.0.1` не подходит:
+укажите доступный адрес сервера в `PUBLIC_ADDRESS` и корректный локальный адрес
+в `REALM_LOCAL_ADDRESS`. Соберите лаунчер с тем же адресом.
+
+| TCP-порт | Служба | Назначение |
+|---|---|---|
+| 1119 | bnetserver | Авторизация Battle.net через TLS |
+| 8081 | bnetserver | REST API авторизации |
+| 8085 | worldserver | Игровое подключение |
+| 80, 443 | Traefik / Dokploy | Только для публикации сайта |
+
+Для доступа из интернета настройте firewall и проброс портов. MySQL (3306)
+и SOAP (7878) наружу не открывайте. Compose публикует игровые порты на всех
+интерфейсах по умолчанию; для личного теста ограничьте доступ локальным firewall.
+Сайт по умолчанию слушает только `127.0.0.1:8088`.
+
+Для сайта через Traefik задайте `SITE_DOMAIN` и нужные параметры Traefik:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
+```
+
+Развёртывание через Dokploy описано в [docs/DOKPLOY.md](docs/DOKPLOY.md)
+(исходная инструкция на английском).
+
+## Сборка лаунчера вручную и macOS
+
+Лаунчер написан на Tauri 2 (Rust + HTML/CSS/JS). Задайте те же переменные сборки,
+либо поместите публичный сертификат в `app/src-tauri/resources/forever_root_ca.crt`.
+Затем выполните:
+
+```bash
+cd app
+npx @tauri-apps/cli@2 build
+```
+
+На Linux требуется `libwebkit2gtk-4.1-dev` и остальные зависимости Tauri.
+Особенности macOS: [docs/MACOS.md](docs/MACOS.md). Приложение не подписано Apple;
+исходный проект предлагает после установки:
+
+```bash
+xattr -cr "/Applications/Forever Launcher.app"
+```
+
+## Настройка и обновление
+
+- Параметры ядра: строки `Key = Value` в `overrides/worldserver.conf`
+  и `overrides/bnetserver.conf`.
+- Дополнительные исправления: `docker/patches/`; описание —
+  [docker/patches/README.md](docker/patches/README.md).
+- Перед обновлением сохраните базу и конфигурацию. Затем:
+
+  ```bash
+  docker compose build --no-cache
+  docker compose up -d
+  ```
+
+  SQL-обновления применяются при запуске. Если сборка останавливается при применении
+  патча, проверьте, не включено ли исправление в upstream. Не удаляйте патч вслепую.
+- [План переноса контента из 3.3.5 и новых дополнений](docs/CUSTOMIZATION.ru.md).
+- [Инструкции для AI-ассистентов](AGENTS.md).
+
+## Лицензия
+
+GNU GPL v2.0 или более поздняя версия, как у TrinityCore. См. [LICENSE](LICENSE).
+Проект не связан с Blizzard Entertainment и не одобрен ею. World of Warcraft —
+товарный знак Blizzard Entertainment. Для игровых данных нужен собственный доступ к игре.
