@@ -1,10 +1,24 @@
-# Patches applied to TrinityCore (forever branch)
+# Исправления для TrinityCore Forever
 
-Applied in name order right after the `git clone` (see the Dockerfile). The build stops if a patch no longer
-applies: either it was merged into the branch (delete it) or it needs updating.
+Патчи применяются по имени после загрузки ядра. Ошибка применения останавливает
+сборку: исправление могло попасть в upstream либо код изменился.
 
-| File | What it fixes (found with packet logs of client 1.60.1.70450) |
+Проверено на коммите ядра `91d49b230f89c3ab4719f5b2b2d1e70ed36613c4`.
+
+| Файл | Что исправляет |
 |---|---|
-| `0002-classic-surname-invite-and-names.patch` | The 1.60 client shows and sends "Name Surname". `normalizePlayerName` keeps the first word only (add friend, ignore, guild, mail by name: no more "player not found"); `CMSG_PARTY_INVITE` is read in the 70425+ layout (shifted bits, surname, trailing byte) instead of failing. |
-| `0003-classic-contact-list-request.patch` | The 1.60 client's `CMSG_SEND_CONTACT_LIST` is 5 bytes: one byte (0) before the flags. Read as a uint32 it gave wrong flags (0x1500) and the server sent an empty friend list every time it was opened, although the friends were stored. |
-| `0004-classic-360-action-buttons.patch` | The 1.60 client has 360 action bar slots; the server kept 180 (one-byte index). Spells placed beyond, notably on the gamepad bars (slots 184+), were ignored and lost at the next login. `MAX_ACTION_BUTTONS` becomes 360, the index 16 bits, and `character_action.button` a `smallint` (`sql/custom/characters/2026_10_17_00_…`, applied by the updater). |
+| `0002-classic-surname-invite-and-names.patch` | В `normalizePlayerName` оставляет первое слово имени, когда клиент передаёт «Name Surname». |
+| `0003-classic-contact-list-request.patch` | Пропускает дополнительный байт перед флагами в `CMSG_SEND_CONTACT_LIST` клиента 1.60. |
+
+## Что уже реализовано в ядре
+
+- Старый фрагмент `0002`, менявший `PartyInviteClient::Read`, удалён: upstream
+  уже использует другой обработчик приглашений с длинами имени/фамилии 6/9 бит,
+  адресом мира и диагностикой ошибок. Старый патч предполагал иной формат пакета;
+  накладывать его поверх текущего обработчика нельзя.
+- `0004-classic-360-action-buttons.patch` удалён: upstream уже содержит 360
+  слотов, 16-битные индексы в API, пакетах и сохранении/загрузке, а также миграцию
+  `sql/custom/characters/2026_10_13_00_characters_classic_action_buttons_360.sql`.
+
+Применимость оставшихся патчей проверена последовательно на указанном коммите.
+Это проверка этапа патчей, а не подтверждение полной сборки и работы клиента 70532.
