@@ -36,10 +36,12 @@ container=$(docker compose ps -q worldserver 2>/dev/null)
 image=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
 label=$(docker inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' "$container" 2>/dev/null || true)
 printf 'Running image: %s\n' "${image:-unknown}"
-if [ -n "$label" ] && [ "$label" != '<no value>' ]; then
-    pass "subclass image label: $label"
+if [ "$label" = '0.2.1-forever.2' ]; then
+    pass "subclass image label: $label (FSC1 endpoint generation)"
+elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then
+    fail "subclass image label: $label (expected 0.2.1-forever.2)"
 else
-    warn 'running image has no org.wowforever.subclass label; it may be an old server image'
+    fail 'running image has no org.wowforever.subclass label'
 fi
 
 # The transport endpoint lives in a core patch, so an image built before that
