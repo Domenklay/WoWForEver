@@ -46,7 +46,7 @@ out="$reports/subclass-debug-$stamp.txt"
 
   echo "=== RECENT SUBCLASS SERVER LOGS ==="
   docker compose logs --no-color --timestamps --tail=4000 worldserver 2>&1 \
-    | grep -Ei 'ForeverSubclass|Subclass|FSC1|FSR1|addon' \
+    | grep -Ei 'ForeverSubclass|Subclass|FSC1|FSR1|addon|pet|talent' \
     | tail -n 800 || true
   echo
 
@@ -57,7 +57,9 @@ out="$reports/subclass-debug-$stamp.txt"
       SELECT \"class_rows\",COUNT(*) FROM forever_character_class_progress;
       SELECT \"spell_rows\",COUNT(*) FROM forever_character_subclass_spells;
       SELECT \"resource_rows\",COUNT(*) FROM forever_character_subclass_resources;
+      SELECT \"talent_rows\",COUNT(*) FROM forever_character_subclass_talents;
       SELECT guid,primary_class_id,IFNULL(active_subclass_id,0),IFNULL(xp_target_class_id,0) FROM forever_character_subclass_state ORDER BY guid LIMIT 50;
+      SELECT guid,class_id,talent_id,rank FROM forever_character_subclass_talents ORDER BY guid,class_id,talent_id LIMIT 100;
     "' 2>&1 || true
   else
     echo "mysql not running"
