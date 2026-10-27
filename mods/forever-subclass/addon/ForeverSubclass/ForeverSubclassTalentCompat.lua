@@ -1,11 +1,11 @@
 -- Forever 1.60.x compatibility shim for the subclass talent tab.
 -- The Forever client uses PlayerSpellsFrame.TalentsFrame for the actual talent page.
--- Earlier builds of our addon attached to PlayerSpellsFrame itself, which can leave
--- the custom tab outside/under the visible talent page. This file reparents the
--- already-created UI to the real Forever talent frame once Blizzard_PlayerSpells loads.
+-- Blizzard's talent content can sit above custom children in the mouse hit-test order,
+-- so the visible tab also gets an invisible UIParent click proxy at a very high level.
 
 local fixed = false
 local hooked = {}
+local clickProxy
 
 local nativeTabText = {
     ["Основное"] = true,
@@ -24,7 +24,7 @@ local function collectButtons(root, out, depth)
     if not root or depth > 6 or not root.GetChildren then return end
     local children = { root:GetChildren() }
     for _, child in ipairs(children) do
-        if child and child ~= _G.ForeverSubclassTalentTab then
+        if child and child ~= _G.ForeverSubclassTalentTab and child ~= clickProxy then
             if child.GetObjectType and child:GetObjectType() == "Button" then
                 table.insert(out, child)
             end
@@ -41,6 +41,46 @@ local function hideSubclassPanel()
         tab:SetEnabled(true)
         if PanelTemplates_DeselectTab then pcall(PanelTemplates_DeselectTab, tab) end
     end
+end
+
+local function invokeSubclassTab()
+    local tab = _G.ForeverSubclassTalentTab
+    if not tab then return end
+    tab:SetEnabled(true)
+    local handler = tab:GetScript("OnClick")
+    if handler then
+        local ok, err = pcall(handler, tab, "LeftButton", false)
+        if not ok and DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff5555[Подклассы]|r Ошибка открытия вкладки: "..tostring(err))
+        end
+    elseif _G.ForeverSubclassOpenTalentTab then
+        pcall(_G.ForeverSubclassOpenTalentTab)
+    end
+end
+
+local function ensureClickProxy(talentHost)
+    local tab = _G.ForeverSubclassTalentTab
+    if not tab then return end
+
+    if not clickProxy then
+        clickProxy = CreateFrame("Button", "ForeverSubclassTalentClickProxy", UIParent)
+        clickProxy:EnableMouse(true)
+        if clickProxy.RegisterForClicks then clickProxy:RegisterForClicks("AnyUp") end
+        clickProxy:SetScript("OnClick", invokeSubclassTab)
+        clickProxy:SetScript("OnEnter", function()
+            if tab.LockHighlight then tab:LockHighlight() end
+        end)
+        clickProxy:SetScript("OnLeave", function()
+            if tab.UnlockHighlight and tab:IsEnabled() then tab:UnlockHighlight() end
+        end)
+    end
+
+    clickProxy:ClearAllPoints()
+    clickProxy:SetPoint("TOPLEFT", tab, "TOPLEFT", -2, 2)
+    clickProxy:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 2, -2)
+    clickProxy:SetFrameStrata("FULLSCREEN_DIALOG")
+    clickProxy:SetFrameLevel(10000)
+    if talentHost:IsShown() and tab:IsShown() then clickProxy:Show() else clickProxy:Hide() end
 end
 
 local function positionTab(talentHost)
@@ -80,12 +120,15 @@ local function positionTab(talentHost)
     if anchor then
         tab:SetPoint("LEFT", anchor, "RIGHT", 7, 0)
     else
-        -- Stable fallback for the Forever talent layout: same top row as spec tabs.
         tab:SetPoint("TOPLEFT", talentHost, "TOPLEFT", 365, -8)
     end
-    tab:SetFrameStrata(talentHost:GetFrameStrata())
-    tab:SetFrameLevel((talentHost:GetFrameLevel() or 1) + 100)
+    tab:EnableMouse(true)
+    if tab.RegisterForClicks then tab:RegisterForClicks("AnyUp") end
+    tab:SetEnabled(true)
+    tab:SetFrameStrata("FULLSCREEN_DIALOG")
+    tab:SetFrameLevel(9999)
     tab:Show()
+    ensureClickProxy(talentHost)
 end
 
 local function fixTalentTab()
@@ -101,8 +144,8 @@ local function fixTalentTab()
     -- Leave Blizzard's title/spec-tab header visible and replace only the tree body.
     panel:SetPoint("TOPLEFT", talentHost, "TOPLEFT", 0, -44)
     panel:SetPoint("BOTTOMRIGHT", talentHost, "BOTTOMRIGHT", 0, 0)
-    panel:SetFrameStrata(talentHost:GetFrameStrata())
-    panel:SetFrameLevel((talentHost:GetFrameLevel() or 1) + 90)
+    panel:SetFrameStrata("FULLSCREEN_DIALOG")
+    panel:SetFrameLevel(9990)
 
     positionTab(talentHost)
 
@@ -110,8 +153,12 @@ local function fixTalentTab()
         hooked[talentHost] = true
         talentHost:HookScript("OnShow", function()
             positionTab(talentHost)
+            if clickProxy then clickProxy:Show() end
         end)
-        talentHost:HookScript("OnHide", hideSubclassPanel)
+        talentHost:HookScript("OnHide", function()
+            hideSubclassPanel()
+            if clickProxy then clickProxy:Hide() end
+        end)
     end
 
     fixed = true
@@ -131,13 +178,10 @@ events:SetScript("OnEvent", function(_, event, addonName)
     end
 end)
 
--- Keep retrying only until the load-on-demand talent UI and our tab both exist.
+-- Retry only until the load-on-demand talent UI and our tab both exist.
 events:SetScript("OnUpdate", function(self, elapsed)
     self._elapsed = (self._elapsed or 0) + elapsed
     if self._elapsed < 0.5 then return end
     self._elapsed = 0
-    if fixTalentTab() then
-        -- We keep the frame alive for ADDON_LOADED/OnShow, but no longer poll every frame.
-        self:SetScript("OnUpdate", nil)
-    end
+    if fixTalentTab() then self:SetScript("OnUpdate", nil) end
 end)
