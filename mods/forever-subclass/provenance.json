@@ -1,0 +1,9 @@
+{
+  "source": "User-supplied forever-subclass-prototype-v0.2.0.zip",
+  "sha256": "cfc6d388b4d247dce7d81ee2fdc5cb2e0acee3432607c16bb2e8db64666204dc",
+  "version": "0.2.0",
+  "original_license": "No separate license supplied in archive; user requested integration; original notices preserved",
+  "target_core_commit": "91d49b230f89c3ab4719f5b2b2d1e70ed36613c4",
+  "game_build": "1.60.1.70532",
+  "adapter_status": "experimental; not game-client tested"
+}

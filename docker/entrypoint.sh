@@ -120,6 +120,7 @@ configure_worldserver() {
     setkey "$f" Classic.Shop.Enabled 1
     setkey "$f" AccountInstancesPerHour 5
     setkey "$f" PlayerSave.Stats.MinLevel 1
+    setkey "$f" ForeverSubclass.Enable "${SUBCLASS_ENABLED:-0}"
     apply_overrides "$f" worldserver
 }
 

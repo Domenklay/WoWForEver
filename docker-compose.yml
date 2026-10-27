@@ -41,6 +41,7 @@ services:
       context: .
       args:
         TC_REF: ${TC_REF:-forever}
+        TC_COMMIT: ${TC_COMMIT:-91d49b230f89c3ab4719f5b2b2d1e70ed36613c4}
         BUILD_JOBS: ${BUILD_JOBS:-4}
     image: forever-trinitycore:latest
     command: ["worldserver"]
@@ -55,6 +56,7 @@ services:
       CLIENT_BUILD: ${CLIENT_BUILD:-}
       PACKET_LOG: ${PACKET_LOG:-0}   # 1 = packet log (diagnostics, holds chat)
       SOAP_ENABLED: "1"   # for the website; port 7878 is never published
+      SUBCLASS_ENABLED: ${SUBCLASS_ENABLED:-0}
     # interactive console: docker compose attach worldserver  (leave with Ctrl+P, Ctrl+Q)
     stdin_open: true
     tty: true
@@ -139,6 +141,7 @@ services:
       target: legion-casc-probe
       args:
         TC_REF: ${TC_REF:-forever}
+        TC_COMMIT: ${TC_COMMIT:-91d49b230f89c3ab4719f5b2b2d1e70ed36613c4}
         BUILD_JOBS: ${BUILD_JOBS:-4}
     image: forever-legion-casc-probe:local
     network_mode: none

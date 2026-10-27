@@ -1,0 +1,57 @@
+{
+  "build_key": "ad1802f4455e427ed8b7769aab25b0c0",
+  "build_name": "WOW-70532patch1.60.1_Beta",
+  "encoding": {
+    "bytes": 141574945,
+    "md5": "9a6b1c5671be704220ed9f58ff7f22e1",
+    "ckey_pages": 20647,
+    "ekey_pages": 13554,
+    "ckey_records": 2209148,
+    "ekey_records": 2209149,
+    "encoding_variants": 2209149,
+    "ckey_page_bytes": 4096,
+    "ekey_page_bytes": 4096,
+    "all_page_hashes_verified": true
+  },
+  "tvfs": {
+    "bytes": 37324,
+    "md5": "64e9f21d6280d51d5949a63926874f53",
+    "top_level_references": 582,
+    "legacy_root_reference_matches": true
+  },
+  "download": {
+    "bytes": 56870749,
+    "md5": "d9ccba873d3d9e7573ad7c6354e47e98",
+    "version": 1,
+    "ekey_bytes": 16,
+    "entry_has_checksum": 0,
+    "entry_count": 2208563,
+    "tag_count": 30,
+    "flag_bytes": 0,
+    "tags_parsed": false,
+    "supported_by_lab_updater": false
+  },
+  "audit_passed": true,
+  "root": {
+    "bytes": 50525924,
+    "md5": "6e2657526d320facacb6f3dfff62d8a2",
+    "version": 2,
+    "groups": 916,
+    "records": 2433102,
+    "named_records": 231036,
+    "max_file_data_id": 8552588,
+    "target_ids": {
+      "957774": [],
+      "956360": [],
+      "956397": []
+    },
+    "all_groups_validated": true
+  },
+  "idx": {
+    "buckets": 16,
+    "unique_ekey_prefixes": 1036707,
+    "offset_bits": 30
+  },
+  "source_report_sha256": "b55959541af9bc75fbf2d53e663f316107b621d30dba6a5a2761b9963af0868c",
+  "real_client_update_supported": false
+}

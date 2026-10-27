@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+!.env.example
+certs
+data
+backups
+logs
+downloads
+overrides/*.conf
+**/__pycache__
+**/*.pyc
+**/.venv
+**/node_modules
+app/src-tauri/target

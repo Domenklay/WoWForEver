@@ -3,6 +3,8 @@
 This repository runs a private server for the **World of Warcraft Forever** beta, client build **1.60.1.70450**,
 based on the [`forever` branch of TrinityCore](https://github.com/advocaite/TrinityCore/tree/forever). Read
 `README.md` first; this file adds what an assistant needs to help someone set it up.
+The user intentionally runs **1.60.1.70532** in this fork; see the compatibility
+limits in README.md. This is not a claim of full compatibility with that client.
 
 ## Layout
 
@@ -14,6 +16,7 @@ based on the [`forever` branch of TrinityCore](https://github.com/advocaite/Trin
 | `app/` | Launcher (Tauri 2: Rust in `app/src-tauri/src`, UI in `app/ui`), 4 languages (`i18n.rs`, `ui/i18n.js`). |
 | `scripts/` | `gen-certs.sh` (CA + server certificate), `upload-dokploy.sh`, `pkt-dump.py` (packet log reader). |
 | `docs/` | `DOKPLOY.md` (deployment), `MACOS.md` (how the macOS launcher works). |
+| `mods/forever-subclass/` | Experimental server adapter and AddOn for the user-supplied subclass prototype. Installation, backup and rollback: `README.ru.md` in that directory. Disabled by default; core revision is pinned in the Docker build. |
 
 ## Helping someone run their server
 
@@ -43,7 +46,7 @@ Then `LAUNCHER_REPO=<owner>/<repo>` in the server's `.env` so the website offers
 - **Never** commit, upload or paste `certs/ca/forever_root_ca.key`, `certs/forever.key.pem`, `.env` or passwords.
   `forever_root_ca.crt` is public and is what the launcher needs.
 - Do not add Blizzard files: no game client, game data, artwork, logos or download links to the client.
-- The client must be build 1.60.1.70450; do not suggest ways to get the beta without access.
+- The upstream documented client is 1.60.1.70450; the user's explicit 70532 experiment is described above. Do not suggest ways to get the beta without access.
 - Do not redeploy or restart the worldserver during its first database import (an interrupted import leaves a
   half-filled `world` database).
 - If the build stops at "applying /patches/...", the forever branch probably merged that fix: check upstream and
@@ -51,6 +54,12 @@ Then `LAUNCHER_REPO=<owner>/<repo>` in the server's `.env` so the website offers
 - Keep the 4 languages in sync when changing texts (FR, EN, ES, PT); `cargo test --lib` checks the Rust messages.
 
 ## Checks
+
+For the content/CASC/subclass tools, run `python3 -m unittest discover -s tests -q`.
+The subclass checks compile the original C++ rules when g++ is installed and
+exercise the AddOn against a Lua API double when liblua5.4 is available. They
+do not launch the actual game client. Do not claim a deployment to the user's
+Windows/WSL machine from cloud-only tests.
 
 ```sh
 docker compose config -q                                    # compose files

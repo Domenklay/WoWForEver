@@ -12,16 +12,26 @@ FROM ubuntu:${UBUNTU_VERSION} AS build
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git cmake make gcc g++ clang \
-        libmysqlclient-dev libssl-dev libbz2-dev libreadline-dev libncurses-dev libboost-all-dev \
+        libmysqlclient-dev libssl-dev libbz2-dev libreadline-dev libncurses-dev libboost-all-dev python3 \
     && rm -rf /var/lib/apt/lists/*
 
 ARG TC_REPO=https://github.com/advocaite/TrinityCore.git
 ARG TC_REF=forever
+ARG TC_COMMIT=91d49b230f89c3ab4719f5b2b2d1e70ed36613c4
 RUN git clone --branch "${TC_REF}" --single-branch --depth 1 "${TC_REPO}" /src/TrinityCore
+RUN if [ -n "${TC_COMMIT}" ]; then \
+      git -C /src/TrinityCore fetch --depth 1 origin "${TC_COMMIT}" \
+      && git -C /src/TrinityCore checkout --detach FETCH_HEAD; \
+    fi
 
 # Fixes not merged upstream yet (docker/patches/*.patch, applied in name order; the build fails if one no longer applies)
 COPY docker/patches/ /patches/
 RUN for p in /patches/*.patch; do [ -e "$p" ] || continue; echo "applying $p"; git -C /src/TrinityCore apply "$p" || exit 1; done
+
+# The subclass adapter is compiled into Custom; enabled only after local schema installation.
+COPY mods/forever-subclass /subclass-module
+COPY scripts/inject-subclass.py /tmp/inject-subclass.py
+RUN python3 /tmp/inject-subclass.py /src/TrinityCore --module /subclass-module
 
 # BUILD_JOBS: lower it on small machines (GCC needs ~2 GB RAM per job on the biggest files)
 ARG BUILD_JOBS=4
@@ -84,6 +94,7 @@ RUN curl -fL --retry 3 -o tdb.7z "${TDB_URL}" \
 
 ############################ runtime ############################
 FROM ubuntu:${UBUNTU_VERSION}
+LABEL org.wowforever.subclass="0.2.0-forever.1"
 
 ARG DEBIAN_FRONTEND=noninteractive
 # mysql-client is required: the TrinityCore DB updater shells out to the `mysql` binary
@@ -100,6 +111,7 @@ COPY --from=build /src/TrinityCore/sql /src/TrinityCore/sql
 # worldserver's auto-setup imports TDB_full_*.sql from its working directory
 COPY --from=tdb /tdb/ /opt/trinitycore/bin/
 COPY docker/entrypoint.sh docker/extract.sh /usr/local/bin/
+COPY mods/forever-subclass/provenance.json /opt/trinitycore/share/forever-subclass/provenance.json
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/extract.sh \
     && mkdir -p /opt/trinitycore/data /opt/trinitycore/logs /opt/trinitycore/certs /opt/trinitycore/overrides
 
