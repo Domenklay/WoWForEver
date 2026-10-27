@@ -42,6 +42,21 @@ else
     warn 'running image has no org.wowforever.subclass label; it may be an old server image'
 fi
 
+# The transport endpoint lives in a core patch, so an image built before that
+# patch commit can have a healthy old subclass module while still being unable
+# to receive FSC1 from the 70532 client.
+transport_patch='docker/patches/0004-forever-subclass-server-addon-endpoint.patch'
+if [ -f "$transport_patch" ]; then
+    patch_epoch=$(git log -1 --format=%ct -- "$transport_patch" 2>/dev/null || echo 0)
+    image_created=$(docker image inspect --format '{{.Created}}' "$image" 2>/dev/null || true)
+    image_epoch=$(date -d "$image_created" +%s 2>/dev/null || echo 0)
+    if [ "${patch_epoch:-0}" -gt 0 ] && [ "${image_epoch:-0}" -ge "$patch_epoch" ]; then
+        pass 'running image is new enough to contain the FSC1 server endpoint patch'
+    else
+        fail 'running image predates the FSC1 server endpoint patch; rebuild/install the subclass server image'
+    fi
+fi
+
 logs=$(docker compose logs --no-color --tail=2500 worldserver 2>/dev/null || true)
 if grep -q 'ForeverSubclass ready:' <<<"$logs"; then
     ready=$(grep 'ForeverSubclass ready:' <<<"$logs" | tail -n1)
@@ -67,10 +82,10 @@ fi
 
 printf '\n'
 if [ "$ok" = "1" ]; then
-    printf 'RESULT: server-side subclass runtime looks ready. If the AddOn still waits, inspect addon-message transport next.\n'
+    printf 'RESULT: server-side subclass runtime and FSC1 transport image look ready.\n'
     exit 0
 else
-    printf 'RESULT: server-side subclass runtime is incomplete. Do not recreate the character; repair/install the module.\n'
-    printf 'Typical repair: bash scripts/subclass-mod.sh build && bash scripts/subclass-mod.sh install /mnt/e/_classic_beta_/\n'
+    printf 'RESULT: server-side subclass runtime is incomplete or stale. Do not recreate the character; rebuild/install the module.\n'
+    printf 'Repair: bash scripts/subclass-mod.sh build && bash scripts/subclass-mod.sh install /mnt/e/_classic_beta_/\n'
     exit 1
 fi
