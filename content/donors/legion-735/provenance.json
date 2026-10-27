@@ -48,6 +48,22 @@
       "wmo_group_files": 0,
       "raw_resources_received_in_cloud": false,
       "dependency_closure_verified": false
+    },
+    "user_export_manifest_review_v2": {
+      "declared_build": "12.1.5.70575",
+      "files": 7269,
+      "total_bytes": 554871512,
+      "root_terrain_tiles": 5,
+      "m2_files": 1972,
+      "skin_files": 2429,
+      "wmo_root_files": 3,
+      "wmo_group_files": 336,
+      "animation_files": 18,
+      "texture_files": 2481,
+      "changed_previous_file_hashes": 0,
+      "added_file_paths": 4760,
+      "raw_resources_received_in_cloud": false,
+      "dependency_closure_verified": false
     }
   },
   "installed_on_forever": false
