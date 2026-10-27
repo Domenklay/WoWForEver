@@ -58,9 +58,11 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertTrue((target/'ForeverSubclassTalentCompat.lua').exists())
             self.assertTrue((target/'ForeverSubclassUX.lua').exists())
             self.assertTrue((target/'ForeverSubclassDirectTransport.lua').exists())
+            self.assertTrue((target/'ForeverSubclassSpellBook.lua').exists())
             toc=(target/'ForeverSubclass.toc').read_text()
             self.assertIn('ForeverSubclassTalentCompat.lua',toc)
             self.assertIn('ForeverSubclassDirectTransport.lua',toc)
+            self.assertIn('ForeverSubclassSpellBook.lua',toc)
             self.assertNotIn('ForeverSubclassCommandTransport.lua',toc)
             self.assertEqual((backup/'previous-addon/previous.lua').read_text(),'-- previous user addon\n')
             with self.assertRaises(FileExistsError):installer.install(client,backup)
@@ -74,6 +76,17 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('PlayerSpellsFrame.TalentsFrame',compat)
         self.assertIn('ForeverSubclassTalentTab',compat)
         self.assertIn('SetParent(talentHost)',compat)
+        self.assertNotIn('ForeverSubclassTalentClickProxy',compat)
+        self.assertNotIn('UIParent)',compat)
+
+    def test_subclass_spellbook_is_addon_owned_and_server_driven(self):
+        spellbook=(MODULE/'addon/ForeverSubclass/ForeverSubclassSpellBook.lua').read_text()
+        self.assertIn('PlayerSpellsFrame.SpellBookFrame',spellbook)
+        self.assertIn('ForeverSubclassSpellBookTab',spellbook)
+        self.assertIn('ForeverSubclassSpellBookPanel',spellbook)
+        self.assertIn('send("cast "..self.spell.id)',spellbook)
+        self.assertIn('if sp.selected then',spellbook)
+        self.assertNotIn('LearnSpell',spellbook)
 
     def test_direct_transport_uses_server_endpoint(self):
         transport=(MODULE/'addon/ForeverSubclass/ForeverSubclassDirectTransport.lua').read_text()
