@@ -292,6 +292,10 @@ if __name__=='__main__':
     parser.add_argument('client',type=Path)
     parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'))
     args=parser.parse_args()
+    if args.action=='apply':
+        parser.exit(1, 'Canary apply paused: WowB.exe rejected the generated container although CascLib read it. '
+                    'Keep the restored baseline copy; native container metadata support is under investigation. '
+                    'verify and rollback remain available.\n')
     lock=Path(tempfile.gettempdir())/('wowforever-casc-edit-'+sha(str(args.client.resolve()).casefold().encode())+'.lock')
     try:
         with lock.open('a') as guard:

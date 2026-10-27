@@ -1,0 +1,116 @@
+{
+  "format": "wowforever-native-container-review-v1",
+  "package_sha256": "b7da997dccfa9c6e2eaec1d0e4627b672f6d3d81248a7b217ded33993d1726d3",
+  "observed_segments": 48,
+  "sampled_bytes_per_segment": 30,
+  "segment_slot0_record_lengths": [
+    30
+  ],
+  "segment_slot0_flags": [
+    1
+  ],
+  "observed_shmem_bytes": 20480,
+  "observed_shmem_version": 5,
+  "observed_shmem_generations": [
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92,
+    92
+  ],
+  "indexes": [
+    {
+      "bucket": 0,
+      "generation": 92,
+      "bytes": 1245184,
+      "sha256": "1fda92235fcfa605e1b4a36f7f170fbfedd4dc500add05b77c99fd0d3c3bafdd",
+      "checksum_modes": [
+        "native-two-seed"
+      ],
+      "records": 64831,
+      "aligned_to_64k": true,
+      "zero_padding_bytes": 78186,
+      "zero_payload_records": 48,
+      "zero_payload_offsets": [
+        0
+      ],
+      "sampled_header_matches": 48,
+      "payload_bucket_mismatches": 0
+    },
+    {
+      "bucket": 1,
+      "generation": 92,
+      "bytes": 1245184,
+      "sha256": "932256634423b062abc9977aa43041f0261afd38de612ffa302bfb2795266d75",
+      "checksum_modes": [
+        "native-two-seed"
+      ],
+      "records": 64739,
+      "aligned_to_64k": true,
+      "zero_padding_bytes": 79842,
+      "zero_payload_records": 48,
+      "zero_payload_offsets": [
+        30
+      ],
+      "sampled_header_matches": 0,
+      "payload_bucket_mismatches": 0
+    },
+    {
+      "bucket": 2,
+      "generation": 92,
+      "bytes": 1245184,
+      "sha256": "e2377fb2038b2c978901d975570fbd53cd6532b12696713030e04d8c36ef00c0",
+      "checksum_modes": [
+        "native-two-seed"
+      ],
+      "records": 64735,
+      "aligned_to_64k": true,
+      "zero_padding_bytes": 79914,
+      "zero_payload_records": 48,
+      "zero_payload_offsets": [
+        60
+      ],
+      "sampled_header_matches": 0,
+      "payload_bucket_mismatches": 0
+    },
+    {
+      "bucket": 3,
+      "generation": 92,
+      "bytes": 1245184,
+      "sha256": "f26ed36d95469be04bcae97d37479b34aedd1131a4e057be96d1b397c682cf67",
+      "checksum_modes": [
+        "native-two-seed"
+      ],
+      "records": 64659,
+      "aligned_to_64k": true,
+      "zero_padding_bytes": 81282,
+      "zero_payload_records": 48,
+      "zero_payload_offsets": [
+        90
+      ],
+      "sampled_header_matches": 0,
+      "payload_bucket_mismatches": 0
+    }
+  ],
+  "observed_shmem_contains_storage_namespace": true,
+  "initial_wowb_failure": "Missing segment header for archive '0'; NeedsRepair",
+  "restored_baseline_copy_launches": true,
+  "baseline_runtime_evidence": "user reported successful launch after metadata restoration",
+  "prior_canary_omits_new_segment_zero_payload_records": true,
+  "prior_canary_idx_has_no_allocation_padding": true,
+  "original_wowb_rejection_cause_proven": false,
+  "canary_apply_paused": true,
+  "dalaran_installed": false,
+  "next_evidence": "All 16 source IDX buckets and all sixteen 30-byte flag=1 slots per segment; read-only collection"
+}
