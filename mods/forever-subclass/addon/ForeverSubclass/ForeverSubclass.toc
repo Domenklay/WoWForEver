@@ -2,7 +2,7 @@
 ## Title: Forever Subclass
 ## Notes: Экспериментальные подклассы для нашего сервера Forever
 ## Author: WoWForEver project; server-authoritative prototype adapter
-## Version: 0.4.5-forever.14
+## Version: 0.4.6-forever.15
 ## SavedVariables: ForeverSubclassUI, ForeverSubclassDebugLog
 ForeverSubclass.lua
 ForeverSubclassTalentTab.lua
