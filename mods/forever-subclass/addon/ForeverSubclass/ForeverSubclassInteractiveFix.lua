@@ -1,51 +1,54 @@
 -- Mouse hit-test fix for the V2 subclass panel on WoW Forever 1.60.x.
--- Blizzard's PlayerSpells/Talents frames use unusually high strata/levels.
--- Keep the V2 presentation on the same high strata and explicitly lift every
--- interactive button above the talent-tree content without replacing handlers.
+-- Do not elevate whole panels above PlayerSpellsFrame. Only actual interactive controls
+-- receive mouse input and a level above the local talent content.
 
 local fixed = false
 
-local function lift(frame, level)
+local function setLevel(frame, level)
     if not frame then return end
-    if frame.SetFrameStrata then pcall(frame.SetFrameStrata, frame, "FULLSCREEN_DIALOG") end
+    if frame.SetFrameStrata then pcall(frame.SetFrameStrata, frame, "MEDIUM") end
     if frame.SetFrameLevel then pcall(frame.SetFrameLevel, frame, level) end
 end
 
-local function walk(frame, depth)
+local function walk(frame, depth, base)
     if not frame or depth > 12 then return end
-    local base = 12020 + depth * 4
+    local level = base + depth * 3
     if frame.GetObjectType and frame:GetObjectType() == "Button" then
-        lift(frame, base + 2)
+        setLevel(frame, level + 2)
         if frame.EnableMouse then frame:EnableMouse(true) end
         if frame.RegisterForClicks then pcall(frame.RegisterForClicks, frame, "LeftButtonUp") end
-    elseif frame ~= _G.ForeverSubclassPanelV2 then
-        lift(frame, base)
+    else
+        if frame ~= _G.ForeverSubclassPanelV2 then
+            setLevel(frame, level)
+            if frame.EnableMouse then frame:EnableMouse(false) end
+            if frame.EnableMouseWheel then frame:EnableMouseWheel(false) end
+        end
     end
 
     if not frame.GetChildren then return end
     for _, child in ipairs({ frame:GetChildren() }) do
-        walk(child, depth + 1)
+        walk(child, depth + 1, base)
     end
 end
 
 local function apply()
     local root = _G.ForeverSubclassPanelV2
-    local legacy = _G.ForeverSubclassTalentPanel
-    if not root or not legacy then return false end
+    local talentHost = _G.PlayerSpellsFrame and _G.PlayerSpellsFrame.TalentsFrame
+    if not root or not talentHost then return false end
 
-    -- The old panel is only a host now. It must stay visible, but V2 owns all
-    -- mouse interaction in the body.
-    lift(legacy, 11900)
-    lift(root, 12000)
-    root:EnableMouse(true)
-    walk(root, 0)
+    local base = (talentHost:GetFrameLevel() or 100) + 2100
+    setLevel(root, base)
+    root:EnableMouse(false)
+    if root.EnableMouseWheel then root:EnableMouseWheel(false) end
+    walk(root, 0, base)
 
-    -- Keep the V2 root on top whenever Blizzard rebuilds the talent frame.
     if not fixed and root.HookScript then
         fixed = true
         root:HookScript("OnShow", function()
-            lift(root, 12000)
-            walk(root, 0)
+            local b = (talentHost:GetFrameLevel() or 100) + 2100
+            setLevel(root, b)
+            root:EnableMouse(false)
+            walk(root, 0, b)
         end)
     end
     return true
