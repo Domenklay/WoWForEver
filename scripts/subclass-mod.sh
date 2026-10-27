@@ -55,6 +55,7 @@ if [ "$action" = rollback ]; then
     if [ -f "$backup/addon/addon-install.json" ]; then
         python3 scripts/install-subclass-addon.py --backup "$backup/addon" --restore
     fi
+    python3 scripts/subclass-log-config.py --backup "$backup" --restore
     docker compose up -d --no-deps --force-recreate worldserver bnetserver web
     echo 'Rolled back server image and AddOn. Subclass progress retained for later use.'
     exit
@@ -80,6 +81,10 @@ if ! grep -q 'worldserver-daemon.*ready' <<< "$ready_logs"; then
     echo 'Current worldserver must finish its initial import and report ready before installation.';exit 1
 fi
 backup=$(mktemp -d "backups/subclass-$(date +%Y%m%d-%H%M%S)-XXXXXX")
+# Keep the built candidate reachable even after a rollback replaces :latest.
+candidate="forever-trinitycore:subclass-candidate-$(basename "$backup")"
+docker tag forever-trinitycore:latest "$candidate"
+printf '%s\n' "$candidate" > "$backup/candidate-image.txt"
 python3 scripts/preserve-container-image.py --container "$container" \
     --tag "forever-trinitycore:before-subclass-$(basename "$backup")" --backup "$backup"
 cp .env "$backup/env.before"
@@ -91,6 +96,9 @@ restore_on_error() {
     trap - EXIT
     if [ "$finished" = 0 ] && [ "$services_stopped" = 1 ]; then
         echo "Installation failed; restoring previous server. Backup: $backup" >&2
+        # Capture the failing container before --force-recreate deletes its log.
+        docker compose logs --no-color --timestamps --tail=3000 worldserver > "$backup/failed-worldserver.log" 2>&1 || true
+        docker compose ps -a > "$backup/failed-services.txt" 2>&1 || true
         if [ -f "$backup/world-bindings.sql" ]; then
             printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName='spell_forever_subclass';" | mysql_world || true
             mysql_world < "$backup/world-bindings.sql" || true
@@ -100,6 +108,7 @@ restore_on_error() {
         if [ -f "$backup/addon/addon-install.json" ]; then
             python3 scripts/install-subclass-addon.py --backup "$backup/addon" --restore || true
         fi
+        python3 scripts/subclass-log-config.py --backup "$backup" --restore || true
         docker compose up -d --no-deps --force-recreate worldserver bnetserver web || true
     fi
     exit "$code"
@@ -119,6 +128,7 @@ mv "$backup/world-bindings.sql.tmp" "$backup/world-bindings.sql"
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot characters' < mods/forever-subclass/sql/characters.sql
 mysql_world < mods/forever-subclass/sql/world.sql
 python3 scripts/install-subclass-addon.py --client "$client" --backup "$backup/addon"
+python3 scripts/subclass-log-config.py --backup "$backup"
 set_enabled 1
 docker compose up -d --no-deps --force-recreate worldserver bnetserver web
 container=$(docker compose ps -q worldserver)
