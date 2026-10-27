@@ -56,10 +56,12 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertTrue((target/'ForeverSubclass.lua').exists())
             self.assertTrue((target/'ForeverSubclassTalentTab.lua').exists())
             self.assertTrue((target/'ForeverSubclassTalentCompat.lua').exists())
-            self.assertTrue((target/'ForeverSubclassCommandTransport.lua').exists())
+            self.assertTrue((target/'ForeverSubclassUX.lua').exists())
+            self.assertTrue((target/'ForeverSubclassDirectTransport.lua').exists())
             toc=(target/'ForeverSubclass.toc').read_text()
             self.assertIn('ForeverSubclassTalentCompat.lua',toc)
-            self.assertIn('ForeverSubclassCommandTransport.lua',toc)
+            self.assertIn('ForeverSubclassDirectTransport.lua',toc)
+            self.assertNotIn('ForeverSubclassCommandTransport.lua',toc)
             self.assertEqual((backup/'previous-addon/previous.lua').read_text(),'-- previous user addon\n')
             with self.assertRaises(FileExistsError):installer.install(client,backup)
             installer.restore(backup)
@@ -73,13 +75,20 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('ForeverSubclassTalentTab',compat)
         self.assertIn('SetParent(talentHost)',compat)
 
-    def test_command_transport_uses_server_command(self):
-        transport=(MODULE/'addon/ForeverSubclass/ForeverSubclassCommandTransport.lua').read_text()
-        self.assertIn('.fsub ',transport)
+    def test_direct_transport_uses_server_endpoint(self):
+        transport=(MODULE/'addon/ForeverSubclass/ForeverSubclassDirectTransport.lua').read_text()
+        self.assertIn('SERVER_TARGET = "SERVER"',transport)
+        self.assertIn('C_ChatInfo.SendAddonMessage',transport)
+        self.assertIn('"WHISPER", SERVER_TARGET',transport)
         self.assertIn('learn ',transport)
         self.assertIn('active ',transport)
         self.assertIn('xp ',transport)
-        self.assertIn('SendChatMessage',transport)
+
+    def test_core_patch_routes_fsc1_before_player_lookup(self):
+        patch=(ROOT/'docker/patches/0004-forever-subclass-server-addon-endpoint.patch').read_text()
+        self.assertIn('prefix == "FSC1"',patch)
+        self.assertIn('OnPlayerAddonMessageSent(sender, type, prefix, text, sender)',patch)
+        self.assertLess(patch.index('prefix == "FSC1"'),patch.index('switch (type)'))
 
     def test_new_addon_uninstall_and_symlink_refusal(self):
         with tempfile.TemporaryDirectory() as temp:
