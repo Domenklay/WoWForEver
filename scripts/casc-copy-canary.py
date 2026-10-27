@@ -21,7 +21,7 @@ import uuid
 from pathlib import Path
 
 from casc_download import append_download
-from casc_manifest_update import Encoding,append_root,extend_encoding
+from casc_manifest_update import Encoding,append_root,extend_encoding,root_groups
 
 SPEC=importlib.util.spec_from_file_location('canary_store',Path(__file__).with_name('update-casc-sandbox.py'))
 storelib=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(storelib)
@@ -146,6 +146,16 @@ def apply(path,checker,controls=None,expected_build=BASE_KEY,progress=print):
         if key==root_ckey:root_ekey=raw[22:38]
     if root_ekey is None:raise ValueError('ROOT absent from ENCODING')
     old_root=store.read(root_ekey,root_ckey);old_vfs=configured('vfs-root')
+    profiles={str(fid):[] for fid in controls}
+    for group in root_groups(old_root):
+        current=0
+        for index,(delta,) in enumerate(struct.iter_unpack('<I',memoryview(old_root)[group['ids_offset']:group['ckeys_offset']])):
+            current+=delta
+            if current in controls:
+                offset=group['ckeys_offset']+index*16
+                profiles[str(current)].append(dict(locale=group['locale'],raw_flags=group['content_flags'],
+                    combined_flags=group['flags'],has_names=group['has_names'],ckey=old_root[offset:offset+16].hex()))
+            current+=1
     reference=storelib.tvfs.parse_tvfs(old_vfs)['leaves'].get('.root',[])
     if len(reference)!=1 or reference[0]['ckey']!=root_ckey.hex() or reference[0]['bytes']!=len(old_root) or reference[0]['offset']!=0:
         raise ValueError('Original TVFS .root reference mismatch')
@@ -232,7 +242,7 @@ def apply(path,checker,controls=None,expected_build=BASE_KEY,progress=print):
         result=dict(format='wowforever-casc-canary-result-v1',copy=str(path),original_build_key=store.build_key,
                     new_build_key=build,canary_file_id=CANARY_ID,canary_bytes=len(CANARY_TEXT),
                     canary_ckey=resource['ckey'].hex(),canary_sha256=sha(CANARY_TEXT),
-                    native_before=before,native_after=after,operation=token,
+                    native_before=before,native_after=after,root_profiles=profiles,operation=token,
                     original_client_modified=False,dalaran_installed=False,wow_client_runtime_verified=False)
         checkpoint(folder/'result.json',result)
         progress('CANARY VERIFIED: new FileDataID and existing control files read correctly.')

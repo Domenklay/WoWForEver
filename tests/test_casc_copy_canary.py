@@ -66,6 +66,7 @@ class CopyCanaryTests(unittest.TestCase):
         before=snapshot(self.copy)
         result=self.run_apply()
         self.assertFalse(result['dalaran_installed'])
+        self.assertEqual({p['locale'] for p in result['root_profiles'][str(lab.BASE_ID)]},{2,256})
         self.assertEqual(int(result['native_before'][0]['tag_mask'],16),(1<<30)-1)
         self.assertEqual(result['native_after'][0]['tag_mask'],result['native_before'][0]['tag_mask'])
         self.assertEqual(result['native_after'][-1]['file_id'],str(canary.CANARY_ID))
