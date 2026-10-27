@@ -200,3 +200,34 @@ class ZonePackageTests(unittest.TestCase):
         self.assertEqual(report['errors'], [])
         self.assertTrue(any('auxiliary WDT v20' in value for value in report['coverage_limits']))
         self.assertIn('maps/test/test_lgt.wdt', {row['path'] for row in report['files']})
+
+    def set_wmo_models(self, ids, placement):
+        path = self.root/'models/root.wmo'
+        blocks = [(tag, data) for tag,data in zone.chunks(path.read_bytes()) if tag not in {'MODI', 'MODD'}]
+        path.write_bytes(b''.join(chunk(tag, data) for tag,data in blocks)+
+                         chunk('MODI', struct.pack('<'+str(len(ids))+'I', *ids))+chunk('MODD', placement))
+
+    def test_unplaced_wmo_model_table_entries_are_reported_not_missing(self):
+        placement = bytes(40)  # Low 24 bits select slot zero: model 200.
+        self.set_wmo_models([200,777], placement)
+        report = self.run_package()
+        self.assertTrue(report['known_reference_closure'])
+        self.assertEqual(report['unplaced_wmo_model_ids']['models/root.wmo'], [777])
+        self.assertNotIn(777, {row['file_data_id'] for row in report['references']})
+        self.assertIn(200, {row['file_data_id'] for row in report['references']})
+
+    def test_duplicate_model_ids_and_high_placement_flags_preserve_used_model(self):
+        placement = bytearray(40)
+        struct.pack_into('<I', placement, 0, 0xaa000001)
+        self.set_wmo_models([200,200,777], placement)
+        report = self.run_package()
+        self.assertEqual(report['unplaced_wmo_model_ids']['models/root.wmo'], [777])
+        self.assertTrue(report['known_reference_closure'])
+
+    def test_invalid_wmo_placement_index_is_not_silently_ignored(self):
+        placement = bytearray(40)
+        struct.pack_into('<I', placement, 0, 2)
+        self.set_wmo_models([200,777], placement)
+        report = self.run_package()
+        self.assertFalse(report['known_reference_closure'])
+        self.assertTrue(any('invalid MODI index' in error for error in report['errors']))

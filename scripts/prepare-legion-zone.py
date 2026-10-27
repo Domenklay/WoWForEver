@@ -62,6 +62,7 @@ class Planner:
         self.missing = set()
         self.errors = []
         self.limits = set()
+        self.unplaced_models = {}
         self.selected = set()
         self.overrides = {}
         self.bindings = {}
@@ -273,8 +274,29 @@ class Planner:
                 return found
             if named.get('MVER') != struct.pack('<I', 17 if suffix == '.wmo' else 18):
                 raise ValueError('Unexpected native world file version')
+            placed_models = None
+            if 'MODI' in named:
+                model_ids = integers(named['MODI'])
+                if 'MODD' in named:
+                    placements = named['MODD']
+                    if len(placements) % 40:
+                        raise ValueError('Invalid WMO MODD placement block length')
+                    used_indices = {struct.unpack_from('<I', placements, off)[0] & 0xffffff
+                                    for off in range(0, len(placements), 40)}
+                    if any(index >= len(model_ids) for index in used_indices):
+                        raise ValueError('WMO MODD references an invalid MODI index')
+                    placed_models = {model_ids[index] for index in used_indices} - {0}
+                    unused = set(model_ids)-placed_models-{0}
+                    self.unplaced_models[relative] = sorted(unused)
+                    # Sidecars supplement native references but cannot make
+                    # unplaced model table slots into placed decorations.
+                    found = {(fid,kind) for fid,kind in found if fid not in unused}
+                else:
+                    self.limits.add(relative+': MODD absent; conservatively following all MODI entries')
             for tag, block in blocks:
-                if tag in {'GFID', 'MODI', 'MDID', 'MHID'}:
+                if tag == 'MODI' and placed_models is not None:
+                    found.update((fid, 'MODI-placed-by-MODD') for fid in placed_models)
+                elif tag in {'GFID', 'MODI', 'MDID', 'MHID'}:
                     found.update((fid, tag) for fid in integers(block) if fid)
                 elif tag in {'MDDF', 'MODF'}:
                     stride, flag_offset, mask = (36,34,0x40) if tag == 'MDDF' else (64,56,0x8)
@@ -346,6 +368,7 @@ class Planner:
                                               referenced_by=sorted({owner for owner,i,_ in self.edges if i == fid}))
                                          for fid in sorted(self.missing)],
                     errors=self.errors, coverage_limits=sorted(self.limits),
+                    unplaced_wmo_model_ids=self.unplaced_models,
                     known_reference_closure=not self.missing and not self.errors,
                     full_dependency_closure_proven=False, installable=False,
                     compatibility_with_forever_70532='not verified',

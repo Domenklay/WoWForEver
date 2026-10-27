@@ -7,6 +7,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location(
@@ -16,6 +17,21 @@ SPEC.loader.exec_module(lab)
 
 
 class CascSandboxTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('CASC_SANDBOX_CHECKER'), 'Native CascLib checker required')
+    def test_native_streaming_hash_reads_resource_larger_than_one_mib(self):
+        payload = (b'owned streaming fixture\0'+bytes(range(256)))*7000
+        self.assertGreater(len(payload), 1024*1024)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)/'client'
+            with patch.object(lab, 'BASE_TEXT', payload):
+                lab.write_store(root)
+            result = subprocess.run([os.environ['CASC_SANDBOX_CHECKER'],str(root),str(lab.BASE_ID)],
+                                    capture_output=True,text=True,check=True,timeout=30)
+            row = next(csv.DictReader(io.StringIO(result.stdout),delimiter='\t'))
+            self.assertEqual(row['status'], 'READ_OK')
+            self.assertEqual(int(row['bytes']), len(payload))
+            self.assertEqual(row['sha256'], hashlib.sha256(payload).hexdigest())
+
     def test_lookup3_vectors(self):
         for text, expected in ((b"",0xDEADBEEF),(b"a",0x58D68708),
                                (b"abc",0x0E397631),(bytes(range(32)),0x21362CFE)):
