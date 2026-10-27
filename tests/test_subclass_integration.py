@@ -18,7 +18,6 @@ def load(name,filename):
 installer=load('addon_install','install-subclass-addon.py')
 injector=load('inject_subclass','inject-subclass.py')
 
-
 class SubclassIntegrationTests(unittest.TestCase):
     def test_source_injection_idempotent_and_does_not_copy_demo_main(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -36,7 +35,6 @@ class SubclassIntegrationTests(unittest.TestCase):
             vendored=(MODULE/'vendor/include/forever_subclass/SubclassSystem.hpp').read_text()
             self.assertIn('subclassUnlockPrimaryLevel = 10;',injected)
             self.assertIn('subclassUnlockPrimaryLevel = 40;',vendored)
-
             server=(folder/'ForeverSubclass/ForeverSubclass.cpp').read_text()
             self.assertIn('#include "ChatCommand.h"',server)
             self.assertIn('class ForeverSubclassCommandScript final : public CommandScript',server)
@@ -53,21 +51,17 @@ class SubclassIntegrationTests(unittest.TestCase):
             old=client/'Interface/AddOns/ForeverSubclass';old.mkdir(parents=True)
             (old/'previous.lua').write_text('-- previous user addon\n')
             backup=root/'backup';target=installer.install(client,backup)
-            self.assertTrue((target/'ForeverSubclass.lua').exists())
-            self.assertTrue((target/'ForeverSubclassTalentTab.lua').exists())
-            self.assertTrue((target/'ForeverSubclassTalentCompat.lua').exists())
-            self.assertTrue((target/'ForeverSubclassUX.lua').exists())
-            self.assertTrue((target/'ForeverSubclassDirectTransport.lua').exists())
-            self.assertTrue((target/'ForeverSubclassSpellBook.lua').exists())
-            self.assertTrue((target/'ForeverSubclassActionBar.lua').exists())
-            self.assertTrue((target/'ForeverSubclassResourceHUD.lua').exists())
+            for name in ['ForeverSubclass.lua','ForeverSubclassDirectTransport.lua','ForeverSubclassTalents.lua',
+                         'ForeverSubclassResourceHUD.lua','ForeverSubclassCastFeedback.lua',
+                         'ForeverSubclassSpellBook.lua','ForeverSubclassActionBar.lua','ForeverSubclassDebug.lua']:
+                self.assertTrue((target/name).exists(),name)
             toc=(target/'ForeverSubclass.toc').read_text()
-            self.assertIn('ForeverSubclassTalentCompat.lua',toc)
-            self.assertIn('ForeverSubclassDirectTransport.lua',toc)
-            self.assertIn('ForeverSubclassSpellBook.lua',toc)
-            self.assertIn('ForeverSubclassActionBar.lua',toc)
-            self.assertIn('ForeverSubclassResourceHUD.lua',toc)
-            self.assertNotIn('ForeverSubclassCommandTransport.lua',toc)
+            for name in ['ForeverSubclassTalents.lua','ForeverSubclassDirectTransport.lua','ForeverSubclassResourceHUD.lua',
+                         'ForeverSubclassCastFeedback.lua','ForeverSubclassSpellBook.lua','ForeverSubclassActionBar.lua']:
+                self.assertIn(name,toc)
+            for stale in ['ForeverSubclassTalentTab.lua','ForeverSubclassTalentCompat.lua','ForeverSubclassPanelV2.lua',
+                          'ForeverSubclassLegacySuppress.lua','ForeverSubclassInteractiveFix.lua','ForeverSubclassCommandTransport.lua']:
+                self.assertNotIn(stale,toc)
             self.assertEqual((backup/'previous-addon/previous.lua').read_text(),'-- previous user addon\n')
             with self.assertRaises(FileExistsError):installer.install(client,backup)
             installer.restore(backup)
@@ -75,15 +69,15 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertEqual((client/'WowB.exe').read_bytes(),b'untouched executable fixture')
             self.assertEqual((root/'Data/sentinel').read_bytes(),b'untouched CASC fixture')
 
-    def test_forever_talent_compat_targets_real_talents_frame(self):
-        compat=(MODULE/'addon/ForeverSubclass/ForeverSubclassTalentCompat.lua').read_text()
-        self.assertIn('PlayerSpellsFrame.TalentsFrame',compat)
-        self.assertIn('ForeverSubclassTalentTab',compat)
-        self.assertIn('SetParent(talentHost)',compat)
-        self.assertIn('OnMouseDown',compat)
-        self.assertIn('ForeverSubclassPanelV2',compat)
-        self.assertNotIn('ForeverSubclassTalentClickProxy',compat)
-        self.assertNotIn('UIParent)',compat)
+    def test_consolidated_talents_owns_visibility_and_matches_markup_labels(self):
+        ui=(MODULE/'addon/ForeverSubclass/ForeverSubclassTalents.lua').read_text()
+        self.assertIn('PlayerSpellsFrame.TalentsFrame',ui)
+        self.assertIn('ForeverSubclassTalentTab',ui)
+        self.assertIn('ForeverSubclassTalentPanel',ui)
+        self.assertIn('text:find("Основное"',ui)
+        self.assertIn('OnMouseDown',ui)
+        self.assertIn('customActive=false',ui)
+        self.assertNotIn('ForeverSubclassTalentClickProxy',ui)
 
     def test_subclass_spellbook_is_addon_owned_and_server_driven(self):
         spellbook=(MODULE/'addon/ForeverSubclass/ForeverSubclassSpellBook.lua').read_text()
@@ -94,21 +88,26 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('if sp.selected then',spellbook)
         self.assertNotIn('LearnSpell',spellbook)
 
-    def test_subclass_action_bar_uses_per_character_macro_bridge(self):
+    def test_subclass_action_bar_has_real_spell_showtooltip(self):
         action=(MODULE/'addon/ForeverSubclass/ForeverSubclassActionBar.lua').read_text()
         self.assertIn('CreateMacro',action)
         self.assertIn('PickupMacro',action)
+        self.assertIn('#showtooltip ',action)
+        self.assertIn('INV_MISC_QUESTIONMARK',action)
         self.assertIn('/fsubcast',action)
-        self.assertIn('ForeverSubclassCast',action)
         self.assertIn('RegisterForDrag',action)
         self.assertIn('InCombatLockdown',action)
 
-    def test_secondary_resource_hud_uses_server_power_snapshot(self):
+    def test_secondary_resource_hud_predicts_then_resyncs(self):
         hud=(MODULE/'addon/ForeverSubclass/ForeverSubclassResourceHUD.lua').read_text()
+        feedback=(MODULE/'addon/ForeverSubclass/ForeverSubclassCastFeedback.lua').read_text()
         self.assertIn('ForeverSubclassResourceHUD',hud)
         self.assertIn('kind=="POWER"',hud)
+        self.assertIn('ForeverSubclassResourcePredictSpend',hud)
+        self.assertIn('kind=="SPELL"',hud)
         self.assertIn('UnitPowerType',hud)
-        self.assertIn('sendStatus()',hud)
+        self.assertIn('ForeverSubclassResourcePredictSpend',feedback)
+        self.assertIn('base("status",true)',feedback)
 
     def test_direct_transport_uses_server_endpoint(self):
         transport=(MODULE/'addon/ForeverSubclass/ForeverSubclassDirectTransport.lua').read_text()
@@ -148,8 +147,7 @@ class SubclassIntegrationTests(unittest.TestCase):
     @unittest.skipUnless(ctypes.util.find_library('lua5.4'),'Lua 5.4 runtime required for API-double test')
     def test_addon_transport_is_server_authoritative(self):
         lua=ctypes.CDLL(ctypes.util.find_library('lua5.4'))
-        lua.luaL_newstate.restype=ctypes.c_void_p
-        lua.luaL_openlibs.argtypes=[ctypes.c_void_p]
+        lua.luaL_newstate.restype=ctypes.c_void_p;lua.luaL_openlibs.argtypes=[ctypes.c_void_p]
         lua.luaL_loadstring.argtypes=[ctypes.c_void_p,ctypes.c_char_p]
         lua.lua_pcallk.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_ssize_t,ctypes.c_void_p]
         lua.lua_tolstring.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p];lua.lua_tolstring.restype=ctypes.c_char_p
@@ -161,6 +159,5 @@ class SubclassIntegrationTests(unittest.TestCase):
             if not status:status=lua.lua_pcallk(state,0,0,0,0,None)
             if status:self.fail(lua.lua_tolstring(state,-1,None).decode())
         finally:lua.lua_close(state)
-
 
 if __name__=='__main__':unittest.main()
