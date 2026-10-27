@@ -1,0 +1,88 @@
+{
+  "format": "wowforever-legion-client-casc-review-v1",
+  "client_build_reported_by_user": "1.60.1.70532",
+  "donor_build_declared": "12.1.5.70575",
+  "uploaded_report_sha256": "7fdb3278f110174f6df4a538c26cecadc42b3c16ddfa0eb8fa6729b284a73b4c",
+  "probe_scope": "Nine fixed targets; offline local CASC, not a complete dependency audit.",
+  "results": [
+    {
+      "label": "tile_23_33_root",
+      "file_data_id": 957774,
+      "status": "OPEN_FAILED",
+      "bytes": 0,
+      "sha256": "-",
+      "error": 2
+    },
+    {
+      "label": "tile_23_33_obj0",
+      "file_data_id": 956360,
+      "status": "OPEN_FAILED",
+      "bytes": 0,
+      "sha256": "-",
+      "error": 2
+    },
+    {
+      "label": "tile_23_33_tex0",
+      "file_data_id": 956397,
+      "status": "OPEN_FAILED",
+      "bytes": 0,
+      "sha256": "-",
+      "error": 2
+    },
+    {
+      "label": "dalaran_wmo",
+      "file_data_id": 1120838,
+      "status": "READ_OK",
+      "bytes": 485104,
+      "sha256": "57401c9210015a0481dfd78452829d659920e410121aa65e3c2e0ce3ed095d8d",
+      "error": 0,
+      "matching_sample_path": "world/wmo/brokenisles/dalaran2.wmo"
+    },
+    {
+      "label": "dalaran_group_000",
+      "file_data_id": 1120853,
+      "status": "READ_OK",
+      "bytes": 500044,
+      "sha256": "a77f414875016ed8d20cb871739f9e0661afe947b625d7f10409031ba6cd4636",
+      "error": 0,
+      "matching_sample_path": "world/wmo/brokenisles/dalaran2_000.wmo"
+    },
+    {
+      "label": "sample_m2",
+      "file_data_id": 1379264,
+      "status": "READ_OK",
+      "bytes": 1632,
+      "sha256": "0ef55a6e60acd18b5f78d037a99c668f1f3852c6cec7685aab3f71e3b1a15ab0",
+      "error": 0,
+      "matching_sample_path": "world/expansion06/doodads/dalaran/7dl_worgen_rug02.m2"
+    },
+    {
+      "label": "sample_skin",
+      "file_data_id": 1379316,
+      "status": "READ_OK",
+      "bytes": 432,
+      "sha256": "de16fbea697d21b27ad3041c1e5bd52a4dcac6fbb02156aff01c1d5783321a26",
+      "error": 0,
+      "matching_sample_path": "world/expansion06/doodads/dalaran/7dl_worgen_rug0200.skin"
+    },
+    {
+      "label": "wdt_spaced",
+      "file_data_id": 0,
+      "status": "OPEN_FAILED",
+      "bytes": 0,
+      "sha256": "-",
+      "error": 2
+    },
+    {
+      "label": "wdt_compact",
+      "file_data_id": 0,
+      "status": "OPEN_FAILED",
+      "bytes": 0,
+      "sha256": "-",
+      "error": 2
+    }
+  ],
+  "complete_dependency_closure_verified": false,
+  "client_patch_delivery_verified": false,
+  "installed_on_forever": false
+}
