@@ -5,6 +5,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 stamp=$(date +%Y%m%d-%H%M%S)
 out="backups/subclass-debug-$stamp.txt"
 mkdir -p backups
+client=${1:-/mnt/e/_classic_beta_/}
 
 {
   echo "ForeverSubclass diagnostic bundle"
@@ -62,8 +63,7 @@ mkdir -p backups
   fi
   echo
 
-  echo "=== CLIENT ADDON INSTALL (if mounted) ==="
-  client=${1:-/mnt/e/_classic_beta_/}
+  echo "=== CLIENT ADDON INSTALL ==="
   toc="$client/Interface/AddOns/ForeverSubclass/ForeverSubclass.toc"
   if [ -f "$toc" ]; then
     echo "Client: $client"
@@ -72,6 +72,22 @@ mkdir -p backups
     find "$client/Interface/AddOns/ForeverSubclass" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort
   else
     echo "Installed addon TOC not found at: $toc"
+  fi
+  echo
+
+  echo "=== CLIENT SAVEDVARIABLES / ForeverSubclassDebugLog ==="
+  found=0
+  while IFS= read -r -d '' sv; do
+    found=1
+    echo "--- $sv ---"
+    # SavedVariables are ordinary Lua. Keeping the raw file is intentional: it
+    # preserves every debug line without trying to parse/escape it in shell.
+    cat "$sv" 2>/dev/null || true
+    echo
+  done < <(find "$client/WTF/Account" -type f -path '*/SavedVariables/ForeverSubclass.lua' -print0 2>/dev/null)
+  if [ "$found" -eq 0 ]; then
+    echo "No ForeverSubclass.lua SavedVariables found under $client/WTF/Account"
+    echo "Use /fsubdebug snapshot, then /reload or log out once before collecting."
   fi
 } > "$out"
 
