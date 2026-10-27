@@ -133,5 +133,26 @@
     "maps/trollraid/troll raid_occ.wdt: auxiliary WDT v18 internal references not fully parsed"
   ],
   "installable": false,
-  "note": "All 74 unresolved MODI IDs have no MODD placement in the exact same WMO. No WMO bytes or table indices are changed. This does not prove that every client path ignores unused model slots; runtime and remaining format checks are still required."
+  "note": "All 74 unresolved MODI IDs have no MODD placement in the exact same WMO. No WMO bytes or table indices are changed. This does not prove that every client path ignores unused model slots; runtime and remaining format checks are still required.",
+  "map_textures_verified_in_forever": [
+    {
+      "file_data_id": 952131,
+      "bytes": 132244,
+      "sha256": "5bd24986d738f2fbc4ebe458b80fb5e7c4d1da5d95793295f872379d09c38d62",
+      "tag_mask": "3fffe3ff"
+    },
+    {
+      "file_data_id": 1246678,
+      "bytes": 175948,
+      "sha256": "3037cd1db53cc31df887f7d03eae51605622f40496104d58be14c907beeaa7b5",
+      "tag_mask": "3fffe3ff"
+    },
+    {
+      "file_data_id": 1246679,
+      "bytes": 44876,
+      "sha256": "080d282279b1f42582bbf165703a9f4acb6e0c5a6e34fc58e728b69c43bbb95b",
+      "tag_mask": "3fffe3ff"
+    }
+  ],
+  "texture_evidence": "User native read-only check on 2026-10-28; donor byte equality remains unverified."
 }
