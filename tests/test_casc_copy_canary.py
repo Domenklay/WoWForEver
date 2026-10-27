@@ -118,3 +118,24 @@ class CopyCanaryTests(unittest.TestCase):
         self.assertNotEqual(snapshot(self.copy)['.build.info'],before['.build.info'])
         canary.rollback(self.copy)
         self.assertEqual(snapshot(self.copy),before)
+
+    def test_verify_after_launch_is_read_only_and_detects_reverted_active_build(self):
+        original=(self.copy/'.build.info').read_bytes()
+        self.run_apply();before=snapshot(self.copy)
+        rows=canary.verify(self.copy,self.checker,progress=lambda text:None)
+        self.assertEqual(len(rows),2)
+        self.assertEqual(snapshot(self.copy),before)
+        # A launcher's repair may replace build selection; this must not pass
+        # simply because the previously-created data/index files still exist.
+        (self.copy/'.build.info').write_bytes(original)
+        reverted=snapshot(self.copy)
+        with self.assertRaisesRegex(ValueError,'Active copy build changed'):
+            canary.verify(self.copy,self.checker,progress=lambda text:None)
+        self.assertEqual(snapshot(self.copy),reverted)
+
+    def test_verify_rejects_rolled_back_operation(self):
+        self.run_apply();canary.rollback(self.copy)
+        before=snapshot(self.copy)
+        with self.assertRaisesRegex(ValueError,'not installed'):
+            canary.verify(self.copy,self.checker,progress=lambda text:None)
+        self.assertEqual(snapshot(self.copy),before)

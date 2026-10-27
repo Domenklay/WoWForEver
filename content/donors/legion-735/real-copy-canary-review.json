@@ -1,0 +1,149 @@
+{
+  "format": "wowforever-real-copy-canary-review-v1",
+  "result_sha256": "b3ce2843160f699727acd3180bd739a9b18b483204222fcdac3d9fa2b200d218",
+  "journal_sha256": "4fc9a3f5f373db7ec85ccb2f5b54fb0f4a362ecc8ac388a3c87d79a31f771d60",
+  "original_build_key": "ad1802f4455e427ed8b7769aab25b0c0",
+  "new_build_key": "a23ebd9810547cc0060d96a0a8ba1e19",
+  "phase": "verified",
+  "canary": {
+    "canary_file_id": 16777214,
+    "canary_bytes": 43,
+    "canary_ckey": "fa04f960f34ef46d72ad53c920715d02",
+    "canary_sha256": "4e6589b68267b49e0a089272e8f095ea7ddc249a16cf2d20dafd789dce7f4abc"
+  },
+  "controls": {
+    "1120838": {
+      "file_id": "1120838",
+      "status": "READ_OK",
+      "bytes": "485104",
+      "sha256": "57401c9210015a0481dfd78452829d659920e410121aa65e3c2e0ce3ed095d8d",
+      "tag_mask": "3fffe3ff",
+      "error": "0"
+    },
+    "1120853": {
+      "file_id": "1120853",
+      "status": "READ_OK",
+      "bytes": "500044",
+      "sha256": "a77f414875016ed8d20cb871739f9e0661afe947b625d7f10409031ba6cd4636",
+      "tag_mask": "3fffe3ff",
+      "error": "0"
+    },
+    "1379264": {
+      "file_id": "1379264",
+      "status": "READ_OK",
+      "bytes": "1632",
+      "sha256": "0ef55a6e60acd18b5f78d037a99c668f1f3852c6cec7685aab3f71e3b1a15ab0",
+      "tag_mask": "3fffe3ff",
+      "error": "0"
+    },
+    "1379316": {
+      "file_id": "1379316",
+      "status": "READ_OK",
+      "bytes": "432",
+      "sha256": "de16fbea697d21b27ad3041c1e5bd52a4dcac6fbb02156aff01c1d5783321a26",
+      "tag_mask": "3fffe3ff",
+      "error": "0"
+    }
+  },
+  "root_profiles": {
+    "1120838": [
+      {
+        "locale": 95222,
+        "raw_flags": [
+          0,
+          301989888,
+          5
+        ],
+        "combined_flags": 302645248,
+        "has_names": false,
+        "ckey": "f74d5dd74035a8d50bb2525226772323"
+      }
+    ],
+    "1120853": [
+      {
+        "locale": 95222,
+        "raw_flags": [
+          0,
+          301989888,
+          10
+        ],
+        "combined_flags": 303300608,
+        "has_names": false,
+        "ckey": "6c334bfbe374fa54243679e1fab491a6"
+      }
+    ],
+    "1379264": [
+      {
+        "locale": 95222,
+        "raw_flags": [
+          0,
+          301989888,
+          6
+        ],
+        "combined_flags": 302776320,
+        "has_names": false,
+        "ckey": "f8b63de48f4ce48a2c688a3ea8678f36"
+      }
+    ],
+    "1379316": [
+      {
+        "locale": 95222,
+        "raw_flags": [
+          0,
+          301989888,
+          9
+        ],
+        "combined_flags": 303169536,
+        "has_names": false,
+        "ckey": "e1acaece364102a8023df5818cb680bc"
+      }
+    ]
+  },
+  "common_download_tag_mask": "3fffe3ff",
+  "enabled_tag_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "excluded_tag_names": [
+    "Alternate",
+    "HighRes",
+    "Talebound"
+  ],
+  "new_files": [
+    "Data/data/data.048",
+    "Data/data/000000005d.idx",
+    "Data/data/020000005d.idx",
+    "Data/data/030000005d.idx",
+    "Data/config/a2/3e/a23ebd9810547cc0060d96a0a8ba1e19"
+  ],
+  "journal_and_result_consistent": true,
+  "original_client_modified": false,
+  "terrain_root_profile_verified": false,
+  "wow_client_runtime_verified": false,
+  "dalaran_installed": false
+}

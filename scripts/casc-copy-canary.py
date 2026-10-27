@@ -259,9 +259,36 @@ def rollback(path):
     rollback_files(path,operation_file(path))
 
 
+def verify(path,checker,progress=print):
+    """Read-only confirmation that launching/repair did not replace the canary."""
+    path,_marker=copy_identity(path)
+    journal_file=operation_file(path)
+    journal=json.loads(journal_file.read_text())
+    if journal.get('phase')!='verified':raise ValueError('Canary operation is not installed and verified')
+    rows=list(csv.reader(io.StringIO((path/'.build.info').read_text()),delimiter='|'))
+    if not rows or any(row and len(row)!=len(rows[0]) for row in rows[1:]):
+        raise ValueError('Malformed active copy build info')
+    columns={name.split('!')[0]:i for i,name in enumerate(rows[0])}
+    active=[row[columns['Build Key']] for row in rows[1:] if row and
+            row[columns['Active']]=='1' and row[columns['Product']]==lab.PRODUCT]
+    if active!=[journal['new_build_key']]:
+        raise ValueError('Active copy build changed; expected '+journal['new_build_key']+', found '+str(active))
+    result=json.loads((journal_file.parent/'result.json').read_text())
+    if result.get('operation')!=journal_file.parent.name or result.get('new_build_key')!=journal['new_build_key']:
+        raise ValueError('Canary result/journal mismatch')
+    expected={int(row['file_id']):dict(bytes=int(row['bytes']),sha256=row['sha256'],tag_mask=row['tag_mask'])
+              for row in result['native_after']}
+    canary=dict(bytes=len(CANARY_TEXT),sha256=sha(CANARY_TEXT),tag_mask='0')
+    if expected.get(CANARY_ID)!=canary:raise ValueError('Canary result lacks the expected control resource')
+    progress('Checking active build, canary and previous resources without changing the copy...')
+    verified=native_check(checker,path,expected)
+    progress('CANARY STILL VERIFIED: active build and all control resources preserved.')
+    return verified
+
+
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['apply','rollback'])
+    parser.add_argument('action',choices=['apply','verify','rollback'])
     parser.add_argument('client',type=Path)
     parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'))
     args=parser.parse_args()
@@ -270,6 +297,7 @@ if __name__=='__main__':
         with lock.open('a') as guard:
             fcntl.flock(guard,fcntl.LOCK_EX|fcntl.LOCK_NB)
             if args.action=='apply':apply(args.client,args.checker)
+            elif args.action=='verify':verify(args.client,args.checker)
             else:rollback(args.client);print('CANARY ROLLED BACK')
     except (ValueError,OSError,KeyError,subprocess.TimeoutExpired) as error:
         parser.exit(1,f'Canary stopped: {error}\n')
