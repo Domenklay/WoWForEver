@@ -69,7 +69,7 @@ if not (p/'WowB.exe').is_file():raise SystemExit('Client folder must contain Wow
 if (p/'Interface/AddOns/ForeverSubclass').is_symlink():raise SystemExit('Symlinked AddOn folder is not supported')
 PY
 label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' forever-trinitycore:latest)
-[ "$label" = '0.2.0-forever.1' ] || { echo 'Build the module first: bash scripts/subclass-mod.sh build';exit 1; }
+[ "$label" = '0.2.1-forever.2' ] || { echo 'Built image is stale or missing the FSC1 endpoint. Run: bash scripts/subclass-mod.sh build';exit 1; }
 running=$(docker compose ps --status running --services)
 for service in mysql worldserver bnetserver web; do
     if ! grep -qx "$service" <<< "$running"; then echo "Service $service must be running before installation";exit 1;fi
