@@ -30,3 +30,12 @@ CREATE TABLE IF NOT EXISTS `forever_character_subclass_resources` (
   `current_value` INT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (`guid`, `power_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `forever_character_subclass_talents` (
+  `guid` BIGINT UNSIGNED NOT NULL,
+  `class_id` TINYINT UNSIGNED NOT NULL,
+  `talent_id` SMALLINT UNSIGNED NOT NULL,
+  `rank` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (`guid`, `class_id`, `talent_id`),
+  INDEX `idx_fcst_guid_class` (`guid`, `class_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
