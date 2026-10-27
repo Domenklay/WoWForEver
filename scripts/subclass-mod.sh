@@ -80,8 +80,8 @@ if ! grep -q 'worldserver-daemon.*ready' <<< "$ready_logs"; then
     echo 'Current worldserver must finish its initial import and report ready before installation.';exit 1
 fi
 backup=$(mktemp -d "backups/subclass-$(date +%Y%m%d-%H%M%S)-XXXXXX")
-docker inspect --format '{{.Image}}' "$container" > "$backup/old-image.txt"
-docker tag "$(cat "$backup/old-image.txt")" "forever-trinitycore:before-subclass-$(basename "$backup")"
+python3 scripts/preserve-container-image.py --container "$container" \
+    --tag "forever-trinitycore:before-subclass-$(basename "$backup")" --backup "$backup"
 cp .env "$backup/env.before"
 git rev-parse HEAD > "$backup/source-commit.txt"
 services_stopped=0
