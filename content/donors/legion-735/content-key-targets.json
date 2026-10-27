@@ -35,5 +35,5 @@
       "sha256": "41ec10ed97b5ce65113b7247a20279bf324a671e427428c1dd05654ae39aff0c"
     }
   ],
-  "available_on_forever": "not yet checked by CKey"
+  "available_on_forever": "All four exact CKeys returned OPEN_FAILED, error 2, in user local storage; see content-key-review.json"
 }

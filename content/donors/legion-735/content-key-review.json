@@ -1,0 +1,39 @@
+{
+  "format": "wowforever-donor-content-key-review-v1",
+  "client_build_reported": "1.60.1.70532",
+  "donor_build_declared": "12.1.5.70575",
+  "uploaded_report_sha256": "8a701ed9878820a956cb7f5b2ba9ddca2ed6018b477bec7501249c38cd3041f8",
+  "results": [
+    {
+      "label": "terrain",
+      "ckey": "e53943871e6b48cf54d474493cd406e2",
+      "status": "OPEN_FAILED",
+      "error": 2,
+      "bytes_read": 0
+    },
+    {
+      "label": "objects",
+      "ckey": "3977afd0e837f7fa2f980d88e062ab01",
+      "status": "OPEN_FAILED",
+      "error": 2,
+      "bytes_read": 0
+    },
+    {
+      "label": "textures",
+      "ckey": "4febae00d00ecb9edfe2a1dc0f2fb3bd",
+      "status": "OPEN_FAILED",
+      "error": 2,
+      "bytes_read": 0
+    },
+    {
+      "label": "world_definition",
+      "ckey": "30906fab9227c04dab483cc94b3abb4d",
+      "status": "OPEN_FAILED",
+      "error": 2,
+      "bytes_read": 0
+    }
+  ],
+  "scope": "Four exact donor content keys in current local CascLib storage, offline; no claim about all builds or remote CDN contents",
+  "conclusion": "No openable CKey entries for these four donor resources in current storage; resource registration and data delivery remain required",
+  "real_zone_installed": false
+}
