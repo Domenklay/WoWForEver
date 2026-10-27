@@ -5,6 +5,57 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <string_view>
+
+static bool ParseCKey(std::string_view text, std::array<unsigned char,16>& key) {
+    if(text.size()!=32) return false;
+    auto digit=[](char c)->int {
+        if(c>='0'&&c<='9') return c-'0';
+        if(c>='a'&&c<='f') return c-'a'+10;
+        if(c>='A'&&c<='F') return c-'A'+10;
+        return -1;
+    };
+    for(size_t i=0;i<key.size();++i) {
+        int hi=digit(text[2*i]),lo=digit(text[2*i+1]);
+        if(hi<0||lo<0) return false;
+        key[i]=static_cast<unsigned char>((hi<<4)|lo);
+    }
+    return true;
+}
+
+// Inspect legacy ROOT's header and the small TVFS top-level directory only.
+// No data files are exported. A prefix is not a full-file integrity check.
+static bool ManifestMetadata(HANDLE storage, char const* label, char const* ckey,
+                             std::array<unsigned char,16> const& key, bool whole) {
+    HANDLE file=nullptr;
+    if(!CascOpenFile(storage,key.data(),CASC_LOCALE_ALL_WOW,
+                     CASC_OPEN_BY_CKEY|CASC_STRICT_DATA_CHECK,&file)) {
+        std::printf("%s\t%s\tOPEN_FAILED\t0\t0\t-\t%u\n",label,ckey,GetCascError());
+        return false;
+    }
+    ULONGLONG size=0;
+    if(!CascGetFileSize64(file,&size)) {
+        std::printf("%s\t%s\tSIZE_FAILED\t0\t0\t-\t%u\n",label,ckey,GetCascError());
+        CascCloseFile(file);return false;
+    }
+    if(size==0||(whole&&size>65536)) {
+        std::printf("%s\t%s\tSIZE_REJECTED\t%llu\t0\t-\t0\n",label,ckey,
+                    static_cast<unsigned long long>(size));
+        CascCloseFile(file);return false;
+    }
+    std::array<unsigned char,65536> bytes{};
+    DWORD want=static_cast<DWORD>(whole?size:(size<64?size:64)),got=0;
+    if(!CascReadFile(file,bytes.data(),want,&got)||got!=want) {
+        std::printf("%s\t%s\tREAD_FAILED\t%llu\t%u\t-\t%u\n",label,ckey,
+                    static_cast<unsigned long long>(size),got,GetCascError());
+        CascCloseFile(file);return false;
+    }
+    std::printf("%s\t%s\t%s\t%llu\t%u\t",label,ckey,whole?"FULL_READ_OK":"PREFIX_READ_OK",
+                static_cast<unsigned long long>(size),got);
+    for(DWORD i=0;i<got;++i) std::printf("%02x",bytes[i]);
+    std::puts("\t0");
+    CascCloseFile(file);return true;
+}
 
 struct Target { char const* label; DWORD id; char const* name; };
 static Target const targets[] = {
@@ -19,7 +70,13 @@ static Target const targets[] = {
     {"wdt_compact",0,"world/maps/trollraid/trollraid.wdt"}
 };
 int main(int argc,char** argv) {
-    if(argc!=3) { std::fprintf(stderr,"Usage: legion-casc-probe CLIENT_ROOT PRODUCT\n"); return 2; }
+    bool metadata=argc==6&&std::string_view(argv[3])=="--manifest-metadata";
+    std::array<unsigned char,16> rootKey{},vfsKey{};
+    if((argc!=3&&!metadata)||(metadata&&
+       (!ParseCKey(argv[4],rootKey)||!ParseCKey(argv[5],vfsKey)))) {
+        std::fprintf(stderr,"Usage: legion-casc-probe CLIENT_ROOT PRODUCT [--manifest-metadata ROOT_CKEY VFS_ROOT_CKEY]\n");
+        return 2;
+    }
     CASC_OPEN_STORAGE_ARGS args{};
     args.Size=sizeof(args); args.szLocalPath=argv[1]; args.szCodeName=argv[2];
     args.dwLocaleMask=CASC_LOCALE_ALL_WOW;
@@ -27,6 +84,13 @@ int main(int argc,char** argv) {
     // Local storage, no ONLINE or FORCE_DOWNLOAD flags. Never zero-fill encrypted data.
     if(!CascOpenStorageEx(nullptr,&args,false,&storage)) {
         std::fprintf(stderr,"LOCAL_STORAGE_OPEN_FAILED error=%u\n",GetCascError());return 1;
+    }
+    if(metadata) {
+        std::puts("label\tckey\tstatus\tfile_bytes\tread_bytes\thex\terror");
+        bool rootOk=ManifestMetadata(storage,"root_prefix",argv[4],rootKey,false);
+        bool vfsOk=ManifestMetadata(storage,"vfs_root",argv[5],vfsKey,true);
+        CascCloseStorage(storage);
+        return rootOk&&vfsOk?0:1;
     }
     std::puts("label\tfile_data_id\tstatus\tbytes\tsha256\terror");
     for(auto const& target:targets) {

@@ -1,0 +1,29 @@
+{
+  "format": "wowforever-client-config-review-v1",
+  "archive_sha256": "4c006b3fde020bad5cd98ace1a79771a0e2ea720a56e38ea0808ef5947c28562",
+  "config_files_md5_verified": 3,
+  "active_product": "wow_classic_beta",
+  "active_version": "1.60.1.70532",
+  "build_name": "WOW-70532patch1.60.1_Beta",
+  "build_key": "ad1802f4455e427ed8b7769aab25b0c0",
+  "cdn_key": "c13b476a09cb3262797a6fdc88103036",
+  "legacy_root_ckey": "6e2657526d320facacb6f3dfff62d8a2",
+  "encoding_ckey": "9a6b1c5671be704220ed9f58ff7f22e1",
+  "encoding_ekey": "852049f0a44aa84de50703f7d9d8ab9b",
+  "vfs_root_ckey": "64e9f21d6280d51d5949a63926874f53",
+  "vfs_root_ekey": "c890eb91bde5d63cd63fdaa0fb72e190",
+  "vfs_root_decoded_bytes": 37324,
+  "vfs_root_encoded_bytes": 23806,
+  "numbered_vfs_entries": 582,
+  "manifest_bytes_inspected": false,
+  "legacy_root_header_version": "not determined from build config",
+  "writer_assessment": {
+    "repository": "https://github.com/wowdev/TACT.Net",
+    "inspected_commit": "57618c47dc0cfef1bfc0e7585bf335ced7218389",
+    "tvfs_implementation_found": false,
+    "root_block_factory": "RootHeader.Version 2/3 both select RootBlockV2; no 58221 group-header implementation found",
+    "compatibility_with_this_client": "not verified; do not modify live client with this writer"
+  },
+  "reader_note": "Forever CascLib tries TVFS then can fall back to legacy ROOT via ERROR_REPARSE_ROOT; a successful CascLib open does not establish which metadata paths WowB.exe uses.",
+  "installed_on_forever": false
+}
