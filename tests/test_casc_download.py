@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 SCRIPTS = Path(__file__).parents[1]/'scripts'
 sys.path.insert(0, str(SCRIPTS))
-from casc_download import Download
+from casc_download import Download, append_download
 
 spec = importlib.util.spec_from_file_location('download_audit', SCRIPTS/'audit-casc-client.py')
 audit = importlib.util.module_from_spec(spec)
@@ -32,6 +32,63 @@ def fixture(count=10, tags=(), version=1, checksums=0, flags=0):
 
 
 class DownloadTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('CASC_DOWNLOAD_TAG_CHECKER'),'Native tag-mask checker required')
+    def test_native_reader_sees_only_explicit_new_memberships_not_old_padding(self):
+        for selected in ([],[5,9,20,24]):
+            with self.subTest(selected=selected), tempfile.TemporaryDirectory() as temp:
+                store = Path(temp)/'store'
+                original = fixture(count=7,tags=[(f'tag-{i}'.encode(),i,b'\xff') for i in range(30)])
+                resource = lab.asset(lab.BASE_TEXT)
+                raw = append_download(original,[dict(ekey=resource['ekey'],encoded_bytes=len(resource['encoded']),
+                                                     priority=0,tag_indices=selected)])
+                original_asset = lab.asset
+                def tagged_asset(body):
+                    return original_asset(raw if body==b'DL\1\x10\0'+bytes(11) else body)
+                with patch.object(lab,'asset',side_effect=tagged_asset):
+                    lab.write_store(store)
+                expected = sum(1<<index for index in selected)
+                native = subprocess.run([os.environ['CASC_DOWNLOAD_TAG_CHECKER'],str(store),str(lab.BASE_ID),
+                                         format(expected,'x')],capture_output=True)
+                self.assertEqual(native.returncode,0,native.stdout+native.stderr)
+
+    def test_append_clears_old_padding_ones_without_changing_old_memberships(self):
+        original = fixture(count=3, tags=[(b'Windows',1,b'\xff'),(b'Talebound',16384,b'\x1f')])
+        row = dict(ekey=hashlib.md5(b'new').digest(),encoded_bytes=456,priority=0,tag_indices=[])
+        updated = Download(append_download(original,[row]))
+        self.assertEqual(updated.count,4)
+        self.assertEqual(updated.tag_indices(3),[])
+        for index in range(3):
+            self.assertEqual(updated.tag_indices(index),Download(original).tag_indices(index))
+        self.assertEqual([t['member_count'] for t in updated.summary()['tags']], [3,0])
+        self.assertEqual([t['unused_bits_value'] for t in updated.summary()['tags']], [0,0])
+        self.assertEqual(updated.data[11:11+3*22], original[11:11+3*22])
+
+    def test_append_explicit_tags_across_bitmap_byte_boundary(self):
+        original = fixture(count=7, tags=[(b'Windows',1,b'\xff'),(b'ruRU',3,b'\x01')])
+        rows = [dict(ekey=hashlib.md5(f'new-{i}'.encode()).digest(),encoded_bytes=456,priority=0,tag_indices=tags)
+                for i,tags in enumerate([[],[1]])]
+        updated = Download(append_download(original,rows))
+        self.assertEqual(updated.tag_indices(7),[])
+        self.assertEqual(updated.tag_indices(8),[1])
+        self.assertEqual([t['member_count'] for t in updated.summary()['tags']], [7,1])
+        self.assertEqual(updated.tags[0]['bitmap'].tobytes(), b'\xfe\0')
+        self.assertEqual(updated.tags[1]['bitmap'].tobytes(), b'\0\x80')
+
+    def test_append_refuses_implicit_tags_duplicate_keys_and_unsupported_layout(self):
+        original = fixture(count=1,tags=[(b'Windows',1,b'\x80')])
+        row = dict(ekey=hashlib.md5(b'new').digest(),encoded_bytes=456,priority=0,tag_indices=[0])
+        self.assertEqual(append_download(original,[]),original)
+        for bad in ({k:v for k,v in row.items() if k!='tag_indices'},
+                    dict(row,tag_indices=[1]),dict(row,tag_indices=[True]),
+                    dict(row,tag_indices=[0,0]),dict(row,encoded_bytes=-1),
+                    dict(row,priority=256),dict(row,ekey=hashlib.md5(b'entry 0').digest())):
+            with self.assertRaises(ValueError):
+                append_download(original,[bad])
+        with self.assertRaisesRegex(ValueError,'duplicate'):
+            append_download(original,[row,row])
+        with self.assertRaisesRegex(ValueError,'v1'):
+            append_download(fixture(version=2),[row])
+
     def test_big_endian_types_msb_membership_and_unused_bits(self):
         raw = fixture(tags=[(b'ruRU',0x102,b'\x81\xff'),(b'Windows',1,b'\x40\0')])
         parsed = Download(raw)

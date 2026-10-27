@@ -1,0 +1,240 @@
+{
+  "format": "wowforever-download-tags-review-v1",
+  "source_report_sha256": "1b0d5b85eb1cf6a2efc50b880175578cf6d61683a594e8f8dea8147779ce693c",
+  "build_key": "ad1802f4455e427ed8b7769aab25b0c0",
+  "build_name": "WOW-70532patch1.60.1_Beta",
+  "download_md5": "d9ccba873d3d9e7573ad7c6354e47e98",
+  "version": 1,
+  "entry_count": 2208563,
+  "tag_count": 30,
+  "bitmap_bytes": 276071,
+  "tag_types": {
+    "1": 7,
+    "2": 3,
+    "16384": 3,
+    "3": 10,
+    "4": 5,
+    "5": 2
+  },
+  "tags": [
+    {
+      "index": 0,
+      "name": "Android",
+      "type": 1,
+      "member_count": 2206990,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 1,
+      "name": "IOS",
+      "type": 1,
+      "member_count": 2206990,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 2,
+      "name": "OSX",
+      "type": 1,
+      "member_count": 2207568,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 3,
+      "name": "PS5",
+      "type": 1,
+      "member_count": 2206990,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 4,
+      "name": "Web",
+      "type": 1,
+      "member_count": 2206990,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 5,
+      "name": "Windows",
+      "type": 1,
+      "member_count": 2207987,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 6,
+      "name": "XBSX",
+      "type": 1,
+      "member_count": 2206990,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 7,
+      "name": "arm64",
+      "type": 2,
+      "member_count": 2208541,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 8,
+      "name": "x86_32",
+      "type": 2,
+      "member_count": 2208508,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 9,
+      "name": "x86_64",
+      "type": 2,
+      "member_count": 2208547,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 10,
+      "name": "Alternate",
+      "type": 16384,
+      "member_count": 6655,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 11,
+      "name": "HighRes",
+      "type": 16384,
+      "member_count": 95850,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 12,
+      "name": "Talebound",
+      "type": 16384,
+      "member_count": 0,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 13,
+      "name": "deDE",
+      "type": 3,
+      "member_count": 1142272,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 14,
+      "name": "enUS",
+      "type": 3,
+      "member_count": 1144990,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 15,
+      "name": "esES",
+      "type": 3,
+      "member_count": 1144115,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 16,
+      "name": "esMX",
+      "type": 3,
+      "member_count": 1129821,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 17,
+      "name": "frFR",
+      "type": 3,
+      "member_count": 1150729,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 18,
+      "name": "koKR",
+      "type": 3,
+      "member_count": 1142065,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 19,
+      "name": "ptBR",
+      "type": 3,
+      "member_count": 1141788,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 20,
+      "name": "ruRU",
+      "type": 3,
+      "member_count": 1131785,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 21,
+      "name": "zhCN",
+      "type": 3,
+      "member_count": 1142975,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 22,
+      "name": "zhTW",
+      "type": 3,
+      "member_count": 1142562,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 23,
+      "name": "CN",
+      "type": 4,
+      "member_count": 2208553,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 24,
+      "name": "EU",
+      "type": 4,
+      "member_count": 2208559,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 25,
+      "name": "KR",
+      "type": 4,
+      "member_count": 2208549,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 26,
+      "name": "TW",
+      "type": 4,
+      "member_count": 2208549,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 27,
+      "name": "US",
+      "type": 4,
+      "member_count": 2208549,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 28,
+      "name": "speech",
+      "type": 5,
+      "member_count": 2100713,
+      "unused_bits_value": 31
+    },
+    {
+      "index": 29,
+      "name": "text",
+      "type": 5,
+      "member_count": 1112801,
+      "unused_bits_value": 31
+    }
+  ],
+  "all_trailing_unused_bits_are_ones": true,
+  "padding_bits_must_not_be_inherited_by_new_entries": true,
+  "metadata_reference_match_counts": {
+    "encoding": 0,
+    "vfs-root": 0
+  },
+  "tag_assignment_policy_verified": false,
+  "real_client_writer_supported": false,
+  "next_step": "Independently copied client; explicit resource tag policy and metadata changes remain to be validated before installing game data"
+}

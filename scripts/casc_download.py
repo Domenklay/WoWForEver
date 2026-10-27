@@ -1,7 +1,8 @@
-"""Read-only DOWNLOAD v1-v3 layout reader, following the pinned CascLib.
+"""DOWNLOAD v1-v3 reader and explicit v1 byte transform, following pinned CascLib.
 
 Tag bitmaps use MSB-first entry indices and big-endian uint16 types. No tag
-semantics or tag assignments for new resources are inferred by this reader.
+semantics or tag assignments for new resources are inferred. These functions
+never open a client installation or write files.
 """
 import hashlib
 import struct
@@ -95,3 +96,59 @@ class Download:
                 if len(result[name]['matches']) < 8:
                     result[name]['matches'].append(item)
         return result
+
+
+def append_download(data, rows):
+    """Append v1 entries with EXPLICIT tag indices; preserve all old memberships.
+
+    Pure byte transform, not a client installer. In particular, an empty tag
+    list is an explicit choice, not permission to guess platform/locale tags.
+    """
+    source = Download(data)
+    if (source.version, source.key_bytes, source.checksums, source.flag_bytes) != (1,16,0,0):
+        raise ValueError('DOWNLOAD append supports only checksumless full-key v1')
+    rows = list(rows)
+    if not rows:
+        return data
+    if source.count + len(rows) > 0xffffffff:
+        raise ValueError('DOWNLOAD entry count overflow')
+    keys, seen = {}, set()
+    for index, row in enumerate(rows):
+        key = row['ekey']
+        if not isinstance(key, bytes) or len(key) != 16 or key in seen:
+            raise ValueError('Invalid/duplicate new DOWNLOAD EKey')
+        if type(row['encoded_bytes']) is not int or not 0 < row['encoded_bytes'] < 1 << 40:
+            raise ValueError('Invalid DOWNLOAD encoded size')
+        if type(row['priority']) is not int or not 0 <= row['priority'] <= 255:
+            raise ValueError('Invalid DOWNLOAD priority')
+        tags = row.get('tag_indices')
+        if (not isinstance(tags, (list, tuple)) or
+                any(type(t) is not int or not 0 <= t < source.tag_count for t in tags) or
+                len(set(tags)) != len(tags)):
+            raise ValueError('Explicit valid DOWNLOAD tag indices required')
+        keys[index] = key
+        seen.add(key)
+    if any(ref['match_count'] for ref in source.references(keys).values()):
+        raise ValueError('New DOWNLOAD EKey already exists')
+    count = source.count + len(rows)
+    header = bytearray(data[:source.header_bytes])
+    struct.pack_into('>I', header, 5, count)
+    result = bytearray(header)
+    result.extend(data[source.header_bytes:source.entries_end])
+    for row in rows:
+        result.extend(row['ekey']+row['encoded_bytes'].to_bytes(5,'big')+bytes([row['priority']]))
+    for tag_index, tag in enumerate(source.tags):
+        bitmap = bytearray((count+7)//8)
+        bitmap[:source.bitmap_bytes] = tag['bitmap']
+        # Native manifests may fill unused bits with ones (the real 70532
+        # profile does). They MUST NOT become memberships of appended entries.
+        if source.count % 8:
+            bitmap[source.bitmap_bytes-1] &= (0xff << (8-source.count%8)) & 0xff
+        for offset, row in enumerate(rows, source.count):
+            if tag_index in row['tag_indices']:
+                bitmap[offset//8] |= 0x80 >> (offset%8)
+        result.extend(bytes.fromhex(tag['name_hex'])+b'\0'+tag['type'].to_bytes(2,'big')+bitmap)
+    result.extend(source.padding)
+    updated = bytes(result)
+    Download(updated)  # Verify the complete new layout before returning bytes.
+    return updated
