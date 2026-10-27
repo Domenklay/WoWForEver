@@ -53,17 +53,11 @@ else
     done
 fi
 
-mysql_query() {
-    local db=$1 sql=$2
-    docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -N -B -uroot '"$db"' -e '"$(printf '%q' "$sql")" 2>/dev/null
-}
-
 if docker compose ps --status running --services 2>/dev/null | grep -qx mysql; then
     pass 'mysql container is running'
-    missing=0
     for table in forever_character_class_progress forever_character_subclass_state forever_character_subclass_spells forever_character_subclass_resources; do
         count=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot characters -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='characters' AND table_name='$table';\"" 2>/dev/null || echo 0)
-        if [ "$count" = "1" ]; then pass "characters.$table exists"; else fail "characters.$table missing"; missing=1; fi
+        if [ "$count" = "1" ]; then pass "characters.$table exists"; else fail "characters.$table missing"; fi
     done
     bindings=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot world -e \"SELECT COUNT(*) FROM spell_script_names WHERE ScriptName='spell_forever_subclass';\"" 2>/dev/null || echo 0)
     if [ "${bindings:-0}" -gt 0 ] 2>/dev/null; then pass "world spell bindings: $bindings"; else fail 'no spell_forever_subclass bindings in world DB'; fi
