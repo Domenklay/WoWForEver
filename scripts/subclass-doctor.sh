@@ -36,17 +36,14 @@ container=$(docker compose ps -q worldserver 2>/dev/null)
 image=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
 label=$(docker inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' "$container" 2>/dev/null || true)
 printf 'Running image: %s\n' "${image:-unknown}"
-if [ "$label" = '0.2.1-forever.2' ]; then
-    pass "subclass image label: $label (FSC1 endpoint generation)"
+if [ "$label" = '0.3.0-forever.3' ]; then
+    pass "subclass image label: $label (multi-resource + auto-rank generation)"
 elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then
-    fail "subclass image label: $label (expected 0.2.1-forever.2)"
+    fail "subclass image label: $label (expected 0.3.0-forever.3)"
 else
     fail 'running image has no org.wowforever.subclass label'
 fi
 
-# The transport endpoint lives in a core patch, so an image built before that
-# patch commit can have a healthy old subclass module while still being unable
-# to receive FSC1 from the 70532 client.
 transport_patch='docker/patches/0004-forever-subclass-server-addon-endpoint.patch'
 if [ -f "$transport_patch" ]; then
     patch_epoch=$(git log -1 --format=%ct -- "$transport_patch" 2>/dev/null || echo 0)
@@ -77,14 +74,14 @@ if docker compose ps --status running --services 2>/dev/null | grep -qx mysql; t
         if [ "$count" = "1" ]; then pass "characters.$table exists"; else fail "characters.$table missing"; fi
     done
     bindings=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot world -e \"SELECT COUNT(*) FROM spell_script_names WHERE ScriptName='spell_forever_subclass';\"" 2>/dev/null || echo 0)
-    if [ "${bindings:-0}" -gt 0 ] 2>/dev/null; then pass "world spell bindings: $bindings"; else fail 'no spell_forever_subclass bindings in world DB'; fi
+    if [ "${bindings:-0}" -ge 18 ] 2>/dev/null; then pass "world spell bindings: $bindings (includes druid rage/energy roots)"; else fail "world spell bindings: ${bindings:-0} (expected at least 18)"; fi
 else
     fail 'mysql container is not running'
 fi
 
 printf '\n'
 if [ "$ok" = "1" ]; then
-    printf 'RESULT: server-side subclass runtime and FSC1 transport image look ready.\n'
+    printf 'RESULT: multi-resource subclass runtime and FSC1 transport look ready.\n'
     exit 0
 else
     printf 'RESULT: server-side subclass runtime is incomplete or stale. Do not recreate the character; rebuild/install the module.\n'
