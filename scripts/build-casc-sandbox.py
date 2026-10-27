@@ -28,9 +28,10 @@ def rot(x, k):
     return ((x << k) | (x >> (32-k))) & MASK
 
 
-def hashlittle(data, seed=0):
-    """lookup3 hashlittle, including the unaligned byte path and empty input."""
+def hashlittle2(data, seed=0, low=0):
+    """lookup3 pair (pc, pb), including the unaligned byte path."""
     a = b = c = (0xDEADBEEF + len(data) + seed) & MASK
+    c = (c+low)&MASK
     pos = 0
     while len(data)-pos > 12:
         x, y, z = struct.unpack_from("<3I", data, pos)
@@ -44,7 +45,7 @@ def hashlittle(data, seed=0):
         pos += 12
     tail = data[pos:]
     if not tail:
-        return c
+        return c,b
     a = (a+int.from_bytes(tail[:4], "little"))&MASK
     b = (b+int.from_bytes(tail[4:8], "little"))&MASK
     c = (c+int.from_bytes(tail[8:12], "little"))&MASK
@@ -54,7 +55,11 @@ def hashlittle(data, seed=0):
     c = ((c ^ b)-rot(b,16))&MASK
     a = ((a ^ c)-rot(c, 4))&MASK
     b = ((b ^ a)-rot(a,14))&MASK
-    return ((c ^ b)-rot(b,24))&MASK
+    return ((c ^ b)-rot(b,24))&MASK,b
+
+
+def hashlittle(data, seed=0):
+    return hashlittle2(data,seed)[0]
 
 
 def asset(content):

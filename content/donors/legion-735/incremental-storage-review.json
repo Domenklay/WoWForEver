@@ -1,0 +1,38 @@
+{
+  "format": "wowforever-incremental-storage-review-v1",
+  "synthetic_only": true,
+  "real_client_update_supported": false,
+  "game_client_tested": false,
+  "source_tree_unchanged": true,
+  "first_copy_unchanged_by_second_update": true,
+  "old_data_segments_byte_identical": true,
+  "first_update": {
+    "added_file_ids": 70,
+    "verified_file_ids": 71,
+    "new_segment": 1,
+    "root_groups": 2,
+    "encoding_ckey_pages": 3,
+    "encoding_ekey_pages": 2
+  },
+  "second_update": {
+    "added_file_ids": 1,
+    "verified_file_ids": 72,
+    "new_segment": 2,
+    "reused_encodings": 1,
+    "root_groups": 3,
+    "encoding_ckey_pages": 4,
+    "encoding_ekey_pages": 2
+  },
+  "native_reader": "Forever CascLib, core 91d49b230f89c3ab4719f5b2b2d1e70ed36613c4, existing readonly fallback, CASC_STRICT_DATA_CHECK",
+  "docker_verification": {
+    "verified_file_ids": 72,
+    "network_mode": "none",
+    "readonly_root": true,
+    "readonly_storage": true,
+    "user": "1000:1000",
+    "capabilities": "ALL dropped",
+    "no_new_privileges": true,
+    "input_tree_unchanged": true,
+    "image": "Locally bundled native checker and host runtime libraries; repository Docker target not built"
+  }
+}

@@ -78,6 +78,7 @@ def parse_tvfs(data):
                                ekey_prefix=raw[:9].hex(),
                                encoded_bytes=int.from_bytes(raw[9:13], "big"),
                                content_bytes=content_size,
+                               espec_offset=est_offset,
                                ckey=raw[17+ew:33+ew].hex()))
             pos = stop
         return result
