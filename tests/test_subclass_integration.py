@@ -47,12 +47,21 @@ class SubclassIntegrationTests(unittest.TestCase):
             backup=root/'backup';target=installer.install(client,backup)
             self.assertTrue((target/'ForeverSubclass.lua').exists())
             self.assertTrue((target/'ForeverSubclassTalentTab.lua').exists())
+            self.assertTrue((target/'ForeverSubclassTalentCompat.lua').exists())
+            toc=(target/'ForeverSubclass.toc').read_text()
+            self.assertIn('ForeverSubclassTalentCompat.lua',toc)
             self.assertEqual((backup/'previous-addon/previous.lua').read_text(),'-- previous user addon\n')
             with self.assertRaises(FileExistsError):installer.install(client,backup)
             installer.restore(backup)
             self.assertEqual(sorted(p.name for p in target.iterdir()),['previous.lua'])
             self.assertEqual((client/'WowB.exe').read_bytes(),b'untouched executable fixture')
             self.assertEqual((root/'Data/sentinel').read_bytes(),b'untouched CASC fixture')
+
+    def test_forever_talent_compat_targets_real_talents_frame(self):
+        compat=(MODULE/'addon/ForeverSubclass/ForeverSubclassTalentCompat.lua').read_text()
+        self.assertIn('PlayerSpellsFrame.TalentsFrame',compat)
+        self.assertIn('ForeverSubclassTalentTab',compat)
+        self.assertIn('SetParent(talentHost)',compat)
 
     def test_new_addon_uninstall_and_symlink_refusal(self):
         with tempfile.TemporaryDirectory() as temp:
