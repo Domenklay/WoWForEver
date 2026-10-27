@@ -1,7 +1,7 @@
 diff --git a/src/server/game/Handlers/ChatHandler.cpp b/src/server/game/Handlers/ChatHandler.cpp
 --- a/src/server/game/Handlers/ChatHandler.cpp
 +++ b/src/server/game/Handlers/ChatHandler.cpp
-@@ -536,6 +536,16 @@ void WorldSession::HandleChatAddonMessage(ChatMsg type, std::string prefix, std
+@@ -536,6 +536,17 @@ void WorldSession::HandleChatAddonMessage(ChatMsg type, std::string prefix, std
      if (text.length() > 255)
          return;
  
