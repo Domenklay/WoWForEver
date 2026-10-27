@@ -13,9 +13,35 @@ import sys
 from pathlib import Path
 
 from casc_manifest_update import root_groups,Encoding
+from casc_download import Download
 
 SPEC=importlib.util.spec_from_file_location("casc_copy",Path(__file__).with_name("update-casc-sandbox.py"))
 copy=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(copy)
+
+
+def download_report(store, root_ekey=None):
+    keys=store.values['download'].split()
+    body=store.read(bytes.fromhex(keys[1]),bytes.fromhex(keys[0]))
+    manifest=Download(body)
+    result=manifest.summary()
+    references={}
+    for name in ('encoding','vfs-root'):
+        values=store.values.get(name,'').split()
+        if len(values)>=2:
+            references[name]=bytes.fromhex(values[1])
+    if root_ekey is not None:
+        references['root']=root_ekey
+    result['reference_entries']=manifest.references(references)
+    return result
+
+
+def audit_download(path):
+    store=copy.Store(path,synthetic_only=False)
+    return dict(format='wowforever-download-audit-v1', build_key=store.build_key,
+                build_name=store.values.get('build-name'), client_modified=False,
+                installation_supported=False, download=download_report(store),
+                audit_scope='DOWNLOAD layout and all tag bitmaps; no full ROOT/ENCODING revalidation',
+                audit_passed=True)
 
 
 def audit(path):
@@ -75,20 +101,7 @@ def audit(path):
         raise ValueError("TVFS root reference mismatch")
     result["tvfs"]=dict(bytes=len(raw_vfs),md5=hashlib.md5(raw_vfs).hexdigest(),
                         top_level_references=len(vfs["leaves"]),legacy_root_reference_matches=True)
-    download=configured("download")
-    if len(download)<11 or download[:2]!=b"DL" or download[2] not in (1,2,3):
-        raise ValueError("Unsupported DOWNLOAD header")
-    version=download[2];header_bytes={1:11,2:12,3:16}[version]
-    if len(download)<header_bytes:raise ValueError("Truncated DOWNLOAD header")
-    keys=download[3];checksums=download[4];count=struct.unpack_from(">I",download,5)[0]
-    tags=struct.unpack_from(">H",download,9)[0];flags=download[11] if version>=2 else 0
-    entry_bytes=keys+5+1+(4 if checksums else 0)+flags
-    if header_bytes+count*entry_bytes>len(download):raise ValueError("Truncated DOWNLOAD entry table")
-    result["download"]=dict(bytes=len(download),md5=hashlib.md5(download).hexdigest(),
-                            version=version,ekey_bytes=keys,entry_has_checksum=checksums,
-                            entry_count=count,tag_count=tags,flag_bytes=flags,
-                            tags_parsed=False,
-                            supported_by_lab_updater=version==1 and keys==16 and not checksums and not tags)
+    result['download']=download_report(store,root_ekey)
     result["audit_passed"]=True
     return result
 
@@ -97,15 +110,16 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("client",type=Path)
     parser.add_argument("--output",type=Path,required=True)
+    parser.add_argument('--download-only',action='store_true',help='Inspect DOWNLOAD and tag bitmaps without repeating the full manifest audit')
     args=parser.parse_args()
     client=args.client.resolve();output=args.output.resolve()
     protected=(client/"Data").resolve()
     if output==(client/".build.info").resolve() or output==protected or protected in output.parents:
         parser.error("Report must be outside the client's Data and .build.info")
     try:
-        result=audit(client)
+        result=audit_download(client) if args.download_only else audit(client)
     except (ValueError,OSError,KeyError,struct.error) as error:
-        result=dict(format="wowforever-full-manifest-audit-v1",audit_passed=False,
+        result=dict(format="wowforever-download-audit-v1" if args.download_only else "wowforever-full-manifest-audit-v1",audit_passed=False,
                     client_modified=False,error=str(error),installation_supported=False)
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(result,indent=2)+"\n")
