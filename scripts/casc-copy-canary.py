@@ -118,24 +118,7 @@ def rollback_files(path,journal_file):
     journal['phase']='rolled_back';checkpoint(journal_file,journal)
 
 
-def apply(path,checker,controls=None,expected_build=BASE_KEY,progress=print):
-    path,marker=copy_identity(path)
-    operations=path/'casc-canary-operations'
-    if operations.is_symlink():raise ValueError('Linked operation directory')
-    if (operations/'active.json').exists():
-        previous=json.loads(operation_file(path).read_text())
-        if previous.get('phase')!='rolled_back':raise ValueError('A canary operation already exists; rollback first')
-    controls=CONTROLS if controls is None else controls
-    original=(path/'.build.info').read_bytes()
-    if sha(original)!=marker['sha256']['.build.info']:
-        raise ValueError('Copy build info differs from its verified baseline; rollback first')
-    if marker['build_key']!=expected_build:raise ValueError('Unexpected copy build key')
-    store=storelib.Store(path,synthetic_only=False)
-    if store.build_key!=expected_build:raise ValueError('Unexpected active build key')
-    if store.values.get('vfs-1')!=store.values.get('vfs-root'):
-        raise ValueError('Unsupported distinct vfs-1/root profile; no changes made')
-    progress('Checking existing control files with native CascLib...')
-    before=native_check(checker,path,controls)
+def prepare_resource(store, controls, progress=print):
     def configured(name):
         keys=store.values[name].split()
         return store.read(bytes.fromhex(keys[1]),bytes.fromhex(keys[0]))
@@ -171,6 +154,47 @@ def apply(path,checker,controls=None,expected_build=BASE_KEY,progress=print):
     rebuilt=Encoding(encoded['content'])
     for _ in rebuilt.rows('c'):pass
     for _ in rebuilt.rows('e'):pass
+    return dict(additions=additions,resource=resource,root=root,vfs=vfs,download=download,encoded=encoded,profiles=profiles)
+
+
+def resource_configuration(store, prepared):
+    root=prepared['root'];encoded=prepared['encoded'];download=prepared['download'];vfs=prepared['vfs']
+    values=dict(store.values)
+    for name,obj in (('root',root),('encoding',encoded),('download',download),('vfs-root',vfs),('vfs-1',vfs)):
+        values[name]=obj['ckey'].hex()+(' '+obj['ekey'].hex() if name!='root' else '')
+        if name!='root':values[name+'-size']=f'{len(obj["content"])} {len(obj["encoded"])}'
+    config='\n'.join(line.split(' = ',1)[0]+' = '+values[line.split(' = ',1)[0]] if ' = ' in line else line
+                     for line in store.config.splitlines())+'\n'
+    build=hashlib.md5(config.encode()).hexdigest()
+    config_path=f'Data/config/{build[:2]}/{build[2:4]}/{build}'
+    store.csv[store.row][store.build_column]=build
+    output=io.StringIO();csv.writer(output,delimiter='|',lineterminator='\n').writerows(store.csv)
+    new_info=output.getvalue().encode()
+    return dict(path=config_path,body=config.encode(),build_key=build,build_info=new_info)
+
+
+def apply(path,checker,controls=None,expected_build=BASE_KEY,progress=print):
+    path,marker=copy_identity(path)
+    operations=path/'casc-canary-operations'
+    if operations.is_symlink():raise ValueError('Linked operation directory')
+    if (operations/'active.json').exists():
+        previous=json.loads(operation_file(path).read_text())
+        if previous.get('phase')!='rolled_back':raise ValueError('A canary operation already exists; rollback first')
+    controls=CONTROLS if controls is None else controls
+    original=(path/'.build.info').read_bytes()
+    if sha(original)!=marker['sha256']['.build.info']:
+        raise ValueError('Copy build info differs from its verified baseline; rollback first')
+    if marker['build_key']!=expected_build:raise ValueError('Unexpected copy build key')
+    store=storelib.Store(path,synthetic_only=False)
+    if store.build_key!=expected_build:raise ValueError('Unexpected active build key')
+    if store.values.get('vfs-1')!=store.values.get('vfs-root'):
+        raise ValueError('Unsupported distinct vfs-1/root profile; no changes made')
+    progress('Checking existing control files with native CascLib...')
+    before=native_check(checker,path,controls)
+    prepared=prepare_resource(store,controls,progress)
+    additions=prepared['additions'];root=prepared['root'];vfs=prepared['vfs']
+    resource=prepared['resource']
+    download=prepared['download'];encoded=prepared['encoded'];profiles=prepared['profiles']
     numbers=[int(p.name[5:]) for p in (path/'Data/data').glob('data.*') if re.fullmatch(r'data\.\d{3}',p.name)]
     segment=max(numbers)+1
     if segment>999 or segment>=(1<<(40-store.bits)):raise ValueError('No available data segment number')
@@ -196,20 +220,12 @@ def apply(path,checker,controls=None,expected_build=BASE_KEY,progress=print):
         for record in sorted(bucket['records']+new):high,low=lab.hashlittle2(record,high,low)
         struct.pack_into('<I',raw,36,high)
         payloads[f'Data/data/{number:02x}{bucket["version"]+1:08x}.idx']=bytes(raw)
-    values=dict(store.values)
-    for name,obj in (('root',root),('encoding',encoded),('download',download),('vfs-root',vfs),('vfs-1',vfs)):
-        values[name]=obj['ckey'].hex()+(' '+obj['ekey'].hex() if name!='root' else '')
-        if name!='root':values[name+'-size']=f'{len(obj["content"])} {len(obj["encoded"])}'
-    config='\n'.join(line.split(' = ',1)[0]+' = '+values[line.split(' = ',1)[0]] if ' = ' in line else line
-                     for line in store.config.splitlines())+'\n'
-    build=hashlib.md5(config.encode()).hexdigest()
-    config_path=f'Data/config/{build[:2]}/{build[2:4]}/{build}'
+    configuration=resource_configuration(store,prepared)
+    config_path=configuration['path'];config_body=configuration['body'];build=configuration['build_key']
+    new_info=configuration['build_info']
     if (path/config_path).exists():
-        if (path/config_path).read_bytes()!=config.encode():raise ValueError('Build config collision')
-    else:payloads[config_path]=config.encode()
-    store.csv[store.row][store.build_column]=build
-    output=io.StringIO();csv.writer(output,delimiter='|',lineterminator='\n').writerows(store.csv)
-    new_info=output.getvalue().encode()
+        if (path/config_path).read_bytes()!=config_body:raise ValueError('Build config collision')
+    else:payloads[config_path]=config_body
     if shutil.disk_usage(path).free<sum(map(len,payloads.values()))+256*1024*1024:raise ValueError('Insufficient space for canary metadata')
     token=uuid.uuid4().hex;operations=path/'casc-canary-operations';operations.mkdir(exist_ok=True)
     folder=operations/token;folder.mkdir();journal_file=folder/'operation.json'

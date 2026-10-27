@@ -21,8 +21,8 @@ _OFFSET_KEYS = (0x049396B8,0x72A82A9B,0xEE626CCA,0x9917754F,
                 0x27F64B7D,0xC6F5C11B,0xD5757E3A,0x6C388745)
 
 
-def service_header(key, segment, offset):
-    head = lab.storage_record(dict(ekey=key, encoded=b''), offset, flags=1)[:26]
+def storage_record(obj, segment, offset, flags=0):
+    head = lab.storage_record(obj, offset, flags=flags)[:26]
     position = ((segment << 30) + offset + 30) & 0xffffffff
     encoded = (position ^ _OFFSET_KEYS[position & 15]).to_bytes(4, 'little')
     folded = bytearray(4)
@@ -31,7 +31,11 @@ def service_header(key, segment, offset):
     # Unlike the historical lab approximation, Agent's observed checksum uses
     # the combined archive position and absolute alignment of the offset mask.
     checksum = bytes(folded[(26+j)&3] ^ encoded[(offset+26+j)&3] for j in range(4))
-    return head+checksum
+    return head+checksum+obj['encoded']
+
+
+def service_header(key, segment, offset):
+    return storage_record(dict(ekey=key, encoded=b''), segment, offset, flags=1)
 
 
 def validate_prologue(raw, segment):
@@ -93,6 +97,10 @@ def rewrite_index(raw, bucket, additions=()):
 
 
 def plan_empty_segment(metadata, prologues):
+    return plan_segment(metadata, prologues)
+
+
+def plan_segment(metadata, prologues, assets=()):
     """Return new files and shmem. Does not write to a client directory."""
     shared = metadata['shmem']
     if len(shared) != 20480 or struct.unpack_from('<I', shared)[0] != 5:
@@ -106,7 +114,21 @@ def plan_empty_segment(metadata, prologues):
     new_keys = validate_prologue(prologue, new_segment)
     generations = struct.unpack_from('<16I', shared, 0x110)
     updated = bytearray(shared)
-    payloads = {f'data.{new_segment:03d}':prologue}
+    body = bytearray(prologue)
+    extra = [[] for _ in range(16)]
+    prefixes = set()
+    for obj in assets:
+        prefix = obj['ekey'][:9]
+        if prefix in prefixes or prefix in {key[:9] for key in new_keys}:
+            raise ValueError('New resource prefix collision')
+        prefixes.add(prefix)
+        offset = len(body)
+        record = storage_record(obj, new_segment, offset)
+        body.extend(record)
+        extra[lab.bucket(prefix)].append(prefix+((new_segment << 30) | offset).to_bytes(5, 'big')+struct.pack('<I', len(record)))
+    if len(body) > 1 << 30:
+        raise ValueError('Segment offset capacity exhausted')
+    payloads = {f'data.{new_segment:03d}':bytes(body)}
     for bucket, generation in enumerate(generations):
         if generation >= 0xffffffff:
             raise ValueError('Index generation overflow')
@@ -116,6 +138,8 @@ def plan_empty_segment(metadata, prologues):
         if parsed['bits'] != 30:
             raise ValueError('Only the observed 30-bit offset profile is supported')
         records = {row[:9]:row for row in parsed['records']}
+        if any(row[:9] in records for row in extra[bucket]):
+            raise ValueError('Resource already indexed or EKey prefix collision')
         for segment in old_segments:
             key = keys[segment][bucket][:9]
             expected = key+((segment << 30) | bucket*30).to_bytes(5, 'big')+struct.pack('<I', 30)
@@ -125,6 +149,6 @@ def plan_empty_segment(metadata, prologues):
         if key in records:
             raise ValueError('New segment service key already present')
         row = key+((new_segment << 30) | bucket*30).to_bytes(5, 'big')+struct.pack('<I', 30)
-        payloads[f'{bucket:02x}{generation+1:08x}.idx'] = rewrite_index(raw, bucket, [row])
+        payloads[f'{bucket:02x}{generation+1:08x}.idx'] = rewrite_index(raw, bucket, [row]+extra[bucket])
         struct.pack_into('<I', updated, 0x110+bucket*4, generation+1)
     return payloads, bytes(updated)

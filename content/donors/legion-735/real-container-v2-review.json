@@ -181,7 +181,9 @@
       ]
     }
   ],
-  "generated_candidate_runtime_verified": false,
+  "generated_candidate_runtime_verified": true,
   "game_resources_changed": false,
-  "dalaran_installed": false
+  "dalaran_installed": false,
+  "runtime_evidence": "User reported successful world entry after empty-segment apply and subsequent verify on 2026-10-27.",
+  "resource_candidate_runtime_verified": false
 }

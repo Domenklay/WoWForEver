@@ -159,3 +159,64 @@ class NativeContainerTests(unittest.TestCase):
             self.assertEqual(len(native.validate_prologue(result, number)), 16)
         with self.assertRaises(ValueError):
             native.make_prologue(raw, 0, 256)
+
+    @unittest.skipUnless(os.environ.get('CASC_SANDBOX_CHECKER'), 'Native CascLib checker required')
+    def test_resource_upgrade_reads_new_file_and_rollback_restores_working_empty_segment(self):
+        checker = os.environ['CASC_SANDBOX_CHECKER']
+        experiment.apply(self.copy, checker, self.controls, self.key, progress=lambda _:None)
+        before_resource = self.snapshot(self.copy)
+        parent = experiment.active(self.copy)[0].name
+        result = experiment.apply(self.copy, checker, self.controls, self.key, progress=lambda _:None, resource=True)
+        self.assertEqual(result['mode'], 'resource')
+        self.assertEqual(result['parent_operation'], parent)
+        rows = experiment.verify(self.copy, checker)
+        self.assertEqual({int(row['file_id']) for row in rows}, {native.lab.BASE_ID, experiment.canary.CANARY_ID})
+        self.assertEqual(self.snapshot(self.source), self.before_source)
+        # Simulate the original client failure: old IDX are pruned and repair state changes.
+        for path in (self.copy/'Data/data').glob('*00000002.idx'):
+            path.unlink()
+        (self.copy/'Data/data/RepairMarker.psv').write_bytes(b'needs repair')
+        experiment.rollback(self.copy)
+        self.assertEqual(experiment.active(self.copy)[0].name, parent)
+        self.assertEqual(self.snapshot(self.copy), before_resource)
+        experiment.verify(self.copy, checker)
+
+    @unittest.skipUnless(os.environ.get('CASC_SANDBOX_CHECKER'), 'Native CascLib checker required')
+    def test_resource_postcheck_failure_restores_parent_build_and_metadata(self):
+        checker = os.environ['CASC_SANDBOX_CHECKER']
+        experiment.apply(self.copy, checker, self.controls, self.key, progress=lambda _:None)
+        before_resource = self.snapshot(self.copy)
+        original_check = experiment.canary.native_check
+        def reject_resource(checker, client, expected):
+            if experiment.canary.CANARY_ID in expected:
+                raise ValueError('resource postcheck failed')
+            return original_check(checker, client, expected)
+        with patch.object(experiment.canary, 'native_check', reject_resource):
+            with self.assertRaisesRegex(ValueError, 'resource postcheck failed'):
+                experiment.apply(self.copy, checker, self.controls, self.key, progress=lambda _:None, resource=True)
+        self.assertEqual(self.snapshot(self.copy), before_resource)
+        experiment.verify(self.copy, checker)
+
+    def test_resource_upgrade_requires_installed_empty_segment_before_writes(self):
+        with self.assertRaises(FileNotFoundError):
+            experiment.apply(self.copy, 'unused-checker', self.controls, self.key, progress=lambda _:None, resource=True)
+        self.assertEqual(self.snapshot(self.copy), self.before_copy)
+
+    def test_observed_native_service_header_checksum_regressions(self):
+        # Metadata values from the supplied, working container. No asset bodies.
+        references = [
+            ('0900a9ed876c985bf300000000000000', 0, 0, 'ed16645df4bee912'),
+            ('0600a9ed876c985bf300000000000000', 0, 30, 'a44163b289783ca4'),
+            ('0401001ab35f5c13c47c3673bf633f14', 1, 0, '91e0e8b2a5b9bd99'),
+        ]
+        for key, segment, offset, expected in references:
+            self.assertEqual(native.service_header(bytes.fromhex(key), segment, offset)[22:].hex(), expected)
+
+    def test_native_payload_framing_preserves_encoded_body(self):
+        obj = native.lab.asset(b'own payload fixture')
+        for segment in (0, 1, 2, 3, 48, 49):
+            for offset in (480, 481, 510, 511):
+                record = native.storage_record(obj, segment, offset)
+                self.assertEqual(record[30:], obj['encoded'])
+                self.assertEqual(struct.unpack_from('<IH', record, 16), (len(record), 0))
+                self.assertEqual(struct.unpack_from('<I', record, 22)[0], native.lab.hashlittle(record[:22], 0x3D6BE971))
