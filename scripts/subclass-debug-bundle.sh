@@ -3,9 +3,10 @@ set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 stamp=$(date +%Y%m%d-%H%M%S)
-out="backups/subclass-debug-$stamp.txt"
-mkdir -p backups
 client=${1:-/mnt/e/_classic_beta_/}
+reports=${2:-/mnt/e/WoWForEver-work/reports}
+mkdir -p "$reports"
+out="$reports/subclass-debug-$stamp.txt"
 
 {
   echo "ForeverSubclass diagnostic bundle"
@@ -80,14 +81,12 @@ client=${1:-/mnt/e/_classic_beta_/}
   while IFS= read -r -d '' sv; do
     found=1
     echo "--- $sv ---"
-    # SavedVariables are ordinary Lua. Keeping the raw file is intentional: it
-    # preserves every debug line without trying to parse/escape it in shell.
     cat "$sv" 2>/dev/null || true
     echo
   done < <(find "$client/WTF/Account" -type f -path '*/SavedVariables/ForeverSubclass.lua' -print0 2>/dev/null)
   if [ "$found" -eq 0 ]; then
     echo "No ForeverSubclass.lua SavedVariables found under $client/WTF/Account"
-    echo "Use /fsubdebug snapshot, then /reload or log out once before collecting."
+    echo "Use /fsubdebug, then /reload or log out once before collecting."
   fi
 } > "$out"
 
