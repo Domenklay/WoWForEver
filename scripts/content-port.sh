@@ -11,9 +11,10 @@ case "${1:-}" in
   status)
     docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot world' < "$port_dir/status.sql"
     exit ;;
-  apply|rollback) action=$1 ;;
-  *) echo "Usage: bash scripts/content-port.sh PORT {status|apply|rollback}"; exit 2 ;;
+  apply|rollback|repair) action=$1 ;;
+  *) echo "Usage: bash scripts/content-port.sh PORT {status|apply|rollback|repair}"; exit 2 ;;
 esac
+test -f "$port_dir/$action.sql" || { echo "Action $action is unavailable for $port_name"; exit 2; }
 command -v flock >/dev/null
 umask 077
 mkdir -p backups

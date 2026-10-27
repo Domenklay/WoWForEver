@@ -261,6 +261,7 @@ xattr -cr "/Applications/Forever Launcher.app"
   патча, проверьте, не включено ли исправление в upstream. Не удаляйте патч вслепую.
 - [Первый тестовый перенос NPC и квеста из 3.3.5](content/ports/northshire-335/README.md).
 - [Цепочка Североземья: 5 квестов и 3 NPC из 3.3.5](content/ports/northshire-chain-335/README.md).
+- [Проверка ресурсов Расколотых островов Legion](docs/zones/LEGION.ru.md).
 - [План переноса контента из 3.3.5 и новых дополнений](docs/CUSTOMIZATION.ru.md).
 - [Инструкции для AI-ассистентов](AGENTS.md).
 

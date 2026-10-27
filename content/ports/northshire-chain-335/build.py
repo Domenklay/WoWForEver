@@ -91,6 +91,9 @@ for q, row in sorted(QUESTS.items()):
         if target and amount:
             objectives.append(dict(ID=9100000+q*10+3+i,QuestID=910000+q,Type=1,
                                    Order=3+i,StorageIndex=3+i,ObjectID=target,Amount=amount,Description=''))
+# Make the hand-off explicit instead of depending on legacy no-objective/auto-accept behaviour.
+objectives.append(dict(ID=9107830,QuestID=910783,Type=3,Order=0,StorageIndex=0,
+                       ObjectID=910197,Amount=1,Description='Speak with [335 chain] Marshal McBride'))
 owned += [('quest_objectives','ID',[o['ID'] for o in objectives])]
 
 s = begin('wf_install_northshire_chain', True)
@@ -123,10 +126,12 @@ for q, row in sorted(QUESTS.items()):
     for i in range(1,6):
         shared += [f'RewardFactionID{i}',f'RewardFactionValue{i}',f'RewardFactionOverride{i}']
     changes = {k:row[k] for k in shared}
+    changes['Flags'] &= ~0x80000  # Require a normal explicit accept on the Forever client.
     changes.update(LogTitle='[335 chain] '+row['LogTitle'], RewardNextQuest=link(row['RewardNextQuest']), VerifiedBuild=0)
     s += clone('quest_template','ID',q,910000+q,changes)
     addon = next(a.copy() for a in SOURCE['quest_template_addon'] if a['ID']==q)
     addon['ID'] = 910000+q
+    addon['SpecialFlags'] &= ~4  # Do not inherit legacy auto-accept.
     for key in ('PrevQuestID','NextQuestID','BreadcrumbForQuestId'):
         addon[key]=link(addon[key])
     assert addon['ExclusiveGroup']==0
@@ -142,7 +147,7 @@ for table in ('quest_offer_reward','quest_request_items'):
         s += insert(table,row)
 for n,row in sorted(NPCS.items()):
     new=910000+n
-    s += clone('creature_template','entry',n,new,dict(name='[335 chain] '+row['name'],npcflag=2,AIName='',ScriptName='',VerifiedBuild=0))
+    s += clone('creature_template','entry',n,new,dict(name='[335 chain] '+row['name'],npcflag=3,AIName='',ScriptName='',VerifiedBuild=0))
     s += clone('creature_template_model','CreatureID',n,new)
     s += clone('creature_template_difficulty','Entry',n,new)
     s += f'''  CREATE TEMPORARY TABLE wf_chain_copy LIKE creature;
@@ -168,3 +173,28 @@ r += f"  DELETE FROM wowforever_content_ports WHERE name='{NAME}';\n"
 r += end('wf_remove_northshire_chain','Removed Northshire chain; character progress and original quests retained')
 (ROOT/'rollback.sql').write_text(r)
 print(f'Generated 5 quests, {len(objectives)} objectives and 3 NPCs')
+
+repair = begin('wf_repair_northshire_chain', False)
+repair += """  IF (SELECT COUNT(*) FROM quest_template WHERE ID IN (910783,910007,910015,910021,910054)) <> 5
+     OR (SELECT COUNT(*) FROM creature_template WHERE entry IN (910823,910197,910240)) <> 3 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Incomplete chain installation; repair stopped';
+  END IF;
+  IF EXISTS (SELECT 1 FROM quest_objectives WHERE ID=9107830 AND
+     (QuestID<>910783 OR Type<>3 OR ObjectID<>910197 OR Amount<>1 OR StorageIndex<>0))
+     OR EXISTS (SELECT 1 FROM quest_objectives WHERE QuestID=910783 AND ID<>9107830) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Unexpected objective data; repair stopped';
+  END IF;
+  UPDATE quest_template SET Flags=Flags & ~524288
+    WHERE ID IN (910783,910007,910015,910021,910054);
+  UPDATE quest_template_addon SET SpecialFlags=SpecialFlags & ~4
+    WHERE ID IN (910783,910007,910015,910021,910054);
+  UPDATE creature_template SET npcflag=npcflag | 3
+    WHERE entry IN (910823,910197,910240);
+  INSERT INTO quest_objectives (ID,QuestID,Type,`Order`,StorageIndex,ObjectID,Amount,Description)
+    VALUES (9107830,910783,3,0,0,910197,1,'Speak with [335 chain] Marshal McBride')
+    ON DUPLICATE KEY UPDATE Description=VALUES(Description);
+  DELETE FROM creature_questender WHERE quest=910783;
+  INSERT INTO creature_questender (id,quest) VALUES (910197,910783);
+"""
+repair += end('wf_repair_northshire_chain','Repaired hand-off to chain Marshal McBride; abandon and retake active introductory quest')
+(ROOT/'repair.sql').write_text(repair)
