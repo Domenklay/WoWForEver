@@ -1,0 +1,21 @@
+diff --git a/src/server/game/Handlers/ChatHandler.cpp b/src/server/game/Handlers/ChatHandler.cpp
+--- a/src/server/game/Handlers/ChatHandler.cpp
++++ b/src/server/game/Handlers/ChatHandler.cpp
+@@ -536,6 +536,16 @@ void WorldSession::HandleChatAddonMessage(ChatMsg type, std::string prefix, std
+     if (text.length() > 255)
+         return;
+ 
++    // WoW Forever 1.60.x does not reliably relay addon whispers addressed to
++    // the sending character itself. FSC1 is a server-bound protocol: consume
++    // it before normal whisper target resolution and expose the sender as the
++    // logical receiver to the existing PlayerScript hook. The subclass module
++    // remains authoritative and can only modify the sending character.
++    if (type == CHAT_MSG_WHISPER && prefix == "FSC1")
++    {
++        sScriptMgr->OnPlayerAddonMessageSent(sender, type, prefix, text, sender);
++        return;
++    }
++
+     switch (type)
+     {
+         case CHAT_MSG_GUILD:
