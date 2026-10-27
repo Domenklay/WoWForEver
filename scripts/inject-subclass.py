@@ -49,14 +49,30 @@ def adapt_server_source(module):
         raise ValueError('ForeverSubclass ScriptMgr include anchor was not found exactly once')
     source=source.replace(include_anchor,include_anchor+'#include "Chat.h"\n#include "ChatCommand.h"\n',1)
 
-    # Push the initial state on login. This removes the need for a client self-whisper
-    # just to populate the tab and also tells us whether server -> client addon
-    # messages are accepted by a particular Forever client build.
+    # Push initial state on login and make sure even non-Hunter primary classes
+    # have a stable container before the subclass pet system touches Pet.cpp.
     old_login='void OnLogin(Player* p,bool) override { if(Ready&&ValidClass(p->GetClass())) { std::lock_guard<std::recursive_mutex> g(Mutex);State(p); } }'
-    new_login='void OnLogin(Player* p,bool) override { if(Ready&&ValidClass(p->GetClass())) { std::lock_guard<std::recursive_mutex> g(Mutex);auto& e=State(p);Snapshot(p,e); } }'
+    new_login='void OnLogin(Player* p,bool) override { if(Ready&&ValidClass(p->GetClass())) { std::lock_guard<std::recursive_mutex> g(Mutex);p->GetOrInitPetStable();auto& e=State(p);Snapshot(p,e); } }'
     if source.count(old_login)!=1:
         raise ValueError('ForeverSubclass login hook anchor was not found exactly once')
     source=source.replace(old_login,new_login,1)
+
+    # The stock Tame Beast spell is hard restricted to primary Hunter. Our
+    # subclass route uses the same pet creation path, but must retain the normal
+    # CreatureTemplate tameability rules and initialize the stable explicitly.
+    old_tame='Creature* creature=p->GetSelectedUnit()?p->GetSelectedUnit()->ToCreature():nullptr;\n    if(!creature||creature->IsPet()||!creature->GetCreatureTemplate()||creature->GetCreatureTemplate()->type!=CREATURE_TYPE_BEAST) {\n        error="select a tameable beast";return false;\n    }'
+    new_tame='Creature* creature=p->GetSelectedUnit()?p->GetSelectedUnit()->ToCreature():nullptr;\n    CreatureTemplate const* creatureTemplate=creature?creature->GetCreatureTemplate():nullptr;\n    CreatureDifficulty const* creatureDifficulty=creature?creature->GetCreatureDifficulty():nullptr;\n    if(!creature||creature->IsPet()||!creatureTemplate||!creatureDifficulty||!creatureTemplate->IsTameable(false,creatureDifficulty)) {\n        error="select a tameable beast";return false;\n    }\n    p->GetOrInitPetStable();'
+    if source.count(old_tame)!=1:
+        raise ValueError('ForeverSubclass tame hook anchor was not found exactly once')
+    source=source.replace(old_tame,new_tame,1)
+
+    old_call='if(p->GetPet()) { error="pet already active";return false; }\n    Pet* pet=new Pet(p,HUNTER_PET);'
+    new_call='if(p->GetPet()) { error="pet already active";return false; }\n    p->GetOrInitPetStable();\n    Pet* pet=new Pet(p,HUNTER_PET);'
+    # This pattern occurs only in CallHunterPet after the tame path has already
+    # been rewritten above.
+    if source.count(old_call)!=1:
+        raise ValueError('ForeverSubclass pet call hook anchor was not found exactly once')
+    source=source.replace(old_call,new_call,1)
 
     # WoW Forever 70532 does not reliably deliver AddOn whispers sent to the same
     # character. Provide a normal TrinityCore command path that forwards into the
@@ -66,11 +82,20 @@ def adapt_server_source(module):
         raise ValueError('ForeverSubclass spell class anchor was not found exactly once')
     source=source.replace(class_anchor,'} // namespace ForeverSubclass\n\n'+COMMAND_SCRIPT+'\nclass spell_forever_subclass final',1)
 
-    registration='new ForeverSubclass::Startup();new ForeverSubclass::Players();new ForeverSubclass::Damage();\n    RegisterSpellScript(spell_forever_subclass);'
-    replacement='new ForeverSubclass::Startup();new ForeverSubclass::Players();new ForeverSubclass::Damage();\n    new ForeverSubclassCommandScript();\n    RegisterSpellScript(spell_forever_subclass);'
-    if source.count(registration)!=1:
+    registration_pattern=(
+        r'new ForeverSubclass::Startup\(\);\s*'
+        r'new ForeverSubclass::Players\(\);\s*'
+        r'new ForeverSubclass::Damage\(\);\s*'
+        r'RegisterSpellScript\(spell_forever_subclass\);'
+    )
+    replacement=(
+        'new ForeverSubclass::Startup();new ForeverSubclass::Players();new ForeverSubclass::Damage();\n'
+        '    new ForeverSubclassCommandScript();\n'
+        '    RegisterSpellScript(spell_forever_subclass);'
+    )
+    source,count=re.subn(registration_pattern,replacement,source,count=1)
+    if count!=1:
         raise ValueError('ForeverSubclass AddSC registration anchor was not found exactly once')
-    source=source.replace(registration,replacement,1)
     return source
 
 
