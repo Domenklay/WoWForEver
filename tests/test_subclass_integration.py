@@ -32,6 +32,10 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertTrue(first.startswith('// Original notice'))
             cpp=sorted(p.name for p in (folder/'ForeverSubclass').rglob('*.cpp'))
             self.assertEqual(cpp,['ForeverSubclass.cpp','SubclassSystem.cpp'])
+            injected=(folder/'ForeverSubclass/forever_subclass/SubclassSystem.hpp').read_text()
+            vendored=(MODULE/'vendor/include/forever_subclass/SubclassSystem.hpp').read_text()
+            self.assertIn('subclassUnlockPrimaryLevel = 10;',injected)
+            self.assertIn('subclassUnlockPrimaryLevel = 40;',vendored)
 
     def test_addon_install_and_restore_preserve_game_and_previous_addon(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -42,6 +46,7 @@ class SubclassIntegrationTests(unittest.TestCase):
             (old/'previous.lua').write_text('-- previous user addon\n')
             backup=root/'backup';target=installer.install(client,backup)
             self.assertTrue((target/'ForeverSubclass.lua').exists())
+            self.assertTrue((target/'ForeverSubclassTalentTab.lua').exists())
             self.assertEqual((backup/'previous-addon/previous.lua').read_text(),'-- previous user addon\n')
             with self.assertRaises(FileExistsError):installer.install(client,backup)
             installer.restore(backup)
