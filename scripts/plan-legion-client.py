@@ -114,7 +114,7 @@ def scan(checker, client, ids, progress=print, timeout=1800):
                 fid = int(row['file_id'])
                 if fid not in expected_ids or fid in rows or None in row:
                     raise ValueError('Unexpected or duplicate native result')
-                if row['status'] not in {'READ_OK','OPEN_FAILED','READ_FAILED','SIZE_FAILED','INFO_FAILED'}:
+                if row['status'] not in {'READ_OK','OPEN_FAILED','READ_FAILED','SIZE_FAILED','SIZE_LIMIT','INFO_FAILED'}:
                     raise ValueError('Unknown native result status')
                 int(row['bytes']);int(row['error'])
                 if row['status'] == 'READ_OK':
@@ -163,6 +163,10 @@ def classify(report, requested, external, ignored, results):
                 kind = 'source_matches_but_package_transformed'
             else:
                 kind = 'different_content_same_id'
+        elif actual['status'] == 'SIZE_LIMIT':
+            kind = 'size_limit_not_checked'
+        elif actual['status'] in {'SIZE_FAILED','READ_FAILED'} and actual['error'] == '1007':
+            kind = 'not_locally_resident'
         elif actual['status'] == 'OPEN_FAILED':
             kind = 'not_readable_requires_ROOT_check'
         else:

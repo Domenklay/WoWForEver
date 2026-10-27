@@ -36,8 +36,12 @@ int main(int argc,char** argv) {
             std::printf("%u\tOPEN_FAILED\t0\t-\t-\t%u\t-\t-\t-\n",id,GetCascError());all=false;continue;
         }
         ULONGLONG size=0;
-        if(!CascGetFileSize64(file,&size)||size>64ull*1024*1024) {
+        if(!CascGetFileSize64(file,&size)) {
             std::printf("%u\tSIZE_FAILED\t0\t-\t-\t%u\t-\t-\t-\n",id,GetCascError());
+            CascCloseFile(file);all=false;continue;
+        }
+        if(size>64ull*1024*1024) {
+            std::printf("%u\tSIZE_LIMIT\t%llu\t-\t-\t0\t-\t-\t-\n",id,static_cast<unsigned long long>(size));
             CascCloseFile(file);all=false;continue;
         }
         std::array<unsigned char,65536> bytes{};

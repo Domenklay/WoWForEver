@@ -85,6 +85,22 @@ class ClientPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Package SHA'):
             planner.read_package(self.report)
 
+    def test_pinned_casclib_offline_error_is_not_a_size_limit_or_corruption(self):
+        self.package_report([(10,b'data',b'data')])
+        actual=self.row(10)
+        actual.update(status='SIZE_FAILED',error='1007')
+        with patch.object(planner,'scan',return_value={10:actual}):
+            result=planner.plan(self.report,self.client,self.output,progress=lambda _:None)
+        self.assertEqual(result['counts'],{'not_locally_resident':1})
+
+    def test_size_limit_does_not_reuse_a_previous_offline_error(self):
+        self.package_report([(10,b'data',b'data')])
+        actual=self.row(10)
+        actual.update(status='SIZE_LIMIT',bytes=str(65*1024*1024),error='0')
+        with patch.object(planner,'scan',return_value={10:actual}):
+            result=planner.plan(self.report,self.client,self.output,progress=lambda _:None)
+        self.assertEqual(result['counts'],{'size_limit_not_checked':1})
+
     def test_prior_unused_modi_review_applies_only_to_exact_report(self):
         value=self.package_report([(10,b'data',b'data')],[777])
         # Recreate a valid report/index with the legacy MODI edge.

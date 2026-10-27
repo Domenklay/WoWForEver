@@ -1,0 +1,47 @@
+{
+  "format": "wowforever-legion-client-comparison-review-v1",
+  "comparison_sha256": "ccb8c7f54969980f288a4fdf977fe10aba67da2cca2f6cbf1972d86dbe5c4a5f",
+  "source_package_sha256": "61710052c60cbe6b44b2344c55a5571f98cc454ce2af1f917b7c402740b919dc",
+  "counts": {
+    "read_error": 894,
+    "different_content_same_id": 564,
+    "identical": 5175,
+    "not_readable_requires_ROOT_check": 471
+  },
+  "counts_by_extension": {
+    "read_error": {
+      ".blp": 894
+    },
+    "different_content_same_id": {
+      ".blp": 170,
+      ".m2": 180,
+      ".skin": 214
+    },
+    "identical": {
+      ".blp": 1329,
+      ".m2": 1716,
+      ".skin": 1777,
+      ".anim": 18,
+      ".wmo": 335
+    },
+    "not_readable_requires_ROOT_check": {
+      ".m2": 29,
+      ".blp": 39,
+      ".adt": 5,
+      ".wdl": 1,
+      ".wdt": 5,
+      ".tex": 1,
+      ".wmo": 2,
+      ".skin": 389
+    }
+  },
+  "matched_bytes": 388771293,
+  "source_error_1007": "Pinned Linux CascLib ERROR_FILE_OFFLINE. Historical SIZE_FAILED combined size-query failure and cap checks, so stale-error ambiguity is retained until ROOT/ENCODING inspection. New checker emits a distinct SIZE_LIMIT with error=0.",
+  "external_dependencies_available": true,
+  "minimum_private_ids_from_graph": 2912,
+  "minimum_additional_parent_clones": 983,
+  "target_ROOT_reservations_checked": false,
+  "root_policy_assigned": false,
+  "installable": false,
+  "note": "Graph lower bound assumes fingerprint-identical source resources are also resident in the test copy. Target ROOT/ENCODING/IDX must be checked before private IDs are assigned."
+}
