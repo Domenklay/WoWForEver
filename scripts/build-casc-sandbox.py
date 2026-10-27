@@ -139,9 +139,9 @@ def guarded(data, checksum):
     return struct.pack("<II",len(data),checksum) + data
 
 
-def storage_record(obj, offset):
+def storage_record(obj, offset, flags=0):
     length = 30 + len(obj["encoded"])
-    head = obj["ekey"][::-1] + struct.pack("<I",length) + b"\0\0"
+    head = obj["ekey"][::-1] + struct.pack("<IH",length,flags)
     head += struct.pack("<I",hashlittle(head,0x3D6BE971))
     # Agent header-span checksum, from CascLib VerifyHeaderSpan (not a bypass).
     constants = [0x049396B8,0x72A82A9B,0xEE626CCA,0x9917754F,

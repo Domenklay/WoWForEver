@@ -12,6 +12,7 @@ import re
 import struct
 import zipfile
 from pathlib import Path
+from casc_native_container import service_header
 
 SPEC = importlib.util.spec_from_file_location('container_store', Path(__file__).with_name('update-casc-sandbox.py'))
 store = importlib.util.module_from_spec(SPEC)
@@ -43,7 +44,9 @@ def analyze(package):
                 record = raw[offset:offset+30]
                 slots.append(dict(offset=offset, key_prefix=record[:16][::-1][:9].hex(),
                                   record_bytes=int.from_bytes(record[16:20], 'little'),
-                                  flags=int.from_bytes(record[20:22], 'little')))
+                                  flags=int.from_bytes(record[20:22], 'little'),
+                                  native_header_checksums_match=(record == service_header(
+                                      record[:16][::-1], int(name[5:]), offset))))
             segments[name] = dict(bytes=item['bytes'], sampled_slots=slots)
         shared = archive.read('metadata/shmem')
         if len(shared) != 20480 or struct.unpack_from('<I', shared)[0] != 5:

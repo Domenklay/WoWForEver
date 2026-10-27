@@ -31,7 +31,7 @@ class ContainerAuditTests(unittest.TestCase):
         headers = bytearray()
         for bucket in range(16):
             key = hashlib.md5(f'own metadata fixture {bucket}'.encode()).digest()
-            headers.extend(key[::-1]+struct.pack('<IH', 30, 1)+bytes(8))
+            headers.extend(audit.service_header(key, 0, bucket*30))
             row = key[:9]+(bucket*30).to_bytes(5, 'big')+struct.pack('<I', 30)
             (self.folder/f'{bucket:02x}00000007.idx').write_bytes(
                 audit.store.write_index(bucket, [row], 30, 0))
@@ -48,6 +48,8 @@ class ContainerAuditTests(unittest.TestCase):
         report = audit.analyze(self.package)
         self.assertTrue(report['complete_16_buckets'])
         self.assertFalse(report['client_runtime_compatibility_proven'])
+        self.assertTrue(all(slot['native_header_checksums_match']
+                            for row in report['segments'].values() for slot in row['sampled_slots']))
         for index in report['indexes']:
             self.assertEqual(len(index['zero_payload_records']), 1)
             self.assertTrue(index['zero_payload_records'][0]['sampled_header_matches'])
