@@ -109,14 +109,16 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('ForeverSubclassResourcePredictSpend',feedback)
         self.assertIn('base("status",true)',feedback)
 
-    def test_direct_transport_uses_server_endpoint(self):
+    def test_direct_transport_uses_server_endpoint_without_ui_rewiring(self):
         transport=(MODULE/'addon/ForeverSubclass/ForeverSubclassDirectTransport.lua').read_text()
-        self.assertIn('SERVER_TARGET = "SERVER"',transport)
+        self.assertIn('SERVER_TARGET="SERVER"',transport)
         self.assertIn('C_ChatInfo.SendAddonMessage',transport)
-        self.assertIn('"WHISPER", SERVER_TARGET',transport)
-        self.assertIn('learn ',transport)
-        self.assertIn('active ',transport)
-        self.assertIn('xp ',transport)
+        self.assertIn('"WHISPER",SERVER_TARGET',transport)
+        self.assertIn('learn%s+%d+',transport)
+        self.assertIn('active%s+%d+',transport)
+        self.assertIn('xp%s+%d+',transport)
+        self.assertNotIn('wireButton',transport)
+        self.assertNotIn('SetScript("OnClick"',transport)
 
     def test_core_patch_routes_fsc1_before_player_lookup(self):
         patch=(ROOT/'docker/patches/0004-forever-subclass-server-addon-endpoint.patch').read_text()
