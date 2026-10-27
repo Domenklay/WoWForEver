@@ -43,6 +43,26 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertIn('auto& e=State(p);Snapshot(p,e);',server)
             self.assertEqual(server.count('new ForeverSubclassCommandScript();'),1)
 
+    def test_server_adapter_has_multi_power_auto_ranks_pet_and_talents(self):
+        server=(MODULE/'server/ForeverSubclass.cpp').read_text()
+        schema=(MODULE/'sql/characters.sql').read_text()
+        world=(MODULE/'sql/world.sql').read_text()
+        self.assertIn('ClassPowers(Class id)',server)
+        self.assertIn('{POWER_MANA,POWER_RAGE,POWER_ENERGY}',server)
+        self.assertIn('BestRank(Entry const& e',server)
+        self.assertIn('RootId(uint32 spell)',server)
+        self.assertIn('TPOINTS',server)
+        self.assertIn('TALENT {} {} {} {}',server)
+        self.assertIn('TameHunterPet',server)
+        self.assertIn('CallHunterPet',server)
+        self.assertIn('CreateTamedPetFrom',server)
+        self.assertIn('FEATURE HUNTER_PET',server)
+        self.assertIn('6807,11,10,POWER_RAGE',server)
+        self.assertIn('1082,11,20,POWER_ENERGY',server)
+        self.assertIn('forever_character_subclass_talents',schema)
+        self.assertIn("(-6807,'spell_forever_subclass')",world)
+        self.assertIn("(-1082,'spell_forever_subclass')",world)
+
     def test_addon_install_and_restore_preserve_game_and_previous_addon(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);client=root/'_classic_beta_';client.mkdir()
@@ -52,13 +72,16 @@ class SubclassIntegrationTests(unittest.TestCase):
             (old/'previous.lua').write_text('-- previous user addon\n')
             backup=root/'backup';target=installer.install(client,backup)
             for name in ['ForeverSubclass.lua','ForeverSubclassDirectTransport.lua','ForeverSubclassTalents.lua',
+                         'ForeverSubclassTalentTree.lua','ForeverSubclassHunterPet.lua',
                          'ForeverSubclassResourceHUD.lua','ForeverSubclassCastFeedback.lua',
                          'ForeverSubclassSpellBook.lua','ForeverSubclassActionBar.lua','ForeverSubclassDebug.lua']:
                 self.assertTrue((target/name).exists(),name)
             toc=(target/'ForeverSubclass.toc').read_text()
-            for name in ['ForeverSubclassTalents.lua','ForeverSubclassDirectTransport.lua','ForeverSubclassResourceHUD.lua',
+            for name in ['ForeverSubclassTalents.lua','ForeverSubclassTalentTree.lua','ForeverSubclassHunterPet.lua',
+                         'ForeverSubclassDirectTransport.lua','ForeverSubclassResourceHUD.lua',
                          'ForeverSubclassCastFeedback.lua','ForeverSubclassSpellBook.lua','ForeverSubclassActionBar.lua']:
                 self.assertIn(name,toc)
+            self.assertIn('0.7.0-forever.20',toc)
             for stale in ['ForeverSubclassTalentTab.lua','ForeverSubclassTalentCompat.lua','ForeverSubclassPanelV2.lua',
                           'ForeverSubclassLegacySuppress.lua','ForeverSubclassInteractiveFix.lua','ForeverSubclassCommandTransport.lua']:
                 self.assertNotIn(stale,toc)
@@ -79,6 +102,19 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('customActive=false',ui)
         self.assertNotIn('ForeverSubclassTalentClickProxy',ui)
 
+    def test_subclass_talent_tree_and_hunter_pet_controls_use_server_protocol(self):
+        tree=(MODULE/'addon/ForeverSubclass/ForeverSubclassTalentTree.lua').read_text()
+        pet=(MODULE/'addon/ForeverSubclass/ForeverSubclassHunterPet.lua').read_text()
+        self.assertIn('TPOINTS',tree)
+        self.assertIn('TALENT',tree)
+        self.assertIn('send("talent "..id)',tree)
+        self.assertIn('send("talentreset")',tree)
+        self.assertIn('FEATURE',pet)
+        self.assertIn('HUNTER_PET',pet)
+        self.assertIn('send("tame")',pet)
+        self.assertIn('send("petcall")',pet)
+        self.assertIn('send("petdismiss")',pet)
+
     def test_subclass_spellbook_is_addon_owned_and_server_driven(self):
         spellbook=(MODULE/'addon/ForeverSubclass/ForeverSubclassSpellBook.lua').read_text()
         self.assertIn('PlayerSpellsFrame.SpellBookFrame',spellbook)
@@ -88,7 +124,7 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('if sp.selected then',spellbook)
         self.assertNotIn('LearnSpell',spellbook)
 
-    def test_subclass_action_bar_has_real_spell_showtooltip(self):
+    def test_subclass_action_bar_has_real_spell_showtooltip_fallback(self):
         action=(MODULE/'addon/ForeverSubclass/ForeverSubclassActionBar.lua').read_text()
         self.assertIn('CreateMacro',action)
         self.assertIn('PickupMacro',action)
@@ -98,13 +134,13 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('RegisterForDrag',action)
         self.assertIn('InCombatLockdown',action)
 
-    def test_secondary_resource_hud_predicts_then_resyncs(self):
+    def test_secondary_resource_hud_supports_multiple_pools_and_prediction(self):
         hud=(MODULE/'addon/ForeverSubclass/ForeverSubclassResourceHUD.lua').read_text()
         feedback=(MODULE/'addon/ForeverSubclass/ForeverSubclassCastFeedback.lua').read_text()
-        self.assertIn('ForeverSubclassResourceHUD',hud)
-        self.assertIn('kind=="POWER"',hud)
+        self.assertIn('powers={}',hud)
+        self.assertIn('powerOrder={0,1,3}',hud)
+        self.assertIn('pending.powers[power]',hud)
         self.assertIn('ForeverSubclassResourcePredictSpend',hud)
-        self.assertIn('kind=="SPELL"',hud)
         self.assertIn('UnitPowerType',hud)
         self.assertIn('ForeverSubclassResourcePredictSpend',feedback)
         self.assertIn('base("status",true)',feedback)
