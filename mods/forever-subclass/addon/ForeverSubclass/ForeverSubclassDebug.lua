@@ -1,6 +1,6 @@
 -- Diagnostics for ForeverSubclass. No gameplay authority lives here.
--- /fsubdebug opens a copyable log. Move the mouse over a class card/button and click it;
--- the log records the frame that actually owns the mouse hit-test.
+-- /fsubdebug opens a copyable log. /fsubdebug snapshot records a fresh frame snapshot.
+-- The log is also persisted in SavedVariables and can be collected from WSL.
 
 local ADDON = "ForeverSubclass"
 local MAX_LINES = 500
@@ -59,6 +59,9 @@ end
 
 local function describe(frame)
     if not frame then return "<none>" end
+    if type(frame) ~= "table" and type(frame) ~= "userdata" then
+        return "<non-frame:" .. type(frame) .. "> " .. tostring(frame)
+    end
     local name = frame.GetName and frame:GetName() or nil
     local object = frame.GetObjectType and frame:GetObjectType() or "?"
     local strata = frame.GetFrameStrata and frame:GetFrameStrata() or "?"
@@ -73,8 +76,11 @@ end
 
 local function currentMouseFocus()
     if GetMouseFoci then
-        local list = { GetMouseFoci() }
-        return list[1]
+        -- Forever 1.60.x returns an array/table, unlike older clients where similar
+        -- APIs returned varargs. Handle both shapes so diagnostics describe the real frame.
+        local first = GetMouseFoci()
+        if type(first) == "table" then return first[1] end
+        return first
     end
     if GetMouseFocus then return GetMouseFocus() end
     return nil
@@ -114,7 +120,7 @@ end
 
 local function refreshHeader()
     local version = addonVersion()
-    local build, buildNumber, buildDate, tocVersion = GetBuildInfo and GetBuildInfo() or "?", "?", "?", "?"
+    local build, buildNumber, buildDate, tocVersion = "?", "?", "?", "?"
     if GetBuildInfo then build, buildNumber, buildDate, tocVersion = GetBuildInfo() end
     add(string.format("CLIENT addon=%s wow=%s build=%s toc=%s", version, tostring(build), tostring(buildNumber), tostring(tocVersion)))
     local root = _G.ForeverSubclassPanelV2
@@ -123,7 +129,15 @@ local function refreshHeader()
     add("FRAME V2 " .. describe(root))
     add("FRAME LEGACY " .. describe(legacy))
     add("FRAME TALENTS " .. describe(talent))
+    add("MOUSEFOCUS SNAPSHOT " .. describe(currentMouseFocus()))
     if root then hookButtons(root) end
+end
+
+local function lift(frame, level)
+    if not frame then return end
+    if frame.SetFrameStrata then pcall(frame.SetFrameStrata, frame, "TOOLTIP") end
+    if frame.SetFrameLevel then pcall(frame.SetFrameLevel, frame, level) end
+    if frame.EnableMouse then pcall(frame.EnableMouse, frame, true) end
 end
 
 local function createWindow()
@@ -132,9 +146,9 @@ local function createWindow()
     window = CreateFrame("Frame", "ForeverSubclassDebugWindow", UIParent, template)
     window:SetSize(860, 560)
     window:SetPoint("CENTER")
-    window:SetFrameStrata("TOOLTIP")
-    window:SetFrameLevel(20000)
-    window:EnableMouse(true)
+    lift(window, 30000)
+    window:SetToplevel(true)
+    window:SetClampedToScreen(true)
     window:SetMovable(true)
     window:RegisterForDrag("LeftButton")
     window:SetScript("OnDragStart", window.StartMoving)
@@ -149,27 +163,35 @@ local function createWindow()
     title:SetText("ForeverSubclass - диагностика")
     local hint = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
-    hint:SetText("Наведи мышь на класс/кнопку, попробуй нажать, затем Ctrl+A / Ctrl+C из поля ниже.")
+    hint:SetText("Если мышь не работает: /fsubdebug snapshot, затем /reload и соберите bundle из WSL.")
 
     local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -4, -4)
+    lift(close, 30020)
+    if close.RegisterForClicks then close:RegisterForClicks("LeftButtonUp") end
 
     local scroll = CreateFrame("ScrollFrame", nil, window, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 14, -58)
     scroll:SetPoint("BOTTOMRIGHT", -32, 46)
+    lift(scroll, 30010)
+
     editBox = CreateFrame("EditBox", nil, scroll)
     editBox:SetMultiLine(true)
     editBox:SetAutoFocus(false)
     editBox:SetFontObject(ChatFontNormal)
     editBox:SetWidth(800)
     editBox:SetTextInsets(4,4,4,4)
+    editBox:EnableMouse(true)
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     scroll:SetScrollChild(editBox)
+    lift(editBox, 30012)
 
     local refresh = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
     refresh:SetSize(110, 24)
     refresh:SetPoint("BOTTOMLEFT", 14, 12)
     refresh:SetText("Снимок")
+    lift(refresh, 30020)
+    if refresh.RegisterForClicks then refresh:RegisterForClicks("LeftButtonUp") end
     refresh:SetScript("OnClick", function()
         refreshHeader()
         editBox:SetText(table.concat(lines, "\n"))
@@ -179,6 +201,8 @@ local function createWindow()
     clear:SetSize(110, 24)
     clear:SetPoint("LEFT", refresh, "RIGHT", 8, 0)
     clear:SetText("Очистить")
+    lift(clear, 30020)
+    if clear.RegisterForClicks then clear:RegisterForClicks("LeftButtonUp") end
     clear:SetScript("OnClick", function()
         wipe(lines)
         _G.ForeverSubclassDebugLog = lines
@@ -188,16 +212,30 @@ local function createWindow()
     window:Hide()
 end
 
-SLASH_FOREVERSUBCLASSDEBUG1 = "/fsubdebug"
-SlashCmdList["FOREVERSUBCLASSDEBUG"] = function(msg)
+local function showWindow()
     createWindow()
-    msg = (msg or ""):lower()
-    if msg == "clear" then wipe(lines); add("log cleared") end
     refreshHeader()
     editBox:SetText(table.concat(lines, "\n"))
-    editBox:SetHeight(math.max(520, select(2, editBox:GetFont()) and (#lines * 14) or (#lines * 14)))
+    editBox:SetHeight(math.max(520, #lines * 14))
     window:Show()
-    editBox:HighlightText(0,0)
+    window:Raise()
+end
+
+SLASH_FOREVERSUBCLASSDEBUG1 = "/fsubdebug"
+SlashCmdList["FOREVERSUBCLASSDEBUG"] = function(msg)
+    msg = (msg or ""):lower():match("^%s*(.-)%s*$")
+    if msg == "clear" then
+        wipe(lines)
+        _G.ForeverSubclassDebugLog = lines
+        add("log cleared")
+        return
+    end
+    if msg == "snapshot" then
+        refreshHeader()
+        add("snapshot saved to ForeverSubclassDebugLog; use /reload before collecting from WTF")
+        return
+    end
+    showWindow()
 end
 
 local events = CreateFrame("Frame")
@@ -219,18 +257,18 @@ events:SetScript("OnEvent", function(_, event, ...)
 end)
 
 events:SetScript("OnUpdate", function(self, elapsed)
-    self._elapsed = (self._elapsed or 0) + elapsed
-    if self._elapsed < 0.20 then return end
-    self._elapsed = 0
+    self._elapsed=(self._elapsed or 0)+elapsed
+    if self._elapsed<0.20 then return end
+    self._elapsed=0
     wrapTransport()
-    local root = _G.ForeverSubclassPanelV2
+    local root=_G.ForeverSubclassPanelV2
     if root and root:IsShown() then
         hookButtons(root)
-        local focus = currentMouseFocus()
-        local desc = describe(focus)
-        if desc ~= lastFocusDesc then
-            lastFocusDesc = desc
-            add("MOUSEFOCUS " .. desc)
+        local focus=currentMouseFocus()
+        local desc=describe(focus)
+        if desc~=lastFocusDesc then
+            lastFocusDesc=desc
+            add("MOUSEFOCUS "..desc)
         end
     end
 end)
