@@ -1,9 +1,11 @@
 -- Direct user-action transport for WoW Forever 1.60.x.
 -- The 70532 client can restrict addon-message sends that are deferred to OnUpdate.
--- This layer sends subclass commands directly from the user's click/command event.
--- Server remains authoritative and answers with FSR1 snapshots.
+-- FSC1 is now a server-bound addon protocol: the client sends a WHISPER packet to
+-- the synthetic target SERVER and our TrinityCore compatibility patch consumes it
+-- before normal player-name resolution. The server remains authoritative.
 
 local REQUEST = "FSC1"
+local SERVER_TARGET = "SERVER"
 local classIds = {
     ["Воин"] = 1,
     ["Паладин"] = 2,
@@ -20,15 +22,6 @@ local selectedClass = 5
 local hooked = setmetatable({}, { __mode = "k" })
 local decorated = false
 
-local function playerTarget()
-    local name, realm
-    if UnitFullName then name, realm = UnitFullName("player") end
-    if not name and UnitName then name = UnitName("player") end
-    if not name then return nil end
-    if realm and realm ~= "" then return name .. "-" .. realm end
-    return name
-end
-
 local function directSend(payload, quiet)
     if not C_ChatInfo or not C_ChatInfo.SendAddonMessage then
         if not quiet and DEFAULT_CHAT_FRAME then
@@ -42,17 +35,14 @@ local function directSend(payload, quiet)
         pcall(C_ChatInfo.RegisterAddonMessagePrefix, "FSR1")
     end
 
-    local target = playerTarget()
-    if not target then return false end
-
-    local ok, result = pcall(C_ChatInfo.SendAddonMessage, REQUEST, payload, "WHISPER", target)
+    local ok, result = pcall(C_ChatInfo.SendAddonMessage, REQUEST, payload, "WHISPER", SERVER_TARGET)
     if not ok then
         if not quiet and DEFAULT_CHAT_FRAME then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff5555[Подклассы]|r Не удалось отправить запрос серверу: " .. tostring(result))
         end
         return false
     end
-    return true
+    return result ~= false
 end
 
 _G.ForeverSubclassDirectSend = directSend
@@ -141,6 +131,7 @@ local function wireEntryPoints()
         hooked[panel] = true
         panel:HookScript("OnShow", function()
             wirePanel()
+            directSend("status", true)
         end)
     end
 
@@ -169,7 +160,7 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("ADDON_LOADED")
-events:SetScript("OnEvent", function()
+events:SetScript("OnEvent", function(_, event)
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
         pcall(C_ChatInfo.RegisterAddonMessagePrefix, REQUEST)
         pcall(C_ChatInfo.RegisterAddonMessagePrefix, "FSR1")
@@ -178,6 +169,7 @@ events:SetScript("OnEvent", function()
         C_Timer.After(0, wireEntryPoints)
         C_Timer.After(0.25, wireEntryPoints)
         C_Timer.After(1.0, wireEntryPoints)
+        if event == "PLAYER_LOGIN" then C_Timer.After(1.25, function() directSend("status", true) end) end
     else
         wireEntryPoints()
     end
