@@ -131,6 +131,23 @@ services:
       # launchers served by /download/<os> (optional, see .env.example)
       - ${DOWNLOADS_DIR:-./downloads}:/downloads:ro
 
+  # Optional diagnostic: local CASC only, no network, read-only client mount.
+  legionprobe:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: legion-casc-probe
+      args:
+        TC_REF: ${TC_REF:-forever}
+        BUILD_JOBS: ${BUILD_JOBS:-4}
+    image: forever-legion-casc-probe:local
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - "${WOW_DIR:-/path/to/World of Warcraft}:/wow:ro"
+
   # Game data extraction from the client: docker compose run --rm extractor
   extractor:
     image: forever-trinitycore:latest

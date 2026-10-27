@@ -44,6 +44,16 @@ RUN sed -i 's|handle = open(szFileName, oflag \| O_LARGEFILE);|handle = open(szF
     && make -j"${BUILD_JOBS}" \
     && make install
 
+############################ optional local resource probe ############################
+# Built explicitly with --target legion-casc-probe; not part of the normal runtime image.
+FROM build AS legion-casc-probe
+COPY tools/legion-casc-probe/probe.cpp /tmp/legion-casc-probe.cpp
+RUN c++ -std=c++20 -O2 -I/src/TrinityCore/dep/CascLib/src \
+        /tmp/legion-casc-probe.cpp /src/TrinityCore/build/dep/CascLib/libcasc.a \
+        -lz -lcrypto -o /usr/local/bin/legion-casc-probe
+ENTRYPOINT ["/usr/local/bin/legion-casc-probe"]
+CMD ["/wow", "wow_classic_beta"]
+
 ############################ database release ############################
 FROM ubuntu:${UBUNTU_VERSION} AS tdb
 
