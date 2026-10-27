@@ -34,10 +34,10 @@ def fixture(count=10, tags=(), version=1, checksums=0, flags=0):
 class DownloadTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('CASC_DOWNLOAD_TAG_CHECKER'),'Native tag-mask checker required')
     def test_native_reader_sees_only_explicit_new_memberships_not_old_padding(self):
-        for selected in ([],[5,9,20,24]):
+        for selected in ([],[5,9,20,24,29]):
             with self.subTest(selected=selected), tempfile.TemporaryDirectory() as temp:
                 store = Path(temp)/'store'
-                original = fixture(count=7,tags=[(f'tag-{i}'.encode(),i,b'\xff') for i in range(30)])
+                original = fixture(count=11,tags=[(f'tag-{i}'.encode(),i,b'\xff\xff') for i in range(30)])
                 resource = lab.asset(lab.BASE_TEXT)
                 raw = append_download(original,[dict(ekey=resource['ekey'],encoded_bytes=len(resource['encoded']),
                                                      priority=0,tag_indices=selected)])

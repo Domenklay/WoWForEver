@@ -23,7 +23,7 @@ int main(int argc,char** argv) {
         std::fprintf(stderr,"STORAGE_OPEN_FAILED error=%u\n",GetCascError());return 1;
     }
     bool all=true;
-    std::puts("file_id\tstatus\tbytes\tsha256\terror");
+    std::puts("file_id\tstatus\tbytes\tsha256\ttag_mask\terror");
     for(int index=2;index<argc;++index) {
         std::string_view text(argv[index]);DWORD id=0;
         auto parse=std::from_chars(text.data(),text.data()+text.size(),id);
@@ -33,26 +33,31 @@ int main(int argc,char** argv) {
         HANDLE file=nullptr;
         if(!CascOpenFile(storage,CASC_FILE_DATA_ID(id),CASC_LOCALE_ALL_WOW,
                          CASC_OPEN_BY_FILEID|CASC_STRICT_DATA_CHECK,&file)) {
-            std::printf("%u\tOPEN_FAILED\t0\t-\t%u\n",id,GetCascError());all=false;continue;
+            std::printf("%u\tOPEN_FAILED\t0\t-\t-\t%u\n",id,GetCascError());all=false;continue;
         }
         ULONGLONG size=0;
         if(!CascGetFileSize64(file,&size)||size>1024*1024) {
-            std::printf("%u\tSIZE_FAILED\t0\t-\t%u\n",id,GetCascError());
+            std::printf("%u\tSIZE_FAILED\t0\t-\t-\t%u\n",id,GetCascError());
             CascCloseFile(file);all=false;continue;
         }
         std::array<unsigned char,1024*1024> bytes{};
         DWORD got=0;
         bool ok=CascReadFile(file,bytes.data(),static_cast<DWORD>(size),&got)&&got==size;
         if(!ok) {
-            std::printf("%u\tREAD_FAILED\t%u\t-\t%u\n",id,got,GetCascError());all=false;
+            std::printf("%u\tREAD_FAILED\t%u\t-\t-\t%u\n",id,got,GetCascError());all=false;
         } else {
             unsigned char hash[EVP_MAX_MD_SIZE];unsigned int length=0;
             if(EVP_Digest(bytes.data(),got,hash,&length,EVP_sha256(),nullptr)!=1||length!=32) {
                 CascCloseFile(file);CascCloseStorage(storage);return 3;
             }
+            CASC_FILE_FULL_INFO info{};
+            if(!CascGetFileInfo(file,CascFileFullInfo,&info,sizeof(info),nullptr)) {
+                std::printf("%u\tINFO_FAILED\t%u\t-\t-\t%u\n",id,got,GetCascError());
+                CascCloseFile(file);all=false;continue;
+            }
             std::printf("%u\tREAD_OK\t%u\t",id,got);
             for(unsigned int i=0;i<length;++i)std::printf("%02x",hash[i]);
-            std::puts("\t0");
+            std::printf("\t%llx\t0\n",static_cast<unsigned long long>(info.TagBitMask));
         }
         CascCloseFile(file);
     }
