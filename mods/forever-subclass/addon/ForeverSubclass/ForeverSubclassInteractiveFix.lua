@@ -17,7 +17,7 @@ local function walk(frame, depth)
     if frame.GetObjectType and frame:GetObjectType() == "Button" then
         lift(frame, base + 2)
         if frame.EnableMouse then frame:EnableMouse(true) end
-        if frame.RegisterForClicks then pcall(frame.RegisterForClicks, frame, "LeftButtonUp", "LeftButtonDown") end
+        if frame.RegisterForClicks then pcall(frame.RegisterForClicks, frame, "LeftButtonUp") end
     elseif frame ~= _G.ForeverSubclassPanelV2 then
         lift(frame, base)
     end
