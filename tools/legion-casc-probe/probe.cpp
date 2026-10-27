@@ -6,6 +6,8 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <span>
+#include <vector>
 
 static bool ParseCKey(std::string_view text, std::array<unsigned char,16>& key) {
     if(text.size()!=32) return false;
@@ -57,7 +59,7 @@ static bool ManifestMetadata(HANDLE storage, char const* label, char const* ckey
     CascCloseFile(file);return true;
 }
 
-struct Target { char const* label; DWORD id; char const* name; };
+struct Target { char const* label; DWORD id; char const* name; unsigned char const* ckey=nullptr; };
 static Target const targets[] = {
     {"tile_23_33_root",957774,nullptr},
     {"tile_23_33_obj0",956360,nullptr},
@@ -71,12 +73,22 @@ static Target const targets[] = {
 };
 int main(int argc,char** argv) {
     bool metadata=argc==6&&std::string_view(argv[3])=="--manifest-metadata";
+    bool contentKeys=argc>=5&&std::string_view(argv[3])=="--content-keys";
     std::array<unsigned char,16> rootKey{},vfsKey{};
-    if((argc!=3&&!metadata)||(metadata&&
+    if((argc!=3&&!metadata&&!contentKeys)||(metadata&&
        (!ParseCKey(argv[4],rootKey)||!ParseCKey(argv[5],vfsKey)))) {
-        std::fprintf(stderr,"Usage: legion-casc-probe CLIENT_ROOT PRODUCT [--manifest-metadata ROOT_CKEY VFS_ROOT_CKEY]\n");
+        std::fprintf(stderr,"Usage: legion-casc-probe CLIENT_ROOT PRODUCT [--manifest-metadata ROOT_CKEY VFS_ROOT_CKEY | --content-keys CKEY ...]\n");
         return 2;
     }
+    std::vector<std::array<unsigned char,16>> keys(contentKeys?argc-4:0);
+    std::vector<Target> keyTargets;
+    for(size_t i=0;i<keys.size();++i) {
+        if(!ParseCKey(argv[i+4],keys[i])) {
+            std::fprintf(stderr,"Invalid content key: expected 32 hexadecimal digits\n");return 2;
+        }
+        keyTargets.push_back({argv[i+4],0,nullptr,keys[i].data()});
+    }
+    std::span<Target const> selected=contentKeys?std::span<Target const>(keyTargets):std::span<Target const>(targets);
     CASC_OPEN_STORAGE_ARGS args{};
     args.Size=sizeof(args); args.szLocalPath=argv[1]; args.szCodeName=argv[2];
     args.dwLocaleMask=CASC_LOCALE_ALL_WOW;
@@ -93,10 +105,11 @@ int main(int argc,char** argv) {
         return rootOk&&vfsOk?0:1;
     }
     std::puts("label\tfile_data_id\tstatus\tbytes\tsha256\terror");
-    for(auto const& target:targets) {
+    for(auto const& target:selected) {
         HANDLE file=nullptr;
-        DWORD flags=(target.id?CASC_OPEN_BY_FILEID:CASC_OPEN_BY_NAME)|CASC_STRICT_DATA_CHECK;
-        void const* name=target.id?CASC_FILE_DATA_ID(target.id):static_cast<void const*>(target.name);
+        DWORD flags=(target.ckey?CASC_OPEN_BY_CKEY:(target.id?CASC_OPEN_BY_FILEID:CASC_OPEN_BY_NAME))|CASC_STRICT_DATA_CHECK;
+        void const* name=target.ckey?static_cast<void const*>(target.ckey):
+                         (target.id?CASC_FILE_DATA_ID(target.id):static_cast<void const*>(target.name));
         if(!CascOpenFile(storage,name,CASC_LOCALE_ALL_WOW,flags,&file)) {
             std::printf("%s\t%u\tOPEN_FAILED\t0\t-\t%u\n",target.label,target.id,GetCascError());continue;
         }

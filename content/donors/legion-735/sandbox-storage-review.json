@@ -1,0 +1,102 @@
+{
+  "format": "wowforever-synthetic-casc-storage-review-v1",
+  "core_commit": "91d49b230f89c3ab4719f5b2b2d1e70ed36613c4",
+  "core_readonly_fallback": "Existing Dockerfile EROFS/EACCES -> O_RDONLY fallback applied to build copy only",
+  "network_mode": "none",
+  "container_readonly": true,
+  "storage_mount_readonly": true,
+  "user": "1000:1000",
+  "capabilities": "ALL dropped",
+  "no_new_privileges": true,
+  "repository_docker_target_built": false,
+  "docker_validation_image": "Local scratch image containing native checker and host runtime libraries; no registry base image",
+  "cases": {
+    "baseline": {
+      "exit_code": 1,
+      "results": [
+        {
+          "file_id": "16777200",
+          "status": "READ_OK",
+          "bytes": "40",
+          "sha256": "6ae65800da50919abe673ef90965a9a69c679ab8a561601dc91fe2016ff9fa76",
+          "error": "0"
+        },
+        {
+          "file_id": "16777201",
+          "status": "OPEN_FAILED",
+          "bytes": "0",
+          "sha256": "-",
+          "error": "2"
+        }
+      ],
+      "input_tree_sha256_unchanged": true,
+      "legacy_root_reparse_observed": true
+    },
+    "candidate": {
+      "exit_code": 0,
+      "results": [
+        {
+          "file_id": "16777200",
+          "status": "READ_OK",
+          "bytes": "40",
+          "sha256": "6ae65800da50919abe673ef90965a9a69c679ab8a561601dc91fe2016ff9fa76",
+          "error": "0"
+        },
+        {
+          "file_id": "16777201",
+          "status": "READ_OK",
+          "bytes": "37",
+          "sha256": "2e8ed4beb416a757c6ef4323b4e8838fc642182ab18024e065c43d17c6b4df6f",
+          "error": "0"
+        }
+      ],
+      "input_tree_sha256_unchanged": true,
+      "legacy_root_reparse_observed": true
+    },
+    "data-only": {
+      "exit_code": 1,
+      "results": [
+        {
+          "file_id": "16777200",
+          "status": "READ_OK",
+          "bytes": "40",
+          "sha256": "6ae65800da50919abe673ef90965a9a69c679ab8a561601dc91fe2016ff9fa76",
+          "error": "0"
+        },
+        {
+          "file_id": "16777201",
+          "status": "OPEN_FAILED",
+          "bytes": "0",
+          "sha256": "-",
+          "error": "2"
+        }
+      ],
+      "input_tree_sha256_unchanged": true,
+      "legacy_root_reparse_observed": true
+    },
+    "damaged-frame": {
+      "exit_code": 1,
+      "results": [
+        {
+          "file_id": "16777200",
+          "status": "READ_OK",
+          "bytes": "40",
+          "sha256": "6ae65800da50919abe673ef90965a9a69c679ab8a561601dc91fe2016ff9fa76",
+          "error": "0"
+        },
+        {
+          "file_id": "16777201",
+          "status": "READ_FAILED",
+          "bytes": "0",
+          "sha256": "-",
+          "error": "1004"
+        }
+      ],
+      "input_tree_sha256_unchanged": true,
+      "legacy_root_reparse_observed": true
+    }
+  },
+  "game_client_tested": false,
+  "actual_client_patch_supported": false,
+  "all_passed": true
+}

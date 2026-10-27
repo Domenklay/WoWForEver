@@ -263,6 +263,7 @@ xattr -cr "/Applications/Forever Launcher.app"
 - [Цепочка Североземья: 5 квестов и 3 NPC из 3.3.5](content/ports/northshire-chain-335/README.md).
 - [Проверка ресурсов Расколотых островов Legion](docs/zones/LEGION.ru.md).
 - [Экспорт участка Даларана и проверка RAW-файлов](docs/zones/LEGION-EXPORT.ru.md).
+- [Синтетический CASC-стенд: ROOT, encoding и локальные индексы](docs/zones/CASC-SANDBOX.ru.md).
 - [План переноса контента из 3.3.5 и новых дополнений](docs/CUSTOMIZATION.ru.md).
 - [Инструкции для AI-ассистентов](AGENTS.md).
 

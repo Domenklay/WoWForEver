@@ -54,6 +54,15 @@ RUN c++ -std=c++20 -O2 -I/src/TrinityCore/dep/CascLib/src \
 ENTRYPOINT ["/usr/local/bin/legion-casc-probe"]
 CMD ["/wow", "wow_classic_beta"]
 
+############################ optional synthetic storage check ############################
+# Reuses the core build and its existing read-only CascLib fallback; no server runtime changes.
+FROM build AS casc-sandbox-check
+COPY tools/legion-casc-probe/check-storage.cpp /tmp/check-storage.cpp
+RUN c++ -std=c++20 -O2 -I/src/TrinityCore/dep/CascLib/src \
+        /tmp/check-storage.cpp /src/TrinityCore/build/dep/CascLib/libcasc.a \
+        -lz -lcrypto -o /usr/local/bin/check-storage
+ENTRYPOINT ["/usr/local/bin/check-storage"]
+
 ############################ database release ############################
 FROM ubuntu:${UBUNTU_VERSION} AS tdb
 
