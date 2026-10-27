@@ -28,7 +28,27 @@
     "version": "0.2.19",
     "native_export_option": "Export Raw",
     "retail_build_displayed_by_user": "12.1.5.70575",
-    "actual_resource_export_verified": false
+    "actual_resource_export_verified": false,
+    "user_export_manifest_review": {
+      "declared_build": "12.1.5.70575",
+      "area": "Dalaran and adjacent terrain",
+      "map_directory": "trollraid",
+      "tile_filename_suffixes": [
+        "22_33",
+        "23_32",
+        "23_33",
+        "23_34",
+        "24_33"
+      ],
+      "files": 2509,
+      "total_bytes": 181170407,
+      "m2_files": 1972,
+      "skin_files": 0,
+      "wmo_root_files": 3,
+      "wmo_group_files": 0,
+      "raw_resources_received_in_cloud": false,
+      "dependency_closure_verified": false
+    }
   },
   "installed_on_forever": false
 }

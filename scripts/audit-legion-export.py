@@ -8,7 +8,7 @@ import struct
 from collections import Counter
 from pathlib import Path
 
-NATIVE = {'.wdt', '.adt', '.wmo', '.m2', '.blp', '.skin', '.anim', '.db2'}
+NATIVE = {'.wdt', '.adt', '.wmo', '.m2', '.blp', '.skin', '.skel', '.bone', '.anim', '.db2'}
 
 
 def inspect_file(path):
@@ -86,6 +86,12 @@ def audit(root, build):
                 warnings.append(f'Missing companion for {p.relative_to(root)}: {suffix}')
     if not counts['.blp']:
         warnings.append('No BLP textures detected; asset dependencies may be incomplete.')
+    if counts['.m2'] and not counts['.skin']:
+        warnings.append('M2 models exist but no SKIN files were exported. In Models / Export Raw, enable M2 .skin Files before exporting the map again.')
+    wmo_roots = [row for row in files if row['path'].lower().endswith('.wmo') and 'MOHD' in row.get('chunks', [])]
+    wmo_groups = [row for row in files if row['path'].lower().endswith('.wmo') and 'MOGP' in row.get('chunks', [])]
+    if any('GFID' in row.get('chunks', []) for row in wmo_roots) and not wmo_groups:
+        warnings.append('WMO roots reference group files (GFID), but no WMO group geometry (MOGP) was exported. Enable WMO Groups in Models / Export Raw.')
     return {
         'format': 'wowforever-legion-export-audit-v1',
         'declared_map_id': 1220,
@@ -93,6 +99,7 @@ def audit(root, build):
         'build_and_map_independently_verified': False,
         'counts': dict(sorted(counts.items())),
         'root_terrain_tiles': len(roots),
+        'wmo_root_files': len(wmo_roots), 'wmo_group_files': len(wmo_groups),
         'errors': errors, 'warnings': warnings, 'files': files,
         'compatibility_with_forever_70532': 'not verified',
         'note': 'Structural inventory only; dependency closure and gameplay are not validated.',
@@ -110,6 +117,7 @@ def main():
     if output.is_relative_to(root):
         parser.error('--output must be outside the export directory')
     result = audit(root, args.build)
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps({k: v for k, v in result.items() if k != 'files'}, ensure_ascii=False, indent=2))
     print(f'Report: {output}')

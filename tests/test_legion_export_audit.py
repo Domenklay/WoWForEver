@@ -2,6 +2,9 @@
 import importlib.util
 from pathlib import Path
 import struct
+import subprocess
+import sys
+import json
 import tempfile
 import unittest
 
@@ -47,6 +50,26 @@ class ExportAuditTests(unittest.TestCase):
     def test_missing_tile_companion_reported(self):
         (self.root / 'test_21_32_obj0.adt').unlink()
         self.assertTrue(any('companion' in w for w in audit.audit(self.root, 'synthetic')['warnings']))
+
+    def test_model_dependency_warnings(self):
+        (self.root / 'model.m2').write_bytes(b'MD21' + bytes(8))
+        root_wmo = chunk(b'MVER', struct.pack('<I', 17)) + chunk(b'MOHD', bytes(64)) + chunk(b'GFID', struct.pack('<I', 123))
+        (self.root / 'building.wmo').write_bytes(root_wmo)
+        result = audit.audit(self.root, 'synthetic')
+        self.assertTrue(any('SKIN' in w for w in result['warnings']))
+        self.assertTrue(any('MOGP' in w for w in result['warnings']))
+        (self.root / 'model00.skin').write_bytes(b'SKIN' + bytes(8))
+        (self.root / 'building_000.wmo').write_bytes(chunk(b'MVER', struct.pack('<I',17)) + chunk(b'MOGP', bytes(68)))
+        result = audit.audit(self.root, 'synthetic')
+        self.assertEqual(result['wmo_group_files'], 1)
+        self.assertEqual(result['warnings'], [])
+
+    def test_cli_creates_report_directory(self):
+        with tempfile.TemporaryDirectory() as reports:
+            out = Path(reports) / 'nested' / 'reports' / 'manifest.json'
+            result = subprocess.run([sys.executable, str(Path(audit.__file__)), str(self.root), '--output', str(out)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(out.read_text())['root_terrain_tiles'], 1)
 
     def test_symlinks_not_read(self):
         (self.root / 'external.wdt').symlink_to('/does/not/exist')
