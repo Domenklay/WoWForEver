@@ -1,0 +1,34 @@
+{
+  "source": "AshamaneProject/AshamaneCore",
+  "branch": "legion",
+  "client_target": "7.3.5.26972",
+  "database_release": "https://github.com/AshamaneProject/AshamaneCore/releases/tag/ADB_735.10",
+  "archive_name": "ADB_735.10.rar",
+  "archive_bytes": 87997425,
+  "downloaded_archive_sha256": "e3f0f90db8940f3a1201188fafdf740b8734e2d3e893e1cebbd14c2b9917154a",
+  "hash_note": "Local fingerprint of the HTTPS download, not an upstream-published checksum.",
+  "world_sql_bytes": 366619372,
+  "hotfix_sql_bytes": 126317838,
+  "map_1220_creature_rows": 27568,
+  "azsuna_zone_filter_note": "No creature rows have zoneId=7334; most map 1220 rows have zoneId=0. Select a region by coordinates/tile after resource export.",
+  "donor_azsuna_teleport_reference": {
+    "source_table": "game_tele",
+    "source_id": 1577,
+    "name": "Azsuna",
+    "map": 1220,
+    "x": -218.95,
+    "y": 5600.9,
+    "z": 61.1105,
+    "orientation": 3.32418,
+    "safe_for_forever": "not verified; do not teleport before resources and geometry are installed"
+  },
+  "resource_tool": {
+    "repository": "https://github.com/Kruithne/wow.export",
+    "inspected_commit": "c2fd7bde36a712be78a5da896c995b84fbfa2545",
+    "version": "0.2.19",
+    "native_export_option": "Export Raw",
+    "retail_build_displayed_by_user": "12.1.5.70575",
+    "actual_resource_export_verified": false
+  },
+  "installed_on_forever": false
+}
