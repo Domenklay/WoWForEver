@@ -15,6 +15,12 @@ local function texture(id)
     return 134400
 end
 
+local function spellName(id)
+    if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
+    if GetSpellInfo then return GetSpellInfo(id) end
+    return nil
+end
+
 local function cast(id)
     id=tonumber(id)
     if not id then return end
@@ -45,7 +51,8 @@ local function pickup(spell)
     end
     local id=tonumber(spell.id)
     local name="FSub"..tostring(id)
-    local body="/fsubcast "..tostring(id)
+    local shown=spellName(id)
+    local body=(shown and ("#showtooltip "..shown.."\n") or "").."/fsubcast "..tostring(id)
     local icon=texture(id)
     local index=GetMacroIndexByName(name)
     local ok,result
