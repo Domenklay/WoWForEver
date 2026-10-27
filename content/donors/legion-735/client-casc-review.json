@@ -84,5 +84,6 @@
   ],
   "complete_dependency_closure_verified": false,
   "client_patch_delivery_verified": false,
-  "installed_on_forever": false
+  "installed_on_forever": false,
+  "tile_id_mapping_correction": "Historical terrain ID queries used transposed WDT indices. They do not test corrected tile 23_33 IDs 957382/956935/957702. See content-key-targets.json and docs/zones/LEGION-PACKAGE.ru.md. Exact CKey observations remain valid."
 }

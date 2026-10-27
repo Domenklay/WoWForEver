@@ -61,9 +61,9 @@ static bool ManifestMetadata(HANDLE storage, char const* label, char const* ckey
 
 struct Target { char const* label; DWORD id; char const* name; unsigned char const* ckey=nullptr; };
 static Target const targets[] = {
-    {"tile_23_33_root",957774,nullptr},
-    {"tile_23_33_obj0",956360,nullptr},
-    {"tile_23_33_tex0",956397,nullptr},
+    {"tile_23_33_root",957382,nullptr},
+    {"tile_23_33_obj0",956935,nullptr},
+    {"tile_23_33_tex0",957702,nullptr},
     {"dalaran_wmo",1120838,nullptr},
     {"dalaran_group_000",1120853,nullptr},
     {"sample_m2",1379264,nullptr},

@@ -1,0 +1,39 @@
+{
+  "format": "wowforever-dalaran-package-sample-review-v1",
+  "source": "Previously supplied small Legion-Dalaran-sample.zip; not the full export",
+  "tile": {
+    "export_tile": "23_33",
+    "world_tile_x": 33,
+    "world_tile_y": 23,
+    "raw_maid_index": 2135,
+    "root_file_data_id": 957382,
+    "geometry_origin": [
+      -533.333984375,
+      4800.0
+    ],
+    "declared_map_id": 1220
+  },
+  "packaged_files": 16,
+  "packaged_bytes": 4624159,
+  "counts": {
+    ".wdt": 5,
+    ".adt": 5,
+    ".m2": 1,
+    ".skin": 1,
+    ".wmo": 4
+  },
+  "errors": [],
+  "unresolved_file_data_ids": 2770,
+  "coverage_limits": [
+    "maps/trollraid/troll raid_23_33_obj1.adt: MLMD references require additional review",
+    "maps/trollraid/troll raid_23_33_obj1.adt: MLMX references require additional review",
+    "maps/trollraid/troll raid_fogs.wdt: auxiliary WDT v2 internal references not fully parsed",
+    "maps/trollraid/troll raid_lgt.wdt: auxiliary WDT v20 internal references not fully parsed",
+    "maps/trollraid/troll raid_mpv.wdt: auxiliary WDT v3 internal references not fully parsed",
+    "maps/trollraid/troll raid_occ.wdt: auxiliary WDT v18 internal references not fully parsed"
+  ],
+  "source_files_modified": false,
+  "installable": false,
+  "full_export_checked": false,
+  "note": "The small format sample omits most city models/textures. The full user export must be packaged locally; this is not a gameplay test."
+}

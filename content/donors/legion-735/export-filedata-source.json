@@ -1,0 +1,10 @@
+{
+  "source_url": "https://github.com/wowdev/wow-listfile/releases/latest/download/community-listfile.csv",
+  "source_sha256": "fa746658b6917fcefb7489fe99f5ad8428b98abcf046ed98c07a8371ed9edda1",
+  "retrieved_date": "2026-10-27",
+  "subset_sha256": "1859facf861cd24854f9764c554b0b5291d774bb135a95161b30964fd69a73bb",
+  "rows": 6563,
+  "selection": "Names present in the user export manifest, plus Troll Raid map definitions and auxiliary files; selected five tiles MAID resources",
+  "source_export_manifest_sha256": "7f97cf6ef6a3dd1f2d6e376837d04e1c56baa6165029512ce24a304f5e9ed675",
+  "build_compatibility_verified": false
+}

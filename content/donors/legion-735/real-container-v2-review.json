@@ -185,5 +185,6 @@
   "game_resources_changed": false,
   "dalaran_installed": false,
   "runtime_evidence": "User reported successful world entry after empty-segment apply and subsequent verify on 2026-10-27.",
-  "resource_candidate_runtime_verified": false
+  "resource_candidate_runtime_verified": true,
+  "resource_runtime_evidence": "User confirmed ordinary world entry and CONTAINER EXPERIMENT STILL VERIFIED after apply-resource on 2026-10-27. This is not Dalaran runtime validation."
 }

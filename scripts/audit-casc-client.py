@@ -74,7 +74,7 @@ def audit(path):
     if root_ekey is None:raise ValueError("ROOT key absent from ENCODING")
     print("Reading ROOT and checking every group...",file=sys.stderr,flush=True)
     root=store.read(root_ekey,root_ckey);groups=records=named=maximum=0
-    targets={957774:[],956360:[],956397:[]};locales=set();profiles={}
+    targets={957382:[],956935:[],957702:[]};locales=set();profiles={}
     for group in root_groups(root):
         groups+=1;records+=group["count"];named+=group["count"]*group["has_names"]
         locales.add(group["locale"]);current=0

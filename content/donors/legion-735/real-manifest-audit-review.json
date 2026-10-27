@@ -53,5 +53,6 @@
     "offset_bits": 30
   },
   "source_report_sha256": "b55959541af9bc75fbf2d53e663f316107b621d30dba6a5a2761b9963af0868c",
-  "real_client_update_supported": false
+  "real_client_update_supported": false,
+  "tile_id_mapping_correction": "Historical terrain ID queries used transposed WDT indices. They do not test corrected tile 23_33 IDs 957382/956935/957702. See content-key-targets.json and docs/zones/LEGION-PACKAGE.ru.md. Exact CKey observations remain valid."
 }

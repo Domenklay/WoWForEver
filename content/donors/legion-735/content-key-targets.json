@@ -5,35 +5,40 @@
     {
       "label": "terrain",
       "path": "maps/trollraid/troll raid_23_33.adt",
-      "file_data_id": 957774,
+      "file_data_id": 957382,
       "ckey": "e53943871e6b48cf54d474493cd406e2",
       "bytes": 441800,
-      "sha256": "e5d1d453021713f01827985e26b55e9be24f8bbf68a5e460d7d5d96903253756"
+      "sha256": "e5d1d453021713f01827985e26b55e9be24f8bbf68a5e460d7d5d96903253756",
+      "historical_incorrect_file_data_id": 957774
     },
     {
       "label": "objects",
       "path": "maps/trollraid/troll raid_23_33_obj0.adt",
-      "file_data_id": 956360,
+      "file_data_id": 956935,
       "ckey": "3977afd0e837f7fa2f980d88e062ab01",
       "bytes": 8480,
-      "sha256": "0841406bbc26c4cf6791be8ebf63119e6f34303082064d403e7c6651aad50976"
+      "sha256": "0841406bbc26c4cf6791be8ebf63119e6f34303082064d403e7c6651aad50976",
+      "historical_incorrect_file_data_id": 956360
     },
     {
       "label": "textures",
       "path": "maps/trollraid/troll raid_23_33_tex0.adt",
-      "file_data_id": 956397,
+      "file_data_id": 957702,
       "ckey": "4febae00d00ecb9edfe2a1dc0f2fb3bd",
       "bytes": 1614621,
-      "sha256": "754b8bac952f5658fd457a63fb9bbdd2eeb2cbdf174c7f56d25e2d551a588505"
+      "sha256": "754b8bac952f5658fd457a63fb9bbdd2eeb2cbdf174c7f56d25e2d551a588505",
+      "historical_incorrect_file_data_id": 956397
     },
     {
       "label": "world_definition",
       "path": "maps/trollraid/troll raid.wdt",
-      "file_data_id": null,
+      "file_data_id": 957721,
       "ckey": "30906fab9227c04dab483cc94b3abb4d",
       "bytes": 163908,
-      "sha256": "41ec10ed97b5ce65113b7247a20279bf324a671e427428c1dd05654ae39aff0c"
+      "sha256": "41ec10ed97b5ce65113b7247a20279bf324a671e427428c1dd05654ae39aff0c",
+      "file_data_id_evidence": "community-listfile: world/maps/troll raid/troll raid.wdt"
     }
   ],
-  "available_on_forever": "All four exact CKeys returned OPEN_FAILED, error 2, in user local storage; see content-key-review.json"
+  "available_on_forever": "All four exact CKeys returned OPEN_FAILED, error 2, in user local storage; see content-key-review.json",
+  "tile_id_mapping_correction": "Exported tile is y_x. Native MAID is x-major: raw index 33*64+23=2135. Confirmed by ADT origin (-533.333984375,4800) and community FileDataID paths. Historical direct-ID queries used transposed IDs; exact-CKey queries are unaffected."
 }
