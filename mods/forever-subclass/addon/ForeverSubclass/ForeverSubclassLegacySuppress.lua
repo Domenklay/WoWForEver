@@ -1,6 +1,7 @@
 -- Hide the legacy ForeverSubclassTalentPanel contents once PanelV2 is available.
 -- The legacy panel remains only as a geometry anchor. V2 is reparented directly to the
--- real talents frame so the old host can never win the mouse hit-test.
+-- real talents frame. Neither host nor V2 root participates in mouse hit testing;
+-- only actual cards/buttons/spell nodes do.
 
 local applied = false
 
@@ -17,35 +18,34 @@ local function suppress()
     local talentHost = _G.PlayerSpellsFrame and _G.PlayerSpellsFrame.TalentsFrame
     if not host or not v2 or not talentHost then return false end
 
-    -- The legacy host itself was the actual frame returned by GetMouseFoci() in
-    -- Forever 70532. Disable it completely for hit testing.
+    -- The old host is geometry only. It must never catch the mouse.
     if host.EnableMouse then pcall(host.EnableMouse, host, false) end
     if host.EnableMouseWheel then pcall(host.EnableMouseWheel, host, false) end
+    if host.SetFrameStrata then pcall(host.SetFrameStrata, host, "MEDIUM") end
+    if host.SetFrameLevel then pcall(host.SetFrameLevel, host, (talentHost:GetFrameLevel() or 100) + 2) end
 
     if host.GetRegions then
         for _, region in ipairs({ host:GetRegions() }) do
             if region and region.SetAlpha then pcall(region.SetAlpha, region, 0) end
         end
     end
-
     if host.GetChildren then
         for _, child in ipairs({ host:GetChildren() }) do
             if child ~= v2 then neutralizeFrame(child) end
         end
     end
 
-    -- Do not leave V2 under the non-interactive legacy host. Make it a sibling of
-    -- the host directly inside Blizzard's real talents page and reuse host geometry.
-    if v2:GetParent() ~= talentHost then
-        v2:SetParent(talentHost)
-    end
+    -- V2 is a sibling inside the real talent page. The root paints the body but does
+    -- not accept input, so it cannot mask its own child buttons or Blizzard controls.
+    if v2:GetParent() ~= talentHost then v2:SetParent(talentHost) end
     v2:ClearAllPoints()
     v2:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
     v2:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
     if v2.SetAlpha then v2:SetAlpha(1) end
-    if v2.EnableMouse then v2:EnableMouse(true) end
-    if v2.SetFrameStrata then v2:SetFrameStrata("FULLSCREEN_DIALOG") end
-    if v2.SetFrameLevel then v2:SetFrameLevel(10000) end
+    if v2.EnableMouse then v2:EnableMouse(false) end
+    if v2.EnableMouseWheel then v2:EnableMouseWheel(false) end
+    if v2.SetFrameStrata then v2:SetFrameStrata("MEDIUM") end
+    if v2.SetFrameLevel then v2:SetFrameLevel((talentHost:GetFrameLevel() or 100) + 2000) end
     v2:Show()
 
     if not applied and host.HookScript then
