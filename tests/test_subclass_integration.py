@@ -37,6 +37,14 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertIn('subclassUnlockPrimaryLevel = 10;',injected)
             self.assertIn('subclassUnlockPrimaryLevel = 40;',vendored)
 
+            server=(folder/'ForeverSubclass/ForeverSubclass.cpp').read_text()
+            self.assertIn('#include "ChatCommand.h"',server)
+            self.assertIn('class ForeverSubclassCommandScript final : public CommandScript',server)
+            self.assertIn('{ "fsub", HandleFsubCommand, rbac::RBAC_PERM_COMMAND_COMMANDS, Console::No }',server)
+            self.assertIn('ForeverSubclass::Request(handler->GetSession()->GetPlayer(), text);',server)
+            self.assertIn('auto& e=State(p);Snapshot(p,e);',server)
+            self.assertEqual(server.count('new ForeverSubclassCommandScript();'),1)
+
     def test_addon_install_and_restore_preserve_game_and_previous_addon(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);client=root/'_classic_beta_';client.mkdir()
@@ -48,8 +56,10 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertTrue((target/'ForeverSubclass.lua').exists())
             self.assertTrue((target/'ForeverSubclassTalentTab.lua').exists())
             self.assertTrue((target/'ForeverSubclassTalentCompat.lua').exists())
+            self.assertTrue((target/'ForeverSubclassCommandTransport.lua').exists())
             toc=(target/'ForeverSubclass.toc').read_text()
             self.assertIn('ForeverSubclassTalentCompat.lua',toc)
+            self.assertIn('ForeverSubclassCommandTransport.lua',toc)
             self.assertEqual((backup/'previous-addon/previous.lua').read_text(),'-- previous user addon\n')
             with self.assertRaises(FileExistsError):installer.install(client,backup)
             installer.restore(backup)
@@ -62,6 +72,14 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('PlayerSpellsFrame.TalentsFrame',compat)
         self.assertIn('ForeverSubclassTalentTab',compat)
         self.assertIn('SetParent(talentHost)',compat)
+
+    def test_command_transport_uses_server_command(self):
+        transport=(MODULE/'addon/ForeverSubclass/ForeverSubclassCommandTransport.lua').read_text()
+        self.assertIn('.fsub ',transport)
+        self.assertIn('learn ',transport)
+        self.assertIn('active ',transport)
+        self.assertIn('xp ',transport)
+        self.assertIn('SendChatMessage',transport)
 
     def test_new_addon_uninstall_and_symlink_refusal(self):
         with tempfile.TemporaryDirectory() as temp:
