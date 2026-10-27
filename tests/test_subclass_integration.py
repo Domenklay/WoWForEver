@@ -59,10 +59,14 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertTrue((target/'ForeverSubclassUX.lua').exists())
             self.assertTrue((target/'ForeverSubclassDirectTransport.lua').exists())
             self.assertTrue((target/'ForeverSubclassSpellBook.lua').exists())
+            self.assertTrue((target/'ForeverSubclassActionBar.lua').exists())
+            self.assertTrue((target/'ForeverSubclassResourceHUD.lua').exists())
             toc=(target/'ForeverSubclass.toc').read_text()
             self.assertIn('ForeverSubclassTalentCompat.lua',toc)
             self.assertIn('ForeverSubclassDirectTransport.lua',toc)
             self.assertIn('ForeverSubclassSpellBook.lua',toc)
+            self.assertIn('ForeverSubclassActionBar.lua',toc)
+            self.assertIn('ForeverSubclassResourceHUD.lua',toc)
             self.assertNotIn('ForeverSubclassCommandTransport.lua',toc)
             self.assertEqual((backup/'previous-addon/previous.lua').read_text(),'-- previous user addon\n')
             with self.assertRaises(FileExistsError):installer.install(client,backup)
@@ -76,6 +80,8 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('PlayerSpellsFrame.TalentsFrame',compat)
         self.assertIn('ForeverSubclassTalentTab',compat)
         self.assertIn('SetParent(talentHost)',compat)
+        self.assertIn('OnMouseDown',compat)
+        self.assertIn('ForeverSubclassPanelV2',compat)
         self.assertNotIn('ForeverSubclassTalentClickProxy',compat)
         self.assertNotIn('UIParent)',compat)
 
@@ -87,6 +93,22 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('send("cast "..self.spell.id)',spellbook)
         self.assertIn('if sp.selected then',spellbook)
         self.assertNotIn('LearnSpell',spellbook)
+
+    def test_subclass_action_bar_uses_per_character_macro_bridge(self):
+        action=(MODULE/'addon/ForeverSubclass/ForeverSubclassActionBar.lua').read_text()
+        self.assertIn('CreateMacro',action)
+        self.assertIn('PickupMacro',action)
+        self.assertIn('/fsubcast',action)
+        self.assertIn('ForeverSubclassCast',action)
+        self.assertIn('RegisterForDrag',action)
+        self.assertIn('InCombatLockdown',action)
+
+    def test_secondary_resource_hud_uses_server_power_snapshot(self):
+        hud=(MODULE/'addon/ForeverSubclass/ForeverSubclassResourceHUD.lua').read_text()
+        self.assertIn('ForeverSubclassResourceHUD',hud)
+        self.assertIn('kind=="POWER"',hud)
+        self.assertIn('UnitPowerType',hud)
+        self.assertIn('sendStatus()',hud)
 
     def test_direct_transport_uses_server_endpoint(self):
         transport=(MODULE/'addon/ForeverSubclass/ForeverSubclassDirectTransport.lua').read_text()
