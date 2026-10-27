@@ -1,6 +1,6 @@
 -- Hide the legacy ForeverSubclassTalentPanel contents once PanelV2 is available.
--- The legacy panel remains as the host/container because the tab integration expects it,
--- but its original buttons, labels and scroll frame must never render or receive input.
+-- The legacy panel remains only as a geometry anchor. V2 is reparented directly to the
+-- real talents frame so the old host can never win the mouse hit-test.
 
 local applied = false
 
@@ -14,29 +14,38 @@ end
 local function suppress()
     local host = _G.ForeverSubclassTalentPanel
     local v2 = _G.ForeverSubclassPanelV2
-    if not host or not v2 then return false end
+    local talentHost = _G.PlayerSpellsFrame and _G.PlayerSpellsFrame.TalentsFrame
+    if not host or not v2 or not talentHost then return false end
 
-    -- Hide all old regions created directly on the legacy panel: headline, progress,
-    -- help text, notice and its original backdrop/borders. V2 paints its own surface.
+    -- The legacy host itself was the actual frame returned by GetMouseFoci() in
+    -- Forever 70532. Disable it completely for hit testing.
+    if host.EnableMouse then pcall(host.EnableMouse, host, false) end
+    if host.EnableMouseWheel then pcall(host.EnableMouseWheel, host, false) end
+
     if host.GetRegions then
         for _, region in ipairs({ host:GetRegions() }) do
             if region and region.SetAlpha then pcall(region.SetAlpha, region, 0) end
         end
     end
 
-    -- Every direct child except V2 belongs to the old implementation. Alpha/mouse
-    -- suppression survives subsequent Show() calls made by the legacy refresh loop.
     if host.GetChildren then
         for _, child in ipairs({ host:GetChildren() }) do
             if child ~= v2 then neutralizeFrame(child) end
         end
     end
 
-    -- Make V2 the only visible/interactive body.
+    -- Do not leave V2 under the non-interactive legacy host. Make it a sibling of
+    -- the host directly inside Blizzard's real talents page and reuse host geometry.
+    if v2:GetParent() ~= talentHost then
+        v2:SetParent(talentHost)
+    end
+    v2:ClearAllPoints()
+    v2:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+    v2:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
     if v2.SetAlpha then v2:SetAlpha(1) end
     if v2.EnableMouse then v2:EnableMouse(true) end
     if v2.SetFrameStrata then v2:SetFrameStrata("FULLSCREEN_DIALOG") end
-    if v2.SetFrameLevel then v2:SetFrameLevel(12000) end
+    if v2.SetFrameLevel then v2:SetFrameLevel(10000) end
     v2:Show()
 
     if not applied and host.HookScript then
@@ -61,8 +70,6 @@ events:SetScript("OnEvent", function()
     end
 end)
 
--- Keep enforcing only while the panel exists. This is cheap (a handful of children)
--- and prevents the legacy refresh loop from restoring opacity/mouse state later.
 events:SetScript("OnUpdate", function(self, elapsed)
     self._elapsed = (self._elapsed or 0) + elapsed
     if self._elapsed < 0.5 then return end
