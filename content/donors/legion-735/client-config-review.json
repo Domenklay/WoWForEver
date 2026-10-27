@@ -15,8 +15,8 @@
   "vfs_root_decoded_bytes": 37324,
   "vfs_root_encoded_bytes": 23806,
   "numbered_vfs_entries": 582,
-  "manifest_bytes_inspected": false,
-  "legacy_root_header_version": "not determined from build config",
+  "manifest_bytes_inspected": true,
+  "legacy_root_header_version": 2,
   "writer_assessment": {
     "repository": "https://github.com/wowdev/TACT.Net",
     "inspected_commit": "57618c47dc0cfef1bfc0e7585bf335ced7218389",
@@ -25,5 +25,6 @@
     "compatibility_with_this_client": "not verified; do not modify live client with this writer"
   },
   "reader_note": "Forever CascLib tries TVFS then can fall back to legacy ROOT via ERROR_REPARSE_ROOT; a successful CascLib open does not establish which metadata paths WowB.exe uses.",
-  "installed_on_forever": false
+  "installed_on_forever": false,
+  "followup_manifest_review": "manifest-lab-review.json"
 }

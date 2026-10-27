@@ -1,0 +1,33 @@
+{
+  "format": "wowforever-manifest-lab-v1",
+  "root": {
+    "header_bytes": 24,
+    "version": 2,
+    "total_records": 2433102,
+    "named_records": 231036,
+    "reserved": 0
+  },
+  "root_file_bytes": 50525924,
+  "root_full_integrity_verified": false,
+  "tvfs": {
+    "file_bytes": 37324,
+    "md5_verified": true,
+    "version": 1,
+    "flags": 7,
+    "max_depth": 9,
+    "top_level_references": 582,
+    "legacy_root_reference_matches": true,
+    "child_references_matching_build_config": 581,
+    "matching_build_key": "ad1802f4455e427ed8b7769aab25b0c0"
+  },
+  "client_installation_supported": false,
+  "experiment": {
+    "original_references_preserved": 582,
+    "candidate_references": 583,
+    "candidate_bytes": 37399,
+    "installed": false,
+    "limitation": "Standalone TVFS copy only; no ROOT, encoding, local IDX, build config, or WowB.exe validation",
+    "native_reader_cross_check": "Unchanged CascLib header/path/span readers agree on all 582 original and 583 candidate top-level entries; no submanifest resolution or storage/client launch."
+  },
+  "source_report_sha256": "2623eb66b49021cc67a11385447c96fe4a0010a559c9dd9409944f79971af0d6"
+}
