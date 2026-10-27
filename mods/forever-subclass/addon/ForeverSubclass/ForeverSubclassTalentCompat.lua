@@ -31,13 +31,24 @@ end
 local function hideSubclassPanel()
     local panel = _G.ForeverSubclassTalentPanel
     local v2 = _G.ForeverSubclassPanelV2
-    if panel then panel:Hide() end
     if v2 then v2:Hide() end
+    if panel then panel:Hide() end
     local tab = _G.ForeverSubclassTalentTab
     if tab then
         tab:SetEnabled(true)
         if PanelTemplates_DeselectTab then pcall(PanelTemplates_DeselectTab, tab) end
     end
+end
+_G.ForeverSubclassHideTalentPanel = hideSubclassPanel
+
+local function hookNativeButton(button)
+    if hooked[button] or not button.HookScript then return end
+    hooked[button]=true
+    -- OnMouseDown is intentional: the Blizzard tab can already be the selected
+    -- tab internally, so its normal SetTab path may be a no-op. We still must
+    -- remove our overlay immediately when the user presses a native tab.
+    button:HookScript("OnMouseDown", hideSubclassPanel)
+    button:HookScript("OnClick", hideSubclassPanel)
 end
 
 local function positionTab(talentHost)
@@ -59,10 +70,7 @@ local function positionTab(talentHost)
             if ok then text = value end
         end
         if text and nativeTabText[text] then
-            if not hooked[button] and button.HookScript then
-                hooked[button] = true
-                button:HookScript("OnClick", hideSubclassPanel)
-            end
+            hookNativeButton(button)
             local left = button.GetLeft and button:GetLeft()
             if left and left > anchorLeft then anchor, anchorLeft = button, left
             elseif not anchor then anchor = button end
