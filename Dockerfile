@@ -94,7 +94,7 @@ RUN curl -fL --retry 3 -o tdb.7z "${TDB_URL}" \
 
 ############################ runtime ############################
 FROM ubuntu:${UBUNTU_VERSION}
-LABEL org.wowforever.subclass="0.3.4-forever.7"
+LABEL org.wowforever.subclass="0.3.5-forever.8"
 
 ARG DEBIAN_FRONTEND=noninteractive
 # mysql-client is required: the TrinityCore DB updater shells out to the `mysql` binary
