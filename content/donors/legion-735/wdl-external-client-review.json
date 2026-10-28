@@ -1,0 +1,43 @@
+{
+  "format": "wowforever-wdl-external-client-review-v1",
+  "reported_by_user": true,
+  "client": "test copy Forever-Legion-client-v1",
+  "scope": "native root-file reads only; dependencies and donor content equality not verified",
+  "resources": [
+    {
+      "file_data_id": 1131661,
+      "bytes": 904,
+      "sha256": "26312e5e07f14f3df02c37ccfc7513ceda1b9847021b8481faea6ea5e8345a85",
+      "ckey": "c5e405b8114f2adfbd6601b40a244cf7",
+      "content_flags": "120a0000"
+    },
+    {
+      "file_data_id": 1400992,
+      "bytes": 92012,
+      "sha256": "1e57707e3a6f1bc0f7612001d298463f372572cbdbc652e2d432a4080c1fe88a",
+      "ckey": "89fef528e5d427537080bc683cc41bee",
+      "content_flags": "120c0000"
+    },
+    {
+      "file_data_id": 1447182,
+      "bytes": 11610,
+      "sha256": "724b2b3533e3c30f9d3911ff01c09c9084c3371900ef2ccdb31250b85b0d8c9a",
+      "ckey": "324cb409fde07159508eeeb41add2c7b",
+      "content_flags": "120c0000"
+    }
+  ],
+  "shared_metadata": {
+    "status": "READ_OK",
+    "tag_mask": "3fffe3ff",
+    "locale_flags": "173f6"
+  },
+  "map_read": {
+    "file_data_id": 1349477,
+    "requested_locale": "all",
+    "status": "SIZE_FAILED",
+    "error": 1007,
+    "error_name": "ERROR_FILE_OFFLINE",
+    "ruRU_result_not_yet_available": true
+  },
+  "installable": false
+}

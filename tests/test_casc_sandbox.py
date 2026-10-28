@@ -118,6 +118,42 @@ class CascSandboxTests(unittest.TestCase):
                 result = subprocess.run([binary,str(root),lab.PRODUCT,*args],capture_output=True,timeout=30)
                 self.assertEqual(result.returncode,2)
 
+    @unittest.skipUnless(os.environ.get('CASC_SANDBOX_CHECKER'), 'Native CascLib checker required')
+    def test_locale_specific_read_avoids_offline_variant_and_reports_failed_ckey(self):
+        original_root = lab.make_root
+        def localized(records):
+            first = bytearray(original_root({lab.BASE_ID:records[lab.BASE_ID]}))
+            struct.pack_into('<I',first,12,2)
+            second = (struct.pack('<4IB',1,0x2000,0x10000000,0,0)+
+                      struct.pack('<I',lab.BASE_ID)+records[lab.NEW_ID]['ckey'])
+            return bytes(first)+second
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)/'client'
+            with patch.object(lab,'make_root',localized):
+                lab.write_store(root,added=True)
+            base=lab.asset(lab.BASE_TEXT)
+            path=root/'Data/data'/f'{lab.bucket(base["ekey"]):02x}00000001.idx'
+            data=path.read_bytes();length=struct.unpack_from('<I',data,32)[0]
+            entries=[data[pos:pos+18] for pos in range(40,40+length,18)
+                     if data[pos:pos+9]!=base['ekey'][:9]]
+            checksum=0
+            for entry in entries:checksum=lab.hashlittle(entry,checksum)
+            result=data[:32]+lab.guarded(b''.join(entries),checksum)
+            path.write_bytes(result if entries else result.ljust(0x8000,b'\0'))
+            snapshot={p:p.read_bytes() for p in root.rglob('*') if p.is_file()}
+            for locale,status,code in [('enUS','SIZE_FAILED',1),('ruRU','READ_OK',0)]:
+                process=subprocess.run([os.environ['CASC_SANDBOX_CHECKER'],str(root),str(lab.BASE_ID)],
+                    env=dict(os.environ,CASC_CHECK_LOCALE=locale),text=True,capture_output=True,timeout=30)
+                self.assertEqual(process.returncode,code,process.stderr)
+                row=next(csv.DictReader(io.StringIO(process.stdout),delimiter='\t'))
+                self.assertEqual(row['status'],status)
+                if locale=='enUS':
+                    self.assertEqual(row['error'],'1007')
+                    self.assertEqual(row['ckey'],base['ckey'].hex())
+                else:
+                    self.assertEqual(row['sha256'],hashlib.sha256(lab.NEW_TEXT).hexdigest())
+            self.assertEqual(snapshot,{p:p.read_bytes() for p in snapshot})
+
 
 if __name__ == "__main__":
     unittest.main()

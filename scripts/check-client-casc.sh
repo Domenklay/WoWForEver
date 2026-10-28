@@ -11,6 +11,7 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
     exit 1
 fi
 docker run --rm --network none --read-only --cap-drop ALL \
+    --env "CASC_CHECK_LOCALE=${CASC_CHECK_LOCALE:-all}" \
     --security-opt no-new-privileges --user "$(id -u):$(id -g)" \
     --tmpfs /tmp:rw,exec,nosuid,nodev,size=256m \
     --mount "type=bind,src=$client,dst=/wow,readonly" \

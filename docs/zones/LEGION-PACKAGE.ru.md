@@ -343,7 +343,7 @@ git pull --ff-only
 mkdir -p /mnt/e/WoWForEver-work/reports
 docker compose cp worldserver:/opt/trinitycore/data/dbc/ruRU/Map.db2 \
   /mnt/e/WoWForEver-work/reports/Forever-Map-before-Legion.db2
-python3 scripts/prepare-legion-map-record.py \
+CASC_CHECK_LOCALE=ruRU python3 scripts/prepare-legion-map-record.py \
   --map-db2 /mnt/e/WoWForEver-work/reports/Forever-Map-before-Legion.db2 \
   --resource-report /mnt/e/WoWForEver-work/packages/Legion-Dalaran-private-v2/report.json \
   --check-client /mnt/e/WoWForEver-work/experiments/Forever-Legion-client-v1 \
@@ -379,3 +379,32 @@ Map.db2 клиента. Скрипт дополнительно запрашив
 CascLib и сравнивает SHA-256 с экспортом. `source_build_match_verified` становится
 `true` только при полном совпадении; ошибка чтения или отличия остаются блокером
 импорта, несмотря на успешную подготовку отдельного кандидата.
+
+
+## Языковой вариант Map.db2 при проверке CascLib
+
+Пользователь подтвердил READ_OK для трёх внешних ID WDL; это подтверждает
+чтение корневых файлов, но не совпадение с донором и не полный обход зависимостей.
+Map.db2 1349477 при прежнем запросе всех локалей вернул SIZE_FAILED/1007.
+В используемой CascLib 1007 — ERROR_FILE_OFFLINE: выбранная запись не имеет
+доступного локального файла. Для локализованной таблицы это ещё не результат
+проверки конкретного ruRU-варианта.
+
+Теперь checker поддерживает `CASC_CHECK_LOCALE=all|ruRU|enUS` (по умолчанию all).
+Маска применяется при открытии хранилища и файла, передаётся внутрь контейнера.
+При SIZE_FAILED выводится выбранный CKey, полученный из метаданных до чтения;
+это не хеш успешно прочитанных байтов. Проверка остаётся без сети и без записей
+в клиент. Языковые варианты не подменяются друг другом при ошибке.
+
+```bash
+cd ~/WoWForEver
+git pull --ff-only
+CASC_CHECK_LOCALE=ruRU bash scripts/check-client-casc.sh \
+  /mnt/e/WoWForEver-work/experiments/Forever-Legion-client-v1 \
+  1349477
+```
+
+На собственном синтетическом CASC проверен случай одного FileDataID с двумя
+языковыми вариантами: enUS намеренно отсутствует в IDX и возвращает 1007 с
+правильным CKey; ruRU читается и совпадает с ожидаемыми байтами. Это тест
+выбора языка, а не утверждение об успешном чтении Map.db2 пользователя.

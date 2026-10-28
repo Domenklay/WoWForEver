@@ -4,6 +4,7 @@
 #include <array>
 #include <charconv>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string_view>
 
@@ -14,9 +15,17 @@ static bool WINAPI Progress(void*,CASC_PROGRESS_MSG kind,LPCSTR object,DWORD,DWO
 
 int main(int argc,char** argv) {
     if(argc<3) { std::fprintf(stderr,"Usage: check-storage CLIENT_ROOT FILE_ID [...]\n");return 2; }
+    DWORD locale=CASC_LOCALE_ALL_WOW;
+    if(char const* setting=std::getenv("CASC_CHECK_LOCALE")) {
+        std::string_view name(setting);
+        if(name=="ruRU") locale=CASC_LOCALE_RURU;
+        else if(name=="enUS") locale=CASC_LOCALE_ENUS;
+        else if(name!="all") { std::fprintf(stderr,"CASC_CHECK_LOCALE must be all, ruRU or enUS\n");return 2; }
+    }
+    std::fprintf(stderr,"locale_mask=%x\n",locale);
     CASC_OPEN_STORAGE_ARGS args{};
     args.Size=sizeof(args);args.szLocalPath=argv[1];args.szCodeName="wow_classic_beta";
-    args.dwLocaleMask=CASC_LOCALE_ALL_WOW;
+    args.dwLocaleMask=locale;
     args.PfnProgressCallback=Progress;
     HANDLE storage=nullptr;
     if(!CascOpenStorageEx(nullptr,&args,false,&storage)) {
@@ -31,13 +40,19 @@ int main(int argc,char** argv) {
             std::fprintf(stderr,"Invalid FileDataID\n");CascCloseStorage(storage);return 2;
         }
         HANDLE file=nullptr;
-        if(!CascOpenFile(storage,CASC_FILE_DATA_ID(id),CASC_LOCALE_ALL_WOW,
+        if(!CascOpenFile(storage,CASC_FILE_DATA_ID(id),locale,
                          CASC_OPEN_BY_FILEID|CASC_STRICT_DATA_CHECK,&file)) {
             std::printf("%u\tOPEN_FAILED\t0\t-\t-\t%u\t-\t-\t-\n",id,GetCascError());all=false;continue;
         }
+        std::array<unsigned char,16> selectedKey{};
+        bool hasSelectedKey=CascGetFileInfo(file,CascFileContentKey,selectedKey.data(),selectedKey.size(),nullptr);
         ULONGLONG size=0;
         if(!CascGetFileSize64(file,&size)) {
-            std::printf("%u\tSIZE_FAILED\t0\t-\t-\t%u\t-\t-\t-\n",id,GetCascError());
+            DWORD error=GetCascError();
+            std::printf("%u\tSIZE_FAILED\t0\t-\t-\t%u\t",id,error);
+            if(hasSelectedKey) for(unsigned char byte:selectedKey)std::printf("%02x",byte);
+            else std::printf("-");
+            std::puts("\t-\t-");
             CascCloseFile(file);all=false;continue;
         }
         if(size>64ull*1024*1024) {
