@@ -1,4 +1,5 @@
--- Small transport wrapper: show virtual-resource spend immediately, then resync from server.
+-- Small transport wrapper: update virtual resources and action-button cooldowns
+-- immediately after a subclass cast, then resync from the authoritative server.
 local installed=false
 local function install()
  if installed or not _G.ForeverSubclassDirectSend then return false end
@@ -8,10 +9,18 @@ local function install()
   local spellId=type(payload)=="string" and payload:match("^cast%s+(%d+)$") or nil
   local ok=base(payload,quiet)
   if ok and spellId then
-   if _G.ForeverSubclassResourcePredictSpend then _G.ForeverSubclassResourcePredictSpend(tonumber(spellId)) end
+   spellId=tonumber(spellId)
+   if _G.ForeverSubclassResourcePredictSpend then _G.ForeverSubclassResourcePredictSpend(spellId) end
+   if _G.ForeverSubclassCooldownStart then _G.ForeverSubclassCooldownStart(spellId) end
    if C_Timer and C_Timer.After then
-    C_Timer.After(0.25,function() base("status",true) end)
-    C_Timer.After(0.90,function() base("status",true) end)
+    C_Timer.After(0.25,function()
+     if _G.ForeverSubclassCooldownSync then _G.ForeverSubclassCooldownSync(spellId) end
+     base("status",true)
+    end)
+    C_Timer.After(0.90,function()
+     if _G.ForeverSubclassCooldownSync then _G.ForeverSubclassCooldownSync(spellId) end
+     base("status",true)
+    end)
    end
   end
   return ok
