@@ -54,7 +54,7 @@ if docker compose ps --status running --services 2>/dev/null | grep -qx mysql; t
         if [ "$count" = "1" ]; then pass "characters.$table exists"; else fail "characters.$table missing";fi
     done
     bindings=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot world -e \"SELECT COUNT(*) FROM spell_script_names WHERE ScriptName='spell_forever_subclass';\"" 2>/dev/null || echo 0)
-    if [ "${bindings:-0}" -ge 18 ] 2>/dev/null; then pass "world spell bindings: $bindings (includes druid rage/energy roots)"; else fail "world spell bindings: ${bindings:-0} (expected at least 18)";fi
+    if [ "${bindings:-0}" -ge 20 ] 2>/dev/null; then pass "world spell bindings: $bindings (includes druid forms/rage/energy roots)"; else fail "world spell bindings: ${bindings:-0} (expected at least 20)";fi
 else fail 'mysql container is not running';fi
 
 printf '\n'
