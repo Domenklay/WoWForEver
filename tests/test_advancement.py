@@ -93,6 +93,9 @@ unpack=table.unpack
 frames={};named={};sent={};SlashCmdList={};UISpecialFrames={}
 local methods={}
 function methods:SetScript(k,f) self.scripts[k]=f end
+function methods:SetPoint(...) self.points=self.points or {};table.insert(self.points,{...}) end
+function methods:ClearAllPoints() self.points={} end
+function methods:SetTexture(value) self.texture=value end
 function methods:Show() self.shown=true end
 function methods:Hide() self.shown=false end
 function methods:IsShown() return self.shown~=false end
@@ -101,6 +104,15 @@ function methods:SetText(text) self.text=text end
 function methods:GetText() return self.text or '' end
 function methods:SetValue(value) self.value=value end
 function methods:SetMinMaxValues(lo,hi) self.maximum=hi end
+function methods:SetHeight(value) self.height=value end
+function methods:GetHeight() return self.height or 10 end
+function methods:SetSize(w,h) self.width=w;self.height=h end
+function methods:GetFrameLevel() return 1 end
+function methods:GetAlpha() return self.alpha or 1 end
+function methods:SetAlpha(value) self.alpha=value end
+function methods:HookScript(k,f) self.scripts[k]=f end
+function methods:SetVerticalScroll(value) self.scroll=value end
+function methods:GetVerticalScroll() return self.scroll or 0 end
 local function object(kind,name,parent)
  local o={kind=kind,name=name,parent=parent,scripts={}}
  setmetatable(o,{__index=function(_,key) return methods[key] or (key:match('^[A-Z]') and function() end) end})
@@ -113,7 +125,7 @@ function CreateFrame(kind,name,parent,template)
  if template=='BasicFrameTemplateWithInset' then o.TitleText=object('Font',nil,o) end
  return o
 end
-UIParent=CreateFrame('Frame');PlayerFrame=CreateFrame('Frame')
+UIParent=CreateFrame('Frame');PlayerFrame=CreateFrame('Frame');PlayerFrameManaBar=CreateFrame('StatusBar',nil,PlayerFrame);CharacterFrame=CreateFrame('Frame')
 GameTooltip=object('Tooltip')
 local now=100
 function GetTime() return now end
@@ -139,6 +151,8 @@ class AdvancementUITests(unittest.TestCase):
         try:
             lib.luaL_openlibs(state)
             for chunk in [MOCK,(MODULE/'addon/ForeverAscension/Catalog.lua').read_text(),
+                          (MODULE/'addon/ForeverAscension/Portrait.lua').read_text(),
+                          (MODULE/'addon/ForeverAscension/CharacterStats.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/ForeverAscension.lua').read_text()+'\n'+assertions]:
                 status=lib.luaL_loadstring(state,chunk.encode())
                 if not status:status=lib.lua_pcallk(state,0,0,0,0,None)
@@ -150,13 +164,14 @@ class AdvancementUITests(unittest.TestCase):
 assert(#ForeverAscensionCatalog==23709)
 SlashCmdList.FOREVERASCENSION('')
 assert(named.ForeverAscensionWindow:IsShown() and sent[#sent]=='status')
+assert(classButtons[8].icon.texture=='Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES')
 local mage,priest
 for _,row in ipairs(ForeverAscensionCatalog) do
  if row.Class=='Mage' and row.Type=='Ability' and row.Name=='Frostbolt' and not mage then mage=row.ID end
  if row.Class=='Priest' and row.Type=='Ability' and row.Name=='Flash Heal' and not priest then priest=row.ID end
 end
 assert(mage and priest)
-parse('STATE 1 20 2 8');parse('CATALOG')
+parse('PROTOCOL 2');parse('STATE 1 20 2 8');parse('CATALOG')
 parse('ENTRY '..mage..' 116 4 0 8');parse('ENTRY '..priest..' 2061 20 0 5')
 parse('POWER 0 400 500');parse('POWER 1 25 100');parse('POWER 3 90 100')
 parse('LEARNED '..mage);parse('LEARNED '..priest);parse('END')
@@ -167,11 +182,56 @@ assert(selectedClass==5 and state.learned[mage] and state.learned[priest])
 parse('STATE 1 20 2 8');parse('LEARNED '..mage);parse('LEARNED '..priest);parse('END')
 assert(compatible[mage] and compatible[priest])
 advance();actionButtons[1].scripts.OnClick(actionButtons[1]);assert(sent[#sent]:match('^cast '))
-selectedClass=8;selectedTab=nil;page=1;filter='frostbolt';refresh()
+selectedClass=8;selectedTab='Frost';page=1;filter='frostbolt';refresh()
 local clicked=false
 for _,n in ipairs(abilityNodes) do if n.entry and n.entry.ID==mage then advance();n.scripts.OnClick(n,'LeftButton');clicked=true end end
 assert(clicked and sent[#sent]=='unlearn '..mage)
 ''')
+
+    def test_talent_grid_ranks_and_server_purchase_messages(self):
+        self.lua(r"""
+open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('CATALOG')
+parse('TENTRY 398 3 10 1 0 8');parse('TPOINTS 9 2 11');parse('TALENT 398 2');parse('END')
+selectedClass=8;selectedTab='Fire';refresh()
+local found
+for _,node in ipairs(talentNodes) do if node.entry and node.entry.ID==398 then found=node end end
+assert(found and found.note.text=='2/3')
+assert(found.points[1][2]==279 and found.points[1][3]==-16)
+advance();found.scripts.OnClick(found,'LeftButton');assert(sent[#sent]=='talent 398')
+advance();found.scripts.OnClick(found,'RightButton');assert(sent[#sent]=='untalent 398')
+assert(state.talentFree==9 and state.talentTotal==11)
+""")
+
+    def test_portrait_resources_replace_native_power_bar_and_stats_keep_text_values(self):
+        self.lua(r"""
+UnitStat=function(_,index) return index*10,index*10+5 end
+UnitHealth=function() return 300 end;UnitHealthMax=function() return 500 end
+GetCritChance=function() return 12.5 end
+open();parse('PROTOCOL 2');parse('STATE 1 20 0 8')
+parse('POWER 0 400 500');parse('POWER 1 25 100');parse('POWER 3 90 100');parse('REGEN 4 1.2');parse('END')
+local portrait=named.ForeverAscensionPortraitResources
+assert(portrait and portrait.parent==PlayerFrame and portrait.points[1][2]==PlayerFrameManaBar)
+assert(PlayerFrameManaBar.alpha==0)
+assert(not named.ForeverAscensionResources,'the old floating block must be gone')
+for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'PLAYER_LOGIN') end end
+named.ForeverAscensionStatsToggle.scripts.OnClick()
+assert(named.ForeverAscensionCharacterStats:IsShown())
+local actual={};for _,row in ipairs(ForeverAscensionStatRows) do actual[row.title]=row.value.text end
+assert(actual['Здоровье']=='300 / 500' and actual['Мана']=='400 / 500')
+assert(actual['Сила']=='15')
+local sawPercent=false;for _,row in ipairs(ForeverAscensionStatRows) do if row.title=='Критический удар' and row.value.text=='12.5%' then sawPercent=true end end;assert(sawPercent)
+assert(actual['Мана / сек.']=='4' and actual['Мана / сек. в бою']=='1.2')
+""")
+
+    def test_russian_search_is_case_insensitive_and_deprecated_duplicates_are_hidden(self):
+        self.lua(r"""
+GetLocale=function() return 'ruRU' end
+open();selectedClass=8;selectedTab='Frost';showAll=true;filter=fold('ЛЕДЯНАЯ СТРЕЛА')
+local abilities=visible();local found=false
+for _,row in ipairs(abilities) do if row.ID==10 then found=true end;assert(availableRow(row)) end
+assert(found)
+local seen={};for _,row in ipairs(abilities) do assert(not seen[row.Name]);seen[row.Name]=true end
+""")
 
     def test_unadapted_talents_and_native_primary_cannot_be_purchased(self):
         self.lua(r'''

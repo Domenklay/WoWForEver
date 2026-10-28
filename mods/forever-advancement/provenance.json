@@ -2,16 +2,24 @@
   "entries": 23709,
   "native_candidates": 1856,
   "catalog_sha256": "bc121f89f0d31fa6f76457dba5d43c3bad3cdf7a98b64a7c24aa816358b9ef77",
-  "source": "User supplied Content.zip",
-  "archive_sha256": "227a4b0099ff1ed0eb72863791cb7909c75bdee63a5eda1205ef455c4da3d3de",
+  "source": "User supplied Content2.zip",
+  "archive_sha256": "ec9b9ebba21986add13bec4bfc473fdaac3c8ecc305a2395aa9a536ce6e73fbe",
   "interface_assets_present": false,
   "donor": "Domenklay/WoW_Ascension_rework",
   "donor_commit": "16ef598773810faea9c72ff77821d411506ba757",
   "note": "Original data retained; Lua/XML/textures are not in the supplied archive. Native candidates require runtime compatibility checks.",
+  "initial_archive_sha256": "227a4b0099ff1ed0eb72863791cb7909c75bdee63a5eda1205ef455c4da3d3de",
+  "additional_archive": {
+    "file": "Content2.zip",
+    "sha256": "ec9b9ebba21986add13bec4bfc473fdaac3c8ecc305a2395aa9a536ce6e73fbe",
+    "compared_files": 82,
+    "all_file_contents_identical_to_initial": true
+  },
   "xml_archive": {
     "sha256": "0775dd8e080a2e46d5b9e16c4bb50a1fe10b3da3d9d9175b210d176035621828",
     "character_advancement_ui": false,
-    "included_in_addon": false
+    "all_stats_reference": "reference/AllStats.xml",
+    "loaded_directly": false
   },
-  "compatibility": "Runtime whitelist; no passive talents, flagged entries or additional entry prerequisites enabled"
+  "compatibility": "Exact multilingual spell identity checks plus runtime whitelist for ability costs and scalar passive talents"
 }

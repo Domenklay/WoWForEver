@@ -6,6 +6,7 @@ import json
 import struct
 from pathlib import Path
 import zipfile
+import zlib
 
 CLASSES = {'Warrior':1,'Paladin':2,'Hunter':3,'Rogue':4,'Priest':5,'Shaman':7,'Mage':8,'Warlock':9,'Druid':11}
 ROOT = Path(__file__).resolve().parents[1] / 'mods/forever-advancement'
@@ -63,7 +64,16 @@ def generate(root=ROOT):
             chunks.append('do local function append() local rows='+lua(dict(items[offset:offset+300]))+
                           ';for key,value in pairs(rows) do ForeverAscension'+field+'RU[key]=value end end append() end')
     (root/'addon/ForeverAscension/Catalog.lua').write_text('\n'.join(chunks)+'\n',encoding='utf-8')
-    headers=['#pragma once','struct AscensionSourceEntry { unsigned id,owner,spell,level; char const* name; };',
+    names_path=root/'catalog/SpellNames.locales.json'
+    localized=json.loads(names_path.read_text()) if names_path.exists() else {}
+    locales=['deDE','esES','esMX','frFR','koKR','ruRU','zhCN','zhTW']
+    def aliases(row,spell):
+        values=[row.get('Name','')]
+        for locale in locales:
+            names=localized.get(locale,{})
+            values.append(names.get(str(spell),names.get(str(row['Spells'][0]),'')))
+        return '{'+','.join(json.dumps(value,ensure_ascii=True) for value in values)+'}'
+    headers=['#pragma once','#include <array>','struct AscensionSourceEntry { unsigned id,owner,spell,level; std::array<char const*,9> names; };',
              'static constexpr AscensionSourceEntry AscensionSourceEntries[] = {']
     spells=set()
     for row in rows:
@@ -82,8 +92,23 @@ def generate(root=ROOT):
             level=max(1,row.get('RequiredLevel',1),rank.get('level',1))
             if level>80:continue
             headers.append('{%d,%d,%d,%d,%s},'%(row['ID'],CLASSES[row['Class']],spell,level,
-                           json.dumps(row.get('Name',''),ensure_ascii=True)))
+                           aliases(row,spell)))
             spells.add(spell)
+    headers.append('};')
+    headers.extend(['struct AscensionTalentSourceEntry { unsigned id,owner,spell,rank,level,cost,investment,tab; std::array<char const*,9> names; };',
+                    'static constexpr AscensionTalentSourceEntry AscensionTalentSourceEntries[] = {'])
+    for row in rows:
+        if row['Class'] not in CLASSES or row['Type']!='Talent' or not row['Spells']:
+            continue
+        if row.get('Flags',0)&~0x4000 or any(row.get(key) for key in
+                ['RequiredIDs','ConnectedNodes','RequiredAEInvestment','Group','Masteries','ParentNode']):
+            continue
+        tab=zlib.crc32((row['Class']+':'+row['Tab']).encode())
+        for rank,spell in enumerate(row['Spells'],1):
+            if not spell:break
+            headers.append('{%d,%d,%d,%d,%d,%d,%d,%d,%s},'%(row['ID'],CLASSES[row['Class']],spell,rank,
+                           max(1,row.get('RequiredLevel',10)),max(1,row.get('TECost',1)),
+                           row.get('RequiredTEInvestment',0),tab,aliases(row,spell)))
     headers.append('};')
     (root/'server/AscensionCatalog.h').write_text('\n'.join(headers)+'\n')
     sql="START TRANSACTION;\nDELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement');\n"
@@ -110,8 +135,16 @@ def import_archive(path,root=ROOT):
                 if info.file_size>32*1024*1024:raise ValueError('Oversized localization')
                 values=read_loc(archive.read(info))
                 (root/('catalog/Spell'+field+'.ruRU.json')).write_text(json.dumps(values,ensure_ascii=False,indent=2)+'\n')
+        all_names={}
+        for locale in ['deDE','esES','esMX','frFR','koKR','ruRU','zhCN','zhTW']:
+            member='Content/Localization/Spell/Name/'+locale+'.loc'
+            if member in archive.namelist():
+                info=archive.getinfo(member)
+                if info.file_size>32*1024*1024:raise ValueError('Oversized localization')
+                all_names[locale]=read_loc(archive.read(info))
+        (root/'catalog/SpellNames.locales.json').write_text(json.dumps(all_names,ensure_ascii=False,indent=2)+'\n')
     report=generate(root)
-    report.update(source='User supplied Content.zip',archive_sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+    report.update(source='User supplied '+Path(path).name,archive_sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(),
                   interface_assets_present=False,donor='Domenklay/WoW_Ascension_rework',
                   donor_commit='16ef598773810faea9c72ff77821d411506ba757',
                   note='Original data retained; Lua/XML/textures are not in the supplied archive. Native candidates require runtime compatibility checks.')

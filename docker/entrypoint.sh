@@ -122,6 +122,8 @@ configure_worldserver() {
     setkey "$f" PlayerSave.Stats.MinLevel 1
     setkey "$f" ForeverSubclass.Enable 0
     setkey "$f" ForeverAdvancement.Enable "${ADVANCEMENT_ENABLED:-0}"
+    setkey "$f" ForeverAdvancement.MaxAbilities "${ADVANCEMENT_MAX_ABILITIES:-8}"
+    setkey "$f" ForeverAdvancement.MaxTalentEssence "${ADVANCEMENT_MAX_TALENT_ESSENCE:-71}"
     apply_overrides "$f" worldserver
 }
 
