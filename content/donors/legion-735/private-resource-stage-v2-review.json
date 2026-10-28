@@ -1,0 +1,64 @@
+{
+  "format": "wowforever-private-resource-stage-v2-review-v1",
+  "report_sha256": "71aa5362bbe4897f94bf24b2a588aca86e4af7cba2968a7e16750251f3adbdd0",
+  "package_sha256": "7bdaa2f1229bae0b730a80f365e540abf9e1fc927fbc3d54164629f371b77e4a",
+  "counts": {
+    "private_payload_files": 2912,
+    "rewritten_files": 1174,
+    "rewritten_reference_slots": 5363,
+    "shared_file_candidates": 4192
+  },
+  "auxiliary_rewrites_reproduced_from_uploaded_bytes": [
+    {
+      "path": "maps/trollraid/troll raid.tex",
+      "source_sha256": "e73d3116d1ead53c5df7a829d93588a096168e9831713b8ff6879570329c1d25",
+      "candidate_sha256": "3915a715c4463c03715e381373016f874d8f806ac1950aa2bd35e8886e203c18",
+      "typed_rewrite_slots": 1102,
+      "chunks": {
+        "TXVR": 1,
+        "TXBT": 1,
+        "TXMD": 8686
+      }
+    },
+    {
+      "path": "maps/trollraid/troll raid.wdl",
+      "source_sha256": "e491a247a42b73dd022d75bb79154b5be0da710e970f9634b9f9e3e52f2443a6",
+      "candidate_sha256": "be57c1ad453155b30bf5bed2fae0af826340161e0e2d442f4d0a9f4741d89414",
+      "typed_rewrite_slots": 1,
+      "chunks": {
+        "MVER": 1,
+        "MLDD": 1,
+        "MLDX": 1,
+        "MLDF": 1,
+        "MLMD": 1,
+        "MLMX": 1,
+        "MAOF": 1,
+        "MARE": 729,
+        "MAOE": 675,
+        "MAHO": 729
+      }
+    }
+  ],
+  "tex_blob_entries": 8686,
+  "tex_blob_offsets_valid": true,
+  "missing_external_placement_ids": [
+    1131661,
+    1400992,
+    1447182
+  ],
+  "map_prototype": {
+    "source_sha256": "d92deea04c0b6d20fb8c691d42358144e64f04125ce6ee1e181f74e9f15c8f94",
+    "candidate_sha256": "3a4720755ae5d0f021214062120a78c75e80ed2c1c9c95bb5276f5254094bfdb",
+    "map_id": 1220,
+    "wdt_file_data_id": 15730590,
+    "native_TrinityCore_loader_checked": true,
+    "readable_original_rows_preserved": 73,
+    "new_readable_rows": 74,
+    "opaque_section_bytes_preserved": true,
+    "actual_game_acceptance": false,
+    "extracted_source_ckey": "3e518b987946d7ababc3b7c15d0693aa",
+    "previous_target_ROOT_ckey": "be6c80d8279a55fba965c27a6386964d",
+    "source_matches_actual_client_not_proven": true
+  },
+  "installable": false
+}
