@@ -65,6 +65,17 @@ def adapt_server_source(module):
         'ForeverSubclass ScriptMgr include anchor',
     )
 
+    # `rank` is a reserved MySQL keyword. The maintained adapter intentionally
+    # keeps the schema column name for compatibility, so quote it in the runtime
+    # SELECT before compiling the source. An unquoted SELECT causes ER_PARSE_ERROR;
+    # this TrinityCore branch waits ten seconds and ABORT()s the worldserver.
+    source = replace_once(
+        source,
+        'SELECT class_id,talent_id,rank FROM forever_character_subclass_talents WHERE guid={}',
+        'SELECT class_id,talent_id,`rank` FROM forever_character_subclass_talents WHERE guid={}',
+        'ForeverSubclass talent rank SQL query',
+    )
+
     # Stable initialization is intentionally deferred to tame/petcall. Doing it
     # for every supported class in PlayerScript::OnLogin caused unnecessary pet
     # subsystem work during login and made disconnect diagnosis harder.
