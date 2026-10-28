@@ -265,6 +265,7 @@ xattr -cr "/Applications/Forever Launcher.app"
 - [Экспорт участка Даларана и проверка RAW-файлов](docs/zones/LEGION-EXPORT.ru.md).
 - [Подготовка пакета тайла Даларана и отчёта о зависимостях](docs/zones/LEGION-PACKAGE.ru.md).
 - [Пакетная установка приватных ресурсов в тестовую копию и откат](docs/zones/LEGION-INSTALL.ru.md).
+- [Извлечение и проверка геометрии одного тайла Даларана](docs/zones/LEGION-GEOMETRY.ru.md).
 - [Синтетический CASC-стенд: ROOT, encoding и локальные индексы](docs/zones/CASC-SANDBOX.ru.md).
 - [Обновление копии CASC и аудит настоящих манифестов](docs/zones/CASC-INCREMENTAL.ru.md).
 - [Контрольный импорт нового FileDataID в отдельную копию клиента](docs/zones/CASC-CANARY.ru.md).

@@ -1,0 +1,16 @@
+{
+  "format": "wowforever-legion-geometry-tools-validation-v1",
+  "core_revision": "91d49b230f89c3ab4719f5b2b2d1e70ed36613c4",
+  "patched_extractors_compiled": ["mapextractor", "vmap4extractor"],
+  "server_vmap_height_probe_compiled": true,
+  "native_assembler_and_height_probe": {
+    "owned_fixture": true,
+    "game_assets_used": false,
+    "expected_height": 735,
+    "collision_samples": 110,
+    "actual_height_range": [735.000122, 735.000122],
+    "missing_tile_rejected": true
+  },
+  "actual_dalaran_geometry_extracted_in_cloud": false,
+  "player_spawn_verified": false
+}

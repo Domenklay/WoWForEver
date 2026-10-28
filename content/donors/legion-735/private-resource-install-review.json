@@ -21,13 +21,13 @@
   },
   "verified_outcome": "Native batch verification succeeded for 5743 previously readable IDs and 2912 private IDs. Baseline failures do not describe the post-install check.",
   "runtime_confirmation": {
-    "user_comment": "запустилось",
-    "game_world_entry_in_test_copy_explicitly_confirmed": false
+    "user_reported_game_world_entry_in_test_copy": true,
+    "confirmation": "Да, вошёл в мир из тестовой копии",
+    "independent_cloud_runtime_observation": false
   },
   "next_requirements": [
-    "confirm entry into existing world in test copy",
-    "enable a validated client Map record",
     "extract and validate server terrain and WMO collision",
+    "enable a validated client Map record",
     "test safe arrival before spawning creatures"
   ],
   "zone_playability_verified": false
