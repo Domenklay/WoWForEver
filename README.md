@@ -271,7 +271,7 @@ xattr -cr "/Applications/Forever Launcher.app"
 - [Синтетический CASC-стенд: ROOT, encoding и локальные индексы](docs/zones/CASC-SANDBOX.ru.md).
 - [Обновление копии CASC и аудит настоящих манифестов](docs/zones/CASC-INCREMENTAL.ru.md).
 - [Контрольный импорт нового FileDataID в отдельную копию клиента](docs/zones/CASC-CANARY.ru.md).
-- [Экспериментальные мультиклассы: установка сервера и игрового аддона](mods/forever-subclass/README.ru.md).
+- [Forever Ascension: новый аддон, обновление и откат](mods/forever-advancement/README.ru.md).
 - [План переноса контента из 3.3.5 и новых дополнений](docs/CUSTOMIZATION.ru.md).
 - [Инструкции для AI-ассистентов](AGENTS.md).
 

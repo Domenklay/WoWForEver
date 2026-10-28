@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Import supplied Content JSON without extracting archive paths or client binaries."""
+import argparse
+import hashlib
+import json
+import struct
+from pathlib import Path
+import zipfile
+
+CLASSES = {'Warrior':1,'Paladin':2,'Hunter':3,'Rogue':4,'Priest':5,'Shaman':7,'Mage':8,'Warlock':9,'Druid':11}
+ROOT = Path(__file__).resolve().parents[1] / 'mods/forever-advancement'
+
+
+def lua(value):
+    if value is None:return 'nil'
+    if isinstance(value,bool):return 'true' if value else 'false'
+    if isinstance(value,(int,float)):return str(value)
+    if isinstance(value,str):return json.dumps(value,ensure_ascii=False)
+    if isinstance(value,list):return '{'+','.join(lua(x) for x in value)+'}'
+    if isinstance(value,dict):return '{'+','.join('['+lua(k)+']='+lua(v) for k,v in value.items())+'}'
+    raise ValueError(type(value))
+
+
+def read_loc(data):
+    if len(data)<4:raise ValueError('Truncated localization')
+    count=struct.unpack_from('<I',data)[0];offset=4;out={}
+    if count>1000000:raise ValueError('Oversized localization')
+    for _ in range(count):
+        if offset+8>len(data):raise ValueError('Truncated localization row')
+        ident,length=struct.unpack_from('<II',data,offset);offset+=8
+        if offset+length>len(data):raise ValueError('Truncated localization text')
+        out[ident]=data[offset:offset+length].decode('utf-8');offset+=length
+    if offset!=len(data):raise ValueError('Trailing localization data')
+    return out
+
+
+def generate(root=ROOT):
+    root=Path(root)
+    raw=(root/'catalog/CharacterAdvancementData.json').read_bytes()
+    rows=json.loads(raw)
+    ranks=json.loads((root/'catalog/SpellRankData.json').read_bytes())
+    seen=set()
+    for row in rows:
+        if not isinstance(row.get('ID'),int) or row['ID']<=0 or row['ID'] in seen:
+            raise ValueError('Invalid or duplicate advancement ID')
+        seen.add(row['ID'])
+        if not isinstance(row.get('Spells'),list) or any(not isinstance(x,int) or x<0 for x in row['Spells']):
+            raise ValueError('Invalid spell list')
+    by_first={}
+    for rank in ranks:
+        by_first.setdefault(rank['firstSpellId'],[]).append(rank)
+    # Retain every source field and every class. UI chooses supported class tabs.
+    chunks=['ForeverAscensionCatalog={}']
+    for offset in range(0,len(rows),300):
+        chunks.append('do local function append() local rows='+lua(rows[offset:offset+300])+
+                      ';for _,row in ipairs(rows) do table.insert(ForeverAscensionCatalog,row) end end append() end')
+    for field in ['Names','Descriptions']:
+        path=root/('catalog/Spell'+field+'.ruRU.json')
+        values={int(key):value for key,value in json.loads(path.read_text()).items()} if path.exists() else {}
+        chunks.append('ForeverAscension'+field+'RU={}')
+        items=list(values.items())
+        for offset in range(0,len(items),300):
+            chunks.append('do local function append() local rows='+lua(dict(items[offset:offset+300]))+
+                          ';for key,value in pairs(rows) do ForeverAscension'+field+'RU[key]=value end end append() end')
+    (root/'addon/ForeverAscension/Catalog.lua').write_text('\n'.join(chunks)+'\n',encoding='utf-8')
+    headers=['#pragma once','struct AscensionSourceEntry { unsigned id,owner,spell,level; char const* name; };',
+             'static constexpr AscensionSourceEntry AscensionSourceEntries[] = {']
+    spells=set()
+    for row in rows:
+        if row['Class'] not in CLASSES or row['Type']!='Ability' or not row['Spells']:
+            continue
+        # Custom/disabled/deprecated records stay visible but are never enabled from this seed.
+        if row.get('Flags',0) or any(row.get(key) for key in
+                ['RequiredIDs','ConnectedNodes','RequiredAEInvestment','RequiredTEInvestment','Group','Masteries','ParentNode']):
+            continue
+        first=row['Spells'][0]
+        # Only the imported native chain, then runtime name/script validation, can enable an entry.
+        candidates=by_first.get(first,[{'spellId':first,'level':row.get('RequiredLevel',1)}])
+        for rank in candidates:
+            spell=rank['spellId']
+            if not spell:continue
+            level=max(1,row.get('RequiredLevel',1),rank.get('level',1))
+            if level>80:continue
+            headers.append('{%d,%d,%d,%d,%s},'%(row['ID'],CLASSES[row['Class']],spell,level,
+                           json.dumps(row.get('Name',''),ensure_ascii=True)))
+            spells.add(spell)
+    headers.append('};')
+    (root/'server/AscensionCatalog.h').write_text('\n'.join(headers)+'\n')
+    sql="START TRANSACTION;\nDELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement');\n"
+    sql+='INSERT INTO spell_script_names (spell_id,ScriptName) VALUES\n'
+    sql+=',\n'.join("(%d,'spell_forever_advancement')"%x for x in sorted(spells))+';\nCOMMIT;\n'
+    (root/'sql/world.sql').write_text(sql)
+    return {'entries':len(rows),'native_candidates':len(spells),'catalog_sha256':hashlib.sha256(raw).hexdigest()}
+
+
+def import_archive(path,root=ROOT):
+    root=Path(root)
+    names=['CharacterAdvancementData.json','SpellRankData.json']
+    with zipfile.ZipFile(path) as archive:
+        for name in names:
+            info=archive.getinfo('Content/'+name)
+            if info.file_size>32*1024*1024:raise ValueError('Oversized JSON')
+            content=archive.read(info)
+            json.loads(content)
+            (root/'catalog'/name).write_bytes(content)
+        for field,directory in [('Names','Name'),('Descriptions','Description')]:
+            member='Content/Localization/Spell/'+directory+'/ruRU.loc'
+            if member in archive.namelist():
+                info=archive.getinfo(member)
+                if info.file_size>32*1024*1024:raise ValueError('Oversized localization')
+                values=read_loc(archive.read(info))
+                (root/('catalog/Spell'+field+'.ruRU.json')).write_text(json.dumps(values,ensure_ascii=False,indent=2)+'\n')
+    report=generate(root)
+    report.update(source='User supplied Content.zip',archive_sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+                  interface_assets_present=False,donor='Domenklay/WoW_Ascension_rework',
+                  donor_commit='16ef598773810faea9c72ff77821d411506ba757',
+                  note='Original data retained; Lua/XML/textures are not in the supplied archive. Native candidates require runtime compatibility checks.')
+    (root/'provenance.json').write_text(json.dumps(report,indent=2)+'\n')
+    return report
+
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('archive',nargs='?',type=Path)
+    args=parser.parse_args()
+    print(json.dumps(import_archive(args.archive) if args.archive else generate(),indent=2))

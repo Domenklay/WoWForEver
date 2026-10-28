@@ -16,7 +16,7 @@ limits in README.md. This is not a claim of full compatibility with that client.
 | `app/` | Launcher (Tauri 2: Rust in `app/src-tauri/src`, UI in `app/ui`), 4 languages (`i18n.rs`, `ui/i18n.js`). |
 | `scripts/` | `gen-certs.sh` (CA + server certificate), `upload-dokploy.sh`, `pkt-dump.py` (packet log reader). |
 | `docs/` | `DOKPLOY.md` (deployment), `MACOS.md` (how the macOS launcher works). |
-| `mods/forever-subclass/` | Experimental server adapter and AddOn for the user-supplied subclass prototype. Installation, backup and rollback: `README.ru.md` in that directory. Disabled by default; core revision is pinned in the Docker build. |
+| `mods/forever-advancement/` | Server adapter and ForeverAscension AddOn using the supplied Ascension Content catalogue. Setup/rollback: `README.ru.md`. The obsolete subclass engine is no longer compiled; its old progress is retained for rollback. |
 
 ## Helping someone run their server
 
@@ -56,8 +56,8 @@ Then `LAUNCHER_REPO=<owner>/<repo>` in the server's `.env` so the website offers
 ## Checks
 
 For the content/CASC/subclass tools, run `python3 -m unittest discover -s tests -q`.
-The subclass checks compile the original C++ rules when g++ is installed and
-exercise the AddOn against a Lua API double when liblua5.4 is available. They
+The advancement checks exercise catalogue import, replacement/rollback, server resource rules,
+and the AddOn against a Lua API double when liblua5.4 is available. They
 do not launch the actual game client. Do not claim a deployment to the user's
 Windows/WSL machine from cloud-only tests.
 

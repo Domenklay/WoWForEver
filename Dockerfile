@@ -28,10 +28,10 @@ RUN if [ -n "${TC_COMMIT}" ]; then \
 COPY docker/patches/ /patches/
 RUN for p in /patches/*.patch; do [ -e "$p" ] || continue; echo "applying $p"; git -C /src/TrinityCore apply "$p" || exit 1; done
 
-# The subclass adapter is compiled into Custom; enabled only after local schema installation.
-COPY mods/forever-subclass /subclass-module
-COPY scripts/inject-subclass.py /tmp/inject-subclass.py
-RUN python3 /tmp/inject-subclass.py /src/TrinityCore --module /subclass-module
+# The new advancement adapter replaces the old subclass engine.
+COPY mods/forever-advancement /advancement-module
+COPY scripts/inject-advancement.py /tmp/inject-advancement.py
+RUN python3 /tmp/inject-advancement.py /src/TrinityCore --module /advancement-module
 
 # BUILD_JOBS: lower it on small machines (GCC needs ~2 GB RAM per job on the biggest files)
 ARG BUILD_JOBS=4
@@ -94,7 +94,7 @@ RUN curl -fL --retry 3 -o tdb.7z "${TDB_URL}" \
 
 ############################ runtime ############################
 FROM ubuntu:${UBUNTU_VERSION}
-LABEL org.wowforever.subclass="0.3.6-forever.9"
+LABEL org.wowforever.advancement="1.0.0"
 
 ARG DEBIAN_FRONTEND=noninteractive
 # mysql-client is required: the TrinityCore DB updater shells out to the `mysql` binary
@@ -111,7 +111,7 @@ COPY --from=build /src/TrinityCore/sql /src/TrinityCore/sql
 # worldserver's auto-setup imports TDB_full_*.sql from its working directory
 COPY --from=tdb /tdb/ /opt/trinitycore/bin/
 COPY docker/entrypoint.sh docker/extract.sh /usr/local/bin/
-COPY mods/forever-subclass/provenance.json /opt/trinitycore/share/forever-subclass/provenance.json
+COPY mods/forever-advancement/provenance.json /opt/trinitycore/share/forever-advancement/provenance.json
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/extract.sh \
     && mkdir -p /opt/trinitycore/data /opt/trinitycore/logs /opt/trinitycore/certs /opt/trinitycore/overrides
 

@@ -57,6 +57,7 @@ services:
       PACKET_LOG: ${PACKET_LOG:-0}   # 1 = packet log (diagnostics, holds chat)
       SOAP_ENABLED: "1"   # for the website; port 7878 is never published
       SUBCLASS_ENABLED: ${SUBCLASS_ENABLED:-0}
+      ADVANCEMENT_ENABLED: ${ADVANCEMENT_ENABLED:-0}
     # interactive console: docker compose attach worldserver  (leave with Ctrl+P, Ctrl+Q)
     stdin_open: true
     tty: true
