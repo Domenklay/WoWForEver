@@ -259,6 +259,7 @@ if __name__=='__main__':
     parser.add_argument('action',choices=['apply','rollback']);parser.add_argument('client',type=Path)
     for name in ('resource-report','namespace-report','type-audit'):parser.add_argument('--'+name,type=Path)
     parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'))
+    parser.add_argument('--report-dir',type=Path)
     args=parser.parse_args()
     try:
         token=hashlib.sha256(str(args.client.resolve()).casefold().encode()).hexdigest()
@@ -269,5 +270,7 @@ if __name__=='__main__':
                 if any(v is None for v in (args.resource_report,args.namespace_report,args.type_audit)):
                     raise ValueError('apply requires all three reports')
                 apply(args.client,args.resource_report,args.namespace_report,args.type_audit,args.checker)
+                from legion_reports import auto_collect
+                auto_collect(args.client,args.report_dir)
     except (ValueError,OSError,KeyError,TypeError,struct.error) as error:
         parser.exit(1,'ROOT type repair stopped: '+str(error)+'\n')

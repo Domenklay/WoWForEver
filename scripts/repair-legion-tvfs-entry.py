@@ -206,12 +206,16 @@ def rollback(client):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=['apply','rollback']);parser.add_argument('client',type=Path)
-    parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'));args=parser.parse_args()
+    parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'))
+    parser.add_argument('--report-dir',type=Path);args=parser.parse_args()
     try:
         token=hashlib.sha256(str(args.client.resolve()).casefold().encode()).hexdigest()
         with (Path(tempfile.gettempdir())/('wowforever-casc-edit-'+token+'.lock')).open('a') as lock:
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            if args.action=='apply':apply(args.client,args.checker)
+            if args.action=='apply':
+                apply(args.client,args.checker)
+                from legion_reports import auto_collect
+                auto_collect(args.client,args.report_dir)
             else:rollback(args.client)
     except (ValueError,OSError,KeyError,TypeError,struct.error) as error:
         parser.exit(1,'TVFS entry canary stopped: '+str(error)+'\n')
