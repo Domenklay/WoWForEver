@@ -193,7 +193,7 @@ class Store:
         return decode_blte(raw[30:],ekey,ckey)
 
 
-def rebuild_tvfs(original,root,resources,locale=2):
+def rebuild_tvfs(original,root,resources,locale=2,path_transform=None):
     parsed=tvfs.parse_tvfs(original)
     paths=dict(parsed["leaves"]);est=parsed["tables"]["est"]
     cursor=0;offset=None
@@ -211,6 +211,13 @@ def rebuild_tvfs(original,root,resources,locale=2):
         name=f"{locale:08X}10000000:{fid:08X}{obj['ckey'].hex().upper()}"
         if name in paths:raise ValueError("Duplicate TVFS resource path")
         paths[name]=span(obj)
+    if path_transform is not None:
+        transformed={}
+        for name,spans in paths.items():
+            changed=path_transform(name)
+            if changed in transformed:raise ValueError('TVFS transformed path collision')
+            transformed[changed]=spans
+        paths=transformed
     ew=tvfs.width(len(est));cft=bytearray();offsets=[]
     for name,spans in sorted(paths.items()):
         for s in spans:

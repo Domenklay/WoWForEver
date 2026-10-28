@@ -1,0 +1,22 @@
+{
+  "format": "wowforever-legion-type-repair-review-v1",
+  "audit_sha256": "fbf2307382b76ff7827f4f45a611abb2d80464084ab10ad251e1aca6fbce4c73",
+  "namespace_sha256": "62de99bd9fbe1cfbde010b8a0a36d26161271c1e5df2ee7e79b24ce092af037e",
+  "private_ids": 2912,
+  "observed_generic_type_ids": 2912,
+  "native_profile_world_types": {
+    "wdt": 39,
+    "adt": 34,
+    "tex": 37,
+    "wdl": 38
+  },
+  "world_tex0_storage_flags_differ": true,
+  "planned_profile_provenance": {
+    "original_id_profile": 2441,
+    "native_world_slot": 12,
+    "same_kind_profile": 459
+  },
+  "native_owned_fixture_read_and_rollback_verified": true,
+  "source_asset_payloads_committed": false,
+  "actual_client_streaming_error_resolved": false
+}

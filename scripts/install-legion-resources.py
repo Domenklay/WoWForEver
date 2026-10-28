@@ -116,10 +116,10 @@ def check_rows(rows,expected):
             raise ValueError(f'Native read/hash mismatch for {fid}: {row}')
         for name in ('ckey','tag_mask'):
             if name in want and row[name]!=want[name]:
-                raise ValueError(f'Native {name} changed for {fid}')
+                raise ValueError(f'Native {name} changed for {fid}: {row[name]} != {want[name]}')
 
 
-def manifests(store,private,objects,before,controls,progress):
+def manifests(store,private,objects,before,controls,progress,root_transform=None,path_transform=None):
     def configured(name):
         ck,ek=store.values[name].split()[:2]
         return store.read(bytes.fromhex(ek),bytes.fromhex(ck))
@@ -135,8 +135,11 @@ def manifests(store,private,objects,before,controls,progress):
     if old_root is None:
         raise ValueError('Active ROOT not locally readable')
     # append_root checks collisions in ALL groups, including other locales.
-    root=canary.lab.asset(append_root(old_root,{fid:obj['ckey'] for fid,obj in private.items()},locale=0xffffffff))
-    vfs=canary.lab.asset(canary.storelib.rebuild_tvfs(configured('vfs-root'),root,private,locale=0xffffffff))
+    changed_root=(root_transform(old_root) if root_transform is not None else
+                  append_root(old_root,{fid:obj['ckey'] for fid,obj in private.items()},locale=0xffffffff))
+    root=canary.lab.asset(changed_root)
+    vfs=canary.lab.asset(canary.storelib.rebuild_tvfs(configured('vfs-root'),root,private,locale=0xffffffff,
+                                                   path_transform=path_transform))
     download_bytes=configured('download');download=Download(download_bytes)
     # Keep tag membership of an existing CKey when adding a new encoding for it.
     masks={}

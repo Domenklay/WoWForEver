@@ -151,7 +151,8 @@ def preflight_client(client,geometry_report,progress=print):
     install = importlib.util.module_from_spec(spec); spec.loader.exec_module(install)
     client,_ = install.canary.copy_identity(client)
     folder,journal = install.operation(client)
-    if (journal['phase']!='verified' or folder.name!=geometry_report['source_install_operation'] or
+    allowed_operations=[folder.name,*journal.get('resource_ancestors',[])]
+    if (journal['phase']!='verified' or geometry_report['source_install_operation'] not in allowed_operations or
             journal['source_report_sha256']!=geometry_report['source_resource_report_sha256'] or
             plan.sha(client/'.build.info')!=journal['after_info_sha256']):
         raise ValueError('Test copy no longer matches the geometry resource layer')
