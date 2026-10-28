@@ -74,27 +74,8 @@ RUN c++ -std=c++20 -O2 -I/src/TrinityCore/dep/CascLib/src \
 ENTRYPOINT ["/usr/local/bin/check-storage"]
 
 ############################ database release ############################
-FROM ubuntu:${UBUNTU_VERSION} AS tdb
-
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl p7zip-full \
-    && rm -rf /var/lib/apt/lists/*
-
-ARG TDB_URL=https://github.com/advocaite/TrinityCore/releases/download/forever-tdb-2026-10-14/TDB_full_forever_2026_10_14.7z
-WORKDIR /tdb
-RUN curl -fL --retry 3 -o tdb.7z "${TDB_URL}" \
-    && 7z e -y tdb.7z '*.sql' -r \
-    && rm tdb.7z \
-    # the dump creates its views with DEFINER=`trinity`@`localhost`: as any other account (e.g. trinity@'%' in the
-    # mysql container) that needs SUPER/SET_USER_ID and the import stops (error 1227). Without the clause the views
-    # belong to the importing user.
-    && sed -i -E 's#/\*!50013 DEFINER=`[^`]*`@`[^`]*` SQL SECURITY DEFINER \*/##' /tdb/*.sql \
-    && ! grep -l 'DEFINER=' /tdb/*.sql \
-    && ls -la /tdb
-
-############################ runtime ############################
 FROM ubuntu:${UBUNTU_VERSION}
-LABEL org.wowforever.subclass="0.3.3-forever.6"
+LABEL org.wowforever.subclass="0.3.4-forever.7"
 
 ARG DEBIAN_FRONTEND=noninteractive
 # mysql-client is required: the TrinityCore DB updater shells out to the `mysql` binary
@@ -106,9 +87,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/trinitycore /opt/trinitycore
-# The updater looks for sql/ under the source directory baked in at build time
 COPY --from=build /src/TrinityCore/sql /src/TrinityCore/sql
-# worldserver's auto-setup imports TDB_full_*.sql from its working directory
 COPY --from=tdb /tdb/ /opt/trinitycore/bin/
 COPY docker/entrypoint.sh docker/extract.sh /usr/local/bin/
 COPY mods/forever-subclass/provenance.json /opt/trinitycore/share/forever-subclass/provenance.json
