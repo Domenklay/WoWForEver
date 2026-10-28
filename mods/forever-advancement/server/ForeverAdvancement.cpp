@@ -3,6 +3,7 @@
 #include "ChatCommand.h"
 #include "ChatPackets.h"
 #include "Config.h"
+#include "DB2Stores.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
 #include "ObjectMgr.h"
@@ -324,6 +325,30 @@ static bool SourceNameMatches(SpellInfo const* info,std::array<char const*,9> co
     }
     return false;
 }
+// A classic ID can be absent or reused in Forever. Never trust an ID alone.
+static uint32 ClassFamily(uint32 owner)
+{
+    switch(owner) { case 1:return 4;case 2:return 10;case 3:return 9;case 4:return 8;
+        case 5:return 6;case 7:return 11;case 8:return 3;case 9:return 5;case 11:return 7;default:return 0; }
+}
+using NameIndex=std::map<std::string,std::vector<SpellInfo const*>>;
+static SpellInfo const* ResolveSpell(uint32 source,uint32 owner,uint32 rank,std::array<char const*,9> const& names,NameIndex const& index)
+{
+    auto family=ClassFamily(owner);
+    auto direct=sSpellMgr->GetSpellInfo(source,DIFFICULTY_NONE);
+    if(direct&&direct->SpellFamilyName==family&&SourceNameMatches(direct,names)) return direct;
+    std::set<uint32> candidates;
+    for(auto name:names)
+    {
+        if(!name||!name[0]) continue;
+        auto it=index.find(name);if(it==index.end()) continue;
+        for(auto info:it->second)
+            if(info->SpellFamilyName==family&&std::max<uint32>(1,sSpellMgr->GetSpellRank(info->Id))==rank)
+                candidates.insert(info->Id);
+    }
+    // Multiple effects with the same name require an explicit reviewed mapping.
+    return candidates.size()==1?sSpellMgr->GetSpellInfo(*candidates.begin(),DIFFICULTY_NONE):nullptr;
+}
 class Startup final:public WorldScript
 {
 public:
@@ -336,31 +361,41 @@ public:
         for(auto table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents"})
             if(!CharacterDatabase.Query(Trinity::StringFormat("SELECT COUNT(*) FROM {}",table).c_str())) { TC_LOG_ERROR("scripts","ForeverAdvancement schema missing: {}",table);return; }
         uint32 script=sObjectMgr->GetScriptId("spell_forever_advancement");std::set<uint32> claimed;
+        if(!script) { TC_LOG_ERROR("scripts","ForeverAdvancement script registration missing");return; }
+        NameIndex names;uint32 remapped=0,examples=0;
+        for(auto entry:sSpellNameStore)
+            if(auto info=sSpellMgr->GetSpellInfo(entry->ID,DIFFICULTY_NONE))
+                for(auto name:entry->Name.Str) if(name&&name[0]) names[name].push_back(info);
         std::array<uint32,5> rejected={};
         for(auto const& row:AscensionSourceEntries)
         {
-            auto info=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
+            auto info=ResolveSpell(row.spell,row.owner,row.rank,row.names,names);
+            if(!info&&examples<12) { ++examples;auto native=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
+                TC_LOG_INFO("scripts","ForeverAdvancement unresolved: entry={} source={} expected={} native={}",row.id,row.spell,row.names[0],native&&native->SpellName&&native->SpellName->Str[LOCALE_enUS]?native->SpellName->Str[LOCALE_enUS]:"<missing>"); }
             if(!info) { ++rejected[0];continue; }
             if(!CompatibleCosts(info)) { ++rejected[1];continue; }
             if(info->IsPassive()) { ++rejected[2];continue; }
             if(!SourceNameMatches(info,row.names)) { ++rejected[3];continue; }
-            bool bound=false;auto bounds=sObjectMgr->GetSpellScriptsBounds(row.spell);
+            sObjectMgr->RegisterForeverAdvancementBinding(info->Id,script);
+            bool bound=false;auto bounds=sObjectMgr->GetSpellScriptsBounds(info->Id);
             for(auto it=bounds.first;it!=bounds.second;++it) if(it->second.first==script&&it->second.second) bound=true;
             if(!bound) { ++rejected[4];continue; }
-            if(claimed.count(row.spell)) continue;
-            Catalog[row.id].push_back({row.id,row.owner,row.spell,std::max(row.level,info->SpellLevel)});claimed.insert(row.spell);
+            if(claimed.count(info->Id)) continue;
+            if(info->Id!=row.spell) ++remapped;
+            Catalog[row.id].push_back({row.id,row.owner,info->Id,std::max(row.level,info->SpellLevel)});claimed.insert(info->Id);
         }
         std::set<uint32> talentSpells;
         for(auto const& row:AscensionTalentSourceEntries)
         {
-            auto info=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
+            auto info=ResolveSpell(row.spell,row.owner,row.rank,row.names,names);
             if(!info||!CompatibleTalent(info)||!SourceNameMatches(info,row.names)) continue;
             auto it=TalentCatalog.find(row.id);uint32 expected=it==TalentCatalog.end()?1:it->second.size()+1;
-            if(row.rank!=expected||talentSpells.count(row.spell)) continue;
-            TalentCatalog[row.id].push_back({row.id,row.owner,row.spell,row.rank,std::max(row.level,info->SpellLevel),row.cost,row.investment,row.tab});
-            talentSpells.insert(row.spell);
+            if(row.rank!=expected||talentSpells.count(info->Id)) continue;
+            TalentCatalog[row.id].push_back({row.id,row.owner,info->Id,row.rank,std::max(row.level,info->SpellLevel),row.cost,row.investment,row.tab});
+            talentSpells.insert(info->Id);
         }
         TC_LOG_INFO("scripts","ForeverAdvancement catalog rows rejected: missing={}, costs={}, passive={}, names={}, binding={}",rejected[0],rejected[1],rejected[2],rejected[3],rejected[4]);
+        TC_LOG_INFO("scripts","ForeverAdvancement catalog remapped: {} abilities by exact name, class family and native rank",remapped);
         if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement compatible catalog empty; disabled");return; }
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} compatible Ascension abilities; {} passive talents; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }

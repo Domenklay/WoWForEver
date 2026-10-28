@@ -73,7 +73,7 @@ def generate(root=ROOT):
             names=localized.get(locale,{})
             values.append(names.get(str(spell),names.get(str(row['Spells'][0]),'')))
         return '{'+','.join(json.dumps(value,ensure_ascii=True) for value in values)+'}'
-    headers=['#pragma once','#include <array>','struct AscensionSourceEntry { unsigned id,owner,spell,level; std::array<char const*,9> names; };',
+    headers=['#pragma once','#include <array>','struct AscensionSourceEntry { unsigned id,owner,spell,level,rank; std::array<char const*,9> names; };',
              'static constexpr AscensionSourceEntry AscensionSourceEntries[] = {']
     spells=set()
     for row in rows:
@@ -86,12 +86,12 @@ def generate(root=ROOT):
         first=row['Spells'][0]
         # Only the imported native chain, then runtime name/script validation, can enable an entry.
         candidates=by_first.get(first,[{'spellId':first,'level':row.get('RequiredLevel',1)}])
-        for rank in candidates:
+        for ordinal,rank in enumerate(sorted(candidates,key=lambda r:r.get("level",1)),1):
             spell=rank['spellId']
             if not spell:continue
             level=max(1,row.get('RequiredLevel',1),rank.get('level',1))
             if level>80:continue
-            headers.append('{%d,%d,%d,%d,%s},'%(row['ID'],CLASSES[row['Class']],spell,level,
+            headers.append('{%d,%d,%d,%d,%d,%s},'%(row['ID'],CLASSES[row['Class']],spell,level,ordinal,
                            aliases(row,spell)))
             spells.add(spell)
     headers.append('};')

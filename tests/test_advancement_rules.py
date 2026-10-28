@@ -16,6 +16,50 @@ def function(source,signature):
 
 @unittest.skipUnless(shutil.which('g++'),'C++20 compiler required')
 class AdvancementRuleTests(unittest.TestCase):
+    def test_name_resolution_rejects_wrong_class_rank_and_ambiguity(self):
+        source=SOURCE.read_text()
+        code=r'''#include <algorithm>
+#include <array>
+#include <cassert>
+#include <map>
+#include <set>
+#include <string>
+#include <string_view>
+#include <vector>
+using uint32=unsigned;
+constexpr int DIFFICULTY_NONE=0;
+struct LocalizedString {std::array<char const*,2> Str;};
+struct SpellInfo {uint32 Id,SpellFamilyName;LocalizedString const* SpellName;};
+struct SpellMgr {
+ std::map<uint32,SpellInfo> spells;std::map<uint32,uint32> ranks;
+ SpellInfo const* GetSpellInfo(uint32 id,int) {auto it=spells.find(id);return it==spells.end()?nullptr:&it->second;}
+ uint32 GetSpellRank(uint32 id) {return ranks[id];}
+} manager;
+auto sSpellMgr=&manager;
+using NameIndex=std::map<std::string,std::vector<SpellInfo const*>>;
+'''+function(source,'static bool SourceNameMatches(')+function(source,'static uint32 ClassFamily(')+function(source,'static SpellInfo const* ResolveSpell(')+r'''
+int main() {
+ LocalizedString frost={{"Frostbolt","Ледяная стрела"}},wrong={{"Something else",nullptr}};
+ manager.spells.emplace(116,SpellInfo{116,3,&wrong});
+ manager.spells.emplace(500,SpellInfo{500,3,&frost});manager.ranks[500]=1;
+ std::array<char const*,9> names={"Frostbolt","Ледяная стрела"};
+ NameIndex index;index["Frostbolt"]={&manager.spells.at(500)};
+ assert(ResolveSpell(116,8,1,names,index)->Id==500);
+ assert(!ResolveSpell(116,5,1,names,index));assert(!ResolveSpell(116,8,2,names,index));
+ manager.spells.emplace(501,SpellInfo{501,3,&frost});manager.ranks[501]=1;
+ index["Frostbolt"].push_back(&manager.spells.at(501));
+ assert(!ResolveSpell(116,8,1,names,index));
+ // A known, matching native ID takes precedence over ambiguous name searches.
+ assert(ResolveSpell(500,8,1,names,index)->Id==500);
+ assert(!ResolveSpell(999,8,1,{},index));
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
     def test_real_resource_and_mixed_class_cast_policy(self):
         source=SOURCE.read_text()
         functions='\n'.join(function(source,name) for name in ['static bool Native(', 'static int32 Scale(',

@@ -79,12 +79,15 @@ class AdvancementTests(unittest.TestCase):
             root=Path(temp);custom=root/'src/server/scripts/Custom';custom.mkdir(parents=True)
             loader=custom/'custom_script_loader.cpp'
             loader.write_text('void AddSC_forever_subclass();\nvoid AddCustomScripts()\n{\n    AddSC_forever_subclass();\n}\n')
+            manager=root/'src/server/game/Globals/ObjectMgr.h';manager.parent.mkdir(parents=True)
+            manager.write_text('class ObjectMgr {\n        SpellScriptsBounds GetSpellScriptsBounds(uint32 spellId);\n};')
             (custom/'ForeverSubclass').mkdir();(custom/'ForeverSubclass/old.cpp').touch()
             injector.inject(root);first=loader.read_text();injector.inject(root)
             self.assertEqual(loader.read_text(),first)
             self.assertNotIn('forever_subclass',first)
             self.assertEqual(first.count('    AddSC_forever_advancement();'),1)
             self.assertFalse((custom/'ForeverSubclass').exists())
+            self.assertEqual(manager.read_text().count('void RegisterForeverAdvancementBinding('),1)
 
 
 MOCK=r'''
@@ -235,19 +238,16 @@ assert(found)
 local seen={};for _,row in ipairs(abilities) do assert(not seen[row.Name]);seen[row.Name]=true end
 """)
 
-    def test_book_background_fills_panel_and_talent_grid_fits_viewport(self):
+    def test_modern_panels_use_solid_colours_and_talent_grid_fits(self):
         self.lua(r"""
 open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('END')
-talentScroll.height=418;selectedClass=8;selectedTab='Fire';refresh()
-assert(talentCanvas.height<=418,'the classic talent tree must fit the actual viewport')
-local paper
-for _,frame in ipairs(frames) do if frame.texture=='Interface\\QuestFrame\\QuestBG' then paper=frame end end
-assert(paper and paper.width==402 and paper.height==462)
-assert(paper.points[1][2]==paper.parent and paper.texcoords[2]<1 and paper.texcoords[4]<1)
-assert(treeTextures[2].texcoords[2]==0.6875 and treeTextures[4].texcoords[4]==0.5859375)
-assert(math.abs(treeTextures[1].width+treeTextures[2].width-576)<0.001)
-assert(math.abs(treeTextures[1].height+treeTextures[3].height-462)<0.001)
-assert(summary.text:find(' | ',1,true) and not summary.text:find('·',1,true))
+talentScroll.height=403;selectedClass=8;selectedTab='Fire';refresh()
+assert(talentCanvas.height<=403,'the classic talent tree must fit the actual viewport')
+for _,frame in ipairs(frames) do
+ assert(frame.texture~='Interface\\QuestFrame\\QuestBG','no stretched parchment')
+ if type(frame.texture)=='string' then assert(not frame.texture:find('TalentFrame',1,true),'no stretched tree artwork') end
+end
+assert(summary.text:find(' | ',1,true))
 assert(emptyAbilities.shadow[1]==0 and emptyAbilities.shadow[2]==0)
 assert(schools.BeastMastery=='Повелитель зверей')
 """)

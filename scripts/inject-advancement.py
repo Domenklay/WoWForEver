@@ -22,6 +22,15 @@ def inject(core,module=None):
     for name in ['ForeverAdvancement.cpp','AscensionCatalog.h']:shutil.copy2(module/'server'/name,target/name)
     legacy=loader.parent/'ForeverSubclass'
     if legacy.exists():shutil.rmtree(legacy)
+    manager=core/'src/server/game/Globals/ObjectMgr.h'
+    if manager.exists():
+        original=manager.read_text()
+        signature='        void RegisterForeverAdvancementBinding(uint32 spellId, uint32 scriptId)'
+        if signature not in original:
+            anchor='        SpellScriptsBounds GetSpellScriptsBounds(uint32 spellId);'
+            if original.count(anchor)!=1:raise ValueError('Unknown ObjectMgr binding layout')
+            original=original.replace(anchor,anchor+"\n"+signature+"\n        {\n            auto bounds = _spellScriptsStore.equal_range(spellId);\n            for (auto it = bounds.first; it != bounds.second; ++it)\n                if (it->second.first == scriptId) { it->second.second = true; return; }\n            _spellScriptsStore.emplace(spellId, std::make_pair(scriptId, true));\n        }\n")
+            manager.write_text(original)
     loader.write_text(text)
 
 
