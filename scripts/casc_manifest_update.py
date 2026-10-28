@@ -151,7 +151,7 @@ def pack_pages(rows,size,ekey_eof=False):
     return bytes(index),bytes(pages),len(index)//32
 
 
-def merge_rows(old,new,kind):
+def merge_rows(old,new,kind,allow_variants=False):
     additions=iter(sorted(new.items()));pending=next(additions,None)
     for key,raw in old:
         while pending and pending[0]<key:
@@ -164,6 +164,16 @@ def merge_rows(old,new,kind):
                          [raw[i:i+16] for i in range(22,len(raw),16)])
             else:
                 matches=raw==proposed
+            if not matches and allow_variants:
+                if kind=="c" and raw[1:6]==proposed[1:6]:
+                    if raw[0]>=255:
+                        raise ValueError("ENCODING variant count exhausted")
+                    # Prefer the verified, fully local N frame, retain every old variant.
+                    raw=bytes([raw[0]+1])+raw[1:22]+proposed[22:38]+raw[22:]
+                    matches=True
+                elif kind=="e" and raw[20:25]==proposed[20:25]:
+                    # Same EKey and encoded length: preserve its established ESpec.
+                    matches=True
             if not matches:
                 raise ValueError(f"ENCODING {kind} key conflict")
             pending=next(additions,None)
@@ -172,7 +182,7 @@ def merge_rows(old,new,kind):
         yield pending;pending=next(additions,None)
 
 
-def extend_encoding(data,objects):
+def extend_encoding(data,objects,allow_variants=False):
     source=Encoding(data)
     if source.trailing and not source.trailing.startswith(b"b:"):
         raise ValueError("Unsupported ENCODING trailing data")
@@ -185,13 +195,23 @@ def extend_encoding(data,objects):
     crows={};erows={}
     for obj in objects:
         ck,ek=obj["ckey"],obj["ekey"]
+        if allow_variants:
+            if hashlib.md5(obj["content"]).digest()!=ck:
+                raise ValueError("ENCODING content fingerprint conflict")
+            # Variant insertion currently accepts only independently verified
+            # single-frame N encodings, never an arbitrary supplied EKey.
+            frame=b"N"+obj["content"]
+            header=(b"BLTE"+struct.pack(">I",36)+b"\x0f\0\0\1"+
+                    struct.pack(">II",len(frame),len(obj["content"]))+hashlib.md5(frame).digest())
+            if obj["encoded"]!=header+frame or ek!=hashlib.md5(header).digest():
+                raise ValueError("ENCODING variant must be a valid single N frame")
         c= b"\1"+len(obj["content"]).to_bytes(5,"big")+ck+ek
         e= ek+spec_index.to_bytes(4,"big")+len(obj["encoded"]).to_bytes(5,"big")
         if (ck in crows and crows[ck]!=c) or (ek in erows and erows[ek]!=e):
             raise ValueError("Conflicting package encodings")
         crows[ck]=c;erows[ek]=e
-    ci,cp,nc=pack_pages(merge_rows(source.rows("c"),crows,"c"),source.ckb)
-    ei,ep,ne=pack_pages(merge_rows(source.rows("e"),erows,"e"),source.ekb,ekey_eof=True)
+    ci,cp,nc=pack_pages(merge_rows(source.rows("c"),crows,"c",allow_variants),source.ckb)
+    ei,ep,ne=pack_pages(merge_rows(source.rows("e"),erows,"e",allow_variants),source.ekb,ekey_eof=True)
     header=bytearray(data[:22]);struct.pack_into(">II",header,9,nc,ne)
     struct.pack_into(">I",header,18,len(spec))
     # Caller stores the new ENCODING in a single N frame. Its self-ESpec must
