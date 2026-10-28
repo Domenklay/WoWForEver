@@ -1,0 +1,97 @@
+{
+  "format": "wowforever-private-namespace-review-v1",
+  "report_sha256": "62de99bd9fbe1cfbde010b8a0a36d26161271c1e5df2ee7e79b24ce092af037e",
+  "package_sha256": "61710052c60cbe6b44b2344c55a5571f98cc454ce2af1f917b7c402740b919dc",
+  "root_summary": {
+    "groups": 917,
+    "records": 2433103,
+    "unique_reserved_ids": 1250957
+  },
+  "private_ids": 2912,
+  "shared_id_candidates": 4192,
+  "actions": {
+    "reuse_local_CKey_candidate": 837,
+    "add_new_CKey_and_payload": 904,
+    "reuse_original_ID_candidate": 4192,
+    "rewrite_references_then_rehash": 1171
+  },
+  "rewritten_parent_files": 1171,
+  "allocation_unique": true,
+  "external_dependencies_root_match": true,
+  "world_controls": {
+    "775969": {
+      "type": ".tex",
+      "format_verified": false,
+      "raw_flags": [
+        0,
+        301989888,
+        37
+      ],
+      "error": null
+    },
+    "775970": {
+      "type": ".wdl",
+      "format_verified": true,
+      "raw_flags": [
+        0,
+        301989888,
+        38
+      ],
+      "error": null
+    },
+    "775971": {
+      "type": ".wdt",
+      "format_verified": true,
+      "raw_flags": [
+        0,
+        301989888,
+        39
+      ],
+      "error": null
+    },
+    "778027": {
+      "type": ".adt",
+      "format_verified": true,
+      "raw_flags": [
+        0,
+        301989888,
+        34
+      ],
+      "error": null
+    },
+    "782779": {
+      "type": ".wdt",
+      "format_verified": true,
+      "raw_flags": [
+        0,
+        301989888,
+        39
+      ],
+      "error": null
+    },
+    "1349477": {
+      "type": ".db2",
+      "format_verified": false,
+      "raw_flags": [
+        0,
+        301989888,
+        16
+      ],
+      "error": "Unsupported BLTE frame codec; no encrypted-data override"
+    }
+  },
+  "sample_rewrite_check": {
+    "hash_matched_original_samples": 18,
+    "rewritten_reference_slots": 1562,
+    "unrelated_bytes_preserved": true
+  },
+  "installable": false,
+  "remaining_requirements": [
+    "opaque dependency sections",
+    "revalidation of reserved IDs and reused payloads in target",
+    "native ROOT/tag policy",
+    "client and server Map entry",
+    "server geometry",
+    "transactional CASC installation and actual game test"
+  ]
+}
