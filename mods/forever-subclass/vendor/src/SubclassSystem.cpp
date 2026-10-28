@@ -80,7 +80,7 @@ bool SubclassSystem::setActiveSubclass(CharacterState& c, ClassId classId, std::
         return false;
     }
     c.activeSubclass = classId;
-    c.selectedSubclassSpells.clear();
+    if (!config_.freepickMode) c.selectedSubclassSpells.clear();
     rebuildResourcePools(c);
     return true;
 }
@@ -88,12 +88,16 @@ bool SubclassSystem::setActiveSubclass(CharacterState& c, ClassId classId, std::
 bool SubclassSystem::clearActiveSubclass(CharacterState& c, std::string* error) const {
     if (!canSwitch(c, error)) return false;
     c.activeSubclass.reset();
-    c.selectedSubclassSpells.clear();
+    if (!config_.freepickMode) c.selectedSubclassSpells.clear();
     rebuildResourcePools(c);
     return true;
 }
 
 bool SubclassSystem::setXpTarget(CharacterState& c, ClassId classId, std::string* error) const {
+    if (config_.freepickMode && classId != c.primaryClass) {
+        setError(error, "Freepick XP belongs to the primary class");
+        return false;
+    }
     if (!c.classes.count(classId)) {
         setError(error, "cannot train a class that has not been learned");
         return false;
@@ -144,7 +148,7 @@ std::uint8_t SubclassSystem::usedSubclassSlots(const CharacterState& c) const {
 }
 
 bool SubclassSystem::selectSubclassSpell(CharacterState& c, std::uint32_t spellId, std::string* error) const {
-    if (!c.activeSubclass) {
+    if (!config_.freepickMode && !c.activeSubclass) {
         setError(error, "no active subclass");
         return false;
     }
@@ -153,13 +157,18 @@ bool SubclassSystem::selectSubclassSpell(CharacterState& c, std::uint32_t spellI
         setError(error, "spell is not registered");
         return false;
     }
-    if (spell->ownerClass != *c.activeSubclass || !spell->secondaryAllowed) {
+    if (spell->ownerClass == c.primaryClass || !spell->secondaryAllowed ||
+        (!config_.freepickMode && spell->ownerClass != *c.activeSubclass)) {
         setError(error, "spell is not available to the active subclass");
         return false;
     }
-    auto cp = c.classes.find(*c.activeSubclass);
+    auto cp = c.classes.find(config_.freepickMode ? c.primaryClass : *c.activeSubclass);
     if (cp == c.classes.end() || cp->second.level < spell->requiredClassLevel) {
         setError(error, "subclass level is too low for this spell");
+        return false;
+    }
+    if (config_.freepickMode && (!canSwitch(c, error) || cp->second.level < config_.subclassUnlockPrimaryLevel)) {
+        setError(error, "Freepick purchases require level 10 and a rest area outside combat");
         return false;
     }
     if (c.selectedSubclassSpells.count(spellId)) return true;
@@ -173,6 +182,7 @@ bool SubclassSystem::selectSubclassSpell(CharacterState& c, std::uint32_t spellI
 }
 
 bool SubclassSystem::unselectSubclassSpell(CharacterState& c, std::uint32_t spellId) const {
+    if (config_.freepickMode && !canSwitch(c, nullptr)) return false;
     const bool removed = c.selectedSubclassSpells.erase(spellId) > 0;
     if (removed) rebuildResourcePools(c);
     return removed;
@@ -215,7 +225,8 @@ std::vector<PowerType> SubclassSystem::activePowerTypes(const CharacterState& c)
         if (std::find(result.begin(), result.end(), p) == result.end()) result.push_back(p);
     };
     pushUnique(nativePower(c.primaryClass));
-    if (c.activeSubclass) pushUnique(nativePower(*c.activeSubclass));
+    if (config_.freepickMode) pushUnique(PowerType::Mana); // One shared pool, independent of the catalogue filter.
+    else if (c.activeSubclass) pushUnique(nativePower(*c.activeSubclass));
     for (auto spellId : c.selectedSubclassSpells) {
         if (const auto* s = getSpell(spellId)) pushUnique(s->powerType);
     }
@@ -234,7 +245,7 @@ void SubclassSystem::rebuildResourcePools(CharacterState& c) const {
 
     for (PowerType type : activePowerTypes(c)) {
         std::uint8_t basisLevel = primaryLevel;
-        if (c.activeSubclass && type == nativePower(*c.activeSubclass)) {
+        if (!config_.freepickMode && c.activeSubclass && type == nativePower(*c.activeSubclass)) {
             if (auto it = c.classes.find(*c.activeSubclass); it != c.classes.end()) basisLevel = it->second.level;
         }
 
@@ -300,6 +311,12 @@ double SubclassSystem::calculateSpellEffect(const CharacterState& c, const Spell
 
 double SubclassSystem::effectivenessFor(const CharacterState& c, ClassId sourceClass) const {
     if (sourceClass == c.primaryClass) return 1.0;
+    if (config_.freepickMode) {
+        for (auto id : c.selectedSubclassSpells)
+            if (auto spell = getSpell(id); spell && spell->ownerClass == sourceClass)
+                return std::clamp(config_.secondaryEffectivenessMultiplier, 0.0, 1.0);
+        return 0.0;
+    }
     if (!c.activeSubclass || sourceClass != *c.activeSubclass) return 0.0;
     auto p = c.classes.find(c.primaryClass);
     auto s = c.classes.find(sourceClass);
@@ -317,11 +334,11 @@ CastResult SubclassSystem::tryCast(CharacterState& c, std::uint32_t spellId) con
     }
 
     bool allowed = false;
-    auto cp = c.classes.find(spell->ownerClass);
+    auto cp = c.classes.find(config_.freepickMode ? c.primaryClass : spell->ownerClass);
     if (cp != c.classes.end() && cp->second.level >= spell->requiredClassLevel) {
         if (spell->ownerClass == c.primaryClass) {
             allowed = true;
-        } else if (c.activeSubclass && spell->ownerClass == *c.activeSubclass && c.selectedSubclassSpells.count(spellId)) {
+        } else if ((config_.freepickMode || (c.activeSubclass && spell->ownerClass == *c.activeSubclass)) && c.selectedSubclassSpells.count(spellId)) {
             allowed = true;
         }
     }

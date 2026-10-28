@@ -121,6 +121,7 @@ configure_worldserver() {
     setkey "$f" AccountInstancesPerHour 5
     setkey "$f" PlayerSave.Stats.MinLevel 1
     setkey "$f" ForeverSubclass.Enable "${SUBCLASS_ENABLED:-0}"
+    setkey "$f" ForeverSubclass.Freepick "${SUBCLASS_FREEPICK:-0}"
     apply_overrides "$f" worldserver
 }
 

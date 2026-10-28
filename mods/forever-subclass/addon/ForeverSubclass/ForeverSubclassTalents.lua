@@ -35,6 +35,9 @@ local errors={
  ["no subclass talent points"]="Нет свободных очков талантов подкласса.",
  ["subclass talent tier locked"]="Сначала потратьте 5 очков в предыдущем ряду.",
  ["subclass talents can only be changed in a rest area"]="Таланты подкласса меняются только в городе или таверне.",
+ ["Freepick purchases require level 10 and a rest area outside combat"]="Для покупки нужны 10-й уровень, город или таверна и выход из боя.",
+ ["Freepick XP belongs to the primary class"]="В Freepick весь опыт получает основной класс.",
+ ["command unavailable in Freepick ability prototype"]="Эта функция пока недоступна в пробном Freepick.",
  ["selection unchanged"]="Изменений нет.",
 }
 
@@ -155,8 +158,10 @@ end
 
 local function clearSpellNodes() for _,node in ipairs(spellNodes) do node:Hide() end end
 local function visibleSpells(s)
- local out,best={},{};if not s or not s.active or s.active==0 or not s.classes[s.active] then return out end
- local level=s.classes[s.active].level or 1
+ local out,best={},{};if not s then return out end
+ if not s.freepick and (not s.active or s.active==0 or not s.classes[s.active]) then return out end
+ local progress=s.classes[s.freepick and s.primary or s.active]
+ local level=progress and progress.level or 1
  for _,sp in pairs(s.spells or {}) do if sp.level<=level and (not best[sp.root] or best[sp.root].level<sp.level) then best[sp.root]=sp end end
  for _,sp in pairs(s.spells or {}) do if (best[sp.root] and best[sp.root].id==sp.id) or sp.selected then table.insert(out,sp) end end
  table.sort(out,function(a,b) if a.level==b.level then return a.id<b.id end return a.level<b.level end);return out
@@ -213,7 +218,7 @@ local function choosePower(s)
 end
 
 local function refreshAbilities()
- clearSpellNodes();if not state or not state.active or state.active==0 then emptySpells:SetText("Сначала изучите и активируйте второй класс.");emptySpells:Show();resourceBar:Hide();return end
+ clearSpellNodes();if not state or (not state.freepick and (not state.active or state.active==0)) then emptySpells:SetText("Сначала изучите и активируйте второй класс.");emptySpells:Show();resourceBar:Hide();return end
  local spells=visibleSpells(state)
  if #spells==0 then emptySpells:SetText("Для текущего уровня доступных способностей пока нет.");emptySpells:Show() else emptySpells:Hide() end
  for index,sp in ipairs(spells) do
@@ -238,11 +243,11 @@ local function refreshTalents()
 end
 
 local function setMode(mode)
- currentMode=mode=="talents" and "talents" or "abilities"
+ currentMode=(not (state and state.freepick) and mode=="talents") and "talents" or "abilities"
  if abilityContent then abilityContent:SetShown(currentMode=="abilities") end
  if talentContent then talentContent:SetShown(currentMode=="talents") end
  if modeAbilities then modeAbilities:SetEnabled(currentMode~="abilities") end
- if modeTalents then modeTalents:SetEnabled(currentMode~="talents") end
+ if modeTalents then modeTalents:SetEnabled(not (state and state.freepick) and currentMode~="talents") end
  if viewTitle then viewTitle:SetText(currentMode=="talents" and "Древо талантов подкласса" or "Способности подкласса") end
  if currentMode=="talents" then refreshTalents() else refreshAbilities() end
 end
@@ -262,7 +267,7 @@ local function refresh()
 
  for _,id in ipairs(classOrder) do
   local card=cards[id];local progress=state.classes[id];local primaryFlag=id==state.primary;local activeFlag=id==state.active;local xpFlag=id==state.xpTarget;local selected=id==selectedClass
-  if primaryFlag then card.role:SetText("Основной класс") elseif activeFlag then card.role:SetText("Активный подкласс") elseif progress then card.role:SetText("Изучен") else card.role:SetText("Не изучен") end
+  if primaryFlag then card.role:SetText("Основной класс") elseif activeFlag then card.role:SetText(state.freepick and "Каталог навыков" or "Активный подкласс") elseif progress then card.role:SetText("Изучен") else card.role:SetText("Не изучен") end
   card.level:SetText(progress and ("Уровень "..progress.level) or "");card.xp:SetText(xpFlag and "Получает опыт" or "")
   card.frame._selected=selected;card.frame._active=activeFlag;card.frame._primary=primaryFlag
   if card.frame.SetBackdropBorderColor then if selected then card.frame:SetBackdropBorderColor(0.45,0.72,0.95,1) elseif activeFlag then card.frame:SetBackdropBorderColor(0.20,0.76,0.36,1) elseif primaryFlag then card.frame:SetBackdropBorderColor(0.50,0.55,0.65,1) else card.frame:SetBackdropBorderColor(0.25,0.28,0.33,0.95) end end
@@ -270,7 +275,15 @@ local function refresh()
  local chosen=state.classes[selectedClass];local isPrimary=selectedClass==state.primary
  setButtonEnabled(learnButton,not isPrimary and not chosen and primaryLevel>=10);setButtonEnabled(activeButton,not isPrimary and chosen~=nil and selectedClass~=state.active);setButtonEnabled(xpButton,chosen~=nil or isPrimary);setButtonEnabled(clearButton,state.active and state.active~=0)
  setMode(currentMode)
- noticeText:SetText("Выберите класс слева. Способности и таланты активного подкласса находятся справа.")
+ if state.freepick then
+  titleText:SetText(className(state.primary).." + Freepick")
+  detailText:SetText(string.format("Основной уровень %d   |   AE %d/%d   |   Каталог: %s",primaryLevel,state.used or 0,state.budget or 8,activeName))
+  activeButton:SetText("Открыть каталог");setButtonEnabled(learnButton,false);setButtonEnabled(xpButton,false);setButtonEnabled(clearButton,false)
+  noticeText:SetText("Freepick: лечение жреца + Frostbolt мага одновременно. Навык стоит 1 AE; повторный клик возвращает AE. Покупки в городе/таверне. Таланты — следующим этапом.")
+ else
+  activeButton:SetText("Активировать")
+  noticeText:SetText("Выберите класс слева. Способности и таланты активного подкласса находятся справа.")
+ end
 end
 
 local function showCustom()
@@ -331,6 +344,7 @@ local function parse(text)
  local words={};for w in tostring(text):gmatch("%S+") do table.insert(words,w) end;local kind=words[1]
  if kind=="ERROR" then local raw=tostring(text):sub(7);noticeText:SetText(errors[raw] or raw);if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffff5555[Подклассы]|r "..(errors[raw] or raw)) end;return
  elseif kind=="STATE" then pending={primary=tonumber(words[2]),active=tonumber(words[3]),xpTarget=tonumber(words[4]),used=tonumber(words[5]) or 0,budget=tonumber(words[6]) or 8,efficiency=tonumber(words[7]) or 0,classes={},spells={},powers={},talents={},talentFree=0,talentSpent=0,talentTotal=0}
+ elseif pending and kind=="MODE" then pending.freepick=words[2]=="FREEPICK"
  elseif pending and kind=="CLASS" then pending.classes[tonumber(words[2])]={level=tonumber(words[3]) or 1,xp=tonumber(words[4]) or 0,next=tonumber(words[5]) or 0}
  elseif pending and kind=="POWER" then local p=tonumber(words[2]);if p then pending.powers[p]={kind=p,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
  elseif pending and kind=="SPELL" then local id=tonumber(words[2]);if id then pending.spells[id]={id=id,root=tonumber(words[3]),level=tonumber(words[4]) or 1,selected=words[5]=="1",cost=tonumber(words[6]) or 0,power=tonumber(words[7])} end

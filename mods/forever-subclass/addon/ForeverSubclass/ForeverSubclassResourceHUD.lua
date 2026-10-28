@@ -193,7 +193,7 @@ end
 
 local function refresh()
  if not build() then return end
- if not state or not state.active or state.active==0 then hideCustom();return end
+ if not state or (not state.freepick and (not state.active or state.active==0)) then hideCustom();return end
 
  local primaryKind=primaryPowerKind()
  local secondary=chooseSecondaryPower(primaryKind)
@@ -229,6 +229,7 @@ local function parse(msg)
  local kind=words[1]
  if kind=="STATE" then
   pending={primary=tonumber(words[2]) or 0,active=tonumber(words[3]) or 0,spells={},powers={},basePower=nil}
+ elseif kind=="MODE" and pending then pending.freepick=words[2]=="FREEPICK"
  elseif kind=="BASEPOWER" and pending then
   local power=tonumber(words[2]);if power then pending.basePower={kind=power,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
  elseif kind=="POWER" and pending then

@@ -1,3 +1,8 @@
+> Новый отдельный режим: [основной класс + Freepick](../../docs/ASCENSION-FREEPICK.ru.md#первый-рабочий-прототип-дополнительные-способности).
+> Первый тест: лечение жреца и Frostbolt мага одновременно; установка командой
+> `bash scripts/subclass-mod.sh install-freepick /mnt/e/_classic_beta_` после сборки.
+> Обычный `install` сохраняет прежнюю механику подклассов.
+
 # Мультиклассы Forever — экспериментальная интеграция
 
 Адаптация присланного `forever-subclass-prototype-v0.2.0.zip` для TrinityCore

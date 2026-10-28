@@ -9,6 +9,7 @@
 #include "Player.h"
 #include "Creature.h"
 #include "Pet.h"
+#include "Map.h"
 #include "RestMgr.h"
 #include "ObjectMgr.h"
 #include "Config.h"
@@ -109,6 +110,8 @@ static std::map<uint32,Definition> Definitions;
 static forever::SubclassSystem Policy(MakePolicyConfig());
 static std::atomic<bool> Ready{false};
 
+static bool Freepick() { return Policy.config().freepickMode; }
+
 static bool ValidClass(uint32 id) { return id==1||id==2||id==3||id==4||id==5||id==7||id==8||id==9||id==11; }
 
 static std::vector<Powers> ClassPowers(Class id)
@@ -140,6 +143,16 @@ static bool Selected(Entry const& e,uint32 spell)
 static uint32 BestRank(Entry const& e,uint32 spellOrRoot)
 {
     uint32 root=RootId(spellOrRoot);
+    if (Freepick())
+    {
+        uint32 best=root;uint8 bestLevel=0;
+        auto primary=e.state.classes.find(e.state.primaryClass);
+        if(primary==e.state.classes.end()) return root;
+        for(auto const& [id,d]:Definitions)
+            if(d.root.id==root&&d.level<=primary->second.level&&(d.level>bestLevel||(d.level==bestLevel&&id>best)))
+                { best=id;bestLevel=d.level; }
+        return best;
+    }
     if (!e.state.activeSubclass) return root;
     auto progress=e.state.classes.find(*e.state.activeSubclass);
     if (progress==e.state.classes.end()) return root;
@@ -200,6 +213,17 @@ static void Save(Entry const& e)
 {
     if (!e.valid) return;
     auto const& c=e.state;
+    if (Freepick())
+    {
+        // Never write legacy subclass tables in Freepick mode.
+        CharacterDatabaseTransaction tx=CharacterDatabase.BeginTransaction();
+        tx->PAppend("REPLACE INTO forever_character_freepick_state VALUES ({},{},{})",c.guid,uint8(c.primaryClass),c.activeSubclass?uint8(*c.activeSubclass):0);
+        tx->PAppend("DELETE FROM forever_character_freepick_spells WHERE guid={}",c.guid);
+        for(auto id:c.selectedSubclassSpells) tx->PAppend("INSERT INTO forever_character_freepick_spells VALUES ({},{})",c.guid,id);
+        tx->PAppend("DELETE FROM forever_character_freepick_resources WHERE guid={}",c.guid);
+        for(auto const& [power,pool]:e.pools) tx->PAppend("INSERT INTO forever_character_freepick_resources VALUES ({},{},{})",c.guid,int(power),std::max(0,pool.current));
+        CharacterDatabase.DirectCommitTransaction(tx);return;
+    }
     CharacterDatabaseTransaction tx=CharacterDatabase.BeginTransaction();
     tx->PAppend("DELETE FROM forever_character_class_progress WHERE guid={}",c.guid);
     for (auto const& [id,progress]:c.classes)
@@ -221,6 +245,12 @@ static void Save(Entry const& e)
 
 static int32 PowerMaximum(Player* p,Entry const& e,Powers power)
 {
+    if (Freepick())
+    {
+        if(power!=POWER_MANA) return 100;
+        uint32 base=0;sObjectMgr->GetPlayerClassLevelInfo(uint8(Class::Priest),p->GetLevel(),base);
+        return int32(std::clamp(double(base)+p->GetManaBonusFromIntellect(),1.0,1000000.0));
+    }
     if (!e.state.activeSubclass) return 1;
     int32 base=100;
     if (power==POWER_MANA)
@@ -241,6 +271,23 @@ static void Refresh(Player* p,Entry& e)
     c.stats={int32(p->GetStat(STAT_STRENGTH)),int32(p->GetStat(STAT_AGILITY)),int32(p->GetStat(STAT_STAMINA)),
              int32(p->GetStat(STAT_INTELLECT)),int32(p->GetStat(STAT_SPIRIT)),0};
     auto now=Clock::now();double seconds=std::min(60.0,std::chrono::duration<double>(now-e.updated).count());e.updated=now;
+    if (Freepick())
+    {
+        // Class cards are catalogue filters, not independently levelled classes.
+        for(auto& [id,progress]:c.classes) if(id!=c.primaryClass) progress={uint8(p->GetLevel()),0};
+        c.xpTargetClass=c.primaryClass;
+        if(p->GetPowerIndex(POWER_MANA)<MAX_POWERS_PER_CLASS) { e.pools.erase(POWER_MANA);return; }
+        int32 maximum=PowerMaximum(p,e,POWER_MANA);
+        auto [it,inserted]=e.pools.try_emplace(POWER_MANA,forever::ResourcePool{maximum,maximum});
+        auto& pool=it->second;pool.maximum=maximum;pool.current=std::clamp(pool.current,0,maximum);
+        if(p->IsAlive())
+        {
+            double gained=e.manaFraction+std::max(0,c.stats.spirit)*0.20*(c.inCombat?0.30:1.0)*seconds;
+            int32 whole=int32(std::min(double(maximum-pool.current),std::floor(gained)));
+            e.manaFraction=pool.current+whole==maximum?0:gained-whole;pool.current+=whole;
+        }
+        return;
+    }
     if (!c.activeSubclass) return;
     for (Powers power:ClassPowers(*c.activeSubclass))
     {
@@ -266,6 +313,30 @@ static Entry& State(Player* p)
     uint64 guid=p->GetGUID().GetCounter();auto it=Entries.find(guid);
     if (it!=Entries.end()) { Refresh(p,it->second);return it->second; }
     Entry e;e.state=Policy.createCharacter(guid,Class(p->GetClass()),p->GetLevel());
+    if (Freepick())
+    {
+        for(uint8 id:{1,2,3,4,5,7,8,9,11}) if(id!=p->GetClass()) e.state.classes[Class(id)]={uint8(p->GetLevel()),0};
+        e.state.activeSubclass=p->GetClass()==5?Class::Mage:Class::Priest;
+        if(auto row=CharacterDatabase.PQuery("SELECT primary_class_id,catalogue_class_id FROM forever_character_freepick_state WHERE guid={}",guid))
+        {
+            Field* f=row->Fetch();e.valid=f[0].GetUInt8()==p->GetClass();
+            if(ValidClass(f[1].GetUInt8())&&f[1].GetUInt8()!=p->GetClass()) e.state.activeSubclass=Class(f[1].GetUInt8());
+        }
+        if(e.valid)
+        {
+            if(auto rows=CharacterDatabase.PQuery("SELECT spell_id FROM forever_character_freepick_spells WHERE guid={} ORDER BY spell_id",guid)) do
+            {
+                std::string error;uint32 id=rows->Fetch()[0].GetUInt32();
+                if(!Policy.selectSubclassSpell(e.state,id,&error))
+                { e.valid=false;TC_LOG_ERROR("scripts","Freepick saved purchase {} rejected for guid {}: {}",id,guid,error); }
+            } while(rows->NextRow());
+            if(auto rows=CharacterDatabase.PQuery("SELECT power_type,current_value FROM forever_character_freepick_resources WHERE guid={}",guid)) do
+            {
+                Field* v=rows->Fetch();if(v[0].GetUInt8()==POWER_MANA) e.pools[POWER_MANA]={int32(std::min<uint32>(v[1].GetUInt32(),1000000)),1000000};
+            } while(rows->NextRow());
+        }
+        auto& value=Entries.emplace(guid,std::move(e)).first->second;Refresh(p,value);return value;
+    }
     if (auto result=CharacterDatabase.PQuery("SELECT primary_class_id,active_subclass_id,xp_target_class_id FROM forever_character_subclass_state WHERE guid={}",guid))
     {
         Field* f=result->Fetch();
@@ -306,7 +377,7 @@ static int32 Cost(Player* p,Entry const& e,uint32 spell,Definition const& def)
         {
             int32 amount=native->Amount;if (def.root.power==POWER_RAGE) amount=(amount+9)/10;value=std::max(value,amount);
         }
-    if (e.state.activeSubclass) value=int32(std::ceil(value*CostMultiplier(e,*e.state.activeSubclass)));
+    if (!Freepick()&&e.state.activeSubclass) value=int32(std::ceil(value*CostMultiplier(e,*e.state.activeSubclass)));
     return std::max(0,value);
 }
 
@@ -319,6 +390,8 @@ static int32 Available(Player* p,Entry& e,Powers power)
 static bool Allowed(Player* p,Entry& e,uint32 spell)
 {
     auto found=Definitions.find(spell);if(found==Definitions.end()||!e.valid) return false;auto const& d=found->second;
+    if(Freepick()) return d.root.owner!=p->GetClass()&&Selected(e,spell)&&p->GetLevel()>=d.level&&
+        p->GetLevel()>=Policy.config().subclassUnlockPrimaryLevel&&Available(p,e,d.root.power)>=Cost(p,e,spell,d);
     return e.state.activeSubclass&&uint8(*e.state.activeSubclass)==d.root.owner&&Selected(e,spell)&&
         e.state.classes[*e.state.activeSubclass].level>=d.level&&HasClassPower(*e.state.activeSubclass,d.root.power)&&
         Available(p,e,d.root.power)>=Cost(p,e,spell,d);
@@ -326,12 +399,14 @@ static bool Allowed(Player* p,Entry& e,uint32 spell)
 
 static bool HunterFeatureReady(Entry const& e)
 {
+    if (Freepick()) return false;
     if (!e.state.activeSubclass||*e.state.activeSubclass!=Class::Hunter) return false;
     auto it=e.state.classes.find(Class::Hunter);return it!=e.state.classes.end()&&it->second.level>=10;
 }
 
 static bool SpendTalent(Entry& e,uint16 id,std::string& error)
 {
+    if (Freepick()) { error="Freepick talents are not enabled in this prototype";return false; }
     if (!e.state.activeSubclass) { error="no active subclass";return false; }
     TalentDef const* def=FindTalent(id);if(!def) { error="unknown subclass talent";return false; }
     Class cls=*e.state.activeSubclass;uint32 total=TalentTotalPoints(e,cls),spent=TalentSpent(e,cls);
@@ -382,8 +457,32 @@ static bool DismissHunterPet(Player* p,Entry& e,std::string& error)
     p->RemovePet(pet,PET_SAVE_AS_CURRENT);return true;
 }
 
+static void SnapshotFreepick(Player* p,Entry& e)
+{
+    auto const& c=e.state;
+    Send(p,Trinity::StringFormat("STATE {} {} {} {} {} 10000",uint8(c.primaryClass),c.activeSubclass?uint8(*c.activeSubclass):0,uint8(c.primaryClass),Policy.usedSubclassSlots(c),Policy.config().subclassAbilitySlots));
+    Send(p,"MODE FREEPICK 1"); // AE = used/budget from STATE; TE deliberately unavailable in v1.
+    for(auto const& [id,v]:c.classes) Send(p,Trinity::StringFormat("CLASS {} {} {} {}",uint8(id),v.level,v.xp,sObjectMgr->GetXPForLevel(v.level)));
+    for(Powers power:ClassPowers(c.primaryClass))
+    {
+        int32 scale=power==POWER_RAGE?10:1;
+        Send(p,Trinity::StringFormat("BASEPOWER {} {} {}",int(power),p->GetPower(power)/scale,p->GetMaxPower(power)/scale));
+    }
+    int32 maximum=p->GetPowerIndex(POWER_MANA)<MAX_POWERS_PER_CLASS?p->GetMaxPower(POWER_MANA):PowerMaximum(p,e,POWER_MANA);
+    Send(p,Trinity::StringFormat("POWER {} {} {}",int(POWER_MANA),Available(p,e,POWER_MANA),maximum));
+    for(auto const& root:Roots)
+    {
+        if(root.owner==p->GetClass()||!Definitions.count(root.id)) continue;
+        if(!Selected(e,root.id)&&(!c.activeSubclass||uint8(*c.activeSubclass)!=root.owner)) continue;
+        uint32 id=BestRank(e,root.id);auto const& d=Definitions.at(id);
+        Send(p,Trinity::StringFormat("SPELL {} {} {} {} {} {}",id,root.id,d.level,Selected(e,root.id)?1:0,Cost(p,e,id,d),int(d.root.power)));
+    }
+    Send(p,"END");
+}
+
 static void Snapshot(Player* p,Entry& e)
 {
+    if(Freepick()) { SnapshotFreepick(p,e);return; }
     auto const& c=e.state;uint32 efficiency=c.activeSubclass?uint32(std::lround(Effectiveness(e,*c.activeSubclass)*10000.0)):0;
     Send(p,Trinity::StringFormat("STATE {} {} {} {} {} {}",uint8(c.primaryClass),c.activeSubclass?uint8(*c.activeSubclass):0,
         c.xpTargetClass?uint8(*c.xpTargetClass):uint8(c.primaryClass),Policy.usedSubclassSlots(c),Policy.config().subclassAbilitySlots,efficiency));
@@ -428,6 +527,8 @@ static void Request(Player* p,std::string const& text)
     auto now=Clock::now();if(now-e.request<std::chrono::milliseconds(150)) return;e.request=now;
     std::istringstream input(text);std::string command,extra;uint32 arg=0,debugLevel=0;input>>command;
     bool needsArg=command=="learn"||command=="active"||command=="xp"||command=="select"||command=="remove"||command=="cast"||command=="talent";
+    if (Freepick()&&(command=="debuglevel"||command=="talent"||command=="talentreset"||command=="tame"||command=="petcall"||command=="petdismiss"))
+        { Error(p,"command unavailable in Freepick ability prototype");return; }
     if (command=="debuglevel")
     {
         if(!(input>>arg>>debugLevel)||(input>>extra)) { Error(p,"invalid command");return; }
@@ -516,6 +617,8 @@ public:
         CharacterDatabaseTransaction tx=CharacterDatabase.BeginTransaction();
         for(char const* table:{"forever_character_class_progress","forever_character_subclass_state","forever_character_subclass_spells","forever_character_subclass_resources","forever_character_subclass_talents"})
             tx->Append(Trinity::StringFormat("DELETE FROM {} WHERE guid={}",table,guid.GetCounter()).c_str());
+        for(char const* table:{"forever_character_freepick_state","forever_character_freepick_spells","forever_character_freepick_resources"})
+            tx->Append(Trinity::StringFormat("DELETE FROM {} WHERE guid={}",table,guid.GetCounter()).c_str());
         CharacterDatabase.DirectCommitTransaction(tx);
     }
     void OnAddonMessageSent(Player* p,uint32 type,std::string const& prefix,std::string const& text,Player* receiver) override
@@ -525,6 +628,7 @@ public:
     void OnGiveXP(Player* p,uint32& amount,Unit*) override
     {
         if(!Ready||!ValidClass(p->GetClass())) return;std::lock_guard<std::recursive_mutex> g(Mutex);auto& e=State(p);auto& c=e.state;
+        if(Freepick()) return; // Native main-class XP is never diverted.
         if(!e.valid||!c.xpTargetClass||*c.xpTargetClass==c.primaryClass) return;
         auto& progress=c.classes[*c.xpTargetClass];uint64 remaining=amount;amount=0;
         uint8 cap=std::min<uint32>(p->GetLevel(),sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL));
@@ -569,9 +673,18 @@ public:
         for(char const* table:{"forever_character_class_progress","forever_character_subclass_state","forever_character_subclass_spells","forever_character_subclass_resources","forever_character_subclass_talents"})
             if(!CharacterDatabase.Query(Trinity::StringFormat("SELECT COUNT(*) FROM {}",table).c_str()))
                 { TC_LOG_ERROR("scripts","Subclass schema missing: {}. Feature disabled.",table);return; }
+        if(sConfigMgr->GetBoolDefault("ForeverSubclass.Freepick",false))
+        {
+            for(char const* table:{"forever_character_freepick_state","forever_character_freepick_spells","forever_character_freepick_resources"})
+                if(!CharacterDatabase.Query(Trinity::StringFormat("SELECT COUNT(*) FROM {}",table).c_str()))
+                { TC_LOG_ERROR("scripts","Freepick schema missing: {}. Feature disabled.",table);return; }
+            auto cfg=MakePolicyConfig();cfg.freepickMode=true;Policy=forever::SubclassSystem(cfg);
+        }
         uint32 scriptId=sObjectMgr->GetScriptId(SpellScriptName);
         for(auto const& root:Roots)
         {
+            // First vertical slice: priest Lesser Heal and mage Frostbolt, including native rank chains.
+            if(Freepick()&&root.id!=2050&&root.id!=116) continue;
             auto info=sSpellMgr->GetSpellInfo(root.id,DIFFICULTY_NONE);uint32 count=0;
             for(;info&&count++<64;info=info->GetNextRankSpell())
             {
@@ -585,7 +698,10 @@ public:
                         root.minimumCost,true});
             }
         }
+        if(Freepick()&&(!Definitions.count(2050)||!Definitions.count(116)))
+            { TC_LOG_ERROR("scripts","Freepick requires both validated chains 2050 and 116. Feature disabled.");return; }
         if(Definitions.empty()) { TC_LOG_ERROR("scripts","Subclass catalogue empty. Feature disabled.");return; }
+        if(Freepick()) TC_LOG_INFO("scripts","ForeverSubclass Freepick ability prototype enabled: 8 AE, native primary class and XP, shared mana; talents disabled");
         Ready=true;TC_LOG_INFO("scripts","ForeverSubclass ready: {} supported spell ranks; auto-ranks, multi-resource, talents and hunter pet foundation enabled",Definitions.size());
     }
 };

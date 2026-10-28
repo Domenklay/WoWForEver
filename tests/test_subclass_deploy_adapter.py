@@ -16,7 +16,7 @@ def load_injector():
 
 
 class SubclassDeployAdapterTests(unittest.TestCase):
-    def test_generated_server_has_native_temporary_spells_hidden_powers_and_safe_pet_stable(self):
+    def test_generated_server_has_authoritative_casts_native_powers_and_safe_pet_stable(self):
         injector=load_injector()
         with tempfile.TemporaryDirectory() as temp:
             core=Path(temp)
@@ -31,14 +31,21 @@ class SubclassDeployAdapterTests(unittest.TestCase):
             )
             injector.inject(core,MODULE)
             cpp=(custom/'ForeverSubclass/ForeverSubclass.cpp').read_text()
-            self.assertIn('p->AddTemporarySpell(newSpell);',cpp)
-            self.assertIn('p->RemoveTemporarySpell(oldSpell);',cpp)
-            self.assertIn('SyncHiddenSubclassPowers',cpp)
-            self.assertIn('p->SetMaxPower(power,maximum*scale);',cpp)
-            self.assertIn('CaptureHiddenSubclassPower',cpp)
-            self.assertIn('AfterCast+=SpellCastFn(spell_forever_subclass::CapturePower)',cpp)
+            # The maintained injector explicitly rejects the removed temporary-spell
+            # implementation. Casts use the server request path and real class slots
+            # when available; classes without a slot retain server-side pools.
+            self.assertNotIn('AddTemporarySpell(',cpp)
+            self.assertNotIn('RemoveTemporarySpell(',cpp)
+            self.assertIn('HasNativePowerSlot(p,def.root.power)',cpp)
+            self.assertIn('p->ModifyPower(def.root.power,-cost*',cpp)
+            self.assertIn('else e.pools[def.root.power].current=',cpp)
+            self.assertIn('std::any_cast<CastTag>',cpp)
+            self.assertIn('TRIGGERED_IGNORE_POWER_COST).SetCustomArg(CastTag{})',cpp)
+            self.assertIn('if(!Allowed(p,e,id))',cpp)
             self.assertIn('p->GetOrInitPetStable();',cpp)
-            self.assertIn('creatureTemplate->IsTameable(false,creatureDifficulty)',cpp)
+            self.assertIn('CREATURE_STATIC_FLAG_TAMEABLE',cpp)
+            self.assertIn('CREATURE_STATIC_FLAG_3_TAMEABLE_EXOTIC',cpp)
+            self.assertIn('p->CreateTamedPetFrom(creature,HunterTameSpell)',cpp)
             self.assertIn('new ForeverSubclassCommandScript();',cpp)
             self.assertEqual(cpp.count('new ForeverSubclassCommandScript();'),1)
 

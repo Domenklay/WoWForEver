@@ -54,6 +54,7 @@ struct CharacterStats {
 };
 
 struct SystemConfig {
+    bool freepickMode = false; // Separate opt-in mode; primary class and XP remain native.
     std::uint8_t maxClassLevel = 80;
     std::uint8_t subclassUnlockPrimaryLevel = 40;
     std::uint8_t subclassAbilitySlots = 8;

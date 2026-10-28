@@ -95,3 +95,22 @@ form, equipment, cooldown and other spell checks remain in force.
 The catalogue is built from the pinned core's actual rank chains and requires
 validated `spell_script_names` bindings. Numeric IDs from the client cannot add
 new abilities, classes, resources, talents or spell bindings to that catalogue.
+
+## Opt-in Freepick ability prototype
+
+`ForeverSubclass.Freepick=1` adds `MODE FREEPICK 1` immediately after `STATE`.
+The `active` field is a catalogue filter; it does not restrict purchased spells.
+`used/budget` are spent/total AE (8 total, 1 per supported root chain).
+`xpTarget` is always the native primary class. `CLASS` levels for catalogue
+classes mirror the primary level and do not represent secondary XP progression.
+`SPELL` includes all purchased chains plus available entries for the filtered
+class, so changing filters preserves action-bar entries and server ownership.
+The initial supported chains are 2050 and 116, upgraded to the best available
+native rank for the primary level. Both use the same `POWER 0` pool.
+
+`select` buys a root chain and `remove` refunds it, in a rest area outside combat
+at primary level 10+. Native primary chains cannot be purchased. `active`
+changes only the filter and never clears purchases; `clear` clears only the
+filter. `xp` for a foreign class, talent/debug-level and hunter-pet commands are
+rejected in this prototype. No `TPOINTS`, `TALENT` or pet features are sent.
+Normal mode retains its existing protocol and persistence tables.

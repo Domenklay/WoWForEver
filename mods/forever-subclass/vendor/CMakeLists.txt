@@ -17,3 +17,7 @@ enable_testing()
 add_executable(forever_subclass_tests tests/test_subclass.cpp)
 target_link_libraries(forever_subclass_tests PRIVATE forever_subclass)
 add_test(NAME forever_subclass_tests COMMAND forever_subclass_tests)
+
+add_executable(forever_freepick_tests tests/test_freepick.cpp)
+target_link_libraries(forever_freepick_tests PRIVATE forever_subclass)
+add_test(NAME forever_freepick_tests COMMAND forever_freepick_tests)

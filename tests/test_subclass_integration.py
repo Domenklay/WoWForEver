@@ -102,7 +102,7 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertEqual({p.name for p in target.iterdir() if p.is_file()},expected)
             toc=(target/'ForeverSubclass.toc').read_text()
             for name in expected-{'ForeverSubclass.toc'}:self.assertIn(name,toc)
-            self.assertIn('0.9.5-forever.31',toc)
+            self.assertIn('0.10.0-freepick.1',toc)
             for stale in ['ForeverSubclass.lua','ForeverSubclassTalentTree.lua','ForeverSubclassTalentHostFix.lua',
                           'ForeverSubclassTalentTab.lua','ForeverSubclassTalentCompat.lua','ForeverSubclassPanelV2.lua',
                           'ForeverSubclassLegacySuppress.lua','ForeverSubclassInteractiveFix.lua','ForeverSubclassCommandTransport.lua']:
@@ -179,8 +179,8 @@ class SubclassIntegrationTests(unittest.TestCase):
         docker=(ROOT/'Dockerfile').read_text()
         installer=(ROOT/'scripts/subclass-mod.sh').read_text()
         doctor=(ROOT/'scripts/subclass-doctor.sh').read_text()
-        self.assertIn('0.3.6-forever.9',docker)
-        self.assertIn("[ \"$label\" = '0.3.6-forever.9' ]",installer)
+        self.assertIn('0.4.0-freepick.1',docker)
+        self.assertIn("[ \"$label\" = '0.4.0-freepick.1' ]",installer)
         self.assertIn("if [ \"$label\" = '0.3.6-forever.9' ]",doctor)
 
     def test_direct_transport_uses_server_endpoint_and_slow_idle_polling(self):

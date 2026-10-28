@@ -51,7 +51,7 @@ end
 
 local function selectedSpells()
     local out = {}
-    if not state or not state.active or state.active == 0 then return out end
+    if not state or (not state.freepick and (not state.active or state.active == 0)) then return out end
     for _, sp in pairs(state.spells or {}) do
         if sp.selected then table.insert(out, sp) end
     end
@@ -70,7 +70,7 @@ local function hideCustomPage()
 end
 
 local function showCustomPage()
-    if not state or not state.active or state.active == 0 then return end
+    if not state or (not state.freepick and (not state.active or state.active == 0)) then return end
     customOpen = true
     if spellBook and spellBook.PagedSpellsFrame then spellBook.PagedSpellsFrame:Hide() end
     if panel then panel:Show() end
@@ -126,7 +126,7 @@ end
 
 local function refresh()
     if not built then return end
-    local active = state and state.active and state.active ~= 0 and state.active or nil
+    local active = state and ((state.active and state.active ~= 0 and state.active) or (state.freepick and state.primary)) or nil
     local info = active and classInfo[active] or nil
 
     tab:SetShown(info ~= nil)
@@ -136,9 +136,9 @@ local function refresh()
     end
 
     setClassIcon(tab.icon, info.token)
-    tab.tooltipTitle = info.name.." — подкласс"
+    tab.tooltipTitle = state.freepick and "Freepick — изученные навыки" or info.name.." — подкласс"
     local level = state.classes and state.classes[active] and state.classes[active].level or 1
-    title:SetText(info.name.." — подкласс")
+    title:SetText(state.freepick and "Freepick — изученные навыки" or info.name.." — подкласс")
     subtitle:SetText("Уровень "..level..". Здесь показаны способности, выбранные в Таланты → Подкласс.")
 
     local list = selectedSpells()
@@ -244,6 +244,8 @@ local function parse(text)
         local p,a,x,u,b,e = text:match("^STATE%s+(%d+)%s+(%d+)%s+(%d+)%s+(%d+)%s+(%d+)%s+(%d+)")
         if not p then return end
         pending={primary=tonumber(p),active=tonumber(a),xpTarget=tonumber(x),used=tonumber(u),budget=tonumber(b),efficiency=tonumber(e),classes={},spells={}}
+    elseif kind == "MODE" and pending then
+        pending.freepick = text:match("^MODE%s+(%S+)")=="FREEPICK"
     elseif kind == "CLASS" and pending then
         local id,lvl,xp,nextxp=text:match("^CLASS%s+(%d+)%s+(%d+)%s+(%d+)%s+(%d+)")
         if id then pending.classes[tonumber(id)]={level=tonumber(lvl),xp=tonumber(xp),next=tonumber(nextxp)} end

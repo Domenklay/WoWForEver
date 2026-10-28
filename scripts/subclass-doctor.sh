@@ -27,7 +27,8 @@ container=$(docker compose ps -q worldserver 2>/dev/null)
 image=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
 label=$(docker inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' "$container" 2>/dev/null || true)
 printf 'Running image: %s\n' "${image:-unknown}"
-if [ "$label" = '0.3.6-forever.9' ]; then pass "subclass image label: $label (staged Mage native Rage/Energy hotfix experiment)"
+if [ "$label" = '0.4.0-freepick.1' ]; then pass "subclass image label: $label (Freepick opt-in available)"
+elif [ "$label" = '0.3.6-forever.9' ]; then pass "subclass image label: $label (staged Mage native Rage/Energy hotfix experiment)"
 elif [ "$label" = '0.3.5-forever.8' ]; then pass "subclass image label: $label (compatible native-slot runtime; staged hotfix supplied by DB)"
 elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then fail "subclass image label: $label (expected 0.3.5-forever.8 or 0.3.6-forever.9)"
 else fail 'running image has no org.wowforever.subclass label';fi
