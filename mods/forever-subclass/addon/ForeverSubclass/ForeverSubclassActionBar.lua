@@ -1,6 +1,6 @@
 -- Action-bar bridge for server-authoritative subclass abilities.
--- Preferred path: selected abilities are true TrinityCore temporary spells, so PickupSpell
--- creates an ordinary WoW action button. Macro/FSC1 remains a compatibility fallback.
+-- PickupSpell is attempted when the client already exposes the spell; otherwise the
+-- server-authoritative /fsubcast macro is the supported compatibility path.
 
 local hooked=setmetatable({}, {__mode="k"})
 
@@ -65,7 +65,7 @@ local function pickup(spell)
  local id=tonumber(spell.id)
  if pickupNative(id) then return end
  if pickupFallback(id) then
-  chat("Клиент ещё не увидел временный спелл; использован резервный ярлык.")
+  chat("Способность добавлена на панель через серверный ярлык.")
   return
  end
  chat("Не удалось взять способность на курсор.")
@@ -79,7 +79,7 @@ local function wireButton(button)
  if button.HookScript then button:HookScript("OnEnter",function(self)
   if self.spell and GameTooltip then
    GameTooltip:AddLine(" ");GameTooltip:AddLine("Перетащите на обычную панель действий",0.35,0.85,1,true)
-   GameTooltip:AddLine("Используется обычный временный WoW-спелл; ярлык — только резерв.",0.7,0.7,0.7,true);GameTooltip:Show()
+   GameTooltip:AddLine("Если клиент не знает этот спелл напрямую, создаётся серверный ярлык.",0.7,0.7,0.7,true);GameTooltip:Show()
   end
  end) end
 end
