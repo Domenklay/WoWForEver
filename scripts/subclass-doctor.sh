@@ -27,8 +27,8 @@ container=$(docker compose ps -q worldserver 2>/dev/null)
 image=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
 label=$(docker inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' "$container" 2>/dev/null || true)
 printf 'Running image: %s\n' "${image:-unknown}"
-if [ "$label" = '0.3.5-forever.8' ]; then pass "subclass image label: $label (native class power slots + virtual fallback)"
-elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then fail "subclass image label: $label (expected 0.3.5-forever.8)"
+if [ "$label" = '0.3.6-forever.9' ]; then pass "subclass image label: $label (staged Mage native Rage/Energy hotfix experiment)"
+elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then fail "subclass image label: $label (expected 0.3.6-forever.9)"
 else fail 'running image has no org.wowforever.subclass label';fi
 
 transport_patch='docker/patches/0004-forever-subclass-server-addon-endpoint.patch'
@@ -55,10 +55,16 @@ if docker compose ps --status running --services 2>/dev/null | grep -qx mysql; t
     done
     bindings=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot world -e \"SELECT COUNT(*) FROM spell_script_names WHERE ScriptName='spell_forever_subclass';\"" 2>/dev/null || echo 0)
     if [ "${bindings:-0}" -ge 20 ] 2>/dev/null; then pass "world spell bindings: $bindings (includes druid forms/rage/energy roots)"; else fail "world spell bindings: ${bindings:-0} (expected at least 20)";fi
+
+    mage_power_rows=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot hotfixes -e \"SELECT COUNT(*) FROM chr_classes_x_power_types WHERE ID IN (190031901,190031902) AND ClassID=8 AND PowerType IN (1,3) AND VerifiedBuild=70532;\"" 2>/dev/null || echo 0)
+    if [ "$mage_power_rows" = "2" ]; then pass 'hotfixes: Mage native Rage/Energy DB2 rows = 2'; else fail "hotfixes: Mage native Rage/Energy DB2 rows = ${mage_power_rows:-0} (expected 2)";fi
+
+    mage_hotfix_rows=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot hotfixes -e \"SELECT COUNT(*) FROM hotfix_data WHERE TableHash=3224459983 AND RecordId IN (190031901,190031902) AND Status=1 AND VerifiedBuild=70532;\"" 2>/dev/null || echo 0)
+    if [ "$mage_hotfix_rows" = "2" ]; then pass 'hotfixes: Mage native-power records published to client = 2'; else fail "hotfixes: Mage native-power published records = ${mage_hotfix_rows:-0} (expected 2)";fi
 else fail 'mysql container is not running';fi
 
 printf '\n'
-if [ "$ok" = "1" ]; then printf 'RESULT: native class power slots, virtual fallback resources, multi-resource subclass runtime, talents/pets and FSC1 transport look ready.\n';exit 0
+if [ "$ok" = "1" ]; then printf 'RESULT: staged Mage native Rage/Energy hotfix, native-slot subclass runtime, talents/pets and FSC1 transport look ready.\n';exit 0
 else
     printf 'RESULT: server-side subclass runtime is incomplete or stale. Do not recreate the character; rebuild/install the module.\n'
     printf 'Repair: bash scripts/subclass-mod.sh build && bash scripts/subclass-mod.sh install /mnt/e/_classic_beta_/\n';exit 1
