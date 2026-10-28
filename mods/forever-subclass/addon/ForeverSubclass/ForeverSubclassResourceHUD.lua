@@ -1,12 +1,12 @@
 -- Integrated player-frame resource block for ForeverSubclass.
--- The primary class resource stays on top; the active subclass resource is shown
--- directly beneath it inside the same framed UI element. When no secondary
--- resource is needed the stock Blizzard power bar is left untouched.
+-- Primary class resource stays on top; one different subclass/form resource is shown
+-- beneath it. Equal power types are never duplicated.
 
 local RESPONSE="FSR1"
 local POWER_MANA=0
 local POWER_RAGE=1
 local POWER_ENERGY=3
+local RAGE_DECAY_PER_SECOND=3
 
 local primaryPowerByClass={
  [1]=POWER_RAGE,
@@ -17,12 +17,14 @@ local primaryPowerByClass={
  [7]=POWER_MANA,
  [8]=POWER_MANA,
  [9]=POWER_MANA,
- [11]=POWER_MANA,
+ [11]=POWER_MANA, -- Druid remains mana-primary even in bear/cat form.
 }
 
 local pending,state
 local frame,mainBar,secondaryBar,nativeBar
 local stockAlpha
+local rageVisualFraction=0
+local refreshElapsed=0
 local fallbackTexture="Interface\\TARGETINGFRAME\\UI-StatusBar"
 
 local function debug(text)
@@ -98,9 +100,6 @@ local function build()
  frame:SetFrameStrata(nativeBar.GetFrameStrata and nativeBar:GetFrameStrata() or "MEDIUM")
  frame:SetFrameLevel((nativeBar.GetFrameLevel and nativeBar:GetFrameLevel() or 1)+10)
  frame:EnableMouse(false)
-
- -- Match the stock power bar width, but extend the framed block downward enough
- -- for a true second row. This remains parented to PlayerFrame so it behaves like UI.
  frame:SetPoint("TOPLEFT",nativeBar,"TOPLEFT",0,1)
  frame:SetPoint("TOPRIGHT",nativeBar,"TOPRIGHT",0,1)
  frame:SetHeight(math.max(18,(nativeBar:GetHeight() or 10)+8))
@@ -108,7 +107,6 @@ local function build()
  local outer=frame:CreateTexture(nil,"BACKGROUND",nil,-8)
  outer:SetPoint("TOPLEFT",-2,2);outer:SetPoint("BOTTOMRIGHT",2,-2)
  outer:SetColorTexture(0.02,0.02,0.02,0.98)
- frame._fsubOuter=outer
 
  local topEdge=frame:CreateTexture(nil,"BORDER")
  topEdge:SetPoint("TOPLEFT",-1,1);topEdge:SetPoint("TOPRIGHT",1,1);topEdge:SetHeight(1);topEdge:SetColorTexture(0.58,0.48,0.24,0.95)
@@ -120,8 +118,7 @@ local function build()
  rightEdge:SetPoint("TOPRIGHT",1,1);rightEdge:SetPoint("BOTTOMRIGHT",1,-1);rightEdge:SetWidth(1);rightEdge:SetColorTexture(0.33,0.25,0.10,1)
 
  mainBar=makeRow(frame)
- mainBar:SetPoint("TOPLEFT",2,-2);mainBar:SetPoint("TOPRIGHT",-2,-2)
- mainBar:SetHeight(8)
+ mainBar:SetPoint("TOPLEFT",2,-2);mainBar:SetPoint("TOPRIGHT",-2,-2);mainBar:SetHeight(8)
 
  local divider=frame:CreateTexture(nil,"ARTWORK")
  divider:SetPoint("TOPLEFT",mainBar,"BOTTOMLEFT",0,-1);divider:SetPoint("TOPRIGHT",mainBar,"BOTTOMRIGHT",0,-1)
@@ -133,7 +130,7 @@ local function build()
  secondaryBar:SetPoint("BOTTOM",frame,"BOTTOM",0,2)
 
  frame:Hide()
- debug("built integrated two-row PlayerFrame resource block")
+ debug("built primary+secondary PlayerFrame power block")
  return true
 end
 
@@ -148,37 +145,46 @@ local function setBar(bar,kind,current,maximum)
  maximum=math.max(1,tonumber(maximum) or 1)
  current=math.max(0,tonumber(current) or 0)
  bar:SetMinMaxValues(0,maximum);bar:SetValue(current);colorBar(bar,kind)
- bar.text:SetText(tostring(current).." / "..tostring(maximum))
+ bar.text:SetText(tostring(math.floor(current+0.5)).." / "..tostring(math.floor(maximum+0.5)))
+end
+
+local function primaryValues(primaryKind)
+ -- BASEPOWER is server-supplied specifically so druid mana remains available
+ -- while the client display power has switched to rage/energy in a form.
+ if state and state.basePower and state.basePower.kind==primaryKind and state.basePower.max>0 then
+  return state.basePower.current,state.basePower.max
+ end
+ return getUnitPower(primaryKind)
 end
 
 local function chooseSecondaryPower(primaryKind)
  if not state or not state.powers then return nil end
  local native=nativePowerKind()
 
- -- A stance/form resource that differs from the primary-class resource gets
- -- priority when it is actually exposed by the active subclass snapshot.
- if native~=nil and native~=primaryKind and state.powers[native] then return state.powers[native] end
+ -- If the current form/stance exposes a different power and the server confirms
+ -- that the active subclass can use it, use that one live. This is the bear/cat
+ -- case and prevents a second virtual rage/energy pool from being rendered.
+ if native~=nil and native~=primaryKind and state.powers[native] then
+  return {kind=native,live=true,server=state.powers[native]}
+ end
 
- local rage=state.powers[POWER_RAGE]
- local energy=state.powers[POWER_ENERGY]
- local mana=state.powers[POWER_MANA]
- if rage and POWER_RAGE~=primaryKind and (rage.current or 0)>0 then return rage end
- if energy and POWER_ENERGY~=primaryKind and (energy.current or 0)>0 then return energy end
- if rage and POWER_RAGE~=primaryKind then return rage end
- if energy and POWER_ENERGY~=primaryKind then return energy end
- if mana and POWER_MANA~=primaryKind then return mana end
- for kind,power in pairs(state.powers) do if kind~=primaryKind then return power end end
+ local order={POWER_RAGE,POWER_ENERGY,POWER_MANA}
+ for _,kind in ipairs(order) do
+  local power=state.powers[kind]
+  if power and kind~=primaryKind then
+   return {kind=kind,live=(kind==native),server=power}
+  end
+ end
  return nil
 end
 
-local function primaryValues(primaryKind)
- -- Primary class power should remain the real client resource whenever possible.
- local current,maximum=getUnitPower(primaryKind)
- if maximum then return current,maximum end
- -- If the client does not expose that off-form power, use the server snapshot.
- local pool=state and state.powers and state.powers[primaryKind]
- if pool then return pool.current,pool.max end
- return nil,nil
+local function secondaryValues(secondary)
+ if not secondary then return nil,nil end
+ if secondary.live then
+  local current,maximum=getUnitPower(secondary.kind)
+  if maximum then return current,maximum end
+ end
+ return secondary.server.current,secondary.server.max
 end
 
 local function hideCustom()
@@ -192,13 +198,14 @@ local function refresh()
 
  local primaryKind=primaryPowerKind()
  local secondary=chooseSecondaryPower(primaryKind)
- if not secondary then hideCustom();return end
+ if not secondary or secondary.kind==primaryKind then hideCustom();return end
 
  local primaryCurrent,primaryMax=primaryValues(primaryKind)
- if not primaryMax then hideCustom();return end
+ local secondaryCurrent,secondaryMax=secondaryValues(secondary)
+ if not primaryMax or not secondaryMax then hideCustom();return end
 
  setBar(mainBar,primaryKind,primaryCurrent,primaryMax)
- setBar(secondaryBar,secondary.kind,secondary.current,secondary.max)
+ setBar(secondaryBar,secondary.kind,secondaryCurrent,secondaryMax)
  setStockVisible(false)
  frame:Show()
 end
@@ -213,18 +220,25 @@ _G.ForeverSubclassResourcePredictSpend=function(spellId)
  if not spell then return end
  local p=state.powers[spell.power]
  if not p or spell.power==primaryPowerKind() then return end
- p.current=math.max(0,(p.current or 0)-(spell.cost or 0));refresh()
+ -- Native rage/energy is updated by UNIT_POWER_UPDATE; only predict virtual pools.
+ if spell.power~=nativePowerKind() then p.current=math.max(0,(p.current or 0)-(spell.cost or 0)) end
+ refresh()
 end
 
 local function parse(msg)
  local words={};for w in tostring(msg):gmatch("%S+") do table.insert(words,w) end
  local kind=words[1]
- if kind=="STATE" then pending={primary=tonumber(words[2]) or 0,active=tonumber(words[3]) or 0,spells={},powers={}}
+ if kind=="STATE" then
+  pending={primary=tonumber(words[2]) or 0,active=tonumber(words[3]) or 0,spells={},powers={},basePower=nil}
+ elseif kind=="BASEPOWER" and pending then
+  local power=tonumber(words[2]);if power then pending.basePower={kind=power,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
  elseif kind=="POWER" and pending then
   local power=tonumber(words[2]);if power then pending.powers[power]={kind=power,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
  elseif kind=="SPELL" and pending then
   local id=tonumber(words[2]);if id then pending.spells[id]={id=id,root=tonumber(words[3]) or id,selected=words[5]=="1",cost=tonumber(words[6]) or 0,power=tonumber(words[7])} end
- elseif kind=="END" and pending then state=pending;pending=nil;refresh() end
+ elseif kind=="END" and pending then
+  state=pending;pending=nil;rageVisualFraction=0;refresh()
+ end
 end
 
 local events=CreateFrame("Frame")
@@ -234,13 +248,32 @@ events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 events:RegisterEvent("UNIT_DISPLAYPOWER")
 events:RegisterEvent("UNIT_POWER_UPDATE")
 events:RegisterEvent("UNIT_MAXPOWER")
+events:RegisterEvent("PLAYER_REGEN_DISABLED")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_LOGOUT")
 events:RegisterEvent("CHAT_MSG_ADDON")
 events:SetScript("OnEvent",function(_,event,...)
  if event=="CHAT_MSG_ADDON" then local prefix,msg=...;if prefix==RESPONSE then parse(msg) end;return end
  if event=="PLAYER_LOGOUT" then setStockVisible(true);return end
+ if event=="PLAYER_REGEN_DISABLED" then rageVisualFraction=0;refresh();return end
+ if event=="PLAYER_REGEN_ENABLED" then rageVisualFraction=0;refresh();return end
  if event=="UNIT_POWER_UPDATE" or event=="UNIT_MAXPOWER" or event=="UNIT_DISPLAYPOWER" then
   local unit=...;if unit and unit~="player" then return end;refresh();return
  end
  if C_Timer and C_Timer.After then C_Timer.After(0.4,function() build();refresh();sendStatus() end) else build();refresh();sendStatus() end
+end)
+
+events:SetScript("OnUpdate",function(_,elapsed)
+ -- Smooth client-side display for virtual warrior rage between authoritative
+ -- server snapshots. Native warrior/bear rage is never touched here.
+ if not state or not state.active or UnitAffectingCombat("player") then return end
+ local rage=state.powers and state.powers[POWER_RAGE]
+ if not rage or POWER_RAGE==nativePowerKind() or rage.current<=0 then return end
+ rageVisualFraction=rageVisualFraction+RAGE_DECAY_PER_SECOND*elapsed
+ local whole=math.floor(rageVisualFraction)
+ if whole<=0 then return end
+ rageVisualFraction=rageVisualFraction-whole
+ rage.current=math.max(0,rage.current-whole)
+ refreshElapsed=refreshElapsed+elapsed
+ refresh()
 end)
