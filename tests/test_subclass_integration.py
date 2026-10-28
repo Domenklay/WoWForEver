@@ -78,7 +78,7 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertEqual({p.name for p in target.iterdir() if p.is_file()},expected)
             toc=(target/'ForeverSubclass.toc').read_text()
             for name in expected-{'ForeverSubclass.toc'}:self.assertIn(name,toc)
-            self.assertIn('0.9.1-forever.27',toc)
+            self.assertIn('0.9.2-forever.28',toc)
             for stale in ['ForeverSubclass.lua','ForeverSubclassTalentTree.lua','ForeverSubclassTalentHostFix.lua',
                           'ForeverSubclassTalentTab.lua','ForeverSubclassTalentCompat.lua','ForeverSubclassPanelV2.lua',
                           'ForeverSubclassLegacySuppress.lua','ForeverSubclassInteractiveFix.lua','ForeverSubclassCommandTransport.lua']:
@@ -135,13 +135,13 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertNotIn('INV_MISC_QUESTIONMARK',action)
         self.assertIn('ForeverSubclassCooldownStart',feedback);self.assertIn('ForeverSubclassCooldownSync',feedback)
 
-    def test_secondary_resource_hud_keeps_primary_class_power_centered(self):
+    def test_secondary_resource_hud_replaces_subclass_power_and_mirrors_native(self):
         hud=(ADDON/'ForeverSubclassResourceHUD.lua').read_text()
         feedback=(ADDON/'ForeverSubclassCastFeedback.lua').read_text()
         self.assertIn('local frame,mainBar,secondaryBar,nativeBar',hud)
-        self.assertIn('primaryPowerByClass',hud)
-        self.assertIn('[11]=POWER_MANA',hud)
-        self.assertIn('secondaryBar:SetPoint("TOPLEFT",nativeBar,"BOTTOMLEFT",2,-2)',hud)
+        self.assertIn('secondaryFrame=makeUIShell',hud)
+        self.assertIn('UI-Tooltip-Border',hud)
+        self.assertIn('findNativeBar',hud);self.assertIn('secondaryBar',hud)
         self.assertIn('pending.powers[power]',hud);self.assertIn('ForeverSubclassResourcePredictSpend',hud)
         self.assertIn('UnitPowerType',hud);self.assertIn('UnitPower("player"',hud)
         self.assertIn('ForeverSubclassResourcePredictSpend',feedback);self.assertIn('base("status",true)',feedback)
