@@ -60,7 +60,6 @@ if [ "$action" = rollback ]; then
     echo 'Rolled back server image and AddOn. Subclass progress retained for later use.'
     exit
 fi
-# No changes before basic prerequisites have been checked.
 python3 - "$client" <<'PY'
 from pathlib import Path
 import sys
@@ -69,7 +68,7 @@ if not (p/'WowB.exe').is_file():raise SystemExit('Client folder must contain Wow
 if (p/'Interface/AddOns/ForeverSubclass').is_symlink():raise SystemExit('Symlinked AddOn folder is not supported')
 PY
 label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' forever-trinitycore:latest)
-[ "$label" = '0.3.3-forever.6' ] || { echo 'Built image is stale or missing rage-decay/resource-sync support. Run: bash scripts/subclass-mod.sh build';exit 1; }
+[ "$label" = '0.3.4-forever.7' ] || { echo 'Built image is stale or missing base-power/rage-sync support. Run: bash scripts/subclass-mod.sh build';exit 1; }
 running=$(docker compose ps --status running --services)
 for service in mysql worldserver bnetserver web; do
     if ! grep -qx "$service" <<< "$running"; then echo "Service $service must be running before installation";exit 1;fi
@@ -81,7 +80,6 @@ if ! grep -q 'worldserver-daemon.*ready' <<< "$ready_logs"; then
     echo 'Current worldserver must finish its initial import and report ready before installation.';exit 1
 fi
 backup=$(mktemp -d "backups/subclass-$(date +%Y%m%d-%H%M%S)-XXXXXX")
-# Keep the built candidate reachable even after a rollback replaces :latest.
 candidate="forever-trinitycore:subclass-candidate-$(basename "$backup")"
 docker tag forever-trinitycore:latest "$candidate"
 printf '%s\n' "$candidate" > "$backup/candidate-image.txt"
