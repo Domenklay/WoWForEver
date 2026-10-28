@@ -50,7 +50,7 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn('RootId(uint32 spell)',server)
         self.assertIn('TPOINTS',server)
         self.assertIn('TALENT {} {} {} {}',server)
-        self.assertIn('SELECT class_id,talent_id,`rank`',server)
+        self.assertIn('SELECT class_id,talent_id,rank FROM forever_character_subclass_talents',server)
         self.assertIn('TameHunterPet',server)
         self.assertIn('CallHunterPet',server)
         self.assertIn('CreateTamedPetFrom',server)
