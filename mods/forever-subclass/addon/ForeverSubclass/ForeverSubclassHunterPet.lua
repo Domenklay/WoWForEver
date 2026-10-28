@@ -7,15 +7,15 @@ local function send(payload) if _G.ForeverSubclassDirectSend then return _G.Fore
 local function style(frame)
  if frame.SetBackdrop then
   frame:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=16,edgeSize=9,insets={left=3,right=3,top=3,bottom=3}})
-  frame:SetBackdropColor(0.02,0.02,0.02,0.96);frame:SetBackdropBorderColor(0.43,0.32,0.14,0.95)
+  frame:SetBackdropColor(0.02,0.02,0.02,0.96);frame:SetBackdropBorderColor(0.34,0.40,0.48,0.95)
  end
 end
 local function button(parent,text,width)
  local template=BackdropTemplateMixin and "BackdropTemplate" or nil
  local b=CreateFrame("Button",nil,parent,template);b:SetSize(width or 110,27);style(b)
- b.text=b:CreateFontString(nil,"OVERLAY","GameFontNormalSmall");b.text:SetPoint("CENTER");b.text:SetText(text)
- b:SetScript("OnEnter",function(self) if self.SetBackdropBorderColor then self:SetBackdropBorderColor(1,0.78,0.2,1) end end)
- b:SetScript("OnLeave",function(self) if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.43,0.32,0.14,0.95) end end)
+ b.text=b:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");b.text:SetPoint("CENTER");b.text:SetText(text);b.text:SetTextColor(0.92,0.92,0.92,1)
+ b:SetScript("OnEnter",function(self) if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.55,0.72,0.92,1) end end)
+ b:SetScript("OnLeave",function(self) if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.34,0.40,0.48,0.95) end end)
  return b
 end
 local function build()
@@ -24,7 +24,7 @@ local function build()
  if panel and panel:GetParent()==root then return true end
  local template=BackdropTemplateMixin and "BackdropTemplate" or nil
  panel=CreateFrame("Frame","ForeverSubclassHunterPetPanel",root,template);panel:SetSize(405,70);panel:SetPoint("BOTTOMRIGHT",root,"BOTTOMRIGHT",-26,52);style(panel)
- local title=panel:CreateFontString(nil,"OVERLAY","GameFontNormal");title:SetPoint("TOPLEFT",10,-9);title:SetText("Питомец Охотника")
+ local title=panel:CreateFontString(nil,"OVERLAY","GameFontHighlight");title:SetPoint("TOPLEFT",10,-9);title:SetText("Питомец Охотника");title:SetTextColor(0.95,0.95,0.95,1)
  status=panel:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");status:SetPoint("LEFT",title,"RIGHT",10,0)
  tame=button(panel,"Приручить",105);tame:SetPoint("BOTTOMLEFT",10,8);tame:SetScript("OnClick",function() send("tame") end)
  call=button(panel,"Призвать",105);call:SetPoint("LEFT",tame,"RIGHT",8,0);call:SetScript("OnClick",function() send("petcall") end)
@@ -37,12 +37,12 @@ local function refresh()
  local show=state.active==3
  panel:SetShown(show);if not show then return end
  if not state.unlocked then
-  status:SetText("|cff888888Откроется на 10 уровне подкласса|r");enable(tame,false);enable(call,false);enable(dismiss,false);return
+  status:SetText("|cffaaaaaaОткроется на 10 уровне подкласса|r");enable(tame,false);enable(call,false);enable(dismiss,false);return
  end
  if state.petActive then
   status:SetText("|cff55dd77Питомец активен|r");enable(tame,false);enable(call,false);enable(dismiss,true)
  else
-  status:SetText("|cffffcc44Выберите зверя или призовите сохранённого|r");enable(tame,true);enable(call,true);enable(dismiss,false)
+  status:SetText("|cffddddddВыберите зверя или призовите сохранённого|r");enable(tame,true);enable(call,true);enable(dismiss,false)
  end
 end
 local function parse(msg)
