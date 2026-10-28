@@ -289,10 +289,22 @@ end
 local function showCustom()
  if not panel then return end;customActive=true;panel:Show();panel:Raise();tab:SetEnabled(false);send("status");refresh();debug("subclass view")
 end
-_G.ForeverSubclassShowTalentPanel=showCustom
 
-local function build()
- owner=_G.PlayerSpellsFrame;host=owner and owner.TalentsFrame;if not owner or not host or built then return built end;built=true
+local function build(allowStandalone)
+ if built then return true end
+ owner=_G.PlayerSpellsFrame;host=owner and owner.TalentsFrame
+ if not owner or not host then
+  if not allowStandalone then return false end
+  owner=CreateFrame("Frame","ForeverSubclassStandaloneFrame",UIParent,"BasicFrameTemplateWithInset")
+  owner:SetSize(1200,740);owner:SetPoint("CENTER");owner:SetClampedToScreen(true)
+  owner:SetMovable(true);owner:EnableMouse(true);owner:RegisterForDrag("LeftButton")
+  owner:SetScript("OnDragStart",function(self) self:StartMoving() end)
+  owner:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
+  if owner.TitleText then owner.TitleText:SetText("Forever — Freepick / Подклассы") end
+  UISpecialFrames=UISpecialFrames or {};table.insert(UISpecialFrames,"ForeverSubclassStandaloneFrame")
+  host=owner
+ end
+ built=true
  tab=CreateFrame("Button","ForeverSubclassTalentTab",host,"UIPanelButtonTemplate");tab:SetSize(76,26);tab:SetText("Подкласс");tab:RegisterForClicks("LeftButtonUp");tab:SetScript("OnClick",showCustom)
  local template=BackdropTemplateMixin and "BackdropTemplate" or nil
  panel=CreateFrame("Frame","ForeverSubclassTalentPanel",owner,template);panel:SetPoint("TOPLEFT",host,"TOPLEFT",0,-44);panel:SetPoint("BOTTOMRIGHT",host,"BOTTOMRIGHT",0,0);panel:SetFrameStrata("HIGH");panel:SetFrameLevel((owner.GetFrameLevel and owner:GetFrameLevel() or 100)+20);panel:EnableMouse(false)
@@ -340,9 +352,23 @@ local function build()
  return true
 end
 
+_G.ForeverSubclassShowTalentPanel=function()
+ if InCombatLockdown and InCombatLockdown() then return false,"Откройте окно Freepick после выхода из боя." end
+ if not built then
+  local loader=(C_AddOns and C_AddOns.LoadAddOn) or LoadAddOn
+  if loader then
+   pcall(loader,"Blizzard_PlayerSpells")
+   pcall(loader,"Blizzard_ClassTalentUI")
+  end
+ end
+ if not build(true) then return false,"Не удалось создать окно Freepick." end
+ owner:Show();host:Show();showCustom()
+ return true
+end
+
 local function parse(text)
  local words={};for w in tostring(text):gmatch("%S+") do table.insert(words,w) end;local kind=words[1]
- if kind=="ERROR" then local raw=tostring(text):sub(7);noticeText:SetText(errors[raw] or raw);if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffff5555[Подклассы]|r "..(errors[raw] or raw)) end;return
+ if kind=="ERROR" then local raw=tostring(text):sub(7);if noticeText then noticeText:SetText(errors[raw] or raw) end;if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffff5555[Подклассы]|r "..(errors[raw] or raw)) end;return
  elseif kind=="STATE" then pending={primary=tonumber(words[2]),active=tonumber(words[3]),xpTarget=tonumber(words[4]),used=tonumber(words[5]) or 0,budget=tonumber(words[6]) or 8,efficiency=tonumber(words[7]) or 0,classes={},spells={},powers={},talents={},talentFree=0,talentSpent=0,talentTotal=0}
  elseif pending and kind=="MODE" then pending.freepick=words[2]=="FREEPICK"
  elseif pending and kind=="CLASS" then pending.classes[tonumber(words[2])]={level=tonumber(words[3]) or 1,xp=tonumber(words[4]) or 0,next=tonumber(words[5]) or 0}

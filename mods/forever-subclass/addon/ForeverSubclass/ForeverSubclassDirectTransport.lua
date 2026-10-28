@@ -50,7 +50,18 @@ _G.ForeverSubclassDirectSend=directSend
 SLASH_FOREVERSUBCLASS1="/fsub"
 SlashCmdList["FOREVERSUBCLASS"]=function(text)
  text=(text or ""):match("^%s*(.-)%s*$")
- if text=="" then directSend("status",false)
+ if text=="" then
+  local opener=_G.ForeverSubclassShowTalentPanel
+  if type(opener)=="function" then
+   local ok,opened,reason=pcall(opener)
+   if ok and opened then return end
+   local message=ok and reason or opened
+   if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffff5555[Freepick]|r "..tostring(message or "Не удалось открыть окно.")) end
+   debug("UI open failed: "..tostring(message))
+  else
+   if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffff5555[Freepick]|r Интерфейс аддона не загружен. Обновите ForeverSubclass и перезапустите игру.") end
+  end
+  directSend("status",false)
  else directSend(text,false) end
 end
 

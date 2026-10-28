@@ -102,7 +102,7 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertEqual({p.name for p in target.iterdir() if p.is_file()},expected)
             toc=(target/'ForeverSubclass.toc').read_text()
             for name in expected-{'ForeverSubclass.toc'}:self.assertIn(name,toc)
-            self.assertIn('0.10.0-freepick.1',toc)
+            self.assertIn('0.10.1-freepick.2',toc)
             for stale in ['ForeverSubclass.lua','ForeverSubclassTalentTree.lua','ForeverSubclassTalentHostFix.lua',
                           'ForeverSubclassTalentTab.lua','ForeverSubclassTalentCompat.lua','ForeverSubclassPanelV2.lua',
                           'ForeverSubclassLegacySuppress.lua','ForeverSubclassInteractiveFix.lua','ForeverSubclassCommandTransport.lua']:
