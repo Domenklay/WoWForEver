@@ -38,6 +38,8 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertIn('#include "ChatCommand.h"',server)
             self.assertIn('class ForeverSubclassCommandScript final : public CommandScript',server)
             self.assertIn('ForeverSubclass::Request(handler->GetSession()->GetPlayer(), text);',server)
+            self.assertIn('BASEPOWER {} {} {}',server)
+            self.assertIn('3.0*seconds',server)
             self.assertEqual(server.count('new ForeverSubclassCommandScript();'),1)
 
     def test_server_adapter_has_multi_power_auto_ranks_pet_and_talents(self):
@@ -78,7 +80,7 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertEqual({p.name for p in target.iterdir() if p.is_file()},expected)
             toc=(target/'ForeverSubclass.toc').read_text()
             for name in expected-{'ForeverSubclass.toc'}:self.assertIn(name,toc)
-            self.assertIn('0.9.3-forever.29',toc)
+            self.assertIn('0.9.4-forever.30',toc)
             for stale in ['ForeverSubclass.lua','ForeverSubclassTalentTree.lua','ForeverSubclassTalentHostFix.lua',
                           'ForeverSubclassTalentTab.lua','ForeverSubclassTalentCompat.lua','ForeverSubclassPanelV2.lua',
                           'ForeverSubclassLegacySuppress.lua','ForeverSubclassInteractiveFix.lua','ForeverSubclassCommandTransport.lua']:
@@ -139,11 +141,13 @@ class SubclassIntegrationTests(unittest.TestCase):
         hud=(ADDON/'ForeverSubclassResourceHUD.lua').read_text()
         feedback=(ADDON/'ForeverSubclassCastFeedback.lua').read_text()
         self.assertIn('local frame,mainBar,secondaryBar,nativeBar',hud)
-        self.assertIn('built integrated two-row PlayerFrame resource block',hud)
+        self.assertIn('built primary+secondary PlayerFrame power block',hud)
         self.assertIn('setStockVisible(false)',hud)
         self.assertIn('mainBar:SetPoint("TOPLEFT"',hud)
         self.assertIn('secondaryBar:SetPoint("TOPLEFT"',hud)
-        self.assertIn('findNativeBar',hud);self.assertIn('secondaryBar',hud)
+        self.assertIn('kind=="BASEPOWER"',hud)
+        self.assertIn('live=(kind==native)',hud)
+        self.assertIn('RAGE_DECAY_PER_SECOND=3',hud)
         self.assertIn('pending.powers[power]',hud);self.assertIn('ForeverSubclassResourcePredictSpend',hud)
         self.assertIn('UnitPowerType',hud);self.assertIn('UnitPower("player"',hud)
         self.assertIn('ForeverSubclassResourcePredictSpend',feedback);self.assertIn('base("status",true)',feedback)
