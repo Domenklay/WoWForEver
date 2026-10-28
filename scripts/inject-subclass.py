@@ -65,20 +65,9 @@ def adapt_server_source(module):
         'ForeverSubclass ScriptMgr include anchor',
     )
 
-    # Non-Hunter primary classes do not necessarily initialize the hunter stable
-    # during normal login. The subclass pet path needs the container to exist.
-    login_pattern = re.compile(
-        r'void OnLogin\(Player\* p,bool\) override \{ if\(Ready&&ValidClass\(p->GetClass\(\)\)\) '
-        r'\{ std::lock_guard<std::recursive_mutex> g\(Mutex\);State\(p\); \} \}'
-    )
-    login_replace = (
-        'void OnLogin(Player* p,bool) override { if(Ready&&ValidClass(p->GetClass())) '
-        '{ std::lock_guard<std::recursive_mutex> g(Mutex);p->GetOrInitPetStable();auto& e=State(p);Snapshot(p,e); } }'
-    )
-    source, count = login_pattern.subn(login_replace, source, count=1)
-    if count != 1:
-        raise ValueError('ForeverSubclass login hook anchor was not found exactly once')
-
+    # Stable initialization is intentionally deferred to tame/petcall. Doing it
+    # for every supported class in PlayerScript::OnLogin caused unnecessary pet
+    # subsystem work during login and made disconnect diagnosis harder.
     tame_anchor = 'Pet* pet=p->CreateTamedPetFrom(creature,HunterTameSpell);'
     source = replace_once(
         source,
