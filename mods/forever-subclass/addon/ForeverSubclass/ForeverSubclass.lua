@@ -7,7 +7,7 @@ local state, pending, selectedClass = nil, nil, 5
 local queue, nextSend, nextPoll = {}, 0, 0
 local errors = {
  ["module disabled or unsupported primary class"]="Серверный мод выключен или класс не поддержан.",
- ["primary class has not reached subclass unlock level"]="Основной класс должен достичь 40-го уровня.",
+ ["primary class has not reached subclass unlock level"]="Подкласс открывается с 10-го уровня.",
  ["subclass can only be switched in a rest area"]="Смена подкласса разрешена в городе или таверне.",
  ["cannot edit in combat or while casting"]="Изменять подкласс в бою, после смерти или во время каста нельзя.",
  ["class has not been learned"]="Сначала изучите этот класс.",
@@ -17,6 +17,14 @@ local errors = {
  ["no active subclass"]="Сначала активируйте подкласс.",
  ["select a target"]="Выберите цель.",
  ["saved primary class mismatch"]="Класс персонажа отличается от сохранённого: сообщите администратору.",
+ ["subclass talents can only be changed in a rest area"]="Таланты подкласса можно менять только в городе или таверне.",
+ ["subclass talents can only be reset in a rest area"]="Сбрасывать таланты подкласса можно только в городе или таверне.",
+ ["no subclass talent points"]="Нет свободных очков талантов подкласса.",
+ ["subclass talent tier locked"]="Этот ряд талантов пока закрыт.",
+ ["hunter pet requires hunter subclass level 10"]="Питомец открывается на 10-м уровне подкласса Охотника.",
+ ["select a tameable beast"]="Выберите живого приручаемого зверя.",
+ ["selected beast is not tameable by this subclass"]="Этот зверь недоступен для приручения подклассом.",
+ ["beast level exceeds hunter subclass level"]="Уровень зверя выше уровня подкласса Охотника.",
 }
 local frame = CreateFrame("Frame", "ForeverSubclassFrame", UIParent, "BasicFrameTemplateWithInset")
 frame:SetSize(560, 530); frame:SetPoint("CENTER"); frame:Hide()
@@ -61,6 +69,7 @@ local scroll=CreateFrame("ScrollFrame","ForeverSubclassScroll",frame,"UIPanelScr
 scroll:SetPoint("TOPLEFT",15,-240); scroll:SetSize(505,225)
 local content=CreateFrame("Frame",nil,scroll); content:SetSize(500,225); scroll:SetScrollChild(content)
 local rows={}
+-- Legacy fallback bar. The persistent multi-resource HUD hides this duplicate when available.
 local power=CreateFrame("StatusBar","ForeverSubclassPowerBar",UIParent)
 power:SetSize(235,19); power:SetPoint("CENTER",UIParent,"CENTER",0,-200)
 power:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar"); power:SetStatusBarColor(0.1,0.35,0.95)
@@ -69,6 +78,13 @@ local function spellName(id)
  if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) or ("Заклинание "..id) end
  return (GetSpellInfo and GetSpellInfo(id)) or ("Заклинание "..id)
 end
+local function fallbackPower(s)
+ if not s or not s.powers then return nil end
+ local native=UnitPowerType and select(1,UnitPowerType("player")) or -1
+ for _,kind in ipairs({0,1,3}) do if s.powers[kind] and kind~=native then return s.powers[kind] end end
+ for _,kind in ipairs({0,1,3}) do if s.powers[kind] then return s.powers[kind] end end
+ return nil
+end
 local function refresh()
  for _,row in ipairs(rows) do row.select:Hide(); row.cast:Hide() end
  if not state then return end
@@ -76,23 +92,16 @@ local function refresh()
  local active=names[state.active] or "нет"
  headline:SetText(primary.." + "..active.."   Слоты: "..state.used.."/"..state.budget..string.format("   %.1f%%",state.efficiency/100))
  local target=state.classes[state.xpTarget]
- if target then progress:SetText("XP → "..(names[state.xpTarget] or state.xpTarget)..": уровень "..target.level..", "..target.xp.."/"..target.next) end
+ if target then progress:SetText("XP → "..(names[state.xpTarget] or state.xpTarget)..": уровень "..target.level..", "..target.xp.."/"..target.next) else progress:SetText("") end
  for _,id in ipairs(classes) do
   local c=state.classes[id]; local text=names[id]..(c and (" ["..c.level.."]") or " [не изучен]")
   if id==selectedClass then text="> "..text end
   if id==state.primary then text=text.." •" end
   classButtons[id]:SetText(text)
  end
- local activeState=state.classes[state.active]
- local best={}
- for _,s in pairs(state.spells) do
-  if activeState and s.level<=activeState.level and (not best[s.root] or best[s.root].level<s.level) then best[s.root]=s end
- end
  local visible={}
- for _,s in pairs(state.spells) do
-  if (best[s.root] and best[s.root].id==s.id) or s.selected then table.insert(visible,s) end
- end
- table.sort(visible,function(a,b) return a.id<b.id end)
+ for _,s in pairs(state.spells) do table.insert(visible,s) end
+ table.sort(visible,function(a,b) if a.level==b.level then return a.id<b.id end return a.level<b.level end)
  for index,s in ipairs(visible) do
   local spell=s; local row=rows[index]
   if not row then
@@ -106,9 +115,11 @@ local function refresh()
   row.cast:SetEnabled(spell.selected); row.select:Show(); row.cast:Show()
  end
  content:SetHeight(math.max(225,#visible*29))
- if state.power and state.active~=0 then
-  local p=state.power; power:SetMinMaxValues(0,math.max(1,p.max)); power:SetValue(p.current)
-  if p.kind==1 then power:SetStatusBarColor(0.8,0.1,0.1) elseif p.kind==3 then power:SetStatusBarColor(0.9,0.8,0.1) else power:SetStatusBarColor(0.1,0.35,0.95) end
+ if _G.ForeverSubclassResourceHUD then power:Hide();return end
+ local p=state.active~=0 and fallbackPower(state) or nil
+ if p then
+  power:SetMinMaxValues(0,math.max(1,p.max)); power:SetValue(p.current)
+  if p.kind==1 then power:SetStatusBarColor(0.8,0.1,0.1) elseif p.kind==3 then power:SetStatusBarColor(0.72,0.60,0.10) else power:SetStatusBarColor(0.1,0.35,0.95) end
   power.text:SetText((powerNames[p.kind] or "Ресурс")..": "..p.current.."/"..p.max); power:Show()
  else power:Hide() end
 end
@@ -130,9 +141,9 @@ events:SetScript("OnEvent",function(_,event,prefix,text,channel,sender)
  local kind=words[1]
  if kind=="ERROR" then say(errors[text:sub(7)] or text:sub(7));return end
  if kind=="STATE" then
-  pending={primary=tonumber(words[2]),active=tonumber(words[3]),xpTarget=tonumber(words[4]),used=tonumber(words[5]),budget=tonumber(words[6]),efficiency=tonumber(words[7]) or 0,classes={},spells={}}
+  pending={primary=tonumber(words[2]),active=tonumber(words[3]),xpTarget=tonumber(words[4]),used=tonumber(words[5]),budget=tonumber(words[6]),efficiency=tonumber(words[7]) or 0,classes={},spells={},powers={}}
  elseif pending and kind=="CLASS" then pending.classes[tonumber(words[2])]={level=tonumber(words[3]),xp=tonumber(words[4]),next=tonumber(words[5])}
- elseif pending and kind=="POWER" then pending.power={kind=tonumber(words[2]),current=tonumber(words[3]),max=tonumber(words[4])}
+ elseif pending and kind=="POWER" then local k=tonumber(words[2]);if k then pending.powers[k]={kind=k,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
  elseif pending and kind=="SPELL" then
   local id=tonumber(words[2]);pending.spells[id]={id=id,root=tonumber(words[3]),level=tonumber(words[4]),selected=words[5]=="1",cost=tonumber(words[6]),power=tonumber(words[7])}
  elseif pending and kind=="END" then state=pending;pending=nil;refresh() end
