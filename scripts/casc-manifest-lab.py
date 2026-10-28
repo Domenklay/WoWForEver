@@ -2,7 +2,8 @@
 """Inspect an offline metadata report; experiment on a TVFS copy, never install it.
 
 Layout reference: Forever CascLib CascRootFile_TVFS.cpp / CascRootFile_WoW.cpp.
-Only the observed TVFS v1, flags=7, unpatched CFT entries are supported.
+Span decoding supports observed TVFS v1, flags=7, unpatched CFT entries.
+Path-only aliases can preserve patched CFT bytes without interpreting them.
 """
 import argparse
 import csv
@@ -27,7 +28,7 @@ def root_header(data):
                 named_records=named, reserved=reserved)
 
 
-def parse_tvfs(data):
+def parse_tvfs(data, raw_paths=False):
     if len(data) < 46:
         raise ValueError("Truncated TVFS header")
     sig, ver, hs, ek, pk, flags, po, ps, vo, vs, co, cs, depth, eo, es = \
@@ -115,7 +116,11 @@ def parse_tvfs(data):
                 else:
                     if path in leaves:
                         raise ValueError("Duplicate TVFS path")
-                    leaves[path] = spans(value)
+                    if raw_paths:
+                        take(value,1,len(vt))
+                        leaves[path]=value
+                    else:
+                        leaves[path] = spans(value)
                 prefix = saved
             else:
                 prefix = path + ("" if post else "/")
@@ -123,6 +128,31 @@ def parse_tvfs(data):
     walk(0, len(pt))
     return dict(tables=tables, leaves=leaves, max_depth=depth,
                 flags=flags, file_bytes=len(data))
+
+
+def alias_tvfs_paths(data,aliases):
+    """Add path aliases to existing VFS rows without decoding or changing CFT.
+
+    Patched CFT entries stay opaque. A new path table is appended; original
+    VFS/CFT/EST bytes AND their file locations stay unchanged.
+    """
+    parsed=parse_tvfs(data,raw_paths=True);paths=dict(parsed['leaves'])
+    for target,source in aliases.items():
+        if source not in paths or target in paths:raise ValueError('Invalid or duplicate TVFS path alias')
+        paths[target]=paths[source]
+    path=bytearray()
+    for name,value in sorted(paths.items()):
+        raw=name.encode('ascii')
+        if not 0<len(raw)<255:raise ValueError('Unsupported TVFS alias path length')
+        path+=bytes([len(raw)])+raw+b'\xff'+struct.pack('>I',value)
+    path=b'\xff'+struct.pack('>I',0x80000000|(len(path)+4))+path
+    tables=parsed['tables'];header=bytearray(data[:46])
+    struct.pack_into('>II',header,12,len(data),len(path))
+    result=bytes(header)+data[46:]+path
+    check=parse_tvfs(result,raw_paths=True)
+    if check['leaves']!=paths or any(check['tables'][key]!=tables[key] for key in ('vfs','cft','est')):
+        raise ValueError('TVFS alias changed original table bytes')
+    return result
 
 
 def append_lab_leaf(data, name, payload):

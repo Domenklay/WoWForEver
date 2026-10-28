@@ -35,6 +35,21 @@ def fixture_directory(old_id=123086,new_id=15728640):
 
 
 class TvfsEntryTests(unittest.TestCase):
+    def test_patched_cft_is_preserved_opaque_when_mirroring_a_native_path(self):
+        store,obj,child,root=fixture_directory()
+        opaque=bytearray(child['content']);cft_offset=struct.unpack_from('>I',opaque,28)[0]
+        # The parser must not interpret or drop unknown patch metadata.
+        opaque[cft_offset+34]=2
+        with self.assertRaisesRegex(ValueError,'Patched CFT'):lib.tvfs.parse_tvfs(opaque)
+        before=lib.tvfs.parse_tvfs(opaque,raw_paths=True)
+        candidate,rows=canary.mirror_child(opaque)
+        after=lib.tvfs.parse_tvfs(candidate,raw_paths=True)
+        self.assertEqual(candidate[:12],opaque[:12])
+        self.assertEqual(candidate[20:len(opaque)],opaque[20:])
+        for table in ('vfs','cft','est'):self.assertEqual(after['tables'][table],before['tables'][table])
+        for name,value in before['leaves'].items():self.assertEqual(after['leaves'][name],value)
+        self.assertEqual(after['leaves'][rows[0]['added']],before['leaves'][rows[0]['original']])
+
     def test_mirrors_native_spans_inside_child_and_removes_only_flat_canary(self):
         store,obj,child,root=fixture_directory();plan=canary.plan(store,lambda _:None)
         new_root=lib.tvfs.parse_tvfs(plan['candidate'])['leaves']
