@@ -232,6 +232,17 @@ refresh=function()
  emptyAbilities:SetText(showAll and "Здесь пока нет записей." or ("В этой школе нет совместимых умений.\nНа сервере найдено: "..count..".\n«Все умения» показывает также записи без аналога."))
  pageText:SetText(page.." / "..pages);previous:SetEnabled(page>1);nextPage:SetEnabled(page<pages)
  showAllButton:SetText(showAll and "Только доступные" or "Все умения")
+ if ForeverAscensionUpdateSpellbook then
+  local book={}
+  if state then for id in pairs(state.learned) do
+   local row,d=byId[id],compatible[id]
+   if row and d and d.kind=="ability" and d.owner~=state.primary then
+    table.insert(book,{entry=id,spell=d.spell,level=d.level,name=spellName(row),icon=icon(row),group=schools[row.Tab] or row.Tab})
+   end
+  end end
+  table.sort(book,function(a,b) return a.group==b.group and a.entry<b.entry or a.group<b.group end)
+  ForeverAscensionUpdateSpellbook(book,function(id) send("cast "..id) end)
+ end
  local learned={};if state then for id in pairs(state.learned) do if compatible[id] then table.insert(learned,id) end end end;table.sort(learned)
  for i,b in ipairs(actionButtons) do b.entry=byId[learned[i]];if b.entry then b.icon:SetTexture(icon(b.entry));b:Show() else b:Hide() end end
  if state and protocol<2 then message:SetText("Для талантов и нового каталога обновите сервер до версии 1.1.") end

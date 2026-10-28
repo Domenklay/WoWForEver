@@ -88,6 +88,84 @@ int main() {
             self.assertEqual(result.returncode,0,result.stderr)
             subprocess.run([str(root/'test')],check=True,capture_output=True)
 
+    def test_native_spellbook_ownership_login_rank_upgrade_and_refund(self):
+        source=SOURCE.read_text()
+        code=r'''#include <algorithm>
+#include <any>
+#include <mutex>
+#include <cassert>
+#include <cstdint>
+#include <map>
+#include <set>
+#include <vector>
+using uint32=uint32_t;
+constexpr int PLAYERSPELL_TEMPORARY=5,PERMANENT=0;
+struct PlayerSpell {int state;};
+namespace WorldPackets::Spells {
+ struct LearnedSpellInfo {uint32 SpellID;bool Favorite;};
+ struct LearnedSpells {std::vector<LearnedSpellInfo> ClientLearnedSpellData;bool SuppressMessaging=false;LearnedSpells* Write(){return this;}};
+ struct UnlearnedSpells {std::vector<uint32> SpellID;UnlearnedSpells* Write(){return this;}};
+}
+struct Player {
+ Player* ToPlayer(){return this;}
+ uint32 cls=1,level=20;bool world=true;std::map<uint32,PlayerSpell> spells;
+ std::vector<uint32> added,removed;
+ uint32 GetClass(){return cls;}uint32 GetLevel(){return level;}
+ bool IsInWorld(){return world;}bool HasSpell(uint32 id){return spells.count(id);}
+ auto const& GetSpellMap(){return spells;}
+ void AddTemporarySpell(uint32 id){spells.try_emplace(id,PlayerSpell{PLAYERSPELL_TEMPORARY});}
+ void RemoveTemporarySpell(uint32 id){auto it=spells.find(id);if(it!=spells.end()&&it->second.state==PLAYERSPELL_TEMPORARY)spells.erase(it);}
+ void SendDirectMessage(WorldPackets::Spells::LearnedSpells* p){for(auto row:p->ClientLearnedSpellData)added.push_back(row.SpellID);}
+ void SendDirectMessage(WorldPackets::Spells::UnlearnedSpells* p){for(auto id:p->SpellID)removed.push_back(id);}
+};
+struct State {std::set<uint32> learned,bookSpells;};
+struct Definition {uint32 entry,owner,spell,level;};
+std::map<uint32,std::vector<Definition>> Catalog;
+'''+''.join(function(source,name) for name in ['static Definition const* Best(', 'static bool TemporaryBookSpell(', 'static void SyncSpellbook(Player* p,State& s)\n{','static uint32 BookEntry('])+r'''
+namespace ForeverAdvancement {}
+struct CastTag {uint32 entry;};
+bool Ready=true;std::recursive_mutex Mutex;State* current;
+State& Get(Player*) {return *current;}
+struct SpellInfo {uint32 Id=116;};
+struct MockSpell {std::any m_customArg;bool triggered=false,ignored=false;void* m_CastItem=nullptr;
+ bool IsTriggered(){return triggered;}void IgnorePowerCostForForeverAdvancement(){ignored=true;}};
+struct Loader {
+ Player* player;MockSpell* spell;SpellInfo info;
+ Player* GetCaster(){return player;}MockSpell* GetSpell(){return spell;}SpellInfo* GetSpellInfo(){return &info;}
+'''+function(source,'    bool Load() override').replace(' override','')+r'''
+};
+int main() {
+ Player p;State s;Catalog[10]={{10,8,116,4},{10,8,205,26}};Catalog[20]={{20,5,2061,1}};
+ s.learned={10,20};p.spells[2061]={PERMANENT};SyncSpellbook(&p,s);
+ assert(p.HasSpell(116)&&p.HasSpell(2061)&&s.bookSpells==std::set<uint32>{116});
+ current=&s;MockSpell cast;Loader loader{&p,&cast,{116}};
+ assert(loader.Load()&&cast.ignored&&std::any_cast<CastTag>(cast.m_customArg).entry==10);
+ cast={};cast.triggered=true;assert(loader.Load()&&!cast.ignored&&!cast.m_customArg.has_value());
+ cast={};cast.m_CastItem=&p;assert(loader.Load()&&!cast.ignored);
+ cast={};loader.info.Id=2061;assert(loader.Load()&&!cast.ignored&&!cast.m_customArg.has_value());
+ cast={};cast.m_customArg=CastTag{10};loader.info.Id=116;assert(loader.Load()&&!cast.ignored);
+ cast={};cast.m_customArg=42;assert(loader.Load()&&!cast.ignored&&std::any_cast<int>(cast.m_customArg)==42);
+ assert(p.added==std::vector<uint32>{116}&&BookEntry(&p,s,116)==10&&BookEntry(&p,s,2061)==0);
+ SyncSpellbook(&p,s);assert(p.added.size()==1);
+ p.level=26;SyncSpellbook(&p,s);assert(!p.HasSpell(116)&&p.HasSpell(205));
+ assert(BookEntry(&p,s,116)==0&&BookEntry(&p,s,205)==10&&p.removed.back()==116);
+ s.learned.clear();SyncSpellbook(&p,s);assert(!p.HasSpell(205)&&p.HasSpell(2061)&&s.bookSpells.empty());
+ assert(p.removed.back()==205);
+ // Purchase remains authoritative across relog. A native spell is never removed.
+ p.spells.clear();s.bookSpells.clear();s.learned={10};p.world=false;auto packets=p.added.size();
+ SyncSpellbook(&p,s);assert(p.HasSpell(205)&&p.added.size()==packets);
+ // A spell promoted by another system to permanent stops belonging to this module.
+ p.world=true;p.spells[205].state=PERMANENT;auto removed=p.removed.size();
+ SyncSpellbook(&p,s);assert(s.bookSpells.empty()&&BookEntry(&p,s,205)==0);
+ s.learned.clear();SyncSpellbook(&p,s);assert(p.HasSpell(205)&&p.removed.size()==removed);
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
     def test_real_resource_and_mixed_class_cast_policy(self):
         source=SOURCE.read_text()
         functions='\n'.join(function(source,name) for name in ['static bool Native(', 'static int32 Scale(',

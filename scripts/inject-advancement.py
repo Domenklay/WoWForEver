@@ -31,6 +31,15 @@ def inject(core,module=None):
             if original.count(anchor)!=1:raise ValueError('Unknown ObjectMgr binding layout')
             original=original.replace(anchor,anchor+"\n"+signature+"\n        {\n            auto bounds = _spellScriptsStore.equal_range(spellId);\n            for (auto it = bounds.first; it != bounds.second; ++it)\n                if (it->second.first == scriptId) { it->second.second = true; return; }\n            _spellScriptsStore.emplace(spellId, std::make_pair(scriptId, true));\n        }\n")
             manager.write_text(original)
+    spell_header=core/'src/server/game/Spells/Spell.h'
+    if spell_header.exists():
+        original=spell_header.read_text()
+        signature='        void IgnorePowerCostForForeverAdvancement()'
+        if signature not in original:
+            anchor='        std::any m_customArg;'
+            if original.count(anchor)!=1:raise ValueError('Unknown Spell custom argument layout')
+            original=original.replace(anchor,signature+' { _triggeredCastFlags = TriggerCastFlags(_triggeredCastFlags | TRIGGERED_IGNORE_POWER_COST); }\n'+anchor)
+            spell_header.write_text(original)
     loader.write_text(text)
 
 

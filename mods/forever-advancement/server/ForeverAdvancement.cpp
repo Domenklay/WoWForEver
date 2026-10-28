@@ -12,6 +12,7 @@
 #include "Spell.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
+#include "SpellPackets.h"
 #include "SpellScript.h"
 #include "WorldSession.h"
 #include "Util.h"
@@ -36,6 +37,7 @@ struct State
     std::set<uint32> learned;
     std::map<uint32,uint32> talents;
     std::set<uint32> ownedAuras;
+    std::set<uint32> bookSpells;
     bool syncing=false;
     std::map<Powers,Pool> pools;
     Clock::time_point updated=Clock::now(),request{};
@@ -80,6 +82,7 @@ static void Refresh(Player* p,State& state)
     }
 }
 static void SyncTalents(Player* p,State& s);
+static void SyncSpellbook(Player* p,State& s);
 static State& Get(Player* p)
 {
     uint64 guid=p->GetGUID().GetCounter();auto [it,inserted]=States.try_emplace(guid);auto& s=it->second;
@@ -92,7 +95,7 @@ static State& Get(Player* p)
         if(auto rows=CharacterDatabase.PQuery("SELECT power_type,current_value FROM forever_advancement_resources WHERE guid={}",guid))
             do { auto f=rows->Fetch();uint32 id=f[0].GetUInt32();if(id==0||id==1||id==3) s.pools[Powers(id)]={int32(std::min<uint32>(f[1].GetUInt32(),1000000)),1000000,0}; } while(rows->NextRow());
     }
-    SyncTalents(p,s);Refresh(p,s);return s;
+    SyncTalents(p,s);SyncSpellbook(p,s);Refresh(p,s);return s;
 }
 static void Save(Player* p,State const& s)
 {
@@ -113,6 +116,51 @@ static Definition const* Best(uint32 entry,uint32 level)
     Definition const* best=nullptr;
     for(auto const& d:it->second) if(d.level<=level&&(!best||d.level>best->level)) best=&d;
     return best;
+}
+static bool TemporaryBookSpell(Player* p,uint32 spell)
+{
+    auto const& spells=p->GetSpellMap();auto it=spells.find(spell);
+    return it!=spells.end()&&it->second.state==PLAYERSPELL_TEMPORARY;
+}
+static void SyncSpellbook(Player* p,State& s)
+{
+    std::set<uint32> desired;
+    for(auto entry:s.learned)
+        if(auto d=Best(entry,p->GetLevel());d&&d->owner!=p->GetClass()) desired.insert(d->spell);
+    std::vector<uint32> removed,added;std::set<uint32> release;
+    for(auto spell:s.bookSpells)
+        if(!desired.count(spell)||!TemporaryBookSpell(p,spell))
+        {
+            p->RemoveTemporarySpell(spell);if(!p->HasSpell(spell)) removed.push_back(spell);release.insert(spell);
+        }
+    for(auto spell:release) s.bookSpells.erase(spell);
+    for(auto spell:desired)
+        if(!p->HasSpell(spell))
+        {
+            // Temporary native entries never auto-learn class skills or dependent spells.
+            // The authoritative purchase is persisted in our own table and restored on login.
+            p->AddTemporarySpell(spell);
+            if(p->HasSpell(spell)) { s.bookSpells.insert(spell);added.push_back(spell); }
+        }
+    if(p->IsInWorld())
+    {
+        if(!removed.empty())
+        {
+            WorldPackets::Spells::UnlearnedSpells packet;packet.SpellID=removed;p->SendDirectMessage(packet.Write());
+        }
+        if(!added.empty())
+        {
+            WorldPackets::Spells::LearnedSpells packet;
+            for(auto spell:added) { auto& entry=packet.ClientLearnedSpellData.emplace_back();entry.SpellID=spell;entry.Favorite=false; }
+            packet.SuppressMessaging=true;p->SendDirectMessage(packet.Write());
+        }
+    }
+}
+static uint32 BookEntry(Player* p,State const& s,uint32 spell)
+{
+    if(!s.bookSpells.count(spell)||!TemporaryBookSpell(p,spell)) return 0;
+    for(auto entry:s.learned) if(auto d=Best(entry,p->GetLevel());d&&d->spell==spell&&d->owner!=p->GetClass()) return entry;
+    return 0;
 }
 static uint32 Used(State const& s)
 {
@@ -236,6 +284,8 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
         auto const* d=Best(id,p->GetLevel());if(!d) d=&definitions.front();
         Send(p,Trinity::StringFormat("ENTRY {} {} {} {} {}",id,d->spell,d->level,s.learned.count(id)?1:0,d->owner));
     }
+    if(!includeCatalog) for(auto id:s.learned)
+        if(auto d=Best(id,p->GetLevel())) Send(p,Trinity::StringFormat("ENTRY {} {} {} 1 {}",id,d->spell,d->level,d->owner));
     if(includeCatalog) for(auto const& [id,ranks]:TalentCatalog)
     {
         auto const& d=ranks.front();
@@ -286,7 +336,7 @@ static void Request(Player* p,std::string const& payload)
     }
     else if(command=="unlearn") s.learned.erase(arg);
     else { Error(p,"invalid_request");return; }
-    Save(p,s);Snapshot(p,s);
+    SyncSpellbook(p,s);Save(p,s);Snapshot(p,s);
 }
 class Players final:public PlayerScript
 {
@@ -428,7 +478,19 @@ public:
 class spell_forever_advancement final:public SpellScript
 {
     PrepareSpellScript(spell_forever_advancement);
-    bool Load() override { return GetCaster()->ToPlayer()!=nullptr; }
+    bool Load() override
+    {
+        using namespace ForeverAdvancement;
+        auto p=GetCaster()->ToPlayer();if(!p) return false;
+        auto spell=GetSpell();
+        if(!Ready||spell->m_customArg.has_value()||spell->IsTriggered()||spell->m_CastItem) return true;
+        std::lock_guard<std::recursive_mutex> lock(Mutex);auto& s=Get(p);
+        if(auto entry=BookEntry(p,s,GetSpellInfo()->Id))
+        {
+            spell->m_customArg=CastTag{entry};spell->IgnorePowerCostForForeverAdvancement();
+        }
+        return true;
+    }
     SpellCastResult Check()
     {
         using namespace ForeverAdvancement;auto tag=std::any_cast<CastTag>(&GetSpell()->m_customArg);if(!tag) return SPELL_CAST_OK;

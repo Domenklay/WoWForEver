@@ -81,6 +81,8 @@ class AdvancementTests(unittest.TestCase):
             loader.write_text('void AddSC_forever_subclass();\nvoid AddCustomScripts()\n{\n    AddSC_forever_subclass();\n}\n')
             manager=root/'src/server/game/Globals/ObjectMgr.h';manager.parent.mkdir(parents=True)
             manager.write_text('class ObjectMgr {\n        SpellScriptsBounds GetSpellScriptsBounds(uint32 spellId);\n};')
+            spell_header=root/'src/server/game/Spells/Spell.h';spell_header.parent.mkdir(parents=True)
+            spell_header.write_text('class Spell {\n        std::any m_customArg;\n};')
             (custom/'ForeverSubclass').mkdir();(custom/'ForeverSubclass/old.cpp').touch()
             injector.inject(root);first=loader.read_text();injector.inject(root)
             self.assertEqual(loader.read_text(),first)
@@ -88,6 +90,7 @@ class AdvancementTests(unittest.TestCase):
             self.assertEqual(first.count('    AddSC_forever_advancement();'),1)
             self.assertFalse((custom/'ForeverSubclass').exists())
             self.assertEqual(manager.read_text().count('void RegisterForeverAdvancementBinding('),1)
+            self.assertEqual(spell_header.read_text().count('void IgnorePowerCostForForeverAdvancement('),1)
 
 
 MOCK=r'''
@@ -158,6 +161,7 @@ class AdvancementUITests(unittest.TestCase):
             for chunk in [MOCK,(MODULE/'addon/ForeverAscension/Catalog.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/Portrait.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/CharacterStats.lua').read_text(),
+                          (MODULE/'addon/ForeverAscension/Spellbook.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/ForeverAscension.lua').read_text()+'\n'+assertions]:
                 status=lib.luaL_loadstring(state,chunk.encode())
                 if not status:status=lib.lua_pcallk(state,0,0,0,0,None)
@@ -250,6 +254,27 @@ end
 assert(summary.text:find(' | ',1,true))
 assert(emptyAbilities.shadow[1]==0 and emptyAbilities.shadow[2]==0)
 assert(schools.BeastMastery=='Повелитель зверей')
+""")
+
+    def test_learned_spells_add_school_tabs_cast_and_drag_from_book(self):
+        self.lua(r"""
+SpellBookFrame=CreateFrame('Frame','SpellBookFrame',UIParent);SpellBookFrame:Show()
+local picked;PickupSpell=function(spell) picked=spell end
+open();parse('PROTOCOL 2');parse('STATE 1 20 1 8');parse('CATALOG')
+local priest
+for _,row in ipairs(ForeverAscensionCatalog) do if row.Class=='Priest' and row.Tab=='Holy' and row.Type=='Ability' then priest=row.ID;break end end
+assert(priest)
+parse('ENTRY '..priest..' 2061 1 0 5');parse('LEARNED '..priest);parse('END')
+local book=named.ForeverAscensionSpellbook;assert(book and book.parent==SpellBookFrame)
+local school,card
+for _,frame in ipairs(frames) do
+ if frame.parent==book and frame.group=='Свет' then school=frame end
+ if frame.parent==book and type(frame.row)=='table' and frame.row.entry==priest then card=frame end
+end
+assert(school and school:IsShown() and card and card:IsShown())
+advance();card.scripts.OnClick(card);assert(sent[#sent]=='cast '..priest)
+card.scripts.OnDragStart(card);assert(picked==2061)
+parse('STATE 1 20 0 8');parse('END');assert(not card:IsShown() and not school:IsShown())
 """)
 
     def test_unadapted_talents_and_native_primary_cannot_be_purchased(self):
