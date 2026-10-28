@@ -346,12 +346,22 @@ static bool TameHunterPet(Player* p,Entry& e,std::string& error)
     if (!HunterFeatureReady(e)) { error="hunter pet requires hunter subclass level 10";return false; }
     if (p->GetPet()) { error="pet already active";return false; }
     Creature* creature=p->GetSelectedUnit()?p->GetSelectedUnit()->ToCreature():nullptr;
-    if (!creature||creature->IsPet()||!creature->GetCreatureTemplate()||creature->GetCreatureTemplate()->type!=CREATURE_TYPE_BEAST)
+    if (!creature||!creature->IsAlive()||creature->IsPet()||!creature->GetCreatureTemplate()||creature->GetCreatureTemplate()->type!=CREATURE_TYPE_BEAST)
         { error="select a tameable beast";return false; }
+    if (!creature->HasFlag(CREATURE_STATIC_FLAG_TAMEABLE)||creature->HasFlag(CREATURE_STATIC_FLAG_3_TAMEABLE_EXOTIC))
+        { error="selected beast is not tameable by this subclass";return false; }
     if (creature->GetLevel()>e.state.classes.at(Class::Hunter).level) { error="beast level exceeds hunter subclass level";return false; }
-    // Use Forever's native tame implementation. This keeps all pet/stable initialization in core code.
-    SpellCastResult result=p->CastSpell(creature,HunterTameSpell,false);
-    if (result!=SPELL_CAST_OK) { error=Trinity::StringFormat("native tame rejected: {}",uint32(result));return false; }
+
+    // Native Tame Beast rejects non-Hunter primary classes before it reaches the pet construction code.
+    // Use the same public Unit API the core calls after that class check; never mutate the player's primary class.
+    Pet* pet=p->CreateTamedPetFrom(creature,HunterTameSpell);
+    if (!pet) { error="could not create hunter pet";return false; }
+    creature->DespawnOrUnsummon();
+    pet->GetMap()->AddToMap(pet->ToCreature());
+    pet->SendNewlyTamed();
+    p->SetMinion(pet,true);
+    pet->SavePetToDB(PET_SAVE_AS_CURRENT);
+    p->PetSpellInitialize();
     return true;
 }
 
