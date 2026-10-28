@@ -81,7 +81,7 @@ class AdvancementTests(unittest.TestCase):
             root=Path(temp);custom=root/'src/server/scripts/Custom';custom.mkdir(parents=True)
             (custom/'custom_script_loader.cpp').write_text('void AddCustomScripts()\n{\n}\n')
             player=root/'src/server/game/Entities/Player';player.mkdir(parents=True)
-            (player/'Player.h').write_text('        void SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal);\n        SkillStatusMap mSkillStatus;')
+            (player/'Player.h').write_text('        void SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal);\n        SkillStatusMap mSkillStatus;\n        Optional<PlayerSpellTrait> GetTraitInfoForSpell(uint32 spellId) const;')
             (player/'Player.cpp').write_text("""void Player::SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal)
 {
     LearnSkillRewardedSpells(id, newVal, Races(GetRace()));
@@ -96,6 +96,11 @@ void Player::_SaveSkills()
 void Player::LearnSkillRewardedSpells(uint32 skillId, uint32 skillValue, Races race)
 {
 }
+Optional<PlayerSpellTrait> Player::GetTraitInfoForSpell(uint32 spellId) const
+{
+    return {};
+}
+void Player::SetReputation() {}
 """)
             db2=root/'src/server/game/DataStores/DB2Stores.cpp';db2.parent.mkdir(parents=True)
             db2.write_text('void DB2Manager::InsertNewHotfix(uint32 tableHash, uint32 recordId)\n{\n    HotfixRecord hotfixRecord;\n}\n')
@@ -343,6 +348,38 @@ local button=ForeverAscensionTalentButton
 assert(button and button.parent==PlayerTalentFrame and button.text=='Мультикласс')
 assert(button.points[1][1]=='TOPRIGHT' and button.points[1][4]==-42)
 window:Hide();button.scripts.OnClick();assert(window:IsShown())
+""")
+
+    def test_trait_description_uses_native_entry_rank_and_reports_actual_aura_values(self):
+        self.lua(r"""
+local requestedEntry,requestedRank,lines
+C_Traits={GetTraitDescription=function(entry,rank) requestedEntry=entry;requestedRank=rank;return 'Снижение времени применения: '..(rank*2)..'%' end}
+GameTooltip={SetOwner=function() end,SetText=function() end,AddLine=function(_,value) table.insert(lines,value) end,Show=function() end}
+open();parse('STATE 1 20 0 8');parse('CATALOG');parse('TENTRY 398 3 10 1 0 8 11069 700 500');parse('TALENT 398 2 11069');parse('TEFFECT 398 0 -4');parse('END')
+selectedClass=8;selectedTab='Fire';refresh()
+local node;for _,frame in ipairs(talentNodes) do if frame.entry and frame.entry.ID==398 then node=frame end end
+lines={};tooltip(node)
+assert(requestedEntry==500 and requestedRank==2)
+local sawDescription,sawApplied=false,false
+for _,line in ipairs(lines) do if line=='Снижение времени применения: 4%' then sawDescription=true end;if line=='Эффект 1: -4' then sawApplied=true end end
+assert(sawDescription and sawApplied and state.effects[398][0]==-4)
+parse('STATE 1 20 0 8');parse('END');assert(not state.effects[398])
+""")
+
+    def test_native_book_report_reads_client_api_without_replacing_it(self):
+        self.lua(r"""
+GetBuildInfo=function() return '1.60.1','70532' end
+GetNumSpellTabs=function() return 1 end
+GetSpellTabInfo=function() return 'Общие',134400,0,10 end
+C_SpellBook={GetNumSpellBookSkillLines=function() return 1 end,GetSpellBookSkillLineInfo=function() return {name='Общие',itemIndexOffset=0,numSpellBookItems=10} end}
+local original=GetSpellTabInfo;local native=C_SpellBook.GetSpellBookSkillLineInfo
+local report=ForeverAscensionNativeBookReport()
+assert(report:find('70532',1,true) and report:find('Общие',1,true) and report:find('numSpellBookItems=10',1,true))
+assert(GetSpellTabInfo==original and C_SpellBook.GetSpellBookSkillLineInfo==native)
+assert(ForeverAscensionUI.nativeSpellbookReport==report)
+local count=#sent;SlashCmdList.FOREVERASCENSION('bookdebug')
+local debugFrame=named.ForeverAscensionBookDebug
+assert(debugFrame and debugFrame.edit.text==report and debugFrame.edit.height>=400 and #sent==count)
 """)
 
     def test_unadapted_talents_and_native_primary_cannot_be_purchased(self):

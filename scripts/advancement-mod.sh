@@ -95,7 +95,7 @@ for name in ('ForeverSubclass','ForeverAscension'):
     if (p/'Interface/AddOns'/name).is_symlink():raise SystemExit('Symlinked AddOn folder is not supported')
 PY
 label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.advancement"}}' forever-trinitycore:latest)
-if [ "$label" = '1.5.0' ]; then :
+if [ "$label" = '1.6.0' ]; then :
 else echo 'Built image is stale or missing native-power-slot support. Run: bash scripts/advancement-mod.sh build';exit 1;fi
 running=$(docker compose ps --status running --services)
 for service in mysql worldserver bnetserver web; do

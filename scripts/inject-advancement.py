@@ -70,6 +70,26 @@ def inject(core,module=None):
         if guard not in source:
             if source.count(reward)!=1:raise ValueError('Unknown skill reward function')
             player_source.write_text(source.replace(reward,reward+'\n'+guard))
+    if player_header.exists() and player_source.exists():
+        header=player_header.read_text();source=player_source.read_text()
+        declaration='        void SetForeverAdvancementTrait(uint32 spell, int32 definition, int32 rank);'
+        if declaration not in header:
+            marker='        Optional<PlayerSpellTrait> GetTraitInfoForSpell(uint32 spellId) const;'
+            if header.count(marker)!=1:raise ValueError('Unknown native trait accessor declaration')
+            header=header.replace(marker,marker+'\n'+declaration)
+            marker='        std::set<uint32> m_foreverAdvancementClassSkills;'
+            header=header.replace(marker,marker+'\n        std::map<uint32, PlayerSpellTrait> m_foreverAdvancementTraits;')
+            marker='Optional<PlayerSpellTrait> Player::GetTraitInfoForSpell(uint32 spellId) const\n{'
+            if source.count(marker)!=1:raise ValueError('Unknown native trait accessor')
+            begin=source.index(marker);end=source.index('\nvoid Player::SetReputation(',begin)
+            source=source[:begin]+(module/'server/PlayerTraits.inc').read_text().rstrip()+'\n'+source[end:]
+            player_header.write_text(header);player_source.write_text(source)
+        else:
+            marker='Optional<PlayerSpellTrait> Player::GetTraitInfoForSpell(uint32 spellId) const'
+            source=player_source.read_text();begin=source.index(marker)
+            end=source.index('\nvoid Player::SetReputation(',begin)
+            replacement=(module/'server/PlayerTraits.inc').read_text().rstrip()+'\n'
+            if source[begin:end]!=replacement:player_source.write_text(source[:begin]+replacement+source[end:])
     db2_source=core/'src/server/game/DataStores/DB2Stores.cpp'
     if db2_source.exists():
         original=db2_source.read_text()

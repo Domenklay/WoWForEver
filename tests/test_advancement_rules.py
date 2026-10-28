@@ -237,6 +237,135 @@ int main() {
             self.assertEqual(result.returncode,0,result.stderr)
             subprocess.run([str(root/'test')],check=True,capture_output=True)
 
+    def test_combat_traits_resolve_without_legacy_talent_rows(self):
+        source=SOURCE.read_text()
+        code=r'''#include <cassert>
+#include <map>
+#include <set>
+#include <vector>
+using uint32=unsigned;
+constexpr int DIFFICULTY_NONE=0;
+struct SpellInfo {};
+struct Spells {SpellInfo const* GetSpellInfo(uint32,int){return nullptr;}} spellMgr;[[maybe_unused]] auto sSpellMgr=&spellMgr;
+[[maybe_unused]] int NativeNames(SpellInfo const*){return 0;}
+constexpr int SKILL_CATEGORY_CLASS=7;
+template<class... T> void MockLog(T const&...) {}
+#define TC_LOG_INFO(...) MockLog(__VA_ARGS__)
+template<class T> struct Store {
+ std::vector<T const*> rows;
+ auto begin()const{return rows.begin();}auto end()const{return rows.end();}
+ T const* LookupEntry(uint32 id){for(auto row:rows)if(row->ID==id)return row;return nullptr;}
+};
+struct Skill {uint32 ID;int CategoryID;};Store<Skill> sSkillLineStore;
+struct SkillTree {uint32 ID,SkillLineID,TraitTreeID;};Store<SkillTree> sSkillLineXTraitTreeStore;
+struct Info {int ClassMask;};
+struct Manager {std::map<uint32,std::vector<Info const*>> infos;auto GetSkillRaceClassInfo(uint32 id){return infos[id];}} sDB2Manager;
+struct NodeLink {uint32 ID,TraitNodeID,TraitNodeEntryID;};Store<NodeLink> sTraitNodeXTraitNodeEntryStore;
+struct Node {uint32 ID,TraitTreeID;};Store<Node> sTraitNodeStore;
+struct Entry {uint32 ID;int MaxRanks,TraitDefinitionID;};Store<Entry> sTraitNodeEntryStore;
+struct Definition {uint32 ID;int SpellID,VisibleSpellID;};Store<Definition> sTraitDefinitionStore;
+'''+source[source.index('struct NativeTrait {'):source.index('static void PublishBookMetadata()')]+r'''
+int main() {
+ Skill mage{237,7},profession{200,11};sSkillLineStore.rows={&mage,&profession};
+ Info mageClass{128};sDB2Manager.infos[237]={&mageClass};sDB2Manager.infos[200]={&mageClass};
+ SkillTree combat{1,237,500},trade{2,200,501};sSkillLineXTraitTreeStore.rows={&combat,&trade};
+ Node node{10,500},tradeNode{11,501};sTraitNodeStore.rows={&node,&tradeNode};
+ Entry entry{20,3,30},tradeEntry{21,5,31},invalidRank{22,128,32};sTraitNodeEntryStore.rows={&entry,&tradeEntry,&invalidRank};
+ Definition definition{30,11069,0},tradeDef{31,900,0},invalidDef{32,901,0};sTraitDefinitionStore.rows={&definition,&tradeDef,&invalidDef};
+ NodeLink link{40,10,20},tradeLink{41,11,21},bad{42,10,22};sTraitNodeXTraitNodeEntryStore.rows={&link,&tradeLink,&bad};
+ auto traits=LoadNativeTraits();auto result=ResolveTrait(11069,8,1,traits);
+ assert(result&&result->definition==30&&result->spell==11069&&result->entry==20&&result->max==3);
+ assert(ResolveTrait(11069,8,3,traits)&&!ResolveTrait(11069,8,4,traits));
+ assert(!ResolveTrait(11069,11,1,traits)&&!ResolveTrait(900,8,1,traits)&&!ResolveTrait(901,8,1,traits));
+ auto duplicate=*result;duplicate.definition=99;traits[11069].push_back(duplicate);
+ assert(!ResolveTrait(11069,8,1,traits));
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
+    def test_trait_rank_bridge_preserves_native_config_and_never_learns_spells(self):
+        code=r'''#include <cassert>
+#include <map>
+#include <optional>
+using uint32=unsigned;using int32=int;
+template<class T> using Optional=std::optional<T>;
+struct PlayerSpellTrait {int DefinitionId,Rank;};
+struct PlayerSpell {Optional<PlayerSpellTrait> Trait;};
+namespace Trinity::Containers {
+ template<class T> auto MapGetValuePtr(T const& map,uint32 id)->typename T::mapped_type const* {auto it=map.find(id);return it==map.end()?nullptr:&it->second;}
+}
+struct Player {
+ std::map<uint32,PlayerSpell> m_spells;
+ std::map<uint32,PlayerSpellTrait> m_foreverAdvancementTraits;
+ bool HasSpell(uint32 id){return m_spells.count(id);}
+ Optional<PlayerSpellTrait> GetTraitInfoForSpell(uint32 spellId)const;
+ void SetForeverAdvancementTrait(uint32 spell,int32 definition,int32 rank);
+};
+'''+(SOURCE.parent/'PlayerTraits.inc').read_text()+r'''
+int main() {
+ Player p;p.SetForeverAdvancementTrait(100,700,2);
+ assert(p.GetTraitInfoForSpell(100)->Rank==2&&p.m_spells.empty());
+ p.SetForeverAdvancementTrait(100,700,3);assert(p.GetTraitInfoForSpell(100)->Rank==3);
+ p.SetForeverAdvancementTrait(100,0,0);assert(!p.GetTraitInfoForSpell(100));
+ p.SetForeverAdvancementTrait(100,0x800000,1);assert(!p.GetTraitInfoForSpell(100));
+ p.SetForeverAdvancementTrait(100,700,128);assert(!p.GetTraitInfoForSpell(100));
+ p.m_spells[100].Trait=PlayerSpellTrait{800,1};p.SetForeverAdvancementTrait(100,700,2);
+ assert(p.GetTraitInfoForSpell(100)->DefinitionId==800&&p.GetTraitInfoForSpell(100)->Rank==1);
+ p.m_foreverAdvancementTraits[100]={700,2};assert(p.GetTraitInfoForSpell(100)->DefinitionId==800);
+ p.m_spells[100].Trait.reset();assert(!p.GetTraitInfoForSpell(100));
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
+    def test_native_ability_identity_uses_class_skill_not_machine_translation(self):
+        source=SOURCE.read_text()
+        code=r'''#include <array>
+#include <cassert>
+#include <map>
+#include <vector>
+using uint32=unsigned;
+constexpr int DIFFICULTY_NONE=0,SKILL_CATEGORY_CLASS=7;
+struct LocalizedString {std::array<char const*,2> Str;};
+struct SpellInfo {uint32 Id,SpellFamilyName;LocalizedString const* SpellName;};
+struct Ability {uint32 SkillLine;int ClassMask;};
+struct Skill {uint32 ID;int CategoryID;uint32 ParentSkillLineID;};
+struct SkillStore {std::map<uint32,Skill> rows;Skill const* LookupEntry(uint32 id){auto it=rows.find(id);return it==rows.end()?nullptr:&it->second;}} sSkillLineStore;
+struct ClassInfo {int ClassMask;};
+struct Manager {std::map<uint32,std::vector<ClassInfo const*>> rows;auto GetSkillRaceClassInfo(uint32 id){return rows[id];}} sDB2Manager;
+struct Spells {
+ std::map<uint32,SpellInfo> spells;std::multimap<uint32,Ability const*> rows;
+ SpellInfo const* GetSpellInfo(uint32 id,int){auto it=spells.find(id);return it==spells.end()?nullptr:&it->second;}
+ auto GetSkillLineAbilityMapBounds(uint32 id){return rows.equal_range(id);}
+} manager;auto sSpellMgr=&manager;
+'''+function(source,'static uint32 ClassFamily(')+function(source,'static SpellInfo const* NativeClassSpell(')+r'''
+int main() {
+ LocalizedString native={{"","Гнев"}},empty={{"",""}};
+ manager.spells={{5176,{5176,7,&native}},{126,{126,0,&native}},{900,{900,7,&native}},{901,{901,7,&empty}}};
+ sSkillLineStore.rows={{574,{574,7,0}},{354,{354,7,0}},{200,{200,11,0}}};
+ ClassInfo druid{1024},warlock{256};sDB2Manager.rows={{574,{&druid}},{354,{&warlock}},{200,{&druid}}};
+ Ability nature{574,1024},demonology{354,256},profession{200,1024};
+ manager.rows={{5176,&nature},{126,&demonology},{900,&profession},{901,&nature}};
+ assert(NativeClassSpell(5176,11)->Id==5176);assert(!NativeClassSpell(5176,8));
+ assert(NativeClassSpell(126,9)->Id==126);assert(!NativeClassSpell(126,11));
+ assert(!NativeClassSpell(900,11)&&!NativeClassSpell(901,11)&&!NativeClassSpell(999,11));
+ nature.ClassMask=128;assert(!NativeClassSpell(5176,11));
+ nature.ClassMask=0;assert(NativeClassSpell(5176,11));sDB2Manager.rows[574].clear();assert(!NativeClassSpell(5176,11));
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
     def test_real_resource_and_mixed_class_cast_policy(self):
         source=SOURCE.read_text()
         functions='\n'.join(function(source,name) for name in ['static bool Native(', 'static int32 Scale(',
@@ -259,15 +388,18 @@ enum Powers {POWER_MANA=0,POWER_RAGE=1,POWER_ENERGY=3};
 constexpr int MAX_POWERS_PER_CLASS=6,CLASS_PRIEST=5,STAT_SPIRIT=4,DIFFICULTY_NONE=0,SPELL_ATTR1_USE_ALL_MANA=1;
 constexpr std::array<Powers,3> PowersList={POWER_MANA,POWER_RAGE,POWER_ENERGY};
 struct Definition { uint32 entry,owner,spell,level; };
-struct TalentDefinition {uint32 entry,owner,spell,rank,level,cost,investment,tab;};
+struct TalentDefinition {uint32 entry,owner,spell,rank,level,cost,investment,tab;uint32 trait=0,traitEntry=0;};
 struct Pool {int32 current=0,maximum=0;double fraction=0;};
-struct State {std::set<uint32> learned;std::map<uint32,uint32> talents;std::set<uint32> ownedAuras;bool syncing=false;std::map<Powers,Pool> pools;Clock::time_point updated=Clock::now();};
+struct State {std::set<uint32> learned;std::map<uint32,uint32> talents;std::set<uint32> ownedAuras;std::map<uint32,std::pair<uint32,uint32>> ownedTraits;bool syncing=false;std::map<Powers,Pool> pools;Clock::time_point updated=Clock::now();};
 struct Player {
  uint32 cls=1,level=20;bool combat=false,alive=true;
  std::set<uint32> auras,spells,removed;
+ std::map<uint32,std::pair<uint32,uint32>> traits;
+ std::map<uint32,uint32> appliedRanks;
+ void SetForeverAdvancementTrait(uint32 spell,int definition,int rank) {if(definition&&rank&&!HasSpell(spell))traits[spell]={unsigned(definition),unsigned(rank)};else traits.erase(spell);}
  bool HasAura(uint32 id) const {return auras.count(id);}
  bool HasSpell(uint32 id) const {return spells.count(id);}
- bool AddAura(uint32 id,Player*) {auras.insert(id);return true;}
+ bool AddAura(uint32 id,Player*) {auras.insert(id);appliedRanks[id]=traits.count(id)?traits[id].second:0;return true;}
  int GetGUID() const {return 1;}
  void RemoveAurasDueToSpell(uint32 id,int) {auras.erase(id);removed.insert(id);}
  int GetPowerIndex(Powers power) const {return power==POWER_RAGE?0:MAX_POWERS_PER_CLASS;}
@@ -337,7 +469,16 @@ int main() {
  p.auras.clear();s.talents[100]=1;SyncTalents(&p,s);assert(s.ownedAuras.count(11069));
  s.talents[100]=2;SyncTalents(&p,s);assert(!p.auras.count(11069)&&p.auras.count(12338));
  s.talents.clear();SyncTalents(&p,s);assert(!p.auras.count(12338));
- s.talents[100]=1;p.cls=8;assert(!TalentBuildValid(&p,s));
+ s.talents[100]=1;p.cls=8;assert(!TalentBuildValid(&p,s));p.cls=1;
+ TalentCatalog[300]={{300,8,900,1,10,1,0,30,700},{300,8,900,2,10,1,0,30,700},{300,8,900,3,10,1,0,30,700}};
+ s.talents={{300,1}};SyncTalents(&p,s);assert(p.appliedRanks[900]==1&&s.ownedTraits.at(900).second==1);
+ s.talents[300]=2;SyncTalents(&p,s);assert(p.appliedRanks[900]==2&&p.removed.count(900));
+ s.talents[300]=1;SyncTalents(&p,s);assert(p.appliedRanks[900]==1);
+ s.talents.clear();SyncTalents(&p,s);assert(!p.auras.count(900)&&!p.traits.count(900));
+ p.auras.insert(900);s.talents={{300,1}};SyncTalents(&p,s);assert(!s.ownedAuras.count(900)&&!p.traits.count(900));
+ s.talents.clear();SyncTalents(&p,s);assert(p.auras.count(900));
+ p.auras.clear();s.talents={{300,1}};SyncTalents(&p,s);p.spells.insert(900);
+ s.talents.clear();SyncTalents(&p,s);assert(p.auras.count(900)&&!p.traits.count(900));
 }
 '''
         with tempfile.TemporaryDirectory() as temp:
