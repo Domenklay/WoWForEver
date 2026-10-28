@@ -4,6 +4,7 @@
 #include "ChatPackets.h"
 #include "Config.h"
 #include "DB2Stores.h"
+#include "DB2HotfixGenerator.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
 #include "ObjectMgr.h"
@@ -307,11 +308,17 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
     if(includeCatalog) for(auto const& [id,ranks]:TalentCatalog)
     {
         auto const& d=ranks.front();
-        Send(p,Trinity::StringFormat("TENTRY {} {} {} {} {} {}",id,ranks.size(),d.level,d.cost,d.investment,d.owner));
+        Send(p,Trinity::StringFormat("TENTRY {} {} {} {} {} {} {}",id,ranks.size(),d.level,d.cost,d.investment,d.owner,d.spell));
+    }
+    for(auto const& [id,definitions]:Catalog)
+    {
+        Definition const* known=nullptr;
+        for(auto const& d:definitions) if(p->HasSpell(d.spell)&&(!known||d.level>known->level)) known=&d;
+        if(known) Send(p,Trinity::StringFormat("KNOWN {} {}",id,known->spell));
     }
     uint32 spent=TalentSpent(s),budget=TalentBudget(p);
     Send(p,Trinity::StringFormat("TPOINTS {} {} {}",spent<budget?budget-spent:0,spent,budget));
-    for(auto const& [id,rank]:s.talents) Send(p,Trinity::StringFormat("TALENT {} {}",id,rank));
+    for(auto const& [id,rank]:s.talents) if(auto d=Talent(id,rank)) Send(p,Trinity::StringFormat("TALENT {} {} {}",id,rank,d->spell));
     for(auto id:s.learned) Send(p,Trinity::StringFormat("LEARNED {}",id));
     Send(p,"END");
 }
@@ -348,7 +355,7 @@ static void Request(Player* p,std::string const& payload)
     else if(command=="learn")
     {
         auto d=Best(arg,p->GetLevel());if(!d||d->owner==p->GetClass()) { Error(p,"incompatible_or_level");return; }
-        if(s.learned.count(arg)) { Error(p,"already_learned");return; }
+        if(s.learned.count(arg)||p->HasSpell(d->spell)) { Error(p,"already_learned");return; }
         if(Used(s)>=Limit) { Error(p,"ability_limit");return; }
         s.learned.insert(arg);
     }
@@ -433,6 +440,31 @@ static SpellInfo const* ResolveSpell(uint32 source,uint32 owner,uint32 rank,std:
     // Multiple effects with the same name require an explicit reviewed mapping.
     return candidates.size()==1?sSpellMgr->GetSpellInfo(*candidates.begin(),DIFFICULTY_NONE):nullptr;
 }
+using TalentOwners=std::map<uint32,std::set<std::pair<uint32,uint32>>>;
+static SpellInfo const* ResolveNativeTalent(uint32 spell,uint32 owner,uint32 rank,TalentOwners const& owners)
+{
+    auto it=owners.find(spell);
+    if(it==owners.end()||!it->second.count({owner,rank})) return nullptr;
+    return sSpellMgr->GetSpellInfo(spell,DIFFICULTY_NONE);
+}
+static void PublishBookMetadata()
+{
+    std::set<uint32> rows;
+    for(auto const& [id,definitions]:Catalog)
+        for(auto const& d:definitions)
+        {
+            auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(d.spell);
+            for(auto it=bounds.first;it!=bounds.second;++it)
+            {
+                auto ability=it->second;auto skill=sSkillLineStore.LookupEntry(ability->SkillLine);
+                if(!skill||skill->CategoryID!=SKILL_CATEGORY_CLASS||skill->ParentSkillLineID||!ability->ClassMask) continue;
+                if(uint32(ability->ClassMask)&(1u<<(d.owner-1))) rows.insert(ability->ID);
+            }
+        }
+    DB2HotfixGenerator<SkillLineAbilityEntry> hotfix(sSkillLineAbilityStore);
+    for(auto id:rows) hotfix.ApplyHotfix(id,[](SkillLineAbilityEntry* row) { row->ClassMask=0; },true);
+    TC_LOG_INFO("scripts","ForeverAdvancement spellbook metadata: {} native class masks published to client",rows.size());
+}
 class Startup final:public WorldScript
 {
 public:
@@ -476,19 +508,31 @@ public:
             if(info->Id!=row.spell) ++remapped;
             Catalog[row.id].push_back({row.id,row.owner,info->Id,std::max(row.level,info->SpellLevel)});claimed.insert(info->Id);
         }
-        std::set<uint32> talentSpells;
+        TalentOwners talentOwners;
+        for(auto talent:sTalentStore)
+        {
+            if(!SupportedClass(talent->ClassID)) continue;
+            for(uint32 rank=0;rank<talent->SpellRank.size();++rank)
+                if(talent->SpellRank[rank]) talentOwners[talent->SpellRank[rank]].insert({uint32(talent->ClassID),rank+1});
+            if(talent->SpellID) talentOwners[talent->SpellID].insert({uint32(talent->ClassID),1});
+        }
+        std::set<uint32> talentSpells;uint32 nativeTalents=0;
         for(auto const& row:AscensionTalentSourceEntries)
         {
-            auto info=ResolveSpell(row.spell,row.owner,row.rank,row.names,names);
-            if(!info||!CompatibleTalent(info)||!SourceNameMatches(info,row.names)) continue;
+            auto info=ResolveNativeTalent(row.spell,row.owner,row.rank,talentOwners);
+            bool native=info!=nullptr;
+            if(!info) info=ResolveSpell(row.spell,row.owner,row.rank,row.names,names);
+            if(!info||!CompatibleTalent(info)||(!native&&!SourceNameMatches(info,row.names))) continue;
             auto it=TalentCatalog.find(row.id);uint32 expected=it==TalentCatalog.end()?1:it->second.size()+1;
             if(row.rank!=expected||talentSpells.count(info->Id)) continue;
             TalentCatalog[row.id].push_back({row.id,row.owner,info->Id,row.rank,std::max(row.level,info->SpellLevel),row.cost,row.investment,row.tab});
-            talentSpells.insert(info->Id);
+            talentSpells.insert(info->Id);if(native) ++nativeTalents;
         }
         TC_LOG_INFO("scripts","ForeverAdvancement catalog rows rejected: missing={}, costs={}, passive={}, names={}, binding={}",rejected[0],rejected[1],rejected[2],rejected[3],rejected[4]);
         TC_LOG_INFO("scripts","ForeverAdvancement catalog remapped: {} abilities by case-folded name, class family and native rank",remapped);
         if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement compatible catalog empty; disabled");return; }
+        PublishBookMetadata();
+        TC_LOG_INFO("scripts","ForeverAdvancement talent metadata: {} native class/rank records accepted",nativeTalents);
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} compatible Ascension abilities; {} passive talents; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }
 };

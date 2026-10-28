@@ -53,7 +53,8 @@ struct SpellMgr {
 } manager;
 auto sSpellMgr=&manager;
 using NameIndex=std::map<std::wstring,std::vector<SpellInfo const*>>;
-'''+UTF8_UTIL_STUB+function(source,'static std::wstring NameKey(')+function(source,'static bool SourceNameMatches(')+function(source,'static std::string NativeNames(')+function(source,'static uint32 ClassFamily(')+function(source,'static SpellInfo const* ResolveSpell(')+r'''
+using TalentOwners=std::map<uint32,std::set<std::pair<uint32,uint32>>>;
+'''+UTF8_UTIL_STUB+function(source,'static std::wstring NameKey(')+function(source,'static bool SourceNameMatches(')+function(source,'static std::string NativeNames(')+function(source,'static uint32 ClassFamily(')+function(source,'static SpellInfo const* ResolveSpell(')+function(source,'static SpellInfo const* ResolveNativeTalent(')+r'''
 int main() {
  LocalizedString frost={{"Frostbolt","Ледяная стрела"}},wrong={{"Something else",nullptr}};
  manager.spells.emplace(116,SpellInfo{116,3,&wrong});
@@ -80,6 +81,11 @@ int main() {
  // A known, matching native ID takes precedence over ambiguous name searches.
  assert(ResolveSpell(500,8,1,names,index)->Id==500);
  assert(!ResolveSpell(999,8,1,{},index));
+ TalentOwners owners={{500,{{8,1}}},{501,{{5,2}}}};
+ manager.spells.at(500).SpellFamilyName=0;manager.spells.at(500).SpellName=&wrong;
+ assert(ResolveNativeTalent(500,8,1,owners)->Id==500);
+ assert(!ResolveNativeTalent(500,5,1,owners));assert(!ResolveNativeTalent(500,8,2,owners));
+ assert(!ResolveNativeTalent(999,8,1,owners));
 }
 '''
         with tempfile.TemporaryDirectory() as temp:
@@ -178,7 +184,14 @@ using uint32=uint32_t;
 constexpr int SKILL_CATEGORY_CLASS=7,SKILL_UNCHANGED=0;
 struct Skill {uint32 ID,CategoryID,ParentSkillLineID;};
 struct Skills {std::map<uint32,Skill> rows;Skill const* LookupEntry(uint32 id){auto it=rows.find(id);return it==rows.end()?nullptr:&it->second;}} sSkillLineStore;
-struct Ability {uint32 SkillLine;int ClassMask;};
+struct Ability {uint32 SkillLine;int ClassMask;uint32 ID=0;};
+using SkillLineAbilityEntry=Ability;
+std::map<uint32,Ability*> sSkillLineAbilityStore;std::vector<uint32> published;
+#define TC_LOG_INFO(...) do {} while(false)
+template<class T> struct DB2HotfixGenerator {
+ explicit DB2HotfixGenerator(std::map<uint32,Ability*>&) {}
+ void ApplyHotfix(uint32 id,void(*fix)(T*),bool notify) {assert(notify);fix(sSkillLineAbilityStore.at(id));published.push_back(id);}
+};
 struct Spells {std::multimap<uint32,Ability const*> rows;auto GetSkillLineAbilityMapBounds(uint32 id){return rows.equal_range(id);}} manager;
 auto sSpellMgr=&manager;
 struct Definition {uint32 entry,owner,spell,level;};
@@ -197,11 +210,12 @@ struct Player {
  }
  void SyncForeverAdvancementClassSkills(std::set<uint32> const& desired);
 };
-'''+(SOURCE.parent/'PlayerBookSchools.inc').read_text()+''.join(function(source,name) for name in ['static Definition const* Best(','static void SyncBookSchools(Player* p,State const& s)\n{'])+r'''
+'''+(SOURCE.parent/'PlayerBookSchools.inc').read_text()+''.join(function(source,name) for name in ['static Definition const* Best(','static void SyncBookSchools(Player* p,State const& s)\n{','static void PublishBookMetadata('])+r'''
 int main() {
  Player p;State s;
  sSkillLineStore.rows={{6,{6,7,0}},{8,{8,7,0}},{56,{56,7,0}},{200,{200,11,0}},{201,{201,7,200}}};
- Ability frost{6,128},fire{8,128},holy{56,16},profession{200,0},child{201,128},wrongClass{56,16};
+ Ability frost{6,128,1},fire{8,128,2},holy{56,16,3},profession{200,0,4},child{201,128,5},wrongClass{56,16,6};
+ sSkillLineAbilityStore={{1,&frost},{2,&fire},{3,&holy},{4,&profession},{5,&child},{6,&wrongClass}};
  manager.rows={{116,&frost},{116,&profession},{116,&child},{116,&wrongClass},{133,&fire},{2061,&holy}};
  Catalog={{10,{{10,8,116,4}}},{11,{{11,8,133,4}}},{20,{{20,5,2061,1}}}};
  p.skills.insert(8);s.learned={10,11};SyncBookSchools(&p,s);
@@ -212,6 +226,9 @@ int main() {
  s.learned.clear();SyncBookSchools(&p,s);assert(p.skills==std::set<uint32>{8}&&p.m_foreverAdvancementClassSkills.empty());
  p.SyncForeverAdvancementClassSkills({200,201,999});assert(p.skills==std::set<uint32>{8});
  assert(!p.rewarded&&!p.removedSpells);
+ PublishBookMetadata();assert(published==std::vector<uint32>({1,2,3}));
+ assert(frost.ClassMask==0&&fire.ClassMask==0&&holy.ClassMask==0);
+ assert(child.ClassMask==128&&wrongClass.ClassMask==16&&profession.ClassMask==0);
 }
 '''
         with tempfile.TemporaryDirectory() as temp:

@@ -28,6 +28,8 @@ class AdvancementTests(unittest.TestCase):
                 shutil.copy2(MODULE/'catalog'/name,root/'catalog'/name)
             result=importer.generate(root)
             self.assertEqual(result['entries'],23709)
+            root_row=next(line for line in (root/'server/AscensionCatalog.h').read_text().splitlines() if line.startswith('{25,11,339,'))
+            self.assertIn(json.dumps('Гнев деревьев',ensure_ascii=True),root_row)
             for name in ['addon/ForeverAscension/Catalog.lua','server/AscensionCatalog.h','sql/world.sql']:
                 self.assertEqual((root/name).read_bytes(),(MODULE/name).read_bytes())
             data=json.loads((root/'catalog/CharacterAdvancementData.json').read_text())
@@ -95,7 +97,10 @@ void Player::LearnSkillRewardedSpells(uint32 skillId, uint32 skillValue, Races r
 {
 }
 """)
+            db2=root/'src/server/game/DataStores/DB2Stores.cpp';db2.parent.mkdir(parents=True)
+            db2.write_text('void DB2Manager::InsertNewHotfix(uint32 tableHash, uint32 recordId)\n{\n    HotfixRecord hotfixRecord;\n}\n')
             injector.inject(root);first=(player/'Player.cpp').read_text();injector.inject(root)
+            self.assertEqual(db2.read_text().count('hotfixRecord.HotfixStatus = HotfixRecord::Status::Valid;'),1)
             self.assertEqual((player/'Player.cpp').read_text(),first)
             self.assertIn('bool advancementEdit = false',(player/'Player.h').read_text())
             self.assertEqual(first.count('if (!advancementEdit) LearnSkillRewardedSpells'),2)
@@ -313,6 +318,31 @@ GetSpellBookItemInfo=function(slot) if slot==1 then return 'SPELL',116 end end
 PickupSpellBookItem=function(slot,book) picked=slot..':'..book end
 assert(ForeverAscensionPickupSpell(116) and picked=='1:spell')
 InCombatLockdown=function() return true end;assert(not ForeverAscensionPickupSpell(116))
+""")
+
+    def test_native_roots_are_visible_known_and_do_not_consume_a_purchase(self):
+        self.lua(r"""
+local picked;C_Spell={GetSpellName=function(id) if id==339 then return 'Гнев деревьев' end end,PickupSpell=function(id) picked=id end}
+open();parse('PROTOCOL 2');parse('STATE 11 11 0 8');parse('CATALOG');parse('ENTRY 25 339 8 0 11');parse('KNOWN 25 339');parse('END')
+selectedClass=11;selectedTab='Balance';refresh()
+local card;for _,node in ipairs(abilityNodes) do if node.entry and node.entry.ID==25 then card=node end end
+assert(card and card.name.text=='Гнев деревьев' and card.note.text=='Известно персонажу')
+assert(state.used==0 and not state.learned[25])
+advance();local count=#sent;card.scripts.OnClick(card,'LeftButton');assert(#sent==count)
+card.scripts.OnDragStart(card);assert(picked==339)
+parse('STATE 11 11 0 8');parse('END');assert(not state.known[25],'known native spells must refresh, not accumulate forever')
+""")
+
+    def test_talent_window_button_attaches_after_delayed_frame_load_and_uses_native_tooltip_id(self):
+        self.lua(r"""
+open();parse('STATE 1 20 0 8');parse('CATALOG');parse('TENTRY 398 3 10 1 0 8 11069');parse('TALENT 398 2 12338');parse('END')
+assert(compatible[398].spell==12338)
+PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrame',UIParent)
+for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
+local button=ForeverAscensionTalentButton
+assert(button and button.parent==PlayerTalentFrame and button.text=='Мультикласс')
+assert(button.points[1][1]=='TOPRIGHT' and button.points[1][4]==-42)
+window:Hide();button.scripts.OnClick();assert(window:IsShown())
 """)
 
     def test_unadapted_talents_and_native_primary_cannot_be_purchased(self):

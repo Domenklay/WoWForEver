@@ -66,12 +66,15 @@ def generate(root=ROOT):
     (root/'addon/ForeverAscension/Catalog.lua').write_text('\n'.join(chunks)+'\n',encoding='utf-8')
     names_path=root/'catalog/SpellNames.locales.json'
     localized=json.loads(names_path.read_text()) if names_path.exists() else {}
+    reviewed_path=root/'catalog/ForeverSpellAliases.json'
+    reviewed=json.loads(reviewed_path.read_text()) if reviewed_path.exists() else {}
     locales=['deDE','esES','esMX','frFR','koKR','ruRU','zhCN','zhTW']
     def aliases(row,spell):
         values=[row.get('Name','')]
         for locale in locales:
             names=localized.get(locale,{})
-            values.append(names.get(str(spell),names.get(str(row['Spells'][0]),'')))
+            alias=reviewed.get(str(row['Spells'][0]),{})
+            values.append(alias.get(locale) if alias.get('class')==row['Class'] and alias.get(locale) else names.get(str(spell),names.get(str(row['Spells'][0]),'')))
         return '{'+','.join(json.dumps(value,ensure_ascii=True) for value in values)+'}'
     headers=['#pragma once','#include <array>','struct AscensionSourceEntry { unsigned id,owner,spell,level,rank; std::array<char const*,9> names; };',
              'static constexpr AscensionSourceEntry AscensionSourceEntries[] = {']

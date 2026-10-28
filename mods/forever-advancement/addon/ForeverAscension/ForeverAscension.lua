@@ -52,6 +52,8 @@ local function button(parent,text,width,fn)
 end
 local function spellName(row)
  local d=compatible[row.ID]
+ local known=state and state.known and state.known[row.ID]
+ if known and C_Spell and C_Spell.GetSpellName then local text=C_Spell.GetSpellName(known);if text then return text end end
  if d and d.spell and C_Spell and C_Spell.GetSpellName then local text=C_Spell.GetSpellName(d.spell);if text then return text end end
  if GetLocale and GetLocale()=="ruRU" then local text=ForeverAscensionNamesRU[row.Spells and row.Spells[1]];if text then return text end end
  if d and C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(d.spell or row.Spells[1]) or row.Name or tostring(row.ID) end
@@ -89,7 +91,7 @@ local function tooltip(self)
  local row=self.entry;if not row or not GameTooltip then return end
  local d=compatible[row.ID]
  local rank=state and state.talents[row.ID] or 0
- local tipSpell=d and (d.spell or row.Spells[math.max(1,rank)])
+ local tipSpell=(state and state.known and state.known[row.ID]) or (d and (d.spell or row.Spells[math.max(1,rank)]))
  GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
  if tipSpell and GameTooltip.SetSpellByID then GameTooltip:SetSpellByID(tipSpell) else GameTooltip:SetText(spellName(row),1,0.82,0.25) end
  local description=ForeverAscensionDescriptionsRU and ForeverAscensionDescriptionsRU[row.Spells and row.Spells[1]]
@@ -100,7 +102,8 @@ local function tooltip(self)
   GameTooltip:AddLine("Ранг "..rank.." / "..tostring(d and d.max or #row.Spells).." | "..tostring(d and d.cost or row.TECost or 1).." TE за ранг",1,0.82,0.3)
   if (row.RequiredTEInvestment or 0)>0 then GameTooltip:AddLine("Требуется "..row.RequiredTEInvestment.." TE в предыдущих рядах этой школы.",0.8,0.75,0.65,true) end
  end
- if d and state and d.owner==state.primary then GameTooltip:AddLine("Это ваш основной класс. Его способности и таланты изучаются штатно.",0.8,0.8,0.8,true)
+ if d and state and state.known[row.ID] and not state.learned[row.ID] then GameTooltip:AddLine("Это уже известное нативное заклинание. Перетащите иконку на панель; повторная покупка не нужна.",0.5,0.9,0.5,true)
+ elseif d and state and d.owner==state.primary then GameTooltip:AddLine("Это ваш основной класс. Его способности и таланты изучаются штатно.",0.8,0.8,0.8,true)
  elseif d then GameTooltip:AddLine(isTalent(row) and "ЛКМ - вложить очко. ПКМ - вернуть ранг." or "ЛКМ - изучить / применить. ПКМ - забыть. Изученную иконку можно перетащить.",0.5,0.9,0.5,true)
  else GameTooltip:AddLine("Аналог этой записи не найден в базе Forever. Аддон сам не добавляет игровые эффекты.",0.9,0.5,0.35,true) end
  GameTooltip:Show()
@@ -122,13 +125,14 @@ local function makeNode(parent,talent)
   b:RegisterForDrag("LeftButton")
   b:SetScript("OnDragStart",function(self)
    local row=self.entry;local d=row and compatible[row.ID]
-   if d and state and state.learned[row.ID] and ForeverAscensionPickupSpell then ForeverAscensionPickupSpell(d.spell) end
+   if d and state and (state.learned[row.ID] or state.known[row.ID]) and ForeverAscensionPickupSpell then ForeverAscensionPickupSpell(state.known[row.ID] or d.spell) end
   end)
  end
  b:SetScript("OnClick",function(self,mouse)
   local row=self.entry;if not row or not state then return end
   local d=compatible[row.ID]
   if not d then message:SetText("Нет аналога в Forever: "..spellName(row)..". Выберите «Только доступные».");return end
+  if state.known[row.ID] and not state.learned[row.ID] then message:SetText("Это заклинание уже известно. Перетащите иконку или примените его из штатной книги.");return end
   if d.owner==state.primary then message:SetText("Способности основного класса изучаются штатно.");return end
   if d.level>state.level then message:SetText("Для изучения нужен уровень "..d.level..".");return end
   if isTalent(row) then send((mouse=="RightButton" and "untalent " or "talent ")..row.ID)
@@ -167,12 +171,14 @@ local function renderAbilities(rows)
   if row then
    n.icon:SetTexture(icon(row));n.name:SetText(spellName(row));local d=compatible[row.ID]
    local learned=state and state.learned[row.ID]
+   local known=state and state.known[row.ID]
    if not d then n.note:SetText("Нет аналога в Forever")
-   elseif state and d.owner==state.primary then n.note:SetText("Основной класс")
+   elseif known and not learned then n.note:SetText("Известно персонажу")
+   elseif state and d.owner==state.primary then n.note:SetText("Основной класс: у наставника")
    elseif state and d.level>state.level then n.note:SetText("Уровень "..d.level)
    elseif learned then n.note:SetText("Изучено")
    else n.note:SetText("Изучить | ур. "..d.level) end
-   local locked=not d or (state and d.level>state.level)
+   local locked=not d or (state and not known and d.level>state.level)
    n:SetAlpha(locked and 0.55 or 1)
    if n.icon.SetDesaturated then n.icon:SetDesaturated(locked and true or false) end
    n.border:SetVertexColor(learned and 0.3 or 0.8,learned and 1 or 0.65,0.25);n:Show()
@@ -327,14 +333,16 @@ local function parse(text)
  local words={};for w in tostring(text):gmatch("%S+") do table.insert(words,w) end;local kind=words[1]
  if kind=="PROTOCOL" then protocol=tonumber(words[2]) or 0;return end
  if kind=="ERROR" then if message then message:SetText(errors[words[2]] or text:sub(7)) end;return end
- if kind=="STATE" then pending={primary=tonumber(words[2]),level=tonumber(words[3]),used=tonumber(words[4]),limit=tonumber(words[5]),powers={},regen={},learned={},talents={},talentFree=0,talentSpent=0,talentTotal=0}
+ if kind=="STATE" then pending={primary=tonumber(words[2]),level=tonumber(words[3]),used=tonumber(words[4]),limit=tonumber(words[5]),powers={},regen={},learned={},known={},talents={},talentFree=0,talentSpent=0,talentTotal=0}
  elseif kind=="CATALOG" and pending then compatible={}
  elseif kind=="POWER" and pending then pending.powers[tonumber(words[2])]={current=tonumber(words[3]),maximum=tonumber(words[4])}
  elseif kind=="REGEN" and pending then pending.regen={normal=tonumber(words[2]),combat=tonumber(words[3])}
  elseif kind=="ENTRY" and pending then compatible[tonumber(words[2])]={kind="ability",spell=tonumber(words[3]),level=tonumber(words[4]),owner=tonumber(words[6])}
- elseif kind=="TENTRY" and pending then compatible[tonumber(words[2])]={kind="talent",max=tonumber(words[3]),level=tonumber(words[4]),cost=tonumber(words[5]),investment=tonumber(words[6]),owner=tonumber(words[7])}
+ elseif kind=="TENTRY" and pending then compatible[tonumber(words[2])]={kind="talent",max=tonumber(words[3]),level=tonumber(words[4]),cost=tonumber(words[5]),investment=tonumber(words[6]),owner=tonumber(words[7]),spell=tonumber(words[8])}
  elseif kind=="TPOINTS" and pending then pending.talentFree=tonumber(words[2]);pending.talentSpent=tonumber(words[3]);pending.talentTotal=tonumber(words[4])
- elseif kind=="TALENT" and pending then pending.talents[tonumber(words[2])]=tonumber(words[3])
+ elseif kind=="TALENT" and pending then
+  local id=tonumber(words[2]);pending.talents[id]=tonumber(words[3]);if compatible[id] and words[4] then compatible[id].spell=tonumber(words[4]) end
+ elseif kind=="KNOWN" and pending then pending.known[tonumber(words[2])]=tonumber(words[3])
  elseif kind=="LEARNED" and pending then pending.learned[tonumber(words[2])]=true
  elseif kind=="END" and pending then state=pending;pending=nil;waiting=false;refresh() end
 end

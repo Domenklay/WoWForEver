@@ -70,6 +70,14 @@ def inject(core,module=None):
         if guard not in source:
             if source.count(reward)!=1:raise ValueError('Unknown skill reward function')
             player_source.write_text(source.replace(reward,reward+'\n'+guard))
+    db2_source=core/'src/server/game/DataStores/DB2Stores.cpp'
+    if db2_source.exists():
+        original=db2_source.read_text()
+        marker='void DB2Manager::InsertNewHotfix(uint32 tableHash, uint32 recordId)\n{\n    HotfixRecord hotfixRecord;'
+        valid='    hotfixRecord.HotfixStatus = HotfixRecord::Status::Valid;'
+        if marker+'\n'+valid not in original:
+            if original.count(marker)!=1:raise ValueError('Unknown generated hotfix layout')
+            db2_source.write_text(original.replace(marker,marker+'\n'+valid))
     loader.write_text(text)
 
 

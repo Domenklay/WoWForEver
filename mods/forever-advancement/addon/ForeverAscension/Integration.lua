@@ -13,10 +13,11 @@ function ForeverAscensionPickupSpell(spell)
  end
  return false
 end
-local micro
+local micro,talentHost,talentButton
 local function attach()
+ if InCombatLockdown and InCombatLockdown() then return end
  local anchor=TalentMicroButton or PlayerSpellsMicroButton
- if not anchor or micro then return end
+ if anchor and not micro then
  micro=CreateFrame("Button","ForeverAscensionMicroButton",anchor)
  -- Keep the native bar's existing layout intact; this sits immediately above
  -- its talent button, rather than covering the adjacent quest button.
@@ -27,6 +28,18 @@ local function attach()
  micro:SetScript("OnClick",function() if ForeverAscensionToggle then ForeverAscensionToggle() end end)
  micro:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Мультиклассы",1,0.82,0);GameTooltip:AddLine("Развитие персонажа (/fa)",1,1,1);GameTooltip:Show() end end)
  micro:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+ end
+ local frame=PlayerTalentFrame or TalentFrame or ClassTalentFrame or ClassicTalentFrame or (PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame)
+ if frame and frame~=talentHost then
+  if talentButton then talentButton:Hide() end
+  talentHost=frame
+  talentButton=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate")
+  talentButton:SetSize(146,24);talentButton:SetPoint("TOPRIGHT",frame,"TOPRIGHT",-42,-12);talentButton:SetText("Мультикласс")
+  talentButton:SetScript("OnClick",function() if ForeverAscensionToggle then ForeverAscensionToggle() end end)
+  talentButton:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_BOTTOM");GameTooltip:SetText("Мультикласс",1,0.82,0);GameTooltip:AddLine("Способности и таланты других классов",1,1,1);GameTooltip:Show() end end)
+  talentButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+  ForeverAscensionTalentButton=talentButton
+ end
 end
-local events=CreateFrame("Frame");events:RegisterEvent("PLAYER_LOGIN");events:RegisterEvent("ADDON_LOADED")
+local events=CreateFrame("Frame");events:RegisterEvent("PLAYER_LOGIN");events:RegisterEvent("ADDON_LOADED");events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent",attach)
