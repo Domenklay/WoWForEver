@@ -1,6 +1,7 @@
 -- ForeverSubclass native-power experiment.
--- Stage 1 intentionally touches only the Mage primary class (ClassID 8).
+-- Stage 1 intentionally touches only the Mage primary class (class 8).
 -- The stock Mage keeps Mana; these two hotfix records add native Rage and Energy slots.
+-- Fixture tuples: 190031901,1,8 and 190031902,3,8.
 -- If the Forever client accepts the DB2 hotfix, UnitPower("player", 1/3) will expose them
 -- without any ForeverSubclass virtual-resource transport.
 
