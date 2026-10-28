@@ -166,6 +166,60 @@ int main() {
             self.assertEqual(result.returncode,0,result.stderr)
             subprocess.run([str(root/'test')],check=True,capture_output=True)
 
+    def test_native_school_skills_are_transient_and_never_grant_other_spells(self):
+        source=SOURCE.read_text()
+        code=r'''#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <map>
+#include <set>
+#include <vector>
+using uint32=uint32_t;
+constexpr int SKILL_CATEGORY_CLASS=7,SKILL_UNCHANGED=0;
+struct Skill {uint32 ID,CategoryID,ParentSkillLineID;};
+struct Skills {std::map<uint32,Skill> rows;Skill const* LookupEntry(uint32 id){auto it=rows.find(id);return it==rows.end()?nullptr:&it->second;}} sSkillLineStore;
+struct Ability {uint32 SkillLine;int ClassMask;};
+struct Spells {std::multimap<uint32,Ability const*> rows;auto GetSkillLineAbilityMapBounds(uint32 id){return rows.equal_range(id);}} manager;
+auto sSpellMgr=&manager;
+struct Definition {uint32 entry,owner,spell,level;};
+std::map<uint32,std::vector<Definition>> Catalog;
+struct State {std::set<uint32> learned;};
+struct Status {int uState=1;};
+struct Player {
+ uint32 cls=1,level=20;std::set<uint32> m_foreverAdvancementClassSkills,skills;
+ std::map<uint32,Status> mSkillStatus;int rewarded=0,removedSpells=0;
+ uint32 GetLevel(){return level;}uint32 GetClass(){return cls;}
+ bool HasSkill(uint32 id){return skills.count(id);}
+ void SetSkill(uint32 id,int,int value,int,bool edit=false) {
+  if(value) {skills.insert(id);if(!edit)++rewarded;}
+  else {skills.erase(id);if(!edit)++removedSpells;}
+  mSkillStatus[id]={1};
+ }
+ void SyncForeverAdvancementClassSkills(std::set<uint32> const& desired);
+};
+'''+(SOURCE.parent/'PlayerBookSchools.inc').read_text()+''.join(function(source,name) for name in ['static Definition const* Best(','static void SyncBookSchools(Player* p,State const& s)\n{'])+r'''
+int main() {
+ Player p;State s;
+ sSkillLineStore.rows={{6,{6,7,0}},{8,{8,7,0}},{56,{56,7,0}},{200,{200,11,0}},{201,{201,7,200}}};
+ Ability frost{6,128},fire{8,128},holy{56,16},profession{200,0},child{201,128},wrongClass{56,16};
+ manager.rows={{116,&frost},{116,&profession},{116,&child},{116,&wrongClass},{133,&fire},{2061,&holy}};
+ Catalog={{10,{{10,8,116,4}}},{11,{{11,8,133,4}}},{20,{{20,5,2061,1}}}};
+ p.skills.insert(8);s.learned={10,11};SyncBookSchools(&p,s);
+ assert(p.skills==std::set<uint32>({6,8})&&p.m_foreverAdvancementClassSkills==std::set<uint32>{6});
+ assert(!p.rewarded&&!p.removedSpells);
+ s.learned.insert(20);SyncBookSchools(&p,s);assert(p.HasSkill(56));
+ s.learned.erase(10);SyncBookSchools(&p,s);assert(!p.HasSkill(6)&&p.mSkillStatus[6].uState==SKILL_UNCHANGED);
+ s.learned.clear();SyncBookSchools(&p,s);assert(p.skills==std::set<uint32>{8}&&p.m_foreverAdvancementClassSkills.empty());
+ p.SyncForeverAdvancementClassSkills({200,201,999});assert(p.skills==std::set<uint32>{8});
+ assert(!p.rewarded&&!p.removedSpells);
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
     def test_real_resource_and_mixed_class_cast_policy(self):
         source=SOURCE.read_text()
         functions='\n'.join(function(source,name) for name in ['static bool Native(', 'static int32 Scale(',

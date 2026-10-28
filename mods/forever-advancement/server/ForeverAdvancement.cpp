@@ -83,6 +83,7 @@ static void Refresh(Player* p,State& state)
 }
 static void SyncTalents(Player* p,State& s);
 static void SyncSpellbook(Player* p,State& s);
+static void SyncBookSchools(Player* p,State const& s);
 static State& Get(Player* p)
 {
     uint64 guid=p->GetGUID().GetCounter();auto [it,inserted]=States.try_emplace(guid);auto& s=it->second;
@@ -95,7 +96,7 @@ static State& Get(Player* p)
         if(auto rows=CharacterDatabase.PQuery("SELECT power_type,current_value FROM forever_advancement_resources WHERE guid={}",guid))
             do { auto f=rows->Fetch();uint32 id=f[0].GetUInt32();if(id==0||id==1||id==3) s.pools[Powers(id)]={int32(std::min<uint32>(f[1].GetUInt32(),1000000)),1000000,0}; } while(rows->NextRow());
     }
-    SyncTalents(p,s);SyncSpellbook(p,s);Refresh(p,s);return s;
+    SyncTalents(p,s);SyncBookSchools(p,s);SyncSpellbook(p,s);Refresh(p,s);return s;
 }
 static void Save(Player* p,State const& s)
 {
@@ -116,6 +117,23 @@ static Definition const* Best(uint32 entry,uint32 level)
     Definition const* best=nullptr;
     for(auto const& d:it->second) if(d.level<=level&&(!best||d.level>best->level)) best=&d;
     return best;
+}
+static void SyncBookSchools(Player* p,State const& s)
+{
+    std::set<uint32> skills;
+    for(auto entry:s.learned)
+        if(auto d=Best(entry,p->GetLevel());d&&d->owner!=p->GetClass())
+        {
+            auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(d->spell);
+            for(auto it=bounds.first;it!=bounds.second;++it)
+            {
+                auto ability=it->second;auto skill=sSkillLineStore.LookupEntry(ability->SkillLine);
+                if(!skill||skill->CategoryID!=SKILL_CATEGORY_CLASS||skill->ParentSkillLineID) continue;
+                if(ability->ClassMask&&!(uint32(ability->ClassMask)&(1u<<(d->owner-1)))) continue;
+                skills.insert(skill->ID);
+            }
+        }
+    p->SyncForeverAdvancementClassSkills(skills);
 }
 static bool TemporaryBookSpell(Player* p,uint32 spell)
 {
@@ -336,7 +354,7 @@ static void Request(Player* p,std::string const& payload)
     }
     else if(command=="unlearn") s.learned.erase(arg);
     else { Error(p,"invalid_request");return; }
-    SyncSpellbook(p,s);Save(p,s);Snapshot(p,s);
+    SyncBookSchools(p,s);SyncSpellbook(p,s);Save(p,s);Snapshot(p,s);
 }
 class Players final:public PlayerScript
 {

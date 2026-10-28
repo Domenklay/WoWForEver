@@ -73,6 +73,36 @@ class AdvancementTests(unittest.TestCase):
             (client/'Interface/AddOns/ForeverSubclass').symlink_to(root,target_is_directory=True)
             with self.assertRaises(ValueError):installer.install(client,root/'second')
 
+    def test_injection_adds_native_class_schools_without_automatic_learning(self):
+        injector=load('inject-advancement.py')
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);custom=root/'src/server/scripts/Custom';custom.mkdir(parents=True)
+            (custom/'custom_script_loader.cpp').write_text('void AddCustomScripts()\n{\n}\n')
+            player=root/'src/server/game/Entities/Player';player.mkdir(parents=True)
+            (player/'Player.h').write_text('        void SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal);\n        SkillStatusMap mSkillStatus;')
+            (player/'Player.cpp').write_text("""void Player::SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal)
+{
+    LearnSkillRewardedSpells(id, newVal, Races(GetRace()));
+    LearnSkillRewardedSpells(id, newVal, Races(GetRace()));
+    if (std::vector<SkillLineAbilityEntry const*> const* skillLineAbilities = sDB2Manager.GetSkillLineAbilitiesBySkill(id)) {}
+}
+bool Player::IsClassicProfessionChildSkill() {}
+void Player::_SaveSkills()
+{
+        if (itr->second.uState == SKILL_UNCHANGED) {}
+}
+void Player::LearnSkillRewardedSpells(uint32 skillId, uint32 skillValue, Races race)
+{
+}
+""")
+            injector.inject(root);first=(player/'Player.cpp').read_text();injector.inject(root)
+            self.assertEqual((player/'Player.cpp').read_text(),first)
+            self.assertIn('bool advancementEdit = false',(player/'Player.h').read_text())
+            self.assertEqual(first.count('if (!advancementEdit) LearnSkillRewardedSpells'),2)
+            self.assertIn('m_foreverAdvancementClassSkills.count(itr->first) ||',first)
+            self.assertIn('if (m_foreverAdvancementClassSkills.count(skillId)) return;',first)
+            self.assertEqual(first.count('void Player::SyncForeverAdvancementClassSkills('),1)
+
     def test_injection_removes_old_engine_and_is_repeatable(self):
         injector=load('inject-advancement.py')
         with tempfile.TemporaryDirectory() as temp:
@@ -161,7 +191,7 @@ class AdvancementUITests(unittest.TestCase):
             for chunk in [MOCK,(MODULE/'addon/ForeverAscension/Catalog.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/Portrait.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/CharacterStats.lua').read_text(),
-                          (MODULE/'addon/ForeverAscension/Spellbook.lua').read_text(),
+                          (MODULE/'addon/ForeverAscension/Integration.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/ForeverAscension.lua').read_text()+'\n'+assertions]:
                 status=lib.luaL_loadstring(state,chunk.encode())
                 if not status:status=lib.lua_pcallk(state,0,0,0,0,None)
@@ -190,11 +220,11 @@ classButtons[5].scripts.OnClick()
 assert(selectedClass==5 and state.learned[mage] and state.learned[priest])
 parse('STATE 1 20 2 8');parse('LEARNED '..mage);parse('LEARNED '..priest);parse('END')
 assert(compatible[mage] and compatible[priest])
-advance();actionButtons[1].scripts.OnClick(actionButtons[1]);assert(sent[#sent]:match('^cast '))
+assert(not named.ForeverAscensionActions and not named.ForeverAscensionSpellbook)
 selectedClass=8;selectedTab='Frost';page=1;filter='frostbolt';refresh()
 local clicked=false
 for _,n in ipairs(abilityNodes) do if n.entry and n.entry.ID==mage then advance();n.scripts.OnClick(n,'LeftButton');clicked=true end end
-assert(clicked and sent[#sent]=='unlearn '..mage)
+assert(clicked and sent[#sent]=='cast '..mage)
 ''')
 
     def test_talent_grid_ranks_and_server_purchase_messages(self):
@@ -205,7 +235,7 @@ selectedClass=8;selectedTab='Fire';refresh()
 local found
 for _,node in ipairs(talentNodes) do if node.entry and node.entry.ID==398 then found=node end end
 assert(found and found.note.text=='2/3')
-assert(found.points[1][2]==322 and found.points[1][3]==-14)
+assert(found.points[1][2]==285 and found.points[1][3]==-14)
 advance();found.scripts.OnClick(found,'LeftButton');assert(sent[#sent]=='talent 398')
 advance();found.scripts.OnClick(found,'RightButton');assert(sent[#sent]=='untalent 398')
 assert(state.talentFree==9 and state.talentTotal==11)
@@ -242,11 +272,17 @@ assert(found)
 local seen={};for _,row in ipairs(abilities) do assert(not seen[row.Name]);seen[row.Name]=true end
 """)
 
-    def test_modern_panels_use_solid_colours_and_talent_grid_fits(self):
+    def test_native_tree_uses_readable_nodes_and_scrolls_to_last_tier(self):
         self.lua(r"""
 open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('END')
 talentScroll.height=403;selectedClass=8;selectedTab='Fire';refresh()
-assert(talentCanvas.height<=403,'the classic talent tree must fit the actual viewport')
+assert(talentCanvas.height>403,'keep talent nodes readable and scroll the long tree')
+talentScroll.scripts.OnMouseWheel(talentScroll,-100)
+assert(talentScroll.scroll>0)
+for _,node in ipairs(talentNodes) do if node:IsShown() then
+ assert(node.icon.width==36)
+ assert(-node.points[1][3]+node.height<=talentCanvas.height)
+end end
 for _,frame in ipairs(frames) do
  assert(frame.texture~='Interface\\QuestFrame\\QuestBG','no stretched parchment')
  if type(frame.texture)=='string' then assert(not frame.texture:find('TalentFrame',1,true),'no stretched tree artwork') end
@@ -256,25 +292,27 @@ assert(emptyAbilities.shadow[1]==0 and emptyAbilities.shadow[2]==0)
 assert(schools.BeastMastery=='Повелитель зверей')
 """)
 
-    def test_learned_spells_add_school_tabs_cast_and_drag_from_book(self):
+    def test_native_drag_and_talent_neighbour_button_without_duplicate_spell_ui(self):
         self.lua(r"""
-SpellBookFrame=CreateFrame('Frame','SpellBookFrame',UIParent);SpellBookFrame:Show()
-local picked;PickupSpell=function(spell) picked=spell end
+TalentMicroButton=CreateFrame('Button','TalentMicroButton',UIParent)
+local picked;C_Spell={PickupSpell=function(spell) picked=spell end}
 open();parse('PROTOCOL 2');parse('STATE 1 20 1 8');parse('CATALOG')
-local priest
-for _,row in ipairs(ForeverAscensionCatalog) do if row.Class=='Priest' and row.Tab=='Holy' and row.Type=='Ability' then priest=row.ID;break end end
-assert(priest)
-parse('ENTRY '..priest..' 2061 1 0 5');parse('LEARNED '..priest);parse('END')
-local book=named.ForeverAscensionSpellbook;assert(book and book.parent==SpellBookFrame)
-local school,card
-for _,frame in ipairs(frames) do
- if frame.parent==book and frame.group=='Свет' then school=frame end
- if frame.parent==book and type(frame.row)=='table' and frame.row.entry==priest then card=frame end
-end
-assert(school and school:IsShown() and card and card:IsShown())
-advance();card.scripts.OnClick(card);assert(sent[#sent]=='cast '..priest)
-card.scripts.OnDragStart(card);assert(picked==2061)
-parse('STATE 1 20 0 8');parse('END');assert(not card:IsShown() and not school:IsShown())
+parse('ENTRY 10 116 4 1 8');parse('LEARNED 10');parse('END')
+selectedClass=8;selectedTab='Frost';refresh()
+local card;for _,node in ipairs(abilityNodes) do if node.entry and node.entry.ID==10 then card=node end end
+assert(card);card.scripts.OnDragStart(card);assert(picked==116)
+advance();card.scripts.OnClick(card,'LeftButton');assert(sent[#sent]=='cast 10')
+advance();card.scripts.OnClick(card,'RightButton');assert(sent[#sent]=='unlearn 10')
+for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'PLAYER_LOGIN') end end
+local micro=named.ForeverAscensionMicroButton;assert(micro and micro.parent==TalentMicroButton and micro.points[1][2]==TalentMicroButton)
+assert(not named.ForeverAscensionSpellbook and not named.ForeverAscensionActions)
+window:Hide();micro.scripts.OnClick();assert(window:IsShown());micro.scripts.OnClick();assert(not window:IsShown())
+-- Missing modern pickup API falls back to the actual native book slot.
+C_Spell=nil;PickupSpell=nil
+GetSpellBookItemInfo=function(slot) if slot==1 then return 'SPELL',116 end end
+PickupSpellBookItem=function(slot,book) picked=slot..':'..book end
+assert(ForeverAscensionPickupSpell(116) and picked=='1:spell')
+InCombatLockdown=function() return true end;assert(not ForeverAscensionPickupSpell(116))
 """)
 
     def test_unadapted_talents_and_native_primary_cannot_be_purchased(self):

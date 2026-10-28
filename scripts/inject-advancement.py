@@ -40,6 +40,36 @@ def inject(core,module=None):
             if original.count(anchor)!=1:raise ValueError('Unknown Spell custom argument layout')
             original=original.replace(anchor,signature+' { _triggeredCastFlags = TriggerCastFlags(_triggeredCastFlags | TRIGGERED_IGNORE_POWER_COST); }\n'+anchor)
             spell_header.write_text(original)
+    player_header=core/'src/server/game/Entities/Player/Player.h'
+    player_source=core/'src/server/game/Entities/Player/Player.cpp'
+    if player_header.exists() and player_source.exists():
+        header=player_header.read_text();source=player_source.read_text()
+        declaration='        void SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal);'
+        if 'SyncForeverAdvancementClassSkills' not in header:
+            if header.count(declaration)!=1:raise ValueError('Unknown Player skill declaration')
+            header=header.replace(declaration,'        void SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal, bool advancementEdit = false);\n        void SyncForeverAdvancementClassSkills(std::set<uint32> const& desired);')
+            marker='        SkillStatusMap mSkillStatus;'
+            if header.count(marker)!=1:raise ValueError('Unknown Player skill storage')
+            header=header.replace(marker,marker+'\n        std::set<uint32> m_foreverAdvancementClassSkills;')
+            begin=source.index('void Player::SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal)')
+            end=source.index('\nbool Player::IsClassicProfessionChildSkill',begin)
+            body=source[begin:end]
+            body=body.replace('uint16 maxVal)','uint16 maxVal, bool advancementEdit)',1)
+            if body.count('LearnSkillRewardedSpells(id, newVal, Races(GetRace()));')!=2:raise ValueError('Unknown skill reward layout')
+            body=body.replace('LearnSkillRewardedSpells(id, newVal, Races(GetRace()));','if (!advancementEdit) LearnSkillRewardedSpells(id, newVal, Races(GetRace()));')
+            body=body.replace('if (std::vector<SkillLineAbilityEntry const*> const* skillLineAbilities = sDB2Manager.GetSkillLineAbilitiesBySkill(id))','if (!advancementEdit) if (std::vector<SkillLineAbilityEntry const*> const* skillLineAbilities = sDB2Manager.GetSkillLineAbilitiesBySkill(id))')
+            source=source[:begin]+body+source[end:]
+            save=source.index('void Player::_SaveSkills(')
+            guard=source.index('        if (itr->second.uState == SKILL_UNCHANGED)',save)
+            source=source[:guard]+source[guard:].replace('if (itr->second.uState == SKILL_UNCHANGED)','if (m_foreverAdvancementClassSkills.count(itr->first) || itr->second.uState == SKILL_UNCHANGED)',1)
+            source+='\n'+(module/'server/PlayerBookSchools.inc').read_text()
+            player_header.write_text(header);player_source.write_text(source)
+        source=player_source.read_text()
+        reward='void Player::LearnSkillRewardedSpells(uint32 skillId, uint32 skillValue, Races race)\n{'
+        guard='    if (m_foreverAdvancementClassSkills.count(skillId)) return; // transient spellbook school'
+        if guard not in source:
+            if source.count(reward)!=1:raise ValueError('Unknown skill reward function')
+            player_source.write_text(source.replace(reward,reward+'\n'+guard))
     loader.write_text(text)
 
 
