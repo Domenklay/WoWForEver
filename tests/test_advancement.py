@@ -346,8 +346,15 @@ PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrame',UIParent)
 for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
 local button=ForeverAscensionTalentButton
 assert(button and button.parent==PlayerTalentFrame and button.text=='Мультикласс')
-assert(button.points[1][1]=='TOPRIGHT' and button.points[1][4]==-42)
+assert(button.points[1][1]=='BOTTOMRIGHT' and button.points[1][4]==-24)
 window:Hide();button.scripts.OnClick();assert(window:IsShown())
+local previous=button
+PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrameWithSearch',UIParent)
+PlayerTalentFrame.SearchBox=CreateFrame('EditBox',nil,PlayerTalentFrame)
+for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
+button=ForeverAscensionTalentButton
+assert(not previous:IsShown() and button.points[1][1]=='RIGHT')
+assert(button.points[1][2]==PlayerTalentFrame.SearchBox and button.points[1][3]=='LEFT' and button.points[1][4]==-12)
 """)
 
     def test_trait_description_uses_native_entry_rank_and_reports_actual_aura_values(self):

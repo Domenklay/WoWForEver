@@ -34,7 +34,20 @@ local function attach()
   if talentButton then talentButton:Hide() end
   talentHost=frame
   talentButton=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate")
-  talentButton:SetSize(146,24);talentButton:SetPoint("TOPRIGHT",frame,"TOPRIGHT",-42,-12);talentButton:SetText("Мультикласс")
+  talentButton:SetSize(146,24);talentButton:SetText("Мультикласс")
+  local search
+  for _,key in ipairs({"SearchBox","SearchEditBox","SearchBar","SearchContainer"}) do
+   local candidate=frame[key]
+   if (type(candidate)=="table" or type(candidate)=="userdata") and type(candidate.GetObjectType)=="function" then search=candidate;break end
+  end
+  if not search then search=PlayerTalentFrameSearchBox or TalentFrameSearchBox end
+  if search then
+   talentButton:SetPoint("RIGHT",search,"LEFT",-12,0)
+  else
+   -- Some client layouts do not expose their search widget. Keep the button
+   -- in the empty footer instead of guessing coordinates in the header.
+   talentButton:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-24,14)
+  end
   talentButton:SetScript("OnClick",function() if ForeverAscensionToggle then ForeverAscensionToggle() end end)
   talentButton:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_BOTTOM");GameTooltip:SetText("Мультикласс",1,0.82,0);GameTooltip:AddLine("Способности и таланты других классов",1,1,1);GameTooltip:Show() end end)
   talentButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
