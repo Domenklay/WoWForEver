@@ -272,6 +272,7 @@ xattr -cr "/Applications/Forever Launcher.app"
 - [Обновление копии CASC и аудит настоящих манифестов](docs/zones/CASC-INCREMENTAL.ru.md).
 - [Контрольный импорт нового FileDataID в отдельную копию клиента](docs/zones/CASC-CANARY.ru.md).
 - [Forever Ascension: новый аддон, обновление и откат](mods/forever-advancement/README.ru.md).
+- [Целевая модель мультикласса в стиле Ascension Freepick](docs/ASCENSION-FREEPICK.ru.md).
 - [План переноса контента из 3.3.5 и новых дополнений](docs/CUSTOMIZATION.ru.md).
 - [Инструкции для AI-ассистентов](AGENTS.md).
 

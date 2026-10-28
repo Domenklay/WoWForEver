@@ -19,8 +19,12 @@
   "owned_fixture_tests": {
     "original_entries_preserved": true,
     "native_casc_readback_passed": true,
-    "manual_and_failure_rollback_passed": true
+    "manual_and_failure_rollback_passed": true,
+    "opaque_patch_bytes_and_offsets_preserved": true
   },
   "actual_client_canary_render_verified": false,
-  "actual_map_arrival_verified": false
+  "actual_map_arrival_verified": false,
+  "first_user_install_stopped_before_changes": "Patched CFT records are not supported",
+  "alias_implementation": "Append path table; reuse original VFS offsets; preserve original VFS/CFT/EST bytes and locations",
+  "native_original_top_level_path_alias_checked": true
 }

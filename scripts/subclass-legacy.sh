@@ -3,6 +3,9 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 action=${1:-status}
+if [ "$action" != rollback ]; then echo "Use scripts/advancement-mod.sh for the new module" >&2;exit 2;fi
+freepick_install=0
+if [ "$action" = install-freepick ]; then action=install;freepick_install=1;fi
 mysql_world() { docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot world'; }
 mysql_hotfixes() { docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot hotfixes'; }
 remove_native_power_hotfix() {
@@ -23,6 +26,14 @@ if not found:out.append('SUBCLASS_ENABLED='+sys.argv[1])
 p.write_text('\n'.join(out)+'\n')
 PY
 }
+set_freepick() {
+    python3 - "$1" <<'PYMODE'
+from pathlib import Path
+import sys
+p=Path('.env');rows=[r for r in p.read_text().splitlines() if not r.startswith('SUBCLASS_FREEPICK=')]
+rows.append('SUBCLASS_FREEPICK='+sys.argv[1]);p.write_text('\n'.join(rows)+'\n')
+PYMODE
+}
 case "$action" in
   build) ;;
   status)
@@ -32,7 +43,7 @@ case "$action" in
   disable) ;;
   install) client=${2:-/mnt/e/_classic_beta_} ;;
   rollback) backup=${2:?Usage: bash scripts/subclass-mod.sh rollback backups/subclass-TIMESTAMP}; ;;
-  *) echo 'Usage: bash scripts/subclass-mod.sh {build|install [CLIENT]|status|disable|rollback BACKUP}';exit 2 ;;
+  *) echo 'Usage: bash scripts/subclass-mod.sh {build|install [CLIENT]|install-freepick [CLIENT]|status|disable|rollback BACKUP}';exit 2 ;;
 esac
 command -v flock >/dev/null
 umask 077
@@ -76,8 +87,11 @@ if not (p/'WowB.exe').is_file():raise SystemExit('Client folder must contain Wow
 if (p/'Interface/AddOns/ForeverSubclass').is_symlink():raise SystemExit('Symlinked AddOn folder is not supported')
 PY
 label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' forever-trinitycore:latest)
-if [ "$label" = '0.3.6-forever.9' ] || [ "$label" = '0.3.5-forever.8' ]; then :
+if [ "$label" = '0.4.0-freepick.1' ] || [ "$label" = '0.3.6-forever.9' ] || [ "$label" = '0.3.5-forever.8' ]; then :
 else echo 'Built image is stale or missing native-power-slot support. Run: bash scripts/subclass-mod.sh build';exit 1;fi
+if [ "$freepick_install" = 1 ] && [ "$label" != '0.4.0-freepick.1' ]; then
+    echo 'Freepick requires the new image. Run: bash scripts/subclass-mod.sh build';exit 1
+fi
 running=$(docker compose ps --status running --services)
 for service in mysql worldserver bnetserver web; do
     if ! grep -qx "$service" <<< "$running"; then echo "Service $service must be running before installation";exit 1;fi
@@ -134,16 +148,24 @@ docker compose exec -T mysql sh -c '
 mv "$backup/world-bindings.sql.tmp" "$backup/world-bindings.sql"
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot characters' < mods/forever-subclass/sql/characters.sql
 mysql_world < mods/forever-subclass/sql/world.sql
-mysql_hotfixes < mods/forever-subclass/sql/hotfixes-native-power-experiment.sql
+if [ "$freepick_install" = 1 ]; then remove_native_power_hotfix
+else mysql_hotfixes < mods/forever-subclass/sql/hotfixes-native-power-experiment.sql;fi
 python3 scripts/install-subclass-addon.py --client "$client" --backup "$backup/addon"
 python3 scripts/subclass-log-config.py --backup "$backup"
 set_enabled 1
+set_freepick "$freepick_install"
 docker compose up -d --no-deps --force-recreate worldserver bnetserver web
 container=$(docker compose ps -q worldserver)
 started=$(docker inspect --format '{{.State.StartedAt}}' "$container")
 for ((attempt=0;attempt<90;attempt++)); do
     logs=$(docker compose logs --since "$started" --tail=1200 worldserver)
     if grep -q 'ForeverSubclass ready:' <<< "$logs" && grep -q 'worldserver-daemon.*ready' <<< "$logs"; then
+        if [ "$freepick_install" = 1 ] && ! grep -q 'Freepick ability prototype enabled' <<< "$logs"; then
+            echo 'Freepick mode was overridden or did not start; rolling back.' >&2;exit 1
+        fi
+        if [ "$freepick_install" = 0 ] && grep -q 'Freepick ability prototype enabled' <<< "$logs"; then
+            echo 'Legacy mode was overridden by Freepick; rolling back.' >&2;exit 1
+        fi
         finished=1
         echo "Subclass module installed. Backup: $backup"
         echo 'Enable ForeverSubclass in the game AddOns list, log in, and type /fsub.'

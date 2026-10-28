@@ -43,18 +43,19 @@ def add_span(est,obj):
 
 
 def mirror_child(data,old_id=OLD_ID,new_id=NEW_ID):
-    parsed=storelib.tvfs.parse_tvfs(data);leaves=parsed['leaves'];new=dict(leaves);mirrored=[]
-    for name,spans in leaves.items():
+    parsed=storelib.tvfs.parse_tvfs(data,raw_paths=True);leaves=parsed['leaves'];aliases={};mirrored=[]
+    for name,value in leaves.items():
         match=re.fullmatch(r'([0-9A-Fa-f]{8})([0-9A-Fa-f]{32})',name)
         if not match or int(match[1],16)!=old_id:continue
         target=f'{new_id:08X}'+match[2]
-        if target in new:raise ValueError('Native child already contains the canary ID')
-        new[target]=copy.deepcopy(spans)
-        mirrored.append(dict(original=name,added=target,ckey=match[2].lower(),spans=len(spans)))
+        if target in leaves:raise ValueError('Native child already contains the canary ID')
+        aliases[target]=name
+        mirrored.append(dict(original=name,added=target,ckey=match[2].lower(),vfs_offset=value,
+                             span_marker=parsed['tables']['vfs'][value]))
     if not mirrored:return None,[]
-    encoded=storelib.encode_tvfs(new,parsed['tables']['est'],parsed['max_depth'])
-    check=storelib.tvfs.parse_tvfs(encoded)['leaves']
-    if any(check[name]!=spans for name,spans in leaves.items()):raise ValueError('Original child entries changed')
+    encoded=storelib.tvfs.alias_tvfs_paths(data,aliases)
+    check=storelib.tvfs.parse_tvfs(encoded,raw_paths=True)['leaves']
+    if any(check[name]!=value for name,value in leaves.items()):raise ValueError('Original child entries changed')
     return encoded,mirrored
 
 
