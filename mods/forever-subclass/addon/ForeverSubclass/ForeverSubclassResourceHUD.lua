@@ -6,7 +6,7 @@
 local RESPONSE="FSR1"
 local powerNames={[0]="Мана",[1]="Ярость",[3]="Энергия"}
 local pending,state
-local holder,mainBar,secondaryBar,nativeBar
+local frame,mainBar,secondaryBar,nativeBar
 
 local function debug(text)
  if _G.ForeverSubclassDebugAdd then _G.ForeverSubclassDebugAdd("RESOURCE "..tostring(text)) end
@@ -35,9 +35,9 @@ local function findNativeBar()
 end
 
 local function colorBar(bar,kind)
- if kind==1 then bar:SetStatusBarColor(0.82,0.08,0.08)       -- rage
- elseif kind==3 then bar:SetStatusBarColor(0.95,0.78,0.05)  -- energy
- else bar:SetStatusBarColor(0.08,0.35,0.92) end             -- mana
+ if kind==1 then bar:SetStatusBarColor(0.82,0.08,0.08)
+ elseif kind==3 then bar:SetStatusBarColor(0.95,0.78,0.05)
+ else bar:SetStatusBarColor(0.08,0.35,0.92) end
 end
 
 local function makeBar(parent,height)
@@ -52,51 +52,34 @@ local function makeBar(parent,height)
   bar:SetBackdropBorderColor(0.34,0.31,0.23,0.95)
  end
  bar.text=bar:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
- bar.text:SetPoint("CENTER",0,0)
- bar.text:SetTextColor(1,1,1,1)
+ bar.text:SetPoint("CENTER",0,0);bar.text:SetTextColor(1,1,1,1)
  return bar
 end
 
 local function build()
- if holder and mainBar and secondaryBar then return true end
+ if frame and mainBar and secondaryBar then return true end
  nativeBar=findNativeBar()
  if not nativeBar or not _G.PlayerFrame then return false end
 
- holder=CreateFrame("Frame","ForeverSubclassResourceHUD",_G.PlayerFrame)
- holder:SetFrameStrata(nativeBar.GetFrameStrata and nativeBar:GetFrameStrata() or "MEDIUM")
- holder:SetFrameLevel((nativeBar.GetFrameLevel and nativeBar:GetFrameLevel() or 1)+7)
- holder:EnableMouse(false)
- holder:SetAllPoints(nativeBar)
+ frame=CreateFrame("Frame","ForeverSubclassResourceHUD",_G.PlayerFrame)
+ frame:SetFrameStrata(nativeBar.GetFrameStrata and nativeBar:GetFrameStrata() or "MEDIUM")
+ frame:SetFrameLevel((nativeBar.GetFrameLevel and nativeBar:GetFrameLevel() or 1)+7)
+ frame:EnableMouse(false);frame:SetAllPoints(nativeBar)
 
- -- This overlays the Blizzard power strip only while the subclass needs a
- -- different combat resource. Otherwise Blizzard's original bar remains visible.
- mainBar=makeBar(holder,math.max(10,nativeBar:GetHeight() or 12))
- mainBar:SetAllPoints(holder)
+ mainBar=makeBar(frame,math.max(10,nativeBar:GetHeight() or 12));mainBar:SetAllPoints(frame)
 
- -- Thin second resource sits directly under the player frame, like classic
- -- druid/alternate-mana unit frames. Parenting to PlayerFrame guarantees it
- -- moves and hides together with the portrait instead of becoming a floating box.
  secondaryBar=makeBar(_G.PlayerFrame,8)
- secondaryBar:SetFrameStrata(holder:GetFrameStrata())
- secondaryBar:SetFrameLevel(holder:GetFrameLevel()+1)
+ secondaryBar:SetFrameStrata(frame:GetFrameStrata());secondaryBar:SetFrameLevel(frame:GetFrameLevel()+1)
  secondaryBar:SetPoint("TOPLEFT",nativeBar,"BOTTOMLEFT",0,-1)
  secondaryBar:SetPoint("TOPRIGHT",nativeBar,"BOTTOMRIGHT",0,-1)
 
- holder:Hide();secondaryBar:Hide()
- debug("attached resource stack to PlayerFrame")
+ frame:Hide();secondaryBar:Hide();debug("attached resource stack to PlayerFrame")
  return true
 end
 
 local function chooseSubclassPower()
  if not state or not state.powers then return nil end
- local native=nativePowerKind()
- local rage=state.powers[1]
- local energy=state.powers[3]
- local mana=state.powers[0]
-
- -- For druids this naturally follows the active form: generated rage wins in
- -- bear, energy wins in cat. At zero resource, prefer rage before energy so the
- -- empty combat bar is still visible and can fill immediately.
+ local native=nativePowerKind();local rage=state.powers[1];local energy=state.powers[3];local mana=state.powers[0]
  if rage and rage.kind~=native and (rage.current or 0)>0 then return rage end
  if energy and energy.kind~=native and (energy.current or 0)>0 then return energy end
  if rage and rage.kind~=native then return rage end
@@ -107,81 +90,54 @@ local function chooseSubclassPower()
 end
 
 local function setBar(bar,kind,current,maximum,showName)
- maximum=math.max(1,tonumber(maximum) or 1)
- current=math.max(0,tonumber(current) or 0)
+ maximum=math.max(1,tonumber(maximum) or 1);current=math.max(0,tonumber(current) or 0)
  bar:SetMinMaxValues(0,maximum);bar:SetValue(current);colorBar(bar,kind)
- if showName then
-  bar.text:SetText((powerNames[kind] or "Ресурс").."  "..current.." / "..maximum)
- else
-  bar.text:SetText(current.." / "..maximum)
- end
+ if showName then bar.text:SetText((powerNames[kind] or "Ресурс").."  "..current.." / "..maximum)
+ else bar.text:SetText(current.." / "..maximum) end
  bar:Show()
 end
 
 local function getNativeValues(kind)
  if kind==nil or not UnitPower or not UnitPowerMax then return nil,nil end
- local maximum=UnitPowerMax("player",kind) or 0
- if maximum<=0 then return nil,nil end
+ local maximum=UnitPowerMax("player",kind) or 0;if maximum<=0 then return nil,nil end
  return UnitPower("player",kind) or 0,maximum
 end
 
 local function chooseSecondaryKind(primary)
  local native=nativePowerKind()
  if native~=nil and (not primary or native~=primary.kind) then
-  local _,maximum=getNativeValues(native)
-  if maximum and maximum>0 then return native end
+  local _,maximum=getNativeValues(native);if maximum and maximum>0 then return native end
  end
-
- -- Druid-style alternate mana: while the displayed native power is rage/energy,
- -- UnitPower(player, MANA) remains readable. Show it as the lower blue strip.
  if native~=0 and (not primary or primary.kind~=0) then
-  local _,maximum=getNativeValues(0)
-  if maximum and maximum>0 then return 0 end
+  local _,maximum=getNativeValues(0);if maximum and maximum>0 then return 0 end
  end
  return nil
 end
 
 local function refreshSecondary(primary)
  if not secondaryBar then return end
- local kind=chooseSecondaryKind(primary)
- if kind==nil then secondaryBar:Hide();return end
- local current,maximum=getNativeValues(kind)
- if not maximum then secondaryBar:Hide();return end
+ local kind=chooseSecondaryKind(primary);if kind==nil then secondaryBar:Hide();return end
+ local current,maximum=getNativeValues(kind);if not maximum then secondaryBar:Hide();return end
  setBar(secondaryBar,kind,current,maximum,true)
 end
 
 local function refresh()
  if not build() then return end
- if not state or not state.active or state.active==0 then
-  holder:Hide();secondaryBar:Hide();return
- end
-
+ if not state or not state.active or state.active==0 then frame:Hide();secondaryBar:Hide();return end
  local primary=chooseSubclassPower()
- if primary then
-  setBar(mainBar,primary.kind,primary.current,primary.max,true)
-  holder:Show()
- else
-  -- Active subclass uses the same resource Blizzard already displays. Do not
-  -- cover the native bar; we may still add alternate mana underneath.
-  holder:Hide()
- end
+ if primary then setBar(mainBar,primary.kind,primary.current,primary.max,true);frame:Show() else frame:Hide() end
  refreshSecondary(primary)
 end
 
--- Immediate visual spend prediction. The next authoritative FSR1 snapshot fixes
--- the value if the server rejects the cast.
 _G.ForeverSubclassResourcePredictSpend=function(spellId)
  spellId=tonumber(spellId)
  if not spellId or not state or not state.powers or not state.spells then return end
  local spell=state.spells[spellId]
  if not spell or not spell.selected then
-  for _,candidate in pairs(state.spells) do
-   if candidate.selected and candidate.root==spellId then spell=candidate;break end
-  end
+  for _,candidate in pairs(state.spells) do if candidate.selected and candidate.root==spellId then spell=candidate;break end end
  end
  if not spell then return end
- local p=state.powers[spell.power]
- if not p or spell.power==nativePowerKind() then return end
+ local p=state.powers[spell.power];if not p or spell.power==nativePowerKind() then return end
  p.current=math.max(0,(p.current or 0)-(spell.cost or 0));refresh()
 end
 
@@ -189,25 +145,16 @@ local function parse(msg)
  local words={};for w in tostring(msg):gmatch("%S+") do table.insert(words,w) end
  local kind=words[1]
  if kind=="STATE" then pending={active=tonumber(words[3]) or 0,spells={},powers={}}
- elseif kind=="POWER" and pending then
-  local power=tonumber(words[2]);if power then pending.powers[power]={kind=power,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
- elseif kind=="SPELL" and pending then
-  local id=tonumber(words[2]);if id then pending.spells[id]={id=id,root=tonumber(words[3]) or id,selected=words[5]=="1",cost=tonumber(words[6]) or 0,power=tonumber(words[7])} end
+ elseif kind=="POWER" and pending then local power=tonumber(words[2]);if power then pending.powers[power]={kind=power,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
+ elseif kind=="SPELL" and pending then local id=tonumber(words[2]);if id then pending.spells[id]={id=id,root=tonumber(words[3]) or id,selected=words[5]=="1",cost=tonumber(words[6]) or 0,power=tonumber(words[7])} end
  elseif kind=="END" and pending then state=pending;pending=nil;refresh() end
 end
 
 local events=CreateFrame("Frame")
-events:RegisterEvent("PLAYER_LOGIN")
-events:RegisterEvent("PLAYER_ENTERING_WORLD")
-events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
-events:RegisterEvent("UNIT_DISPLAYPOWER")
-events:RegisterEvent("UNIT_POWER_UPDATE")
-events:RegisterEvent("UNIT_MAXPOWER")
-events:RegisterEvent("CHAT_MSG_ADDON")
+events:RegisterEvent("PLAYER_LOGIN");events:RegisterEvent("PLAYER_ENTERING_WORLD");events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+events:RegisterEvent("UNIT_DISPLAYPOWER");events:RegisterEvent("UNIT_POWER_UPDATE");events:RegisterEvent("UNIT_MAXPOWER");events:RegisterEvent("CHAT_MSG_ADDON")
 events:SetScript("OnEvent",function(_,event,...)
  if event=="CHAT_MSG_ADDON" then local prefix,msg=...;if prefix==RESPONSE then parse(msg) end;return end
- if event=="UNIT_POWER_UPDATE" or event=="UNIT_MAXPOWER" or event=="UNIT_DISPLAYPOWER" then
-  local unit=...;if unit and unit~="player" then return end;refresh();return
- end
+ if event=="UNIT_POWER_UPDATE" or event=="UNIT_MAXPOWER" or event=="UNIT_DISPLAYPOWER" then local unit=...;if unit and unit~="player" then return end;refresh();return end
  if C_Timer and C_Timer.After then C_Timer.After(0.4,function() build();refresh();sendStatus() end) else build();refresh();sendStatus() end
 end)
