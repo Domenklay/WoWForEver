@@ -96,3 +96,29 @@ python3 scripts/activate-legion-map.py rollback
 высоту в 110 точках. В отдельном MySQL 8 проверены установка, русское имя карты,
 откат, сохранение посторонних строк и возврат персонажей из тестовой карты.
 Эти проверки не заменяют тест приёма hotfix и телепортации клиентом пользователя.
+
+## Ошибка потоковой загрузки WOW51900322
+
+На компьютере пользователя hotfix Map 1220 получил `VALIDATION_RESULT_VALID`,
+но при загрузке карты клиент запросил отключение и показал WOW51900322.
+Успешная телепортация и ходьба не подтверждены. Код не называет конкретный файл;
+ошибку нельзя считать доказательством неисправности сервера или архива CASC.
+
+Верните персонажа через `home KAY`, закройте игру и лаунчер и соберите отчёт
+о типах ресурсов. Уже установленный пакет использовал общую группу ROOT;
+проверка сравнивает её с метаданными файлов рабочего мира. Роли вспомогательных
+WDT и разных ADT определяются по слотам MPHD/MAID, поскольку одного расширения
+файла недостаточно.
+
+```bash
+cd ~/WoWForEver
+git pull --ff-only
+python3 scripts/audit-legion-root-types.py \
+  /mnt/e/WoWForEver-work/experiments/Forever-Legion-client-v1 \
+  --resource-report /mnt/e/WoWForEver-work/packages/Legion-Dalaran-private-v2/report.json \
+  --output /mnt/e/WoWForEver-work/reports/Dalaran-ROOT-types-v1.json
+```
+
+Пришлите `E:\WoWForEver-work\reports\Dalaran-ROOT-types-v1.json`.
+Команда не меняет клиент или сервер и не обращается к CDN. Если файл отчёта уже
+существует, используйте новое имя, например `Dalaran-ROOT-types-v2.json`.
