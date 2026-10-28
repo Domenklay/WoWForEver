@@ -4,6 +4,12 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 action=${1:-status}
 mysql_world() { docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot world'; }
+mysql_hotfixes() { docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot hotfixes'; }
+remove_native_power_hotfix() {
+    printf '%s\n' \
+      "DELETE FROM hotfix_data WHERE TableHash=3224459983 AND RecordId IN (190031901,190031902);" \
+      "DELETE FROM chr_classes_x_power_types WHERE ID IN (190031901,190031902);" | mysql_hotfixes
+}
 set_enabled() {
     python3 - "$1" <<'PY'
 from pathlib import Path
@@ -39,8 +45,9 @@ if [ "$action" = build ]; then
 fi
 if [ "$action" = disable ]; then
     set_enabled 0
+    remove_native_power_hotfix
     docker compose up -d --no-deps --force-recreate worldserver
-    echo 'Subclass gameplay disabled. Progress tables and AddOn kept.'
+    echo 'Subclass gameplay and native-power experiment disabled. Progress tables and AddOn kept.'
     exit
 fi
 if [ "$action" = rollback ]; then
@@ -50,6 +57,7 @@ if [ "$action" = rollback ]; then
     docker compose stop web bnetserver worldserver
     printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName='spell_forever_subclass';" | mysql_world
     mysql_world < "$backup/world-bindings.sql"
+    remove_native_power_hotfix
     docker tag "$(cat "$backup/old-image.txt")" forever-trinitycore:latest
     set_enabled 0
     if [ -f "$backup/addon/addon-install.json" ]; then
@@ -57,7 +65,7 @@ if [ "$action" = rollback ]; then
     fi
     python3 scripts/subclass-log-config.py --backup "$backup" --restore
     docker compose up -d --no-deps --force-recreate worldserver bnetserver web
-    echo 'Rolled back server image and AddOn. Subclass progress retained for later use.'
+    echo 'Rolled back server image, native-power hotfix and AddOn. Subclass progress retained for later use.'
     exit
 fi
 python3 - "$client" <<'PY'
@@ -68,7 +76,7 @@ if not (p/'WowB.exe').is_file():raise SystemExit('Client folder must contain Wow
 if (p/'Interface/AddOns/ForeverSubclass').is_symlink():raise SystemExit('Symlinked AddOn folder is not supported')
 PY
 label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' forever-trinitycore:latest)
-[ "$label" = '0.3.5-forever.8' ] || { echo 'Built image is stale or missing native-power-slot support. Run: bash scripts/subclass-mod.sh build';exit 1; }
+[ "$label" = '0.3.6-forever.9' ] || { echo 'Built image is stale or missing staged native-power hotfix support. Run: bash scripts/subclass-mod.sh build';exit 1; }
 running=$(docker compose ps --status running --services)
 for service in mysql worldserver bnetserver web; do
     if ! grep -qx "$service" <<< "$running"; then echo "Service $service must be running before installation";exit 1;fi
@@ -100,6 +108,7 @@ restore_on_error() {
             printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName='spell_forever_subclass';" | mysql_world || true
             mysql_world < "$backup/world-bindings.sql" || true
         fi
+        remove_native_power_hotfix || true
         cp "$backup/env.before" .env
         docker tag "$(cat "$backup/old-image.txt")" forever-trinitycore:latest || true
         if [ -f "$backup/addon/addon-install.json" ]; then
@@ -124,6 +133,7 @@ docker compose exec -T mysql sh -c '
 mv "$backup/world-bindings.sql.tmp" "$backup/world-bindings.sql"
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot characters' < mods/forever-subclass/sql/characters.sql
 mysql_world < mods/forever-subclass/sql/world.sql
+mysql_hotfixes < mods/forever-subclass/sql/hotfixes-native-power-experiment.sql
 python3 scripts/install-subclass-addon.py --client "$client" --backup "$backup/addon"
 python3 scripts/subclass-log-config.py --backup "$backup"
 set_enabled 1
