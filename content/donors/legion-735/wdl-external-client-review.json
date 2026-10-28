@@ -37,7 +37,20 @@
     "status": "SIZE_FAILED",
     "error": 1007,
     "error_name": "ERROR_FILE_OFFLINE",
-    "ruRU_result_not_yet_available": true
+    "ruRU_result_not_yet_available": false
   },
-  "installable": false
+  "installable": false,
+  "map_ruRU_read": {
+    "file_data_id": 1349477,
+    "requested_locale": "ruRU",
+    "locale_mask": "2000",
+    "status": "READ_FAILED",
+    "bytes_read": 11546,
+    "error": 1005,
+    "error_name": "ERROR_FILE_ENCRYPTED",
+    "source_library_reason": "encrypted stream cannot find file key",
+    "previous_export_first_opaque_section_offset": 11546,
+    "whole_content_hash_not_verified": true
+  },
+  "next_step": "Prepare separate Map.db2 candidate from server export; keep client/server unchanged and full source-content match unverified"
 }
