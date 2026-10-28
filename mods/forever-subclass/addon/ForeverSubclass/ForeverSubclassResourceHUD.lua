@@ -1,12 +1,12 @@
 -- Player-frame resource integration for ForeverSubclass.
--- The active subclass resource is presented as the main power bar when it differs
--- from the player's native resource. The native resource is then mirrored as a
--- thin secondary bar below it. Server FSR1 snapshots remain authoritative.
+-- Layout follows familiar WoW unit-frame conventions:
+--   health (Blizzard) -> active combat resource -> secondary mana/native resource.
+-- No detached HUD is created; everything is parented to PlayerFrame.
 
 local RESPONSE="FSR1"
 local powerNames={[0]="Мана",[1]="Ярость",[3]="Энергия"}
 local pending,state
-local frame,mainBar,secondaryBar,nativeBar
+local holder,mainBar,secondaryBar,nativeBar
 
 local function debug(text)
  if _G.ForeverSubclassDebugAdd then _G.ForeverSubclassDebugAdd("RESOURCE "..tostring(text)) end
@@ -35,48 +35,55 @@ local function findNativeBar()
 end
 
 local function colorBar(bar,kind)
- if kind==1 then bar:SetStatusBarColor(0.78,0.10,0.10)
- elseif kind==3 then bar:SetStatusBarColor(0.86,0.67,0.08)
- else bar:SetStatusBarColor(0.08,0.32,0.82) end
+ if kind==1 then bar:SetStatusBarColor(0.82,0.08,0.08)       -- rage
+ elseif kind==3 then bar:SetStatusBarColor(0.95,0.78,0.05)  -- energy
+ else bar:SetStatusBarColor(0.08,0.35,0.92) end             -- mana
 end
 
-local function addBackground(bar,alpha)
- local bg=bar:CreateTexture(nil,"BACKGROUND")
- bg:SetAllPoints();bg:SetColorTexture(0.015,0.015,0.015,alpha or 0.92)
- bar._fsubBackground=bg
+local function makeBar(parent,height)
+ local template=BackdropTemplateMixin and "BackdropTemplate" or nil
+ local bar=CreateFrame("StatusBar",nil,parent,template)
+ bar:SetHeight(height)
+ bar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
+ bar:SetMinMaxValues(0,1);bar:SetValue(0);bar:EnableMouse(false)
+ if bar.SetBackdrop then
+  bar:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=8,edgeSize=5,insets={left=1,right=1,top=1,bottom=1}})
+  bar:SetBackdropColor(0.01,0.01,0.01,0.95)
+  bar:SetBackdropBorderColor(0.34,0.31,0.23,0.95)
+ end
+ bar.text=bar:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+ bar.text:SetPoint("CENTER",0,0)
+ bar.text:SetTextColor(1,1,1,1)
+ return bar
 end
 
 local function build()
- if frame and mainBar and secondaryBar then return true end
+ if holder and mainBar and secondaryBar then return true end
  nativeBar=findNativeBar()
  if not nativeBar or not _G.PlayerFrame then return false end
 
- frame=CreateFrame("Frame","ForeverSubclassResourceHUD",UIParent)
- frame:SetFrameStrata(nativeBar.GetFrameStrata and nativeBar:GetFrameStrata() or "MEDIUM")
- frame:SetFrameLevel((nativeBar.GetFrameLevel and nativeBar:GetFrameLevel() or 1)+8)
- frame:EnableMouse(false)
- frame:SetAllPoints(nativeBar)
+ holder=CreateFrame("Frame","ForeverSubclassResourceHUD",_G.PlayerFrame)
+ holder:SetFrameStrata(nativeBar.GetFrameStrata and nativeBar:GetFrameStrata() or "MEDIUM")
+ holder:SetFrameLevel((nativeBar.GetFrameLevel and nativeBar:GetFrameLevel() or 1)+7)
+ holder:EnableMouse(false)
+ holder:SetAllPoints(nativeBar)
 
- mainBar=CreateFrame("StatusBar",nil,frame)
- mainBar:SetAllPoints(frame)
- mainBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
- addBackground(mainBar,0.96)
- mainBar.text=mainBar:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
- mainBar.text:SetPoint("CENTER",0,0)
- mainBar:EnableMouse(false)
+ -- This overlays the Blizzard power strip only while the subclass needs a
+ -- different combat resource. Otherwise Blizzard's original bar remains visible.
+ mainBar=makeBar(holder,math.max(10,nativeBar:GetHeight() or 12))
+ mainBar:SetAllPoints(holder)
 
- secondaryBar=CreateFrame("StatusBar",nil,UIParent)
- secondaryBar:SetFrameStrata(frame:GetFrameStrata())
- secondaryBar:SetFrameLevel(frame:GetFrameLevel()+1)
- secondaryBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
- secondaryBar:SetHeight(6)
+ -- Thin second resource sits directly under the player frame, like classic
+ -- druid/alternate-mana unit frames. Parenting to PlayerFrame guarantees it
+ -- moves and hides together with the portrait instead of becoming a floating box.
+ secondaryBar=makeBar(_G.PlayerFrame,8)
+ secondaryBar:SetFrameStrata(holder:GetFrameStrata())
+ secondaryBar:SetFrameLevel(holder:GetFrameLevel()+1)
  secondaryBar:SetPoint("TOPLEFT",nativeBar,"BOTTOMLEFT",0,-1)
  secondaryBar:SetPoint("TOPRIGHT",nativeBar,"BOTTOMRIGHT",0,-1)
- addBackground(secondaryBar,0.94)
- secondaryBar:EnableMouse(false)
 
- frame:Hide();secondaryBar:Hide()
- debug("HUD built on native power bar")
+ holder:Hide();secondaryBar:Hide()
+ debug("attached resource stack to PlayerFrame")
  return true
 end
 
@@ -86,7 +93,10 @@ local function chooseSubclassPower()
  local rage=state.powers[1]
  local energy=state.powers[3]
  local mana=state.powers[0]
- -- Prefer an actively used physical resource, then any other subclass resource.
+
+ -- For druids this naturally follows the active form: generated rage wins in
+ -- bear, energy wins in cat. At zero resource, prefer rage before energy so the
+ -- empty combat bar is still visible and can fill immediately.
  if rage and rage.kind~=native and (rage.current or 0)>0 then return rage end
  if energy and energy.kind~=native and (energy.current or 0)>0 then return energy end
  if rage and rage.kind~=native then return rage end
@@ -96,29 +106,70 @@ local function chooseSubclassPower()
  return nil
 end
 
-local function refreshNativeSecondary()
- if not secondaryBar or not secondaryBar:IsShown() then return end
+local function setBar(bar,kind,current,maximum,showName)
+ maximum=math.max(1,tonumber(maximum) or 1)
+ current=math.max(0,tonumber(current) or 0)
+ bar:SetMinMaxValues(0,maximum);bar:SetValue(current);colorBar(bar,kind)
+ if showName then
+  bar.text:SetText((powerNames[kind] or "Ресурс").."  "..current.." / "..maximum)
+ else
+  bar.text:SetText(current.." / "..maximum)
+ end
+ bar:Show()
+end
+
+local function getNativeValues(kind)
+ if kind==nil or not UnitPower or not UnitPowerMax then return nil,nil end
+ local maximum=UnitPowerMax("player",kind) or 0
+ if maximum<=0 then return nil,nil end
+ return UnitPower("player",kind) or 0,maximum
+end
+
+local function chooseSecondaryKind(primary)
  local native=nativePowerKind()
- if native==nil or not UnitPower or not UnitPowerMax then secondaryBar:Hide();return end
- local maximum=math.max(1,UnitPowerMax("player",native) or 1)
- local current=math.max(0,UnitPower("player",native) or 0)
- secondaryBar:SetMinMaxValues(0,maximum);secondaryBar:SetValue(current);colorBar(secondaryBar,native)
+ if native~=nil and (not primary or native~=primary.kind) then
+  local _,maximum=getNativeValues(native)
+  if maximum and maximum>0 then return native end
+ end
+
+ -- Druid-style alternate mana: while the displayed native power is rage/energy,
+ -- UnitPower(player, MANA) remains readable. Show it as the lower blue strip.
+ if native~=0 and (not primary or primary.kind~=0) then
+  local _,maximum=getNativeValues(0)
+  if maximum and maximum>0 then return 0 end
+ end
+ return nil
+end
+
+local function refreshSecondary(primary)
+ if not secondaryBar then return end
+ local kind=chooseSecondaryKind(primary)
+ if kind==nil then secondaryBar:Hide();return end
+ local current,maximum=getNativeValues(kind)
+ if not maximum then secondaryBar:Hide();return end
+ setBar(secondaryBar,kind,current,maximum,true)
 end
 
 local function refresh()
  if not build() then return end
- if not state or not state.active or state.active==0 then frame:Hide();secondaryBar:Hide();return end
- local power=chooseSubclassPower()
- if not power then frame:Hide();secondaryBar:Hide();return end
+ if not state or not state.active or state.active==0 then
+  holder:Hide();secondaryBar:Hide();return
+ end
 
- mainBar:SetMinMaxValues(0,math.max(1,power.max or 1))
- mainBar:SetValue(math.max(0,power.current or 0));colorBar(mainBar,power.kind)
- mainBar.text:SetText((powerNames[power.kind] or "Ресурс").."  "..tostring(power.current or 0).." / "..tostring(power.max or 0))
- frame:Show();secondaryBar:Show();refreshNativeSecondary()
+ local primary=chooseSubclassPower()
+ if primary then
+  setBar(mainBar,primary.kind,primary.current,primary.max,true)
+  holder:Show()
+ else
+  -- Active subclass uses the same resource Blizzard already displays. Do not
+  -- cover the native bar; we may still add alternate mana underneath.
+  holder:Hide()
+ end
+ refreshSecondary(primary)
 end
 
--- Called immediately after a subclass cast request. The next FSR1 POWER snapshot
--- corrects this prediction if the server rejects the cast.
+-- Immediate visual spend prediction. The next authoritative FSR1 snapshot fixes
+-- the value if the server rejects the cast.
 _G.ForeverSubclassResourcePredictSpend=function(spellId)
  spellId=tonumber(spellId)
  if not spellId or not state or not state.powers or not state.spells then return end
@@ -156,7 +207,7 @@ events:RegisterEvent("CHAT_MSG_ADDON")
 events:SetScript("OnEvent",function(_,event,...)
  if event=="CHAT_MSG_ADDON" then local prefix,msg=...;if prefix==RESPONSE then parse(msg) end;return end
  if event=="UNIT_POWER_UPDATE" or event=="UNIT_MAXPOWER" or event=="UNIT_DISPLAYPOWER" then
-  local unit=...;if unit and unit~="player" then return end;refreshNativeSecondary();return
+  local unit=...;if unit and unit~="player" then return end;refresh();return
  end
  if C_Timer and C_Timer.After then C_Timer.After(0.4,function() build();refresh();sendStatus() end) else build();refresh();sendStatus() end
 end)
