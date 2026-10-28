@@ -1,0 +1,24 @@
+{
+  "format": "wowforever-legion-geometry-review-v1",
+  "source_report_sha256": "da5ad4b5e4462767c25b1ddbc4e9327b74494f72cd82d58f5513b1143d7b4c70",
+  "native_resource_ids_verified": 8655,
+  "terrain_tiles": 1,
+  "collision_models": 1093,
+  "collision_tiles": 9,
+  "city_collision_samples": 101,
+  "client_metadata_unchanged": true,
+  "logged_missing_file_ids": 40,
+  "logged_missing_ids_all_previously_unplaced": true,
+  "native_isolated_geometry_test": {
+    "game_assets_used": false,
+    "model_names_isolated": true,
+    "spawn_indexes_preserved": true,
+    "native_height_samples": 110,
+    "expected_height": 735
+  },
+  "mysql8_apply_and_rollback_test": true,
+  "russian_locale_test": true,
+  "client_hotfix_acceptance_verified": false,
+  "player_spawn_verified": false,
+  "map_enabled_on_user_machine": false
+}
