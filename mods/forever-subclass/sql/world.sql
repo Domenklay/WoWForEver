@@ -11,5 +11,6 @@ INSERT INTO spell_script_names (spell_id,ScriptName) VALUES
 (-331,'spell_forever_subclass'),(-116,'spell_forever_subclass'),
 (-2136,'spell_forever_subclass'),(-686,'spell_forever_subclass'),
 (-5176,'spell_forever_subclass'),(-5185,'spell_forever_subclass'),
+(-5487,'spell_forever_subclass'),(-768,'spell_forever_subclass'),
 (-6807,'spell_forever_subclass'),(-1082,'spell_forever_subclass');
 COMMIT;
