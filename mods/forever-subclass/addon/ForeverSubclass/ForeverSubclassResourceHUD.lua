@@ -1,6 +1,6 @@
 -- Integrated player-frame resource block for ForeverSubclass.
 -- Primary class resource stays on top; one different subclass/form resource is shown
--- beneath it. Equal power types are never duplicated.
+-- beneath it. Native class power slots are always read directly from the client.
 
 local RESPONSE="FSR1"
 local POWER_MANA=0
@@ -17,14 +17,13 @@ local primaryPowerByClass={
  [7]=POWER_MANA,
  [8]=POWER_MANA,
  [9]=POWER_MANA,
- [11]=POWER_MANA, -- Druid remains mana-primary even in bear/cat form.
+ [11]=POWER_MANA,
 }
 
 local pending,state
 local frame,mainBar,secondaryBar,nativeBar
 local stockAlpha
 local rageVisualFraction=0
-local refreshElapsed=0
 local fallbackTexture="Interface\\TARGETINGFRAME\\UI-StatusBar"
 
 local function debug(text)
@@ -130,7 +129,7 @@ local function build()
  secondaryBar:SetPoint("BOTTOM",frame,"BOTTOM",0,2)
 
  frame:Hide()
- debug("built primary+secondary PlayerFrame power block")
+ debug("built native-aware primary+secondary PlayerFrame power block")
  return true
 end
 
@@ -141,6 +140,11 @@ local function getUnitPower(kind)
  return UnitPower("player",kind) or 0,maximum
 end
 
+local function hasNativeClientPower(kind)
+ local _,maximum=getUnitPower(kind)
+ return maximum~=nil and maximum>0
+end
+
 local function setBar(bar,kind,current,maximum)
  maximum=math.max(1,tonumber(maximum) or 1)
  current=math.max(0,tonumber(current) or 0)
@@ -149,8 +153,6 @@ local function setBar(bar,kind,current,maximum)
 end
 
 local function primaryValues(primaryKind)
- -- BASEPOWER is server-supplied specifically so druid mana remains available
- -- while the client display power has switched to rage/energy in a form.
  if state and state.basePower and state.basePower.kind==primaryKind and state.basePower.max>0 then
   return state.basePower.current,state.basePower.max
  end
@@ -159,20 +161,17 @@ end
 
 local function chooseSecondaryPower(primaryKind)
  if not state or not state.powers then return nil end
- local native=nativePowerKind()
+ local display=nativePowerKind()
 
- -- If the current form/stance exposes a different power and the server confirms
- -- that the active subclass can use it, use that one live. This is the bear/cat
- -- case and prevents a second virtual rage/energy pool from being rendered.
- if native~=nil and native~=primaryKind and state.powers[native] then
-  return {kind=native,live=true,server=state.powers[native]}
+ if display~=nil and display~=primaryKind and state.powers[display] then
+  return {kind=display,live=hasNativeClientPower(display),server=state.powers[display]}
  end
 
  local order={POWER_RAGE,POWER_ENERGY,POWER_MANA}
  for _,kind in ipairs(order) do
   local power=state.powers[kind]
   if power and kind~=primaryKind then
-   return {kind=kind,live=(kind==native),server=power}
+   return {kind=kind,live=hasNativeClientPower(kind),server=power}
   end
  end
  return nil
@@ -220,8 +219,8 @@ _G.ForeverSubclassResourcePredictSpend=function(spellId)
  if not spell then return end
  local p=state.powers[spell.power]
  if not p or spell.power==primaryPowerKind() then return end
- -- Native rage/energy is updated by UNIT_POWER_UPDATE; only predict virtual pools.
- if spell.power~=nativePowerKind() then p.current=math.max(0,(p.current or 0)-(spell.cost or 0)) end
+ -- Native class slots are updated by UNIT_POWER_UPDATE; only predict virtual pools.
+ if not hasNativeClientPower(spell.power) then p.current=math.max(0,(p.current or 0)-(spell.cost or 0)) end
  refresh()
 end
 
@@ -255,8 +254,7 @@ events:RegisterEvent("CHAT_MSG_ADDON")
 events:SetScript("OnEvent",function(_,event,...)
  if event=="CHAT_MSG_ADDON" then local prefix,msg=...;if prefix==RESPONSE then parse(msg) end;return end
  if event=="PLAYER_LOGOUT" then setStockVisible(true);return end
- if event=="PLAYER_REGEN_DISABLED" then rageVisualFraction=0;refresh();return end
- if event=="PLAYER_REGEN_ENABLED" then rageVisualFraction=0;refresh();return end
+ if event=="PLAYER_REGEN_DISABLED" or event=="PLAYER_REGEN_ENABLED" then rageVisualFraction=0;refresh();return end
  if event=="UNIT_POWER_UPDATE" or event=="UNIT_MAXPOWER" or event=="UNIT_DISPLAYPOWER" then
   local unit=...;if unit and unit~="player" then return end;refresh();return
  end
@@ -264,16 +262,15 @@ events:SetScript("OnEvent",function(_,event,...)
 end)
 
 events:SetScript("OnUpdate",function(_,elapsed)
- -- Smooth client-side display for virtual warrior rage between authoritative
- -- server snapshots. Native warrior/bear rage is never touched here.
+ -- Only virtual rage needs interpolation. Druid/warrior native rage is handled by
+ -- the core and read directly from UnitPower even when it is not the display power.
  if not state or not state.active or UnitAffectingCombat("player") then return end
  local rage=state.powers and state.powers[POWER_RAGE]
- if not rage or POWER_RAGE==nativePowerKind() or rage.current<=0 then return end
+ if not rage or hasNativeClientPower(POWER_RAGE) or rage.current<=0 then return end
  rageVisualFraction=rageVisualFraction+RAGE_DECAY_PER_SECOND*elapsed
  local whole=math.floor(rageVisualFraction)
  if whole<=0 then return end
  rageVisualFraction=rageVisualFraction-whole
  rage.current=math.max(0,rage.current-whole)
- refreshElapsed=refreshElapsed+elapsed
  refresh()
 end)
