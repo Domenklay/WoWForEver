@@ -2,16 +2,15 @@
 ## Title: Forever Subclass
 ## Notes: Подклассы WoW Forever: отдельный прогресс, ресурсы, таланты и питомцы
 ## Author: WoWForEver project; server-authoritative prototype adapter
-## Version: 0.8.2-forever.23
+## Version: 0.8.3-forever.24
 ## SavedVariables: ForeverSubclassUI, ForeverSubclassDebugLog
-ForeverSubclass.lua
 ForeverSubclassDirectTransport.lua
 ForeverSubclassResourceHUD.lua
 ForeverSubclassCastFeedback.lua
 ForeverSubclassTalents.lua
+ForeverSubclassTalentHostFix.lua
 ForeverSubclassTalentTree.lua
 ForeverSubclassHunterPet.lua
-ForeverSubclassNativeTalentVisibility.lua
 ForeverSubclassSpellBook.lua
 ForeverSubclassActionBar.lua
 ForeverSubclassDebug.lua
