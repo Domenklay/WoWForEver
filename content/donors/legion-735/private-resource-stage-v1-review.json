@@ -1,0 +1,36 @@
+{
+  "format": "wowforever-private-resource-stage-review-v1",
+  "report_sha256": "d6db0d10efbfe21dc0e23b6afe99a003ebd442a55a3c9d2e479d486b133b8c08",
+  "package_sha256": "be9d8f8d611468e7f765b24dd42a1d4e83d268dd9af97e867516be10e1a852a4",
+  "counts": {
+    "private_payload_files": 2912,
+    "rewritten_files": 1171,
+    "rewritten_reference_slots": 4210,
+    "shared_file_candidates": 4192
+  },
+  "private_payload_bytes": 168791851,
+  "report_id_and_offset_consistency_verified": true,
+  "installable": false,
+  "blocking_findings": [
+    {
+      "path": "maps/trollraid/troll raid_23_33_obj1.adt",
+      "finding": "MLDD and MLMD still reference original IDs in stage v1",
+      "additional_rewrites": 50,
+      "additional_rewrite_kinds": {
+        "MLDD": 48,
+        "MLMD": 2
+      },
+      "typed_placement_slots": 77,
+      "all_placement_ids_already_in_package": true,
+      "original_sha256": "c80cdbd358a5cab108a85fdce7f12dffaac83f9aff6264b94519a415a807934b",
+      "corrected_sha256": "4541a19bbd5f05c63b6eb6b46e18e7402d5bdab5ed83eb650c6233ede50886f5"
+    }
+  ],
+  "next_step": "Rebuild private v2 with parser revision 2 and review original TEX/WDL sample before installation",
+  "remaining_requirements": [
+    "revalidate target ROOT reservations and every reused payload",
+    "resolve opaque dependency sections and native ROOT/tag policies",
+    "client/server Map record and server geometry",
+    "transactional CASC import and game test"
+  ]
+}

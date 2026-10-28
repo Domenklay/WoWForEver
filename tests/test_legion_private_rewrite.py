@@ -67,13 +67,27 @@ class PrivateRewriteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'array'):
             mod.reference_slots('own.m2',chunk('TXID',b'x'))
 
-    def fixture(self, home):
+    def fixture(self, home, extra=False):
         package = home/'source'
         package.mkdir()
         bodies = {'own/model.m2':chunk('MD21',b'owned model')+chunk('TXID',struct.pack('<I',101)),
                   'own/a.blp':b'BLP2owned texture','own/shared.blp':b'BLP2shared texture'}
+        if extra:
+            placement=bytearray(36)
+            struct.pack_into('<I',placement,0,101)
+            struct.pack_into('<H',placement,34,0x40)
+            wmo=bytearray(40)
+            struct.pack_into('<I',wmo,0,999)
+            struct.pack_into('<H',wmo,32,8)
+            sky=bytearray(48)
+            struct.pack_into('<I',sky,8,101)
+            bodies['own/test.wdl']=(chunk('MLDD',placement,True)+chunk('MLMD',wmo,True)+
+                                    chunk('MSSO',sky,True)+chunk('MLMX',bytes(28),True))
+            bodies['own/test.tex']=(chunk('TXVR',struct.pack('<I',1),True)+
+                                    chunk('TXBT',struct.pack('<II4B',101,101,4,4,1,0),True)+
+                                    chunk('TXMD',struct.pack('<I',101),True))
         files=[]
-        for fid,(name,body) in zip((100,101,102),bodies.items()):
+        for fid,(name,body) in enumerate(bodies.items(),100):
             files.append(dict(path=name,bytes=len(body),file_data_ids=[fid],sha256=hashlib.sha256(body).hexdigest(),
                               source_sha256=hashlib.sha256(body).hexdigest(),ckey=hashlib.md5(body).hexdigest()))
         report=dict(format='wowforever-legion-tile-package-v1',errors=[],files=files,bytes=sum(map(len,bodies.values())),
@@ -85,9 +99,9 @@ class PrivateRewriteTests(unittest.TestCase):
         report['package_sha256']=mod.compare.sha_file(package/'tile-candidate.zip')
         (package/'report.json').write_text(json.dumps(report))
         plan=dict(format='wowforever-legion-private-id-plan-v1',package_sha256=report['package_sha256'],
-                  private_ids=2,target_build_info_sha256='a'*64,external_dependencies=[],
+                  private_ids=4 if extra else 2,target_build_info_sha256='a'*64,external_dependencies=[],
                   resources=[dict(original_file_data_id=row['file_data_ids'][0],target_file_data_id=15728540+row['file_data_ids'][0]
-                                  if index<2 else 102,path=row['path'],donor_ckey=row['ckey']) for index,row in enumerate(files)])
+                                  if index!=2 else 102,path=row['path'],donor_ckey=row['ckey']) for index,row in enumerate(files)])
         plan_path=home/'plan.json';plan_path.write_text(json.dumps(plan))
         return package/'report.json',plan_path,bodies
 
@@ -131,3 +145,36 @@ class PrivateRewriteTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'fingerprint'):
                 mod.prepare(report,plan,home/'delta',progress=lambda _:None)
             self.assertFalse((home/'delta').exists())
+
+
+    def test_lod_wdl_and_tex_rewrites_report_missing_placements_and_sample_original_bytes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home=Path(temp);report,plan,bodies=self.fixture(home,extra=True)
+            result=mod.prepare(report,plan,home/'delta',progress=lambda _:None,format_sample=True)
+            self.assertEqual(result['unresolved_additional_placement_ids'],[999])
+            self.assertEqual(result['reference_parser_revision'],2)
+            self.assertEqual(result['counts']['rewritten_reference_slots'],4)
+            self.assertFalse(result['installable'])
+            with zipfile.ZipFile(home/'delta/aux-format-sample.zip') as archive:
+                sample=json.loads(archive.read('sample-index.json'))
+                self.assertEqual(len(sample['files']),2)
+                for row in sample['files']:
+                    self.assertEqual(archive.read('data/'+row['path']),bodies[row['path']])
+            with zipfile.ZipFile(home/'delta/private-resources.zip') as archive:
+                tex=archive.read('data/own/test.tex')
+                self.assertIn(struct.pack('<II4B',15728641,101,4,4,1,0),tex)
+                self.assertEqual(tex[-4:],struct.pack('<I',101))
+
+    def test_lod_flags_extents_and_legacy_tex_names_are_preserved(self):
+        entry=bytearray(36);struct.pack_into('<I',entry,0,101)
+        flagged=bytearray(entry);struct.pack_into('<H',flagged,34,0x40)
+        bounds=struct.pack('<7I',101,0,0,0,0,0,0)
+        data=chunk('MLDD',entry+flagged,True)+chunk('MLDX',bounds,True)
+        body,changes=mod.rewrite('test_obj1.adt',data,{101:15728641},set())
+        self.assertEqual(len(changes),1)
+        self.assertEqual(body[8:44],entry)
+        self.assertEqual(body[-28:],bounds)
+        legacy=chunk('TXFN',b'names',True)+chunk('TXBT',struct.pack('<3I',101,0,0),True)
+        self.assertEqual(mod.rewrite('test.tex',legacy,{101:15728641},set()),(legacy,[]))
+        with self.assertRaisesRegex(ValueError,'extent'):
+            mod.reference_slots('test_obj1.adt',chunk('MLMX',b'x',True))

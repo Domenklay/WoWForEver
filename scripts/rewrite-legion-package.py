@@ -30,11 +30,11 @@ def reference_slots(path, data):
     Unparsed sections stay unchanged and remain explicit coverage limitations.
     """
     suffix = Path(path).suffix.lower()
-    if suffix not in {'.m2', '.skel', '.adt', '.wdt', '.wmo'}:
+    if suffix not in {'.m2', '.skel', '.adt', '.wdt', '.wmo', '.wdl', '.tex'}:
         return []
     if suffix in {'.m2', '.skel'} and data[:4] == b'MD20':
         return []
-    reverse = suffix in {'.adt', '.wdt', '.wmo'}
+    reverse = suffix in {'.adt', '.wdt', '.wmo', '.wdl', '.tex'}
     blocks = []
     offset = 0
     while offset < len(data):
@@ -70,6 +70,9 @@ def reference_slots(path, data):
                 if size != 16:
                     raise ValueError('Unsupported SKPD layout')
                 array(start, size, tag, 16, 8)
+        elif suffix == '.tex':
+            if tag == 'TXBT' and 'TXFN' not in tags:
+                array(start, size, 'TXBT', 12)
         elif suffix == '.wdt':
             if tag == 'MPHD':
                 if size != 32:
@@ -83,13 +86,20 @@ def reference_slots(path, data):
         else:
             if tag in {'GFID', 'MODI', 'MDID', 'MHID'}:
                 array(start, size, tag)
-            elif tag in {'MDDF', 'MODF'}:
-                stride, flag, mask = (36, 34, 0x40) if tag == 'MDDF' else (64, 56, 8)
+            elif tag in {'MDDF', 'MODF', 'MLDD', 'MLMD'}:
+                stride, flag, mask = ({'MDDF': (36, 34, 0x40), 'MODF': (64, 56, 8),
+                                       'MLDD': (36, 34, 0x40), 'MLMD': (40, 32, 8)})[tag]
                 if size % stride:
                     raise ValueError('Invalid placement layout')
                 for pos in range(start, start + size, stride):
                     if struct.unpack_from('<H', data, pos + flag)[0] & mask:
                         array(pos, stride, tag, stride)
+            elif tag in {'MLDX', 'MLMX'}:
+                if size % 28:
+                    raise ValueError('Invalid LOD extent layout')
+                # Seven floats describe bounds/radius, not FileDataIDs.
+            elif tag == 'MSSO' and suffix == '.wdl':
+                array(start, size, tag, 48, 8)
             elif tag == 'MOMT' and 'MOTX' not in tags:
                 for field in (12, 24, 36):
                     array(start, size, 'MOMT', 64, field)
@@ -127,7 +137,7 @@ def rewrite(path, data, mapping, expected):
     return rewritten, changes
 
 
-def prepare(report_path, plan_path, output, progress=print):
+def prepare(report_path, plan_path, output, progress=print, format_sample=False):
     report_path, plan_path, output = map(lambda p: Path(p).resolve(), (report_path, plan_path, output))
     if (output.exists() or output.is_relative_to(report_path.parent) or
             any(p in {'Data', '_classic_beta_'} for p in output.parts)):
@@ -167,6 +177,9 @@ def prepare(report_path, plan_path, output, progress=print):
         raise ValueError('Insufficient free space for delta and 256 MiB reserve')
     stage = Path(tempfile.mkdtemp(prefix=output.name + '.partial-', dir=output.parent))
     files, counts = [], Counter()
+    additional = []
+    sample = []
+    sample_bytes = 0
     try:
         with zipfile.ZipFile(report_path.parent/'tile-candidate.zip') as source, zipfile.ZipFile(
                 stage/'private-resources.zip', 'x', zipfile.ZIP_DEFLATED, allowZip64=True) as dest:
@@ -179,6 +192,17 @@ def prepare(report_path, plan_path, output, progress=print):
                 data = source.read(member)
                 if hashlib.sha256(data).hexdigest() != row['sha256'] or hashlib.md5(data).hexdigest() != row['ckey']:
                     raise ValueError('Resource content mismatch: ' + row['path'])
+                for offset, fid, kind in reference_slots(row['path'], data):
+                    if kind in {'MLDD', 'MLMD', 'MSSO', 'TXBT'}:
+                        additional.append(dict(source=row['path'], offset=offset, file_data_id=fid, kind=kind,
+                            role='embedded_texture_key' if kind == 'TXBT' else 'external_placement',
+                            target_file_data_id=mapping.get(fid, fid),
+                            listed_in_package_or_external_plan=fid in requested or fid in external))
+                if format_sample and Path(row['path']).suffix.lower() in {'.tex', '.wdl'}:
+                    sample_bytes += len(data)
+                    if sample_bytes > 20*1024*1024:
+                        raise ValueError('Format sample exceeds 20 MiB budget')
+                    sample.append((row['path'], data, row['sha256']))
                 rewritten, changes = rewrite(row['path'], data, mapping, refs[row['path']])
                 ids = row['file_data_ids']
                 private = [fid in mapping for fid in ids]
@@ -203,12 +227,25 @@ def prepare(report_path, plan_path, output, progress=print):
                           target_build_info_sha256=plan['target_build_info_sha256'],tile=report['tile'],
                           counts=dict(counts),files=files,external_dependencies=plan['external_dependencies'],
                           coverage_limits=report['coverage_limits'],ignored_unplaced_modi_ids=ignored,
+                          reference_parser_revision=2,additional_typed_references=additional,
+                          unresolved_additional_placement_ids=sorted({r['file_data_id'] for r in additional
+                              if r['role']=='external_placement' and not r['listed_in_package_or_external_plan']}),
                           client_modified=False,typed_references_rewritten=True,full_dependency_closure_proven=False,
                           root_policy_assigned=False,installable=False,
                           remaining_requirements=['revalidate target ROOT reservations and every reused payload',
                               'resolve opaque dependency sections and native ROOT/tag policies',
                               'client/server Map record and server geometry', 'transactional CASC import and game test'])
             dest.writestr('private-resource-index.json', json.dumps(result, indent=2)+'\n')
+        if format_sample:
+            sample_index = dict(format='wowforever-legion-aux-format-sample-v1',
+                source_package_sha256=report['package_sha256'],
+                files=[dict(path=name, bytes=len(body), sha256=digest) for name,body,digest in sample])
+            with zipfile.ZipFile(stage/'aux-format-sample.zip', 'x', zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr('sample-index.json', json.dumps(sample_index, indent=2)+'\n')
+                for name, body, _ in sample:
+                    archive.writestr('data/'+name, body)
+                    if archive.read('data/'+name) != body:
+                        raise ValueError('Auxiliary sample verification failed')
         result['package_sha256'] = compare.sha_file(stage/'private-resources.zip')
         (stage/'report.json').write_text(json.dumps(result, indent=2)+'\n')
         if compare.sha_file(report_path.parent/'tile-candidate.zip') != report['package_sha256']:
@@ -225,6 +262,9 @@ def prepare(report_path, plan_path, output, progress=print):
         raise
     progress('Private resource package: '+str(output/'private-resources.zip'))
     progress('Report: '+str(output/'report.json'))
+    if format_sample:
+        progress('Small format sample: '+str(output/'aux-format-sample.zip'))
+    progress(f'Unresolved additional placement IDs: {len(result["unresolved_additional_placement_ids"])}')
     progress(f'Private payload files: {counts["private_payload_files"]}; rewritten files: {counts["rewritten_files"]}; installable: false')
     return result
 
@@ -234,8 +274,9 @@ if __name__ == '__main__':
     parser.add_argument('--package-report', type=Path, required=True)
     parser.add_argument('--private-plan', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--format-sample', action='store_true', help='Also package original TEX/WDL for format review (20 MiB limit)')
     args = parser.parse_args()
     try:
-        prepare(args.package_report, args.private_plan, args.output)
+        prepare(args.package_report, args.private_plan, args.output, format_sample=args.format_sample)
     except (ValueError, OSError, KeyError, TypeError, struct.error, UnicodeError, zipfile.BadZipFile) as exc:
         parser.exit(1, f'Private resource staging stopped: {exc}\n')
