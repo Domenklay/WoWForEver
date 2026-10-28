@@ -35,6 +35,8 @@ out="$reports/subclass-debug-$stamp.txt"
     docker inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' "$container" 2>/dev/null || true
     echo -n "Created: "
     docker image inspect --format '{{.Created}}' "$image" 2>/dev/null || true
+    echo -n "Running: "
+    docker inspect --format '{{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} restart={{.RestartCount}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' "$container" 2>/dev/null || true
   else
     echo "worldserver container not found"
   fi
@@ -48,6 +50,10 @@ out="$reports/subclass-debug-$stamp.txt"
   docker compose logs --no-color --timestamps --tail=4000 worldserver 2>&1 \
     | grep -Ei 'ForeverSubclass|Subclass|FSC1|FSR1|addon|pet|talent' \
     | tail -n 800 || true
+  echo
+
+  echo "=== FULL WORLDSERVER TAIL ==="
+  docker compose logs --no-color --timestamps --tail=600 worldserver 2>&1 || true
   echo
 
   echo "=== SUBCLASS DATABASE SUMMARY ==="
