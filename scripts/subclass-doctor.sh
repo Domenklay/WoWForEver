@@ -27,8 +27,8 @@ container=$(docker compose ps -q worldserver 2>/dev/null)
 image=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
 label=$(docker inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' "$container" 2>/dev/null || true)
 printf 'Running image: %s\n' "${image:-unknown}"
-if [ "$label" = '0.3.1-forever.4' ]; then pass "subclass image label: $label (login-stabilized multi-resource/talents/pets generation)"
-elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then fail "subclass image label: $label (expected 0.3.1-forever.4)"
+if [ "$label" = '0.3.2-forever.5' ]; then pass "subclass image label: $label (reserved-rank SQL crash fix + login stabilization)"
+elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then fail "subclass image label: $label (expected 0.3.2-forever.5)"
 else fail 'running image has no org.wowforever.subclass label';fi
 
 transport_patch='docker/patches/0004-forever-subclass-server-addon-endpoint.patch'
@@ -58,7 +58,7 @@ if docker compose ps --status running --services 2>/dev/null | grep -qx mysql; t
 else fail 'mysql container is not running';fi
 
 printf '\n'
-if [ "$ok" = "1" ]; then printf 'RESULT: login-stabilized multi-resource subclass runtime, talents/pets and FSC1 transport look ready.\n';exit 0
+if [ "$ok" = "1" ]; then printf 'RESULT: reserved-rank SQL crash fix, multi-resource subclass runtime, talents/pets and FSC1 transport look ready.\n';exit 0
 else
     printf 'RESULT: server-side subclass runtime is incomplete or stale. Do not recreate the character; rebuild/install the module.\n'
     printf 'Repair: bash scripts/subclass-mod.sh build && bash scripts/subclass-mod.sh install /mnt/e/_classic_beta_/\n';exit 1
