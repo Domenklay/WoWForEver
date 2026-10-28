@@ -78,7 +78,7 @@ class SubclassIntegrationTests(unittest.TestCase):
             self.assertEqual({p.name for p in target.iterdir() if p.is_file()},expected)
             toc=(target/'ForeverSubclass.toc').read_text()
             for name in expected-{'ForeverSubclass.toc'}:self.assertIn(name,toc)
-            self.assertIn('0.9.2-forever.28',toc)
+            self.assertIn('0.9.3-forever.29',toc)
             for stale in ['ForeverSubclass.lua','ForeverSubclassTalentTree.lua','ForeverSubclassTalentHostFix.lua',
                           'ForeverSubclassTalentTab.lua','ForeverSubclassTalentCompat.lua','ForeverSubclassPanelV2.lua',
                           'ForeverSubclassLegacySuppress.lua','ForeverSubclassInteractiveFix.lua','ForeverSubclassCommandTransport.lua']:
@@ -135,12 +135,14 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertNotIn('INV_MISC_QUESTIONMARK',action)
         self.assertIn('ForeverSubclassCooldownStart',feedback);self.assertIn('ForeverSubclassCooldownSync',feedback)
 
-    def test_secondary_resource_hud_replaces_subclass_power_and_mirrors_native(self):
+    def test_secondary_resource_hud_is_integrated_two_row_player_frame_block(self):
         hud=(ADDON/'ForeverSubclassResourceHUD.lua').read_text()
         feedback=(ADDON/'ForeverSubclassCastFeedback.lua').read_text()
         self.assertIn('local frame,mainBar,secondaryBar,nativeBar',hud)
-        self.assertIn('secondaryFrame=makeUIShell',hud)
-        self.assertIn('UI-Tooltip-Border',hud)
+        self.assertIn('built integrated two-row PlayerFrame resource block',hud)
+        self.assertIn('setStockVisible(false)',hud)
+        self.assertIn('mainBar:SetPoint("TOPLEFT"',hud)
+        self.assertIn('secondaryBar:SetPoint("TOPLEFT"',hud)
         self.assertIn('findNativeBar',hud);self.assertIn('secondaryBar',hud)
         self.assertIn('pending.powers[power]',hud);self.assertIn('ForeverSubclassResourcePredictSpend',hud)
         self.assertIn('UnitPowerType',hud);self.assertIn('UnitPower("player"',hud)
