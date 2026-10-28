@@ -218,6 +218,11 @@ def rebuild_tvfs(original,root,resources,locale=2,path_transform=None):
             if changed in transformed:raise ValueError('TVFS transformed path collision')
             transformed[changed]=spans
         paths=transformed
+    return encode_tvfs(paths,est,parsed['max_depth'])
+
+
+def encode_tvfs(paths,est,max_depth=1):
+    """Serialize semantic TVFS leaves; offsets into the EST stay explicit."""
     ew=tvfs.width(len(est));cft=bytearray();offsets=[]
     for name,spans in sorted(paths.items()):
         for s in spans:
@@ -237,7 +242,7 @@ def rebuild_tvfs(original,root,resources,locale=2,path_transform=None):
     path=b"\xff"+struct.pack(">I",0x80000000|(len(path)+4))+bytes(path)
     po=46;eo=po+len(path);co=eo+len(est);vo=co+len(cft)
     header=struct.pack(">4s4B7IH2I",b"TVFS",1,46,9,9,7,po,len(path),vo,len(vfs),
-                       co,len(cft),max(1,parsed["max_depth"]),eo,len(est))
+                       co,len(cft),max(1,max_depth),eo,len(est))
     result=header+path+est+bytes(cft)+bytes(vfs)
     actual=tvfs.parse_tvfs(result)["leaves"]
     if actual!=paths:raise ValueError("TVFS rebuild changed span fields")

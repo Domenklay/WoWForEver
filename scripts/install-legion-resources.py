@@ -119,7 +119,8 @@ def check_rows(rows,expected):
                 raise ValueError(f'Native {name} changed for {fid}: {row[name]} != {want[name]}')
 
 
-def manifests(store,private,objects,before,controls,progress,root_transform=None,path_transform=None):
+def manifests(store,private,objects,before,controls,progress,root_transform=None,path_transform=None,
+              vfs_transform=None,extra_assets=()):
     def configured(name):
         ck,ek=store.values[name].split()[:2]
         return store.read(bytes.fromhex(ek),bytes.fromhex(ck))
@@ -138,8 +139,10 @@ def manifests(store,private,objects,before,controls,progress,root_transform=None
     changed_root=(root_transform(old_root) if root_transform is not None else
                   append_root(old_root,{fid:obj['ckey'] for fid,obj in private.items()},locale=0xffffffff))
     root=canary.lab.asset(changed_root)
-    vfs=canary.lab.asset(canary.storelib.rebuild_tvfs(configured('vfs-root'),root,private,locale=0xffffffff,
-                                                   path_transform=path_transform))
+    vfs_bytes=canary.storelib.rebuild_tvfs(configured('vfs-root'),root,private,locale=0xffffffff,
+                                         path_transform=path_transform)
+    if vfs_transform is not None:vfs_bytes=vfs_transform(vfs_bytes)
+    vfs=canary.lab.asset(vfs_bytes)
     download_bytes=configured('download');download=Download(download_bytes)
     # Keep tag membership of an existing CKey when adding a new encoding for it.
     masks={}
@@ -163,7 +166,7 @@ def manifests(store,private,objects,before,controls,progress,root_transform=None
             rows.append(dict(ekey=obj['ekey'],encoded_bytes=len(obj['encoded']),priority=0,
                              tag_indices=[n for n in range(download.tag_count) if mask&(1<<n)]))
     dl=canary.lab.asset(append_download(download_bytes,rows))
-    additions=list(objects.values())+[root,vfs,dl]
+    additions=list(objects.values())+list(extra_assets)+[root,vfs,dl]
     enc=canary.lab.asset(extend_encoding(encoded,additions,allow_variants=True));additions.append(enc)
     checked=Encoding(enc['content'])
     for kind in ('c','e'):

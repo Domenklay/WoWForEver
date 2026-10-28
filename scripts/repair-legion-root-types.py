@@ -205,7 +205,7 @@ def apply(client,report_path,namespace_path,audit_path,checker,progress=print):
         configuration=dict(path=configuration['path'],created=created,sha256=install.canary.sha(configuration['body'])),
         original_segments=sorted(prologues),expected_after=expected,root_types_repaired=True,
         root_type_profiles=planned,
-        root_policy='typed native profiles; hashless private IDs; matching TVFS names',resource_ancestors=ancestors,
+        root_policy='typed native ROOT profiles; provisional flat TVFS routes, not game-validated',resource_ancestors=ancestors,
         root_type_audit_sha256=install.canary.sha(audit_bytes),root_type_evidence=evidence,wow_client_runtime_verified=False)
     install.canary.checkpoint(folder/'operation.json',journal)
     install.canary.checkpoint(client/install.OPS/'active.json',dict(operation=token))
@@ -247,6 +247,7 @@ def apply(client,report_path,namespace_path,audit_path,checker,progress=print):
 
 def rollback(client):
     client,_=install.canary.copy_identity(client);folder,journal=install.operation(client)
+    if journal.get('tvfs_entry_canary'):raise ValueError('Roll back the TVFS entry canary before the ROOT type repair')
     if not journal.get('root_types_repaired') or not journal.get('resource_ancestors'):raise ValueError('No active type repair')
     install.rollback(client)
     install.canary.checkpoint(client/install.OPS/'active.json',dict(operation=journal['resource_ancestors'][-1]))

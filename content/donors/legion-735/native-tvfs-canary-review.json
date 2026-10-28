@@ -1,0 +1,26 @@
+{
+  "format": "wowforever-native-tvfs-canary-review-v1",
+  "game_ui_observation": {
+    "original_texture_id": 123086,
+    "private_texture_id": 15728640,
+    "original_rendered": true,
+    "private_rendered": false,
+    "private_appearance": "solid green"
+  },
+  "original_top_level_tvfs": {
+    "entries": 582,
+    "has_16_hex_directory_names": true
+  },
+  "prior_installer_route": "literal full virtual name at top level",
+  "canary_route": "mirror source ID variants inside native RU child manifests; append changed children to vfs-N registry",
+  "legacy_root_unchanged": true,
+  "game_asset_payloads_unchanged": true,
+  "server_modified": false,
+  "owned_fixture_tests": {
+    "original_entries_preserved": true,
+    "native_casc_readback_passed": true,
+    "manual_and_failure_rollback_passed": true
+  },
+  "actual_client_canary_render_verified": false,
+  "actual_map_arrival_verified": false
+}
