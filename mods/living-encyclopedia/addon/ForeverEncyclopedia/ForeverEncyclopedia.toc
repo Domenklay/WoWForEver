@@ -1,0 +1,6 @@
+## Interface: 110000
+## Title: Forever Encyclopedia (prototype)
+## Notes: Local UI prototype. Server integration pending.
+## Version: 0.1.0-dev
+## SavedVariables: ForeverEncyclopediaDB
+ForeverEncyclopedia.lua
