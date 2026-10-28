@@ -1,0 +1,17 @@
+# Design defaults only. This file is not wired to TrinityCore yet.
+ForeverScaling.Enable = 0
+ForeverScaling.World = 1
+ForeverScaling.Dungeons = 1
+ForeverScaling.Raids = 1
+ForeverScaling.PlayerMaxLevel = 60
+ForeverScaling.MinLevelOffset = -9
+ForeverScaling.MaxLevelOffset = 10
+ForeverScaling.NormalOffset = 0
+ForeverScaling.EliteOffset = 5
+ForeverScaling.RareEliteOffset = 7
+ForeverScaling.BossOffset = 8
+ForeverScaling.DamageCap.NormalPct = 20
+ForeverScaling.DamageCap.ElitePct = 30
+ForeverScaling.DamageCap.RareElitePct = 40
+ForeverScaling.DamageCap.BossPct = 45
+ForeverScaling.Debug = 0
