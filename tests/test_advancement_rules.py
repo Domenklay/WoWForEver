@@ -14,6 +14,22 @@ def function(source,signature):
     return source[start:end]
 
 
+UTF8_UTIL_STUB=r'''
+#include <codecvt>
+#include <locale>
+#include <cwctype>
+#include <clocale>
+#include <string>
+bool Utf8toWStr(char const* text,std::wstring& out) {
+ try {out=std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(text);return true;}
+ catch(...) {return false;}
+}
+void wstrToLower(std::wstring& text) {
+ std::setlocale(LC_CTYPE,"C.UTF-8");for(auto& c:text)c=std::towlower(c);
+}
+'''
+
+
 @unittest.skipUnless(shutil.which('g++'),'C++20 compiler required')
 class AdvancementRuleTests(unittest.TestCase):
     def test_name_resolution_rejects_wrong_class_rank_and_ambiguity(self):
@@ -27,7 +43,7 @@ class AdvancementRuleTests(unittest.TestCase):
 #include <string_view>
 #include <vector>
 using uint32=unsigned;
-constexpr int DIFFICULTY_NONE=0;
+constexpr int DIFFICULTY_NONE=0,TOTAL_LOCALES=2;
 struct LocalizedString {std::array<char const*,2> Str;};
 struct SpellInfo {uint32 Id,SpellFamilyName;LocalizedString const* SpellName;};
 struct SpellMgr {
@@ -36,19 +52,31 @@ struct SpellMgr {
  uint32 GetSpellRank(uint32 id) {return ranks[id];}
 } manager;
 auto sSpellMgr=&manager;
-using NameIndex=std::map<std::string,std::vector<SpellInfo const*>>;
-'''+function(source,'static bool SourceNameMatches(')+function(source,'static uint32 ClassFamily(')+function(source,'static SpellInfo const* ResolveSpell(')+r'''
+using NameIndex=std::map<std::wstring,std::vector<SpellInfo const*>>;
+'''+UTF8_UTIL_STUB+function(source,'static std::wstring NameKey(')+function(source,'static bool SourceNameMatches(')+function(source,'static std::string NativeNames(')+function(source,'static uint32 ClassFamily(')+function(source,'static SpellInfo const* ResolveSpell(')+r'''
 int main() {
  LocalizedString frost={{"Frostbolt","Ледяная стрела"}},wrong={{"Something else",nullptr}};
  manager.spells.emplace(116,SpellInfo{116,3,&wrong});
  manager.spells.emplace(500,SpellInfo{500,3,&frost});manager.ranks[500]=1;
- std::array<char const*,9> names={"Frostbolt","Ледяная стрела"};
- NameIndex index;index["Frostbolt"]={&manager.spells.at(500)};
+ std::array<char const*,9> names={"FROSTBOLT","Ледяная Стрела"};
+ NameIndex index;index[NameKey("Frostbolt")]={&manager.spells.at(500)};
  assert(ResolveSpell(116,8,1,names,index)->Id==500);
  assert(!ResolveSpell(116,5,1,names,index));assert(!ResolveSpell(116,8,2,names,index));
  manager.spells.emplace(501,SpellInfo{501,3,&frost});manager.ranks[501]=1;
- index["Frostbolt"].push_back(&manager.spells.at(501));
+ index[NameKey("Frostbolt")].push_back(&manager.spells.at(501));
  assert(!ResolveSpell(116,8,1,names,index));
+ // A Russian-only native store must accept title-case archive names.
+ frost.Str[0]="";NameIndex russian;russian[NameKey("Ледяная стрела")]={&manager.spells.at(500)};
+ assert(ResolveSpell(116,8,1,names,russian)->Id==500);
+ assert(NativeNames(&manager.spells.at(500)).find("1:Ледяная стрела")!=std::string::npos);
+ assert(NativeNames(nullptr)=="<missing>");
+ LocalizedString empty={{"",""}};SpellInfo unnamed{1,3,&empty};
+ assert(NativeNames(&unnamed)=="<empty all locales>");
+ assert(NameKey("Удар В Спину")==NameKey("Удар в спину"));
+ assert(NameKey("СНЕЖНАЯ БУРЯ")==NameKey("Снежная буря"));
+ assert(NameKey("ÉCLAIR DE GIVRE")==NameKey("éclair de givre"));
+ assert(NameKey("Ледяная стрела")!=NameKey("Огненная стрела"));
+ assert(NameKey(nullptr).empty()&&NameKey("").empty());
  // A known, matching native ID takes precedence over ambiguous name searches.
  assert(ResolveSpell(500,8,1,names,index)->Id==500);
  assert(!ResolveSpell(999,8,1,{},index));
@@ -66,7 +94,7 @@ int main() {
             'static void Refresh(', 'static int32 Available(', 'static Definition const* Best(',
             'static uint32 Used(', 'static int32 Cost(', 'static bool CompatibleCosts(', 'static bool CanCast(',
             'static TalentDefinition const* Talent(', 'static uint32 TalentBudget(', 'static uint32 TalentSpent(',
-            'static uint32 LowerTierSpent(', 'static bool TalentBuildValid(', 'static void SyncTalents(Player* p,State& s)\n{', 'static bool SourceNameMatches('])
+            'static uint32 LowerTierSpent(', 'static bool TalentBuildValid(', 'static void SyncTalents(Player* p,State& s)\n{', 'static std::wstring NameKey(', 'static bool SourceNameMatches('])
         code=r'''
 #include <algorithm>
 #include <array>
@@ -120,7 +148,7 @@ auto sSpellMgr=&spellMgr;
 std::map<uint32,std::vector<Definition>> Catalog;
 std::map<uint32,std::vector<TalentDefinition>> TalentCatalog;
 uint32 TalentCap=71;
-'''+functions+r'''
+'''+UTF8_UTIL_STUB+functions+r'''
 int main() {
  Player p;State s;Refresh(&p,s);
  LocalizedString nativeNames;nativeNames.Str[1]="Ледяная стрела";spellMgr.info.SpellName=&nativeNames;
