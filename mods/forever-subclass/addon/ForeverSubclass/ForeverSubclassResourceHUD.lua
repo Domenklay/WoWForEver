@@ -1,26 +1,27 @@
 -- Player-frame resource integration for ForeverSubclass.
 -- Primary class resource stays in the normal Blizzard power slot.
--- A different active-subclass resource is rendered as a compact secondary strip
--- attached directly beneath it. Druid primary keeps mana as its main resource.
+-- A different active-subclass resource is rendered as a compact Blizzard-like
+-- strip attached directly beneath it. Druid primary keeps mana as its main bar.
 
 local RESPONSE="FSR1"
 local POWER_MANA=0
 local POWER_RAGE=1
 local POWER_ENERGY=3
 local primaryPowerByClass={
- [1]=POWER_RAGE,   -- Warrior
- [2]=POWER_MANA,   -- Paladin
- [3]=POWER_MANA,   -- Hunter in this Forever ruleset
- [4]=POWER_ENERGY, -- Rogue
- [5]=POWER_MANA,   -- Priest
- [7]=POWER_MANA,   -- Shaman
- [8]=POWER_MANA,   -- Mage
- [9]=POWER_MANA,   -- Warlock
- [11]=POWER_MANA,  -- Druid: mana remains the main bar even in forms
+ [1]=POWER_RAGE,
+ [2]=POWER_MANA,
+ [3]=POWER_MANA,
+ [4]=POWER_ENERGY,
+ [5]=POWER_MANA,
+ [7]=POWER_MANA,
+ [8]=POWER_MANA,
+ [9]=POWER_MANA,
+ [11]=POWER_MANA,
 }
 
 local pending,state
 local frame,mainBar,secondaryBar,nativeBar
+local secondaryFrame
 local nativeTexture="Interface\\TARGETINGFRAME\\UI-StatusBar"
 
 local function debug(text)
@@ -70,54 +71,69 @@ local function colorBar(bar,kind)
  else bar:SetStatusBarColor(0.08,0.35,0.92) end
 end
 
-local function makeBar(parent,height)
+local function makePlainBar(parent)
  local bar=CreateFrame("StatusBar",nil,parent)
- bar:SetHeight(height)
  bar:SetStatusBarTexture(nativeTexture)
- bar:SetMinMaxValues(0,1);bar:SetValue(0);bar:EnableMouse(false)
-
- local bg=bar:CreateTexture(nil,"BACKGROUND")
- bg:SetPoint("TOPLEFT",-1,1);bg:SetPoint("BOTTOMRIGHT",1,-1)
- bg:SetColorTexture(0.02,0.02,0.02,0.94)
- bar._fsubBackground=bg
-
- local top=bar:CreateTexture(nil,"BORDER");top:SetPoint("TOPLEFT",0,0);top:SetPoint("TOPRIGHT",0,0);top:SetHeight(1);top:SetColorTexture(0.38,0.38,0.38,0.65)
- local bottom=bar:CreateTexture(nil,"BORDER");bottom:SetPoint("BOTTOMLEFT",0,0);bottom:SetPoint("BOTTOMRIGHT",0,0);bottom:SetHeight(1);bottom:SetColorTexture(0,0,0,0.95)
- local left=bar:CreateTexture(nil,"BORDER");left:SetPoint("TOPLEFT",0,0);left:SetPoint("BOTTOMLEFT",0,0);left:SetWidth(1);left:SetColorTexture(0,0,0,0.95)
- local right=bar:CreateTexture(nil,"BORDER");right:SetPoint("TOPRIGHT",0,0);right:SetPoint("BOTTOMRIGHT",0,0);right:SetWidth(1);right:SetColorTexture(0,0,0,0.95)
-
+ bar:SetMinMaxValues(0,1)
+ bar:SetValue(0)
+ bar:EnableMouse(false)
  bar.text=bar:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
- bar.text:SetPoint("CENTER",0,0);bar.text:SetTextColor(1,1,1,1)
+ bar.text:SetPoint("CENTER",0,0)
+ bar.text:SetTextColor(1,1,1,1)
  return bar
 end
 
+local function makeUIShell(parent,height)
+ local template=BackdropTemplateMixin and "BackdropTemplate" or nil
+ local shell=CreateFrame("Frame",nil,parent,template)
+ shell:SetHeight(height)
+ shell:EnableMouse(false)
+ if shell.SetBackdrop then
+  shell:SetBackdrop({
+   bgFile="Interface\\Tooltips\\UI-Tooltip-Background",
+   edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",
+   tile=true,tileSize=8,edgeSize=5,
+   insets={left=1,right=1,top=1,bottom=1}
+  })
+  shell:SetBackdropColor(0.015,0.015,0.015,0.96)
+  shell:SetBackdropBorderColor(0.42,0.38,0.27,0.92)
+ end
+ return shell
+end
+
 local function build()
- if frame and mainBar and secondaryBar then return true end
+ if frame and mainBar and secondaryBar and secondaryFrame then return true end
  nativeBar=findNativeBar()
  if not nativeBar or not _G.PlayerFrame then return false end
  nativeTexture=getNativeTexture()
 
- -- Normally hidden. Used only when Blizzard changes the displayed power away
- -- from the primary class resource (notably druid forms). Most classes keep the
- -- untouched Blizzard bar here.
+ -- Only used when Blizzard changes the displayed power away from the primary
+ -- class resource (notably druid bear/cat). For normal classes this stays hidden.
  frame=CreateFrame("Frame","ForeverSubclassPrimaryPowerOverlay",_G.PlayerFrame)
  frame:SetAllPoints(nativeBar)
  frame:SetFrameStrata(nativeBar.GetFrameStrata and nativeBar:GetFrameStrata() or "MEDIUM")
  frame:SetFrameLevel((nativeBar.GetFrameLevel and nativeBar:GetFrameLevel() or 1)+4)
  frame:EnableMouse(false)
- mainBar=makeBar(frame,math.max(8,nativeBar:GetHeight() or 10));mainBar:SetAllPoints(frame)
+ mainBar=makePlainBar(frame)
+ mainBar:SetAllPoints(frame)
+ frame:Hide()
 
- -- Secondary resource is inset and attached directly to the Blizzard power bar.
- -- It moves/scales/hides with PlayerFrame and never floats independently.
- secondaryBar=makeBar(_G.PlayerFrame,7)
- secondaryBar:SetStatusBarTexture(nativeTexture)
- secondaryBar:SetFrameStrata(frame:GetFrameStrata())
- secondaryBar:SetFrameLevel(frame:GetFrameLevel()+1)
- secondaryBar:SetPoint("TOPLEFT",nativeBar,"BOTTOMLEFT",2,-2)
- secondaryBar:SetPoint("TOPRIGHT",nativeBar,"BOTTOMRIGHT",-2,-2)
+ -- Blizzard-like secondary resource shell. The shell belongs to PlayerFrame,
+ -- so it follows scale, position, visibility and portrait movement automatically.
+ local shellHeight=9
+ secondaryFrame=makeUIShell(_G.PlayerFrame,shellHeight)
+ secondaryFrame:SetFrameStrata(frame:GetFrameStrata())
+ secondaryFrame:SetFrameLevel(frame:GetFrameLevel()+1)
+ secondaryFrame:SetPoint("TOPLEFT",nativeBar,"BOTTOMLEFT",0,-1)
+ secondaryFrame:SetPoint("TOPRIGHT",nativeBar,"BOTTOMRIGHT",0,-1)
 
- frame:Hide();secondaryBar:Hide()
- debug("attached secondary resource strip to PlayerFrame")
+ secondaryBar=makePlainBar(secondaryFrame)
+ secondaryBar:SetPoint("TOPLEFT",2,-2)
+ secondaryBar:SetPoint("BOTTOMRIGHT",-2,2)
+ secondaryBar.text:SetFontObject(GameFontHighlightSmall)
+ secondaryFrame:Hide()
+
+ debug("attached Blizzard-style secondary resource to PlayerFrame")
  return true
 end
 
@@ -131,7 +147,9 @@ end
 local function setBar(bar,kind,current,maximum)
  maximum=math.max(1,tonumber(maximum) or 1)
  current=math.max(0,tonumber(current) or 0)
- bar:SetMinMaxValues(0,maximum);bar:SetValue(current);colorBar(bar,kind)
+ bar:SetMinMaxValues(0,maximum)
+ bar:SetValue(current)
+ colorBar(bar,kind)
  bar.text:SetText(tostring(current).." / "..tostring(maximum))
  bar:Show()
 end
@@ -140,9 +158,11 @@ local function chooseSecondaryPower(primaryKind)
  if not state or not state.powers then return nil end
  local native=nativePowerKind()
 
- -- Form/stance resource gets first priority if it differs from the main class
- -- resource and the server exposes it for the active subclass.
- if native~=nil and native~=primaryKind and state.powers[native] then return state.powers[native] end
+ -- If a druid form/stance exposes a resource that belongs to the active
+ -- subclass, prefer that as the secondary bar.
+ if native~=nil and native~=primaryKind and state.powers[native] then
+  return state.powers[native]
+ end
 
  local rage=state.powers[POWER_RAGE]
  local energy=state.powers[POWER_ENERGY]
@@ -152,30 +172,41 @@ local function chooseSecondaryPower(primaryKind)
  if rage and POWER_RAGE~=primaryKind then return rage end
  if energy and POWER_ENERGY~=primaryKind then return energy end
  if mana and POWER_MANA~=primaryKind then return mana end
- for kind,power in pairs(state.powers) do if kind~=primaryKind then return power end end
+ for kind,power in pairs(state.powers) do
+  if kind~=primaryKind then return power end
+ end
  return nil
 end
 
 local function refreshPrimaryOverlay(primaryKind)
  local native=nativePowerKind()
- if primaryKind==nil or native==nil or native==primaryKind then frame:Hide();return end
-
- -- Druid primary remains mana-first even when bear/cat changes Blizzard's native
- -- display to rage/energy. Other classes normally never need this overlay.
+ if primaryKind==nil or native==nil or native==primaryKind then
+  frame:Hide()
+  return
+ end
  local current,maximum=getUnitPower(primaryKind)
  if not maximum then frame:Hide();return end
- setBar(mainBar,primaryKind,current,maximum);frame:Show()
+ setBar(mainBar,primaryKind,current,maximum)
+ frame:Show()
 end
 
 local function refresh()
  if not build() then return end
- if not state or not state.active or state.active==0 then frame:Hide();secondaryBar:Hide();return end
+ if not state or not state.active or state.active==0 then
+  frame:Hide()
+  secondaryFrame:Hide()
+  return
+ end
 
  local primaryKind=primaryPowerKind()
  refreshPrimaryOverlay(primaryKind)
  local secondary=chooseSecondaryPower(primaryKind)
- if secondary then setBar(secondaryBar,secondary.kind,secondary.current,secondary.max)
- else secondaryBar:Hide() end
+ if secondary then
+  setBar(secondaryBar,secondary.kind,secondary.current,secondary.max)
+  secondaryFrame:Show()
+ else
+  secondaryFrame:Hide()
+ end
 end
 
 _G.ForeverSubclassResourcePredictSpend=function(spellId)
@@ -183,28 +214,59 @@ _G.ForeverSubclassResourcePredictSpend=function(spellId)
  if not spellId or not state or not state.powers or not state.spells then return end
  local spell=state.spells[spellId]
  if not spell or not spell.selected then
-  for _,candidate in pairs(state.spells) do if candidate.selected and candidate.root==spellId then spell=candidate;break end end
+  for _,candidate in pairs(state.spells) do
+   if candidate.selected and candidate.root==spellId then spell=candidate;break end
+  end
  end
  if not spell then return end
  local p=state.powers[spell.power]
  if not p or spell.power==primaryPowerKind() then return end
- p.current=math.max(0,(p.current or 0)-(spell.cost or 0));refresh()
+ p.current=math.max(0,(p.current or 0)-(spell.cost or 0))
+ refresh()
 end
 
 local function parse(msg)
- local words={};for w in tostring(msg):gmatch("%S+") do table.insert(words,w) end
+ local words={}
+ for w in tostring(msg):gmatch("%S+") do table.insert(words,w) end
  local kind=words[1]
- if kind=="STATE" then pending={primary=tonumber(words[2]) or 0,active=tonumber(words[3]) or 0,spells={},powers={}}
- elseif kind=="POWER" and pending then local power=tonumber(words[2]);if power then pending.powers[power]={kind=power,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
- elseif kind=="SPELL" and pending then local id=tonumber(words[2]);if id then pending.spells[id]={id=id,root=tonumber(words[3]) or id,selected=words[5]=="1",cost=tonumber(words[6]) or 0,power=tonumber(words[7])} end
- elseif kind=="END" and pending then state=pending;pending=nil;refresh() end
+ if kind=="STATE" then
+  pending={primary=tonumber(words[2]) or 0,active=tonumber(words[3]) or 0,spells={},powers={}}
+ elseif kind=="POWER" and pending then
+  local power=tonumber(words[2])
+  if power then pending.powers[power]={kind=power,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
+ elseif kind=="SPELL" and pending then
+  local id=tonumber(words[2])
+  if id then pending.spells[id]={id=id,root=tonumber(words[3]) or id,selected=words[5]=="1",cost=tonumber(words[6]) or 0,power=tonumber(words[7])} end
+ elseif kind=="END" and pending then
+  state=pending
+  pending=nil
+  refresh()
+ end
 end
 
 local events=CreateFrame("Frame")
-events:RegisterEvent("PLAYER_LOGIN");events:RegisterEvent("PLAYER_ENTERING_WORLD");events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
-events:RegisterEvent("UNIT_DISPLAYPOWER");events:RegisterEvent("UNIT_POWER_UPDATE");events:RegisterEvent("UNIT_MAXPOWER");events:RegisterEvent("CHAT_MSG_ADDON")
+events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
+events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+events:RegisterEvent("UNIT_DISPLAYPOWER")
+events:RegisterEvent("UNIT_POWER_UPDATE")
+events:RegisterEvent("UNIT_MAXPOWER")
+events:RegisterEvent("CHAT_MSG_ADDON")
 events:SetScript("OnEvent",function(_,event,...)
- if event=="CHAT_MSG_ADDON" then local prefix,msg=...;if prefix==RESPONSE then parse(msg) end;return end
- if event=="UNIT_POWER_UPDATE" or event=="UNIT_MAXPOWER" or event=="UNIT_DISPLAYPOWER" then local unit=...;if unit and unit~="player" then return end;refresh();return end
- if C_Timer and C_Timer.After then C_Timer.After(0.4,function() build();refresh();sendStatus() end) else build();refresh();sendStatus() end
+ if event=="CHAT_MSG_ADDON" then
+  local prefix,msg=...
+  if prefix==RESPONSE then parse(msg) end
+  return
+ end
+ if event=="UNIT_POWER_UPDATE" or event=="UNIT_MAXPOWER" or event=="UNIT_DISPLAYPOWER" then
+  local unit=...
+  if unit and unit~="player" then return end
+  refresh()
+  return
+ end
+ if C_Timer and C_Timer.After then
+  C_Timer.After(0.4,function() build();refresh();sendStatus() end)
+ else
+  build();refresh();sendStatus()
+ end
 end)
