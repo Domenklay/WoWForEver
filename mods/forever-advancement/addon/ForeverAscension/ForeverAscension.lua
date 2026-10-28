@@ -15,7 +15,7 @@ local schools={Arcane="Тайная магия",Fire="Огонь",Frost="Лёд"
  Balance="Баланс",Restoration="Исцеление",["Feral Combat"]="Сила зверя",Elemental="Стихии",Enhancement="Совершенствование",
  Affliction="Колдовство",Demonology="Демонология",Destruction="Разрушение",["Beast Mastery"]="Повелитель зверей",BeastMastery="Повелитель зверей",FeralCombat="Сила зверя",
  Marksmanship="Стрельба",Survival="Выживание",Retribution="Воздаяние"}
-local errors={disabled="Модуль развития выключен.",cannot_edit_now="Нельзя менять набор в бою, после смерти или во время каста.",
+local errors={select_subclass="Сначала активируйте нужный подкласс.",invalid_subclass="Этот подкласс недоступен.",disabled="Модуль развития выключен.",cannot_edit_now="Нельзя менять набор в бою, после смерти или во время каста.",
  unavailable_or_power="Способность недоступна или не хватает ресурса.",incompatible_or_level="Способность недоступна для изучения на этом уровне.",
  ability_limit="Достигнут предел дополнительных способностей.",select_target="Выберите цель.",already_learned="Способность уже изучена.",
  talent_unavailable="Этот ранг таланта пока недоступен.",talent_requirements="Не хватает очков или не выполнены требования предыдущих рядов."}
@@ -28,6 +28,7 @@ end
 local state,pending,compatible=nil,nil,{}
 local protocol=0
 local window,summary,message,search,previous,nextPage,pageText,selectedText,talentPoints,emptyAbilities,showAllButton
+local activateButton,progressText
 local talentScroll,talentCanvas
 local classButtons,tabButtons,abilityNodes,talentNodes,connectors={},{},{},{},{}
 local powerBars=ForeverAscensionResourceBars or {}
@@ -119,6 +120,11 @@ local function tooltip(self)
  else GameTooltip:AddLine("Запись каталога ещё не подключена к Forever: нет подтверждённого соответствия или её механика пока не поддерживается.",0.9,0.5,0.35,true) end
  GameTooltip:Show()
 end
+local function classLevel(owner)
+ if not state then return 1 end
+ if owner==state.primary then return state.level end
+ return state.classes and state.classes[owner] and state.classes[owner].level or 1
+end
 local function makeNode(parent,talent)
  local b=CreateFrame("Button",nil,parent)
  b:SetSize(talent and 44 or 250,talent and 42 or 54)
@@ -145,7 +151,8 @@ local function makeNode(parent,talent)
   if not d then message:SetText("Пока не подключено: "..spellName(row)..". Выберите «Только доступные».");return end
   if state.known[row.ID] and not state.learned[row.ID] then message:SetText("Это заклинание уже известно. Перетащите иконку или примените его из штатной книги.");return end
   if d.owner==state.primary then message:SetText("Способности основного класса изучаются штатно.");return end
-  if d.level>state.level then message:SetText("Для изучения нужен уровень "..d.level..".");return end
+  if d.level>classLevel(d.owner) and mouse~="RightButton" then message:SetText("Для изучения нужен уровень "..d.level..".");return end
+  if isTalent(row) and state.active~=d.owner then message:SetText("Сначала активируйте этот подкласс.");return end
   if isTalent(row) then send((mouse=="RightButton" and "untalent " or "talent ")..row.ID)
   elseif mouse=="RightButton" then if state.learned[row.ID] then send("unlearn "..row.ID) end
   elseif state.learned[row.ID] then send("cast "..row.ID)
@@ -186,10 +193,10 @@ local function renderAbilities(rows)
    if not d then n.note:SetText("Не подключено")
    elseif known and not learned then n.note:SetText("Известно персонажу")
    elseif state and d.owner==state.primary then n.note:SetText("Основной класс: у наставника")
-   elseif state and d.level>state.level then n.note:SetText("Уровень "..d.level)
+   elseif state and d.level>classLevel(d.owner) then n.note:SetText("Уровень "..d.level)
    elseif learned then n.note:SetText("Изучено")
    else n.note:SetText("Изучить | ур. "..d.level) end
-   local locked=not d or (state and not known and d.level>state.level)
+   local locked=not d or (state and not known and d.level>classLevel(d.owner))
    n:SetAlpha(locked and 0.55 or 1)
    if n.icon.SetDesaturated then n.icon:SetDesaturated(locked and true or false) end
    n.border:SetVertexColor(learned and 0.3 or 0.8,learned and 1 or 0.65,0.25);n:Show()
@@ -212,7 +219,7 @@ local function renderTalents(rows)
   local d=compatible[row.ID];local rank=state and state.talents[row.ID] or 0
   local max=d and d.max or #row.Spells
   n.icon:SetTexture(icon(row));n.note:SetText(rank.."/"..max)
-  local locked=not d or not state or d.level>state.level or lowerTierSpent(row)<(row.RequiredTEInvestment or 0)
+  local locked=not d or not state or state.active~=d.owner or d.level>classLevel(d.owner) or lowerTierSpent(row)<(row.RequiredTEInvestment or 0)
   if n.icon.SetDesaturated then n.icon:SetDesaturated(locked and true or false) end
   n:SetAlpha(d and 1 or 0.5);n.border:SetVertexColor(rank>0 and 0.3 or 0.85,rank>0 and 1 or 0.7,0.2)
   n.note:SetTextColor(rank==max and 0.3 or 1,rank==max and 1 or 0.82,rank==max and 0.3 or 0.2);n:Show()
@@ -240,7 +247,11 @@ refresh=function()
  if not window then return end
  if state then
   summary:SetText("Основной класс: "..name(state.primary).."  |  Уровень "..state.level.."  |  Умения "..state.used.."/"..state.limit)
-  talentPoints:SetText("TE мультикласса: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
+  local progress=state.classes and state.classes[selectedClass]
+  progressText:SetText("Опыт получает: "..name(state.active~=0 and state.active or state.primary)..(progress and (" | "..name(selectedClass)..": ур. "..progress.level.."/40, "..progress.xp.."/"..progress.next.." опыта") or ""))
+  activateButton:SetText(selectedClass==state.primary and "Опыт основному" or state.active==selectedClass and "Подкласс активен" or "Активировать")
+  activateButton:SetEnabled(state.active~=(selectedClass==state.primary and 0 or selectedClass))
+  talentPoints:SetText("TE активного: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
  else summary:SetText("Ожидаем состояние персонажа...");talentPoints:SetText("TE мультикласса: —") end
  local tabs,seen={},{ }
  for _,row in ipairs(byClass[selectedClass] or {}) do if availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
@@ -299,6 +310,8 @@ local function build()
  end
  summary=label(window,"","GameFontHighlightSmall");summary:SetPoint("TOPLEFT",151,-49)
  selectedText=label(window,"","GameFontNormalLarge");selectedText:SetPoint("TOPLEFT",151,-114)
+ activateButton=button(window,"Активировать",145,function() send("activate "..(state and selectedClass==state.primary and 0 or selectedClass)) end);activateButton:SetPoint("TOPRIGHT",-20,-108)
+ progressText=label(window,"","GameFontHighlightSmall");progressText:SetPoint("TOPLEFT",151,-64);progressText:SetWidth(540);progressText:SetJustifyH("LEFT")
  search=CreateFrame("EditBox",nil,window,"InputBoxTemplate");search:SetSize(190,22);search:SetPoint("TOPRIGHT",-149,-46);search:SetAutoFocus(false)
  search:SetScript("OnTextChanged",function(self) filter=fold(self:GetText());page=1;refresh() end);search:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
  local reload=button(window,"Обновить",105,function() send("status") end);reload:SetPoint("TOPRIGHT",-20,-46)
@@ -322,7 +335,7 @@ local function build()
   if not state then send("status");return end
   local candidates={}
   for id,d in pairs(compatible) do
-   if d.kind=="ability" and d.owner~=state.primary and d.level<=state.level and not state.learned[id] and byId[id] then table.insert(candidates,id) end
+   if d.kind=="ability" and d.owner~=state.primary and d.level<=classLevel(d.owner) and not state.learned[id] and byId[id] then table.insert(candidates,id) end
   end
   table.sort(candidates)
   local row=byId[candidates[1]]
@@ -347,7 +360,9 @@ local function parse(text)
  local words={};for w in tostring(text):gmatch("%S+") do table.insert(words,w) end;local kind=words[1]
  if kind=="PROTOCOL" then protocol=tonumber(words[2]) or 0;return end
  if kind=="ERROR" then if message then message:SetText(errors[words[2]] or text:sub(7)) end;return end
- if kind=="STATE" then pending={primary=tonumber(words[2]),level=tonumber(words[3]),used=tonumber(words[4]),limit=tonumber(words[5]),powers={},regen={},learned={},known={},talents={},effects={},talentFree=0,talentSpent=0,talentTotal=0}
+ if kind=="STATE" then pending={primary=tonumber(words[2]),level=tonumber(words[3]),used=tonumber(words[4]),limit=tonumber(words[5]),active=0,classes={},powers={},regen={},learned={},known={},talents={},effects={},talentFree=0,talentSpent=0,talentTotal=0}
+ elseif kind=="ACTIVE" and pending then pending.active=tonumber(words[2]) or 0
+ elseif kind=="CLASS" and pending then pending.classes[tonumber(words[2])]={level=tonumber(words[3]),xp=tonumber(words[4]),next=tonumber(words[5])}
  elseif kind=="CATALOG" and pending then compatible={}
  elseif kind=="POWER" and pending then pending.powers[tonumber(words[2])]={current=tonumber(words[3]),maximum=tonumber(words[4])}
  elseif kind=="REGEN" and pending then pending.regen={normal=tonumber(words[2]),combat=tonumber(words[3])}

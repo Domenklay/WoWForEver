@@ -124,10 +124,11 @@ struct Player {
  void SendDirectMessage(WorldPackets::Spells::LearnedSpells* p){for(auto row:p->ClientLearnedSpellData)added.push_back(row.SpellID);}
  void SendDirectMessage(WorldPackets::Spells::UnlearnedSpells* p){for(auto id:p->SpellID)removed.push_back(id);}
 };
-struct State {std::set<uint32> learned,bookSpells;};
+struct ClassProgress {uint32 level=1;uint64_t xp=0;};
+struct State {uint32 active=8;std::map<uint32,ClassProgress> classes;std::set<uint32> learned,bookSpells;};
 struct Definition {uint32 entry,owner,spell,level;};
 std::map<uint32,std::vector<Definition>> Catalog;
-'''+''.join(function(source,name) for name in ['static Definition const* Best(', 'static bool TemporaryBookSpell(', 'static void SyncSpellbook(Player* p,State& s)\n{','static uint32 BookEntry('])+r'''
+'''+''.join(function(source,name) for name in ['static uint32 ClassLevel(', 'static Definition const* Best(', 'static Definition const* BestFor(', 'static bool TemporaryBookSpell(', 'static void SyncSpellbook(Player* p,State& s)\n{','static uint32 BookEntry('])+r'''
 namespace ForeverAdvancement {}
 struct CastTag {uint32 entry;};
 bool Ready=true;std::recursive_mutex Mutex;State* current;
@@ -141,7 +142,7 @@ struct Loader {
 '''+function(source,'    bool Load() override').replace(' override','')+r'''
 };
 int main() {
- Player p;State s;Catalog[10]={{10,8,116,4},{10,8,205,26}};Catalog[20]={{20,5,2061,1}};
+ Player p;State s;s.classes[8].level=40;s.classes[5].level=40;Catalog[10]={{10,8,116,4},{10,8,205,26}};Catalog[20]={{20,5,2061,1}};
  s.learned={10,20};p.spells[2061]={PERMANENT};SyncSpellbook(&p,s);
  assert(p.HasSpell(116)&&p.HasSpell(2061)&&s.bookSpells==std::set<uint32>{116});
  current=&s;MockSpell cast;Loader loader{&p,&cast,{116}};
@@ -196,7 +197,8 @@ struct Spells {std::multimap<uint32,Ability const*> rows;auto GetSkillLineAbilit
 auto sSpellMgr=&manager;
 struct Definition {uint32 entry,owner,spell,level;};
 std::map<uint32,std::vector<Definition>> Catalog;
-struct State {std::set<uint32> learned;};
+struct ClassProgress {uint32 level=1;uint64_t xp=0;};
+struct State {uint32 active=8;std::map<uint32,ClassProgress> classes;std::set<uint32> learned;};
 struct Status {int uState=1;};
 struct Player {
  uint32 cls=1,level=20;std::set<uint32> m_foreverAdvancementClassSkills,skills;
@@ -210,9 +212,9 @@ struct Player {
  }
  void SyncForeverAdvancementClassSkills(std::set<uint32> const& desired);
 };
-'''+(SOURCE.parent/'PlayerBookSchools.inc').read_text()+''.join(function(source,name) for name in ['static Definition const* Best(','static void SyncBookSchools(Player* p,State const& s)\n{','static void PublishBookMetadata('])+r'''
+'''+(SOURCE.parent/'PlayerBookSchools.inc').read_text()+''.join(function(source,name) for name in ['static uint32 ClassLevel(', 'static Definition const* Best(', 'static Definition const* BestFor(','static void SyncBookSchools(Player* p,State const& s)\n{','static void PublishBookMetadata('])+r'''
 int main() {
- Player p;State s;
+ Player p;State s;s.classes[8].level=40;s.classes[5].level=40;
  sSkillLineStore.rows={{6,{6,7,0}},{8,{8,7,0}},{56,{56,7,0}},{200,{200,11,0}},{201,{201,7,200}}};
  Ability frost{6,128,1},fire{8,128,2},holy{56,16,3},profession{200,0,4},child{201,128,5},wrongClass{56,16,6};
  sSkillLineAbilityStore={{1,&frost},{2,&fire},{3,&holy},{4,&profession},{5,&child},{6,&wrongClass}};
@@ -366,9 +368,47 @@ int main() {
             self.assertEqual(result.returncode,0,result.stderr)
             subprocess.run([str(root/'test')],check=True,capture_output=True)
 
+    def test_subclass_xp_redirect_independent_progress_and_level_cap(self):
+        source=SOURCE.read_text()
+        code=r'''
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <map>
+using uint32=uint32_t;using uint64=uint64_t;
+struct ClassProgress {uint32 level=1;uint64 xp=0;};
+struct State {uint32 active=0;std::map<uint32,ClassProgress> classes;};
+struct Player {uint32 level=60,cls=11;uint32 GetLevel(){return level;}uint32 GetClass(){return cls;}};
+struct ObjectMgr {uint32 GetXPForLevel(uint32 level){return level*100;}} manager;
+auto sObjectMgr=&manager;
+'''+''.join(function(source,name) for name in ['static uint32 ClassLevel(', 'static uint32 ActiveLevel(', 'static void GrantClassXP('])+r'''
+int main() {
+ Player p;State s;uint32 amount=500;
+ GrantClassXP(&p,s,amount);assert(amount==500&&s.classes.empty());
+ s.active=8;GrantClassXP(&p,s,amount);assert(amount==0&&s.classes[8].level==3&&s.classes[8].xp==200);
+ s.active=1;amount=50;GrantClassXP(&p,s,amount);
+ assert(s.classes[1].level==1&&s.classes[1].xp==50&&s.classes[8].xp==200);
+ auto restored=s;s=restored;s.active=8;amount=100;GrantClassXP(&p,s,amount);
+ assert(s.classes[8].level==4&&s.classes[8].xp==0);
+ amount=UINT32_MAX;GrantClassXP(&p,s,amount);
+ assert(s.classes[8].level==40&&s.classes[8].xp==0&&ActiveLevel(&p,s)==40);
+ amount=500;GrantClassXP(&p,s,amount);assert(amount==0&&s.classes[8].level==40);
+ p.level=11;s.active=5;amount=UINT32_MAX;GrantClassXP(&p,s,amount);
+ assert(s.classes[5].level==11&&s.classes[5].xp==0);
+ p.level=12;amount=100;GrantClassXP(&p,s,amount);assert(s.classes[5].xp==100);
+ assert(ClassLevel(&p,s,11)==12&&ClassLevel(&p,s,2)==1);
+ assert(s.classes[1].xp==50&&s.classes[8].level==40);
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
     def test_real_resource_and_mixed_class_cast_policy(self):
         source=SOURCE.read_text()
-        functions='\n'.join(function(source,name) for name in ['static bool Native(', 'static int32 Scale(',
+        functions='\n'.join(function(source,name) for name in ['static uint32 ClassLevel(', 'static uint32 ActiveLevel(', 'static bool Native(', 'static int32 Scale(',
             'static void Refresh(', 'static int32 Available(', 'static Definition const* Best(',
             'static uint32 Used(', 'static int32 Cost(', 'static bool CompatibleCosts(', 'static bool CanCast(',
             'static TalentDefinition const* Talent(', 'static uint32 TalentBudget(', 'static uint32 TalentSpent(',
@@ -390,7 +430,8 @@ constexpr std::array<Powers,3> PowersList={POWER_MANA,POWER_RAGE,POWER_ENERGY};
 struct Definition { uint32 entry,owner,spell,level; };
 struct TalentDefinition {uint32 entry,owner,spell,rank,level,cost,investment,tab;uint32 trait=0,traitEntry=0;};
 struct Pool {int32 current=0,maximum=0;double fraction=0;};
-struct State {std::set<uint32> learned;std::map<uint32,uint32> talents;std::set<uint32> ownedAuras;std::map<uint32,std::pair<uint32,uint32>> ownedTraits;bool syncing=false;std::map<Powers,Pool> pools;Clock::time_point updated=Clock::now();};
+struct ClassProgress {uint32 level=1;uint64_t xp=0;};
+struct State {uint32 active=8;std::map<uint32,ClassProgress> classes;std::set<uint32> learned;std::map<uint32,uint32> talents;std::set<uint32> ownedAuras;std::map<uint32,std::pair<uint32,uint32>> ownedTraits;bool syncing=false;std::map<Powers,Pool> pools;Clock::time_point updated=Clock::now();};
 struct Player {
  uint32 cls=1,level=20;bool combat=false,alive=true;
  std::set<uint32> auras,spells,removed;
@@ -431,7 +472,8 @@ std::map<uint32,std::vector<TalentDefinition>> TalentCatalog;
 uint32 TalentCap=71;
 '''+UTF8_UTIL_STUB+functions+r'''
 int main() {
- Player p;State s;Refresh(&p,s);
+ Player p;State s;s.classes[8].level=40;s.classes[5].level=40;Refresh(&p,s);
+ p.level=60;assert(TalentBudget(&p,s)==31);p.level=20;
  LocalizedString nativeNames;nativeNames.Str[1]="Ледяная стрела";spellMgr.info.SpellName=&nativeNames;
  std::array<char const*,9> aliases={"Frostbolt","Ледяная стрела","","","","","","",""};
  assert(SourceNameMatches(&spellMgr.info,aliases));nativeNames.Str[1]="Другое заклинание";
@@ -460,14 +502,18 @@ int main() {
  TalentCatalog[100]={{100,8,11069,1,10,1,0,10},{100,8,12338,2,10,1,0,10},{100,8,12339,3,10,1,0,10}};
  TalentCatalog[101]={{101,8,11083,1,15,1,3,10}};
  TalentCatalog[200]={{200,5,14908,1,10,1,0,20}};
- s.talents={{100,2},{200,1}};assert(TalentSpent(s)==3 && TalentBuildValid(&p,s));
+ s.talents={{100,2},{200,1}};assert(TalentSpent(s)==2 && TalentBuildValid(&p,s));
  s.talents[101]=1;assert(!TalentBuildValid(&p,s));s.talents[100]=3;assert(TalentBuildValid(&p,s));
  s.talents[100]=2;assert(!TalentBuildValid(&p,s));s.talents.erase(101);
- p.level=11;assert(TalentBudget(&p)==2 && !TalentBuildValid(&p,s));p.level=20;
+ p.level=11;assert(TalentBudget(&p,s)==2 && TalentBuildValid(&p,s));p.level=20;
  s.talents={{100,1}};p.auras.insert(11069);SyncTalents(&p,s);
  assert(!s.ownedAuras.count(11069));s.talents.clear();SyncTalents(&p,s);assert(p.auras.count(11069));
  p.auras.clear();s.talents[100]=1;SyncTalents(&p,s);assert(s.ownedAuras.count(11069));
  s.talents[100]=2;SyncTalents(&p,s);assert(!p.auras.count(11069)&&p.auras.count(12338));
+ s.active=5;s.talents[200]=1;SyncTalents(&p,s);assert(!p.auras.count(12338)&&p.auras.count(14908));
+ s.active=8;SyncTalents(&p,s);assert(p.auras.count(12338)&&!p.auras.count(14908));
+ s.active=0;SyncTalents(&p,s);assert(!p.auras.count(12338)&&TalentBudget(&p,s)==0);
+ s.active=8;SyncTalents(&p,s);
  s.talents.clear();SyncTalents(&p,s);assert(!p.auras.count(12338));
  s.talents[100]=1;p.cls=8;assert(!TalentBuildValid(&p,s));p.cls=1;
  TalentCatalog[300]={{300,8,900,1,10,1,0,30,700},{300,8,900,2,10,1,0,30,700},{300,8,900,3,10,1,0,30,700}};

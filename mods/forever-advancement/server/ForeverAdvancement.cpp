@@ -35,8 +35,11 @@ struct Definition { uint32 entry,owner,spell,level; };
 struct CastTag { uint32 entry; };
 struct TalentDefinition { uint32 entry,owner,spell,rank,level,cost,investment,tab;uint32 trait=0,traitEntry=0; };
 struct Pool { int32 current=0,maximum=0;double fraction=0; };
+struct ClassProgress { uint32 level=1;uint64 xp=0; };
 struct State
 {
+    uint32 active=0;
+    std::map<uint32,ClassProgress> classes;
     std::set<uint32> learned;
     std::map<uint32,uint32> talents;
     std::set<uint32> ownedAuras;
@@ -55,6 +58,13 @@ static bool Ready=false;
 static uint32 Limit=8;
 
 static bool SupportedClass(uint32 id) { return id==1||id==2||id==3||id==4||id==5||id==7||id==8||id==9||id==11; }
+static uint32 ClassLevel(Player* p,State const& s,uint32 owner)
+{
+    if(owner==p->GetClass()) return p->GetLevel();
+    auto it=s.classes.find(owner);
+    return std::min<uint32>({40,p->GetLevel(),it==s.classes.end()?1:it->second.level});
+}
+static uint32 ActiveLevel(Player* p,State const& s) { return s.active?ClassLevel(p,s,s.active):0; }
 static bool Native(Player* p,Powers power) { return p->GetPowerIndex(power)<MAX_POWERS_PER_CLASS&&p->GetMaxPower(power)>0; }
 static int32 Scale(Powers power) { return power==POWER_RAGE?10:1; }
 static void Send(Player* p,std::string const& text)
@@ -99,6 +109,10 @@ static State& Get(Player* p)
             do { auto f=rows->Fetch();s.talents[f[0].GetUInt32()]=f[1].GetUInt32(); } while(rows->NextRow());
         if(auto rows=CharacterDatabase.PQuery("SELECT power_type,current_value FROM forever_advancement_resources WHERE guid={}",guid))
             do { auto f=rows->Fetch();uint32 id=f[0].GetUInt32();if(id==0||id==1||id==3) s.pools[Powers(id)]={int32(std::min<uint32>(f[1].GetUInt32(),1000000)),1000000,0}; } while(rows->NextRow());
+        if(auto rows=CharacterDatabase.PQuery("SELECT class_id,level_value,xp_value FROM forever_advancement_class_progress WHERE guid={}",guid))
+            do { auto f=rows->Fetch();uint32 owner=f[0].GetUInt32();if(SupportedClass(owner)&&owner!=p->GetClass()) s.classes[owner]={std::clamp<uint32>(f[1].GetUInt32(),1,40),f[2].GetUInt64()}; } while(rows->NextRow());
+        if(auto row=CharacterDatabase.PQuery("SELECT active_class FROM forever_advancement_class_state WHERE guid={}",guid))
+        { uint32 owner=row->Fetch()[0].GetUInt32();if(SupportedClass(owner)&&owner!=p->GetClass()) s.active=owner; }
     }
     SyncTalents(p,s);SyncBookSchools(p,s);SyncSpellbook(p,s);Refresh(p,s);return s;
 }
@@ -111,6 +125,9 @@ static void Save(Player* p,State const& s)
     for(auto const& [id,rank]:s.talents) if(rank) tx->PAppend("INSERT INTO forever_advancement_talents VALUES ({},{},{})",guid,id,rank);
     tx->PAppend("DELETE FROM forever_advancement_resources WHERE guid={}",guid);
     for(auto const& [power,pool]:s.pools) tx->PAppend("INSERT INTO forever_advancement_resources VALUES ({},{},{})",guid,uint32(power),pool.current);
+    tx->PAppend("REPLACE INTO forever_advancement_class_state (guid,active_class) VALUES ({},{})",guid,s.active);
+    for(auto const& [owner,progress]:s.classes)
+        tx->PAppend("REPLACE INTO forever_advancement_class_progress (guid,class_id,level_value,xp_value) VALUES ({},{},{},{})",guid,owner,progress.level,progress.xp);
     CharacterDatabase.DirectCommitTransaction(tx);
 }
 static int32 Available(Player* p,State const& s,Powers power)
@@ -122,11 +139,16 @@ static Definition const* Best(uint32 entry,uint32 level)
     for(auto const& d:it->second) if(d.level<=level&&(!best||d.level>best->level)) best=&d;
     return best;
 }
+static Definition const* BestFor(Player* p,State const& s,uint32 entry)
+{
+    auto it=Catalog.find(entry);if(it==Catalog.end()||it->second.empty()) return nullptr;
+    return Best(entry,ClassLevel(p,s,it->second.front().owner));
+}
 static void SyncBookSchools(Player* p,State const& s)
 {
     std::set<uint32> skills;
     for(auto entry:s.learned)
-        if(auto d=Best(entry,p->GetLevel());d&&d->owner!=p->GetClass())
+        if(auto d=BestFor(p,s,entry);d&&d->owner!=p->GetClass())
         {
             auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(d->spell);
             for(auto it=bounds.first;it!=bounds.second;++it)
@@ -148,7 +170,7 @@ static void SyncSpellbook(Player* p,State& s)
 {
     std::set<uint32> desired;
     for(auto entry:s.learned)
-        if(auto d=Best(entry,p->GetLevel());d&&d->owner!=p->GetClass()) desired.insert(d->spell);
+        if(auto d=BestFor(p,s,entry);d&&d->owner!=p->GetClass()) desired.insert(d->spell);
     std::vector<uint32> removed,added;std::set<uint32> release;
     for(auto spell:s.bookSpells)
         if(!desired.count(spell)||!TemporaryBookSpell(p,spell))
@@ -181,7 +203,7 @@ static void SyncSpellbook(Player* p,State& s)
 static uint32 BookEntry(Player* p,State const& s,uint32 spell)
 {
     if(!s.bookSpells.count(spell)||!TemporaryBookSpell(p,spell)) return 0;
-    for(auto entry:s.learned) if(auto d=Best(entry,p->GetLevel());d&&d->spell==spell&&d->owner!=p->GetClass()) return entry;
+    for(auto entry:s.learned) if(auto d=BestFor(p,s,entry);d&&d->spell==spell&&d->owner!=p->GetClass()) return entry;
     return 0;
 }
 static uint32 Used(State const& s)
@@ -224,11 +246,11 @@ static TalentDefinition const* Talent(uint32 id,uint32 rank)
     auto it=TalentCatalog.find(id);
     return it!=TalentCatalog.end()&&rank>0&&rank<=it->second.size()?&it->second[rank-1]:nullptr;
 }
-static uint32 TalentBudget(Player* p) { return p->GetLevel()<10?0:std::min<uint32>(TalentCap,p->GetLevel()-9); }
+static uint32 TalentBudget(Player* p,State const& s) { uint32 level=ActiveLevel(p,s);return level<10?0:std::min<uint32>(TalentCap,level-9); }
 static uint32 TalentSpent(State const& s)
 {
     uint32 spent=0;
-    for(auto const& [id,rank]:s.talents) if(auto d=Talent(id,rank)) spent+=rank*d->cost;
+    for(auto const& [id,rank]:s.talents) if(auto d=Talent(id,rank);d&&d->owner==s.active) spent+=rank*d->cost;
     return spent;
 }
 static uint32 LowerTierSpent(State const& s,TalentDefinition const& node)
@@ -240,9 +262,9 @@ static uint32 LowerTierSpent(State const& s,TalentDefinition const& node)
 }
 static bool TalentBuildValid(Player* p,State const& s)
 {
-    if(TalentSpent(s)>TalentBudget(p)) return false;
+    if(TalentSpent(s)>TalentBudget(p,s)) return false;
     for(auto const& [id,rank]:s.talents)
-        if(auto d=Talent(id,rank);d&&(d->owner==p->GetClass()||d->level>p->GetLevel()||LowerTierSpent(s,*d)<d->investment)) return false;
+        if(auto d=Talent(id,rank);d&&d->owner==s.active&&(d->owner==p->GetClass()||d->level>ActiveLevel(p,s)||LowerTierSpent(s,*d)<d->investment)) return false;
     return true;
 }
 static void SyncTalents(Player* p,State& s)
@@ -251,7 +273,7 @@ static void SyncTalents(Player* p,State& s)
     s.syncing=true;
     std::set<uint32> desired;std::map<uint32,std::pair<uint32,uint32>> traits;
     if(TalentBuildValid(p,s))
-        for(auto const& [id,rank]:s.talents) if(auto d=Talent(id,rank))
+        for(auto const& [id,rank]:s.talents) if(auto d=Talent(id,rank);d&&d->owner==s.active)
         {
             desired.insert(d->spell);if(d->trait) traits[d->spell]={d->trait,d->rank};
         }
@@ -303,7 +325,7 @@ static bool CompatibleTalent(SpellInfo const* info)
 }
 static bool CanCast(Player* p,State const& s,Definition const& d)
 {
-    if(d.owner==p->GetClass()||!s.learned.count(d.entry)||d.level>p->GetLevel()||!p->IsAlive()) return false;
+    if(d.owner==p->GetClass()||!s.learned.count(d.entry)||d.level>ClassLevel(p,s,d.owner)||!p->IsAlive()) return false;
     auto info=sSpellMgr->GetSpellInfo(d.spell,DIFFICULTY_NONE);if(!info||!CompatibleCosts(info)) return false;
     for(auto power:PowersList) if(Available(p,s,power)<Cost(p,info,power)) return false;
     return true;
@@ -312,6 +334,13 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
 {
     Send(p,"PROTOCOL 2");
     Send(p,Trinity::StringFormat("STATE {} {} {} {}",p->GetClass(),p->GetLevel(),Used(s),Limit));
+    Send(p,Trinity::StringFormat("ACTIVE {}",s.active));
+    for(uint32 owner:{1u,2u,3u,4u,5u,7u,8u,9u,11u}) if(owner!=p->GetClass())
+    {
+        uint32 level=ClassLevel(p,s,owner);auto it=s.classes.find(owner);
+        uint64 xp=it==s.classes.end()?0:it->second.xp;
+        Send(p,Trinity::StringFormat("CLASS {} {} {} {}",owner,level,xp,level<std::min<uint32>(40,p->GetLevel())?sObjectMgr->GetXPForLevel(level):0));
+    }
     for(auto power:PowersList)
         Send(p,Trinity::StringFormat("POWER {} {} {}",uint32(power),Available(p,s,power),Native(p,power)?p->GetMaxPower(power)/Scale(power):s.pools.at(power).maximum));
     double regen=std::max(0.0,double(p->GetStat(STAT_SPIRIT)))*0.2;
@@ -319,11 +348,11 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
     if(includeCatalog) Send(p,"CATALOG");
     if(includeCatalog) for(auto const& [id,definitions]:Catalog)
     {
-        auto const* d=Best(id,p->GetLevel());if(!d) d=&definitions.front();
+        auto const* d=BestFor(p,s,id);if(!d) d=&definitions.front();
         Send(p,Trinity::StringFormat("ENTRY {} {} {} {} {}",id,d->spell,d->level,s.learned.count(id)?1:0,d->owner));
     }
     if(!includeCatalog) for(auto id:s.learned)
-        if(auto d=Best(id,p->GetLevel())) Send(p,Trinity::StringFormat("ENTRY {} {} {} 1 {}",id,d->spell,d->level,d->owner));
+        if(auto d=BestFor(p,s,id)) Send(p,Trinity::StringFormat("ENTRY {} {} {} 1 {}",id,d->spell,d->level,d->owner));
     if(includeCatalog) for(auto const& [id,ranks]:TalentCatalog)
     {
         auto const& d=ranks.front();
@@ -335,7 +364,7 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
         for(auto const& d:definitions) if(p->HasSpell(d.spell)&&(!known||d.level>known->level)) known=&d;
         if(known) Send(p,Trinity::StringFormat("KNOWN {} {}",id,known->spell));
     }
-    uint32 spent=TalentSpent(s),budget=TalentBudget(p);
+    uint32 spent=TalentSpent(s),budget=TalentBudget(p,s);
     Send(p,Trinity::StringFormat("TPOINTS {} {} {}",spent<budget?budget-spent:0,spent,budget));
     for(auto const& [id,rank]:s.talents) if(auto d=Talent(id,rank))
     {
@@ -355,13 +384,13 @@ static void Request(Player* p,std::string const& payload)
     if(payload.size()>96) return;
     auto& s=Get(p);auto now=Clock::now();if(now-s.request<std::chrono::milliseconds(150)) return;s.request=now;
     std::istringstream input(payload);std::string command,extra;uint32 arg=0;input>>command;
-    bool argument=command=="learn"||command=="unlearn"||command=="cast"||command=="talent"||command=="untalent";
+    bool argument=command=="learn"||command=="unlearn"||command=="cast"||command=="talent"||command=="untalent"||command=="activate";
     if((argument&&!(input>>arg))||(input>>extra)) { Error(p,"invalid_request");return; }
     if(command=="status") { Snapshot(p,s,true);return; }
     if(command=="poll") { Snapshot(p,s);return; }
     if(command=="cast")
     {
-        auto d=Best(arg,p->GetLevel());if(!d||!CanCast(p,s,*d)) { Error(p,"unavailable_or_power");return; }
+        auto d=BestFor(p,s,arg);if(!d||!CanCast(p,s,*d)) { Error(p,"unavailable_or_power");return; }
         auto info=sSpellMgr->GetSpellInfo(d->spell,DIFFICULTY_NONE);Unit* target=p->GetSelectedUnit();if(!target&&info->IsPositive()) target=p;
         if(!target) { Error(p,"select_target");return; }
         auto result=p->CastSpell(target,d->spell,CastSpellExtraArgs(TRIGGERED_IGNORE_POWER_COST).SetCustomArg(CastTag{arg}));
@@ -369,18 +398,26 @@ static void Request(Player* p,std::string const& payload)
         return;
     }
     if(p->IsInCombat()||!p->IsAlive()||p->HasUnitState(UNIT_STATE_CASTING)) { Error(p,"cannot_edit_now");return; }
+    if(command=="activate")
+    {
+        if(arg&&(!SupportedClass(arg)||arg==p->GetClass())) { Error(p,"invalid_subclass");return; }
+        s.active=arg;if(arg) s.classes.try_emplace(arg);
+        SyncTalents(p,s);Save(p,s);Snapshot(p,s,true);return;
+    }
     if(command=="talent"||command=="untalent")
     {
+        auto node=Talent(arg,1);
+        if(!node||!s.active||node->owner!=s.active) { Error(p,"select_subclass");return; }
         uint32 rank=s.talents.count(arg)?s.talents.at(arg):0;
         uint32 next=command=="talent"?rank+1:rank?rank-1:0;
         if(next==rank||!Talent(arg,command=="talent"?next:rank)) { Error(p,"talent_unavailable");return; }
         auto candidate=s;candidate.talents[arg]=next;if(!next) candidate.talents.erase(arg);
-        if(!TalentBuildValid(p,candidate)) { Error(p,"talent_requirements");return; }
+        if(!TalentBuildValid(p,candidate)&&!(command=="untalent"&&!TalentBuildValid(p,s))) { Error(p,"talent_requirements");return; }
         s.talents=std::move(candidate.talents);SyncTalents(p,s);Refresh(p,s);
     }
     else if(command=="learn")
     {
-        auto d=Best(arg,p->GetLevel());if(!d||d->owner==p->GetClass()) { Error(p,"incompatible_or_level");return; }
+        auto d=BestFor(p,s,arg);if(!d||d->owner==p->GetClass()) { Error(p,"incompatible_or_level");return; }
         if(s.learned.count(arg)||p->HasSpell(d->spell)) { Error(p,"already_learned");return; }
         if(Used(s)>=Limit) { Error(p,"ability_limit");return; }
         s.learned.insert(arg);
@@ -389,17 +426,39 @@ static void Request(Player* p,std::string const& payload)
     else { Error(p,"invalid_request");return; }
     SyncBookSchools(p,s);SyncSpellbook(p,s);Save(p,s);Snapshot(p,s);
 }
+static void GrantClassXP(Player* p,State& s,uint32& amount)
+{
+    if(!s.active) return;
+    auto& progress=s.classes[s.active];uint64 remaining=amount;amount=0;
+    uint32 cap=std::min<uint32>(40,p->GetLevel());
+    while(remaining&&progress.level<cap)
+    {
+        uint64 need=sObjectMgr->GetXPForLevel(progress.level);if(!need) break;
+        progress.xp=std::min(progress.xp,need-1);
+        uint64 take=std::min(remaining,need-progress.xp);progress.xp+=take;remaining-=take;
+        if(progress.xp==need) { ++progress.level;progress.xp=0; }
+    }
+    if(progress.level>=40) progress.xp=0;
+}
 class Players final:public PlayerScript
 {
 public:
     Players():PlayerScript("forever_advancement_players") { }
     void OnLogin(Player* p,bool) override { if(Ready&&SupportedClass(p->GetClass())) { std::lock_guard<std::recursive_mutex> lock(Mutex);Get(p); } }
+    void OnGiveXP(Player* p,uint32& amount,Unit*) override
+    {
+        if(!Ready||!amount||!SupportedClass(p->GetClass())) return;
+        std::lock_guard<std::recursive_mutex> lock(Mutex);auto& s=Get(p);
+        if(!s.active) return;
+        uint32 previous=ActiveLevel(p,s);GrantClassXP(p,s,amount);
+        SyncTalents(p,s);SyncBookSchools(p,s);SyncSpellbook(p,s);Save(p,s);Snapshot(p,s,previous!=ActiveLevel(p,s));
+    }
     void OnSave(Player* p) override { if(Ready&&SupportedClass(p->GetClass())) { std::lock_guard<std::recursive_mutex> lock(Mutex);Save(p,Get(p)); } }
     void OnLogout(Player* p) override { std::lock_guard<std::recursive_mutex> lock(Mutex);auto it=States.find(p->GetGUID().GetCounter());if(it!=States.end()) { Save(p,it->second);for(auto spell:it->second.ownedAuras) p->RemoveAurasDueToSpell(spell,p->GetGUID());for(auto const& [spell,trait]:it->second.ownedTraits) p->SetForeverAdvancementTrait(spell,0,0);States.erase(it); } }
     void OnDelete(ObjectGuid guid,uint32) override
     {
         if(!Ready) return;std::lock_guard<std::recursive_mutex> lock(Mutex);States.erase(guid.GetCounter());auto tx=CharacterDatabase.BeginTransaction();
-        for(char const* table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents"}) tx->Append(Trinity::StringFormat("DELETE FROM {} WHERE guid={}",table,guid.GetCounter()).c_str());
+        for(char const* table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents","forever_advancement_class_progress","forever_advancement_class_state"}) tx->Append(Trinity::StringFormat("DELETE FROM {} WHERE guid={}",table,guid.GetCounter()).c_str());
         CharacterDatabase.DirectCommitTransaction(tx);
     }
     void OnAddonMessageSent(Player* p,uint32 type,std::string const& prefix,std::string const& text,Player* receiver) override
@@ -567,7 +626,7 @@ public:
         if(!sConfigMgr->GetBoolDefault("ForeverAdvancement.Enable",false)) return;
         TalentCap=std::clamp(sConfigMgr->GetIntDefault("ForeverAdvancement.MaxTalentEssence",71),0,1000);
         Limit=std::clamp(sConfigMgr->GetIntDefault("ForeverAdvancement.MaxAbilities",8),1,100);
-        for(auto table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents"})
+        for(auto table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents","forever_advancement_class_progress","forever_advancement_class_state"})
             if(!CharacterDatabase.Query(Trinity::StringFormat("SELECT COUNT(*) FROM {}",table).c_str())) { TC_LOG_ERROR("scripts","ForeverAdvancement schema missing: {}",table);return; }
         uint32 script=sObjectMgr->GetScriptId("spell_forever_advancement");std::set<uint32> claimed;
         if(!script) { TC_LOG_ERROR("scripts","ForeverAdvancement script registration missing");return; }
@@ -658,13 +717,13 @@ class spell_forever_advancement final:public SpellScript
     SpellCastResult Check()
     {
         using namespace ForeverAdvancement;auto tag=std::any_cast<CastTag>(&GetSpell()->m_customArg);if(!tag) return SPELL_CAST_OK;
-        std::lock_guard<std::recursive_mutex> lock(Mutex);auto p=GetCaster()->ToPlayer();auto& s=Get(p);auto d=Best(tag->entry,p->GetLevel());
+        std::lock_guard<std::recursive_mutex> lock(Mutex);auto p=GetCaster()->ToPlayer();auto& s=Get(p);auto d=BestFor(p,s,tag->entry);
         return d&&d->spell==GetSpellInfo()->Id&&CanCast(p,s,*d)?SPELL_CAST_OK:SPELL_FAILED_NO_POWER;
     }
     void Pay()
     {
         using namespace ForeverAdvancement;auto tag=std::any_cast<CastTag>(&GetSpell()->m_customArg);if(!tag) return;
-        std::lock_guard<std::recursive_mutex> lock(Mutex);auto p=GetCaster()->ToPlayer();auto& s=Get(p);auto d=Best(tag->entry,p->GetLevel());
+        std::lock_guard<std::recursive_mutex> lock(Mutex);auto p=GetCaster()->ToPlayer();auto& s=Get(p);auto d=BestFor(p,s,tag->entry);
         if(!d||d->spell!=GetSpellInfo()->Id||!CanCast(p,s,*d)) { FinishCast(SPELL_FAILED_NO_POWER);return; }
         for(auto power:PowersList) { int32 cost=Cost(p,GetSpellInfo(),power);if(Native(p,power)) p->ModifyPower(power,-cost*Scale(power));else s.pools[power].current-=cost; }
         Save(p,s);Snapshot(p,s);

@@ -220,7 +220,7 @@ for _,row in ipairs(ForeverAscensionCatalog) do
  if row.Class=='Priest' and row.Type=='Ability' and row.Name=='Flash Heal' and not priest then priest=row.ID end
 end
 assert(mage and priest)
-parse('PROTOCOL 2');parse('STATE 1 20 2 8');parse('CATALOG')
+parse('PROTOCOL 2');parse('STATE 1 20 2 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG')
 parse('ENTRY '..mage..' 116 4 0 8');parse('ENTRY '..priest..' 2061 20 0 5')
 parse('POWER 0 400 500');parse('POWER 1 25 100');parse('POWER 3 90 100')
 parse('LEARNED '..mage);parse('LEARNED '..priest);parse('END')
@@ -228,7 +228,7 @@ assert(state.learned[mage] and state.learned[priest])
 assert(powerBars[1].value==400 and powerBars[2].value==90 and powerBars[3].value==25)
 classButtons[5].scripts.OnClick()
 assert(selectedClass==5 and state.learned[mage] and state.learned[priest])
-parse('STATE 1 20 2 8');parse('LEARNED '..mage);parse('LEARNED '..priest);parse('END')
+parse('STATE 1 20 2 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('LEARNED '..mage);parse('LEARNED '..priest);parse('END')
 assert(compatible[mage] and compatible[priest])
 assert(not named.ForeverAscensionActions and not named.ForeverAscensionSpellbook)
 selectedClass=8;selectedTab='Frost';page=1;filter='frostbolt';refresh()
@@ -237,9 +237,19 @@ for _,n in ipairs(abilityNodes) do if n.entry and n.entry.ID==mage then advance(
 assert(clicked and sent[#sent]=='cast '..mage)
 ''')
 
+    def test_activate_subclass_and_independent_progress_in_menu(self):
+        self.lua(r"""
+open();parse('PROTOCOL 2');parse('STATE 11 60 0 8')
+parse('ACTIVE 8');parse('CLASS 8 40 0 0');parse('CLASS 1 12 50 1000');parse('TPOINTS 31 0 31');parse('END')
+selectedClass=8;refresh();assert(not activateButton.enabled and progressText.text:find('40/40',1,true))
+selectedClass=1;refresh();advance();activateButton.scripts.OnClick();assert(sent[#sent]=='activate 1')
+assert(state.classes[8].level==40 and state.classes[1].xp==50)
+selectedClass=11;refresh();advance();activateButton.scripts.OnClick();assert(sent[#sent]=='activate 0')
+""")
+
     def test_talent_grid_ranks_and_server_purchase_messages(self):
         self.lua(r"""
-open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('CATALOG')
+open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG')
 parse('TENTRY 398 3 10 1 0 8');parse('TPOINTS 9 2 11');parse('TALENT 398 2');parse('END')
 selectedClass=8;selectedTab='Fire';refresh()
 local found
@@ -256,7 +266,7 @@ assert(state.talentFree==9 and state.talentTotal==11)
 UnitStat=function(_,index) return index*10,index*10+5 end
 UnitHealth=function() return 300 end;UnitHealthMax=function() return 500 end
 GetCritChance=function() return 12.5 end
-open();parse('PROTOCOL 2');parse('STATE 1 20 0 8')
+open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000')
 parse('POWER 0 400 500');parse('POWER 1 25 100');parse('POWER 3 90 100');parse('REGEN 4 1.2');parse('END')
 local portrait=named.ForeverAscensionPortraitResources
 assert(portrait and portrait.parent==PlayerFrame and portrait.points[1][2]==PlayerFrameManaBar)
@@ -284,7 +294,7 @@ local seen={};for _,row in ipairs(abilities) do assert(not seen[row.Name]);seen[
 
     def test_native_tree_uses_readable_nodes_and_scrolls_to_last_tier(self):
         self.lua(r"""
-open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('END')
+open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('END')
 talentScroll.height=403;selectedClass=8;selectedTab='Fire';refresh()
 assert(talentCanvas.height>403,'keep talent nodes readable and scroll the long tree')
 talentScroll.scripts.OnMouseWheel(talentScroll,-100)
@@ -306,7 +316,7 @@ assert(schools.BeastMastery=='Повелитель зверей')
         self.lua(r"""
 TalentMicroButton=CreateFrame('Button','TalentMicroButton',UIParent)
 local picked;C_Spell={PickupSpell=function(spell) picked=spell end}
-open();parse('PROTOCOL 2');parse('STATE 1 20 1 8');parse('CATALOG')
+open();parse('PROTOCOL 2');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG')
 parse('ENTRY 10 116 4 1 8');parse('LEARNED 10');parse('END')
 selectedClass=8;selectedTab='Frost';refresh()
 local card;for _,node in ipairs(abilityNodes) do if node.entry and node.entry.ID==10 then card=node end end
@@ -328,19 +338,19 @@ InCombatLockdown=function() return true end;assert(not ForeverAscensionPickupSpe
     def test_native_roots_are_visible_known_and_do_not_consume_a_purchase(self):
         self.lua(r"""
 local picked;C_Spell={GetSpellName=function(id) if id==339 then return 'Гнев деревьев' end end,PickupSpell=function(id) picked=id end}
-open();parse('PROTOCOL 2');parse('STATE 11 11 0 8');parse('CATALOG');parse('ENTRY 25 339 8 0 11');parse('KNOWN 25 339');parse('END')
+open();parse('PROTOCOL 2');parse('STATE 11 11 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG');parse('ENTRY 25 339 8 0 11');parse('KNOWN 25 339');parse('END')
 selectedClass=11;selectedTab='Balance';refresh()
 local card;for _,node in ipairs(abilityNodes) do if node.entry and node.entry.ID==25 then card=node end end
 assert(card and card.name.text=='Гнев деревьев' and card.note.text=='Известно персонажу')
 assert(state.used==0 and not state.learned[25])
 advance();local count=#sent;card.scripts.OnClick(card,'LeftButton');assert(#sent==count)
 card.scripts.OnDragStart(card);assert(picked==339)
-parse('STATE 11 11 0 8');parse('END');assert(not state.known[25],'known native spells must refresh, not accumulate forever')
+parse('STATE 11 11 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('END');assert(not state.known[25],'known native spells must refresh, not accumulate forever')
 """)
 
     def test_talent_window_button_attaches_after_delayed_frame_load_and_uses_native_tooltip_id(self):
         self.lua(r"""
-open();parse('STATE 1 20 0 8');parse('CATALOG');parse('TENTRY 398 3 10 1 0 8 11069');parse('TALENT 398 2 12338');parse('END')
+open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG');parse('TENTRY 398 3 10 1 0 8 11069');parse('TALENT 398 2 12338');parse('END')
 assert(compatible[398].spell==12338)
 PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrame',UIParent)
 for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
@@ -362,7 +372,7 @@ assert(button.points[1][2]==PlayerTalentFrame.SearchBox and button.points[1][3]=
 local requestedEntry,requestedRank,lines
 C_Traits={GetTraitDescription=function(entry,rank) requestedEntry=entry;requestedRank=rank;return 'Снижение времени применения: '..(rank*2)..'%' end}
 GameTooltip={SetOwner=function() end,SetText=function() end,AddLine=function(_,value) table.insert(lines,value) end,Show=function() end}
-open();parse('STATE 1 20 0 8');parse('CATALOG');parse('TENTRY 398 3 10 1 0 8 11069 700 500');parse('TALENT 398 2 11069');parse('TEFFECT 398 0 -4');parse('END')
+open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG');parse('TENTRY 398 3 10 1 0 8 11069 700 500');parse('TALENT 398 2 11069');parse('TEFFECT 398 0 -4');parse('END')
 selectedClass=8;selectedTab='Fire';refresh()
 local node;for _,frame in ipairs(talentNodes) do if frame.entry and frame.entry.ID==398 then node=frame end end
 lines={};tooltip(node)
@@ -370,7 +380,7 @@ assert(requestedEntry==500 and requestedRank==2)
 local sawDescription,sawApplied=false,false
 for _,line in ipairs(lines) do if line=='Снижение времени применения: 4%' then sawDescription=true end;if line=='Эффект 1: -4' then sawApplied=true end end
 assert(sawDescription and sawApplied and state.effects[398][0]==-4)
-parse('STATE 1 20 0 8');parse('END');assert(not state.effects[398])
+parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('END');assert(not state.effects[398])
 """)
 
     def test_native_book_report_reads_client_api_without_replacing_it(self):
@@ -391,7 +401,7 @@ assert(debugFrame and debugFrame.edit.text==report and debugFrame.edit.height>=4
 
     def test_unadapted_talents_and_native_primary_cannot_be_purchased(self):
         self.lua(r'''
-open();parse('STATE 8 20 0 8');parse('END')
+open();parse('STATE 8 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('END')
 local row=byClass[8][1]
 local b=abilityNodes[1];b.entry=row
 advance();local count=#sent;b.scripts.OnClick(b,'LeftButton');assert(#sent==count)

@@ -2,7 +2,7 @@
 ## Title: Forever Ascension
 ## Notes: Развитие персонажа и мультиклассы; каталог из Content.zip
 ## Author: WoWForEver
-## Version: 1.6.1
+## Version: 1.7.0
 ## SavedVariables: ForeverAscensionUI
 Catalog.lua
 Portrait.lua
