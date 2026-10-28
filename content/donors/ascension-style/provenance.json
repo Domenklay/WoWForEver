@@ -1,0 +1,24 @@
+{
+  "format": "wowforever-ascension-style-donor-review-v1",
+  "user_selected_mode": "Freepick",
+  "target_model": "Permanent native main class plus simultaneously selected abilities and talents from multiple other classes",
+  "candidate": {
+    "repository": "https://github.com/DustinHendrickson/mod-classless-wildcard",
+    "revision": "97172c4fdfae51213a0f170d60167c500b53fb33",
+    "license": "GPL-2.0-or-later",
+    "license_checked_in": ["LICENSE", "src/ClasslessMgr.h"],
+    "upstream_target": "AzerothCore WotLK 3.3.5a",
+    "official_project_ascension_server_source_verified": false,
+    "reviewed_interfaces": ["BuyAbility", "UnlearnAbility", "BuyTalentRank", "UnlearnTalent", "Respec"],
+    "conflicting_features_to_exclude": ["Replacing the native class with Hero", "Unconditional removal of native class progression", "Applying its 3.3.5a client patch to Forever"],
+    "installed_on_user_server": false,
+    "vendored_source_code": false
+  },
+  "reference_only": {
+    "repository": "https://github.com/synthalorian/open_ascension",
+    "purpose": "Companion app and build/reference data; not a server implementation"
+  },
+  "full_ascension_content_donor_verified": false,
+  "client_assets_committed": false,
+  "casc_map_experiments_paused": true
+}
