@@ -67,6 +67,20 @@ class SubclassIntegrationTests(unittest.TestCase):
         self.assertIn("(-6807,'spell_forever_subclass')",world)
         self.assertIn("(-1082,'spell_forever_subclass')",world)
 
+    def test_staged_native_power_hotfix_only_targets_mage(self):
+        sql=(MODULE/'sql/hotfixes-native-power-experiment.sql').read_text()
+        installer=(ROOT/'scripts/subclass-mod.sh').read_text()
+        doctor=(ROOT/'scripts/subclass-doctor.sh').read_text()
+        self.assertIn('3224459983',sql)
+        self.assertIn('190031901,1,8',sql)
+        self.assertIn('190031902,3,8',sql)
+        self.assertEqual(sql.count('ClassID'),1)
+        self.assertNotIn(',1,1,@FSC_BUILD',sql)
+        self.assertIn('hotfixes-native-power-experiment.sql',installer)
+        self.assertIn('remove_native_power_hotfix',installer)
+        self.assertIn('Mage native Rage/Energy DB2 rows = 2',doctor)
+        self.assertIn('Mage native-power records published to client = 2',doctor)
+
     def test_addon_install_and_restore_is_clean_and_atomic(self):
         expected={
             'ForeverSubclass.toc','ForeverSubclassDirectTransport.lua','ForeverSubclassResourceHUD.lua',
@@ -161,9 +175,9 @@ class SubclassIntegrationTests(unittest.TestCase):
         docker=(ROOT/'Dockerfile').read_text()
         installer=(ROOT/'scripts/subclass-mod.sh').read_text()
         doctor=(ROOT/'scripts/subclass-doctor.sh').read_text()
-        self.assertIn('0.3.5-forever.8',docker)
-        self.assertIn("[ \"$label\" = '0.3.5-forever.8' ]",installer)
-        self.assertIn("if [ \"$label\" = '0.3.5-forever.8' ]",doctor)
+        self.assertIn('0.3.6-forever.9',docker)
+        self.assertIn("[ \"$label\" = '0.3.6-forever.9' ]",installer)
+        self.assertIn("if [ \"$label\" = '0.3.6-forever.9' ]",doctor)
 
     def test_direct_transport_uses_server_endpoint_and_slow_idle_polling(self):
         transport=(ADDON/'ForeverSubclassDirectTransport.lua').read_text()
