@@ -95,6 +95,27 @@ def adapt_server_source(module):
         'ForeverSubclass virtual rage decay anchor',
     )
 
+    # The client HUD needs the primary class resource independently of the active
+    # form. In particular, a druid in bear form still displays mana as its primary
+    # class resource while the native rage becomes the secondary row.
+    powers_anchor = '''static std::vector<Powers> ClassPowers(Class id)\n{\n    if (id==Class::Warrior) return {POWER_RAGE};\n    if (id==Class::Rogue) return {POWER_ENERGY};\n    if (id==Class::Druid) return {POWER_MANA,POWER_RAGE,POWER_ENERGY};\n    return {POWER_MANA};\n}\n'''
+    powers_replacement = powers_anchor + '''\nstatic Powers PrimaryClassPower(Class id)\n{\n    if (id==Class::Warrior) return POWER_RAGE;\n    if (id==Class::Rogue) return POWER_ENERGY;\n    return POWER_MANA;\n}\n'''
+    source = replace_once(
+        source,
+        powers_anchor,
+        powers_replacement,
+        'ForeverSubclass primary class power anchor',
+    )
+
+    class_snapshot_anchor = '    for (auto const& [id,v]:c.classes) Send(p,Trinity::StringFormat("CLASS {} {} {} {}",uint8(id),v.level,v.xp,sObjectMgr->GetXPForLevel(v.level)));\n'
+    class_snapshot_replacement = class_snapshot_anchor + '''    Powers basePower=PrimaryClassPower(c.primaryClass);\n    int32 baseCurrent=p->GetPower(basePower),baseMax=p->GetMaxPower(basePower);\n    if(basePower==POWER_RAGE) { baseCurrent/=10;baseMax/=10; }\n    Send(p,Trinity::StringFormat("BASEPOWER {} {} {}",int(basePower),baseCurrent,baseMax));\n'''
+    source = replace_once(
+        source,
+        class_snapshot_anchor,
+        class_snapshot_replacement,
+        'ForeverSubclass base power snapshot anchor',
+    )
+
     # Stable initialization is intentionally deferred to tame/petcall. Doing it
     # for every supported class in PlayerScript::OnLogin caused unnecessary pet
     # subsystem work during login and made disconnect diagnosis harder.
