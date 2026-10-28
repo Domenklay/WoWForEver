@@ -96,6 +96,8 @@ function methods:SetScript(k,f) self.scripts[k]=f end
 function methods:SetPoint(...) self.points=self.points or {};table.insert(self.points,{...}) end
 function methods:ClearAllPoints() self.points={} end
 function methods:SetTexture(value) self.texture=value end
+function methods:SetTexCoord(...) self.texcoords={...} end
+function methods:SetShadowOffset(x,y) self.shadow={x,y} end
 function methods:Show() self.shown=true end
 function methods:Hide() self.shown=false end
 function methods:IsShown() return self.shown~=false end
@@ -196,7 +198,7 @@ selectedClass=8;selectedTab='Fire';refresh()
 local found
 for _,node in ipairs(talentNodes) do if node.entry and node.entry.ID==398 then found=node end end
 assert(found and found.note.text=='2/3')
-assert(found.points[1][2]==279 and found.points[1][3]==-16)
+assert(found.points[1][2]==322 and found.points[1][3]==-14)
 advance();found.scripts.OnClick(found,'LeftButton');assert(sent[#sent]=='talent 398')
 advance();found.scripts.OnClick(found,'RightButton');assert(sent[#sent]=='untalent 398')
 assert(state.talentFree==9 and state.talentTotal==11)
@@ -231,6 +233,23 @@ local abilities=visible();local found=false
 for _,row in ipairs(abilities) do if row.ID==10 then found=true end;assert(availableRow(row)) end
 assert(found)
 local seen={};for _,row in ipairs(abilities) do assert(not seen[row.Name]);seen[row.Name]=true end
+""")
+
+    def test_book_background_fills_panel_and_talent_grid_fits_viewport(self):
+        self.lua(r"""
+open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('END')
+talentScroll.height=418;selectedClass=8;selectedTab='Fire';refresh()
+assert(talentCanvas.height<=418,'the classic talent tree must fit the actual viewport')
+local paper
+for _,frame in ipairs(frames) do if frame.texture=='Interface\\QuestFrame\\QuestBG' then paper=frame end end
+assert(paper and paper.width==402 and paper.height==462)
+assert(paper.points[1][2]==paper.parent and paper.texcoords[2]<1 and paper.texcoords[4]<1)
+assert(treeTextures[2].texcoords[2]==0.6875 and treeTextures[4].texcoords[4]==0.5859375)
+assert(math.abs(treeTextures[1].width+treeTextures[2].width-576)<0.001)
+assert(math.abs(treeTextures[1].height+treeTextures[3].height-462)<0.001)
+assert(summary.text:find(' | ',1,true) and not summary.text:find('·',1,true))
+assert(emptyAbilities.shadow[1]==0 and emptyAbilities.shadow[2]==0)
+assert(schools.BeastMastery=='Повелитель зверей')
 """)
 
     def test_unadapted_talents_and_native_primary_cannot_be_purchased(self):

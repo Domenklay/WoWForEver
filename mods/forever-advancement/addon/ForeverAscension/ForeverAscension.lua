@@ -12,7 +12,7 @@ local classCoords={WARRIOR={0,0.25,0,0.25},MAGE={0.25,0.49609375,0,0.25},ROGUE={
 local schools={Arcane="Тайная магия",Fire="Огонь",Frost="Лёд",Holy="Свет",Discipline="Послушание",Shadow="Тьма",
  Arms="Оружие",Fury="Неистовство",Protection="Защита",Assassination="Ликвидация",Combat="Бой",Subtlety="Скрытность",
  Balance="Баланс",Restoration="Исцеление",["Feral Combat"]="Сила зверя",Elemental="Стихии",Enhancement="Совершенствование",
- Affliction="Колдовство",Demonology="Демонология",Destruction="Разрушение",["Beast Mastery"]="Повелитель зверей",
+ Affliction="Колдовство",Demonology="Демонология",Destruction="Разрушение",["Beast Mastery"]="Повелитель зверей",BeastMastery="Повелитель зверей",FeralCombat="Сила зверя",
  Marksmanship="Стрельба",Survival="Выживание",Retribution="Воздаяние"}
 local errors={disabled="Модуль развития выключен.",cannot_edit_now="Нельзя менять набор в бою, после смерти или во время каста.",
  unavailable_or_power="Способность недоступна или не хватает ресурса.",incompatible_or_level="Способность недоступна для изучения на этом уровне.",
@@ -85,14 +85,14 @@ local function tooltip(self)
  if tipSpell and GameTooltip.SetSpellByID then GameTooltip:SetSpellByID(tipSpell) else GameTooltip:SetText(spellName(row),1,0.82,0.25) end
  local description=ForeverAscensionDescriptionsRU and ForeverAscensionDescriptionsRU[row.Spells and row.Spells[1]]
  if description and not d then GameTooltip:AddLine(description,0.9,0.85,0.7,true) end
- GameTooltip:AddLine((schools[row.Tab] or row.Tab).." · уровень "..tostring(d and d.level or row.RequiredLevel or 1),0.75,0.7,0.6,true)
+ GameTooltip:AddLine((schools[row.Tab] or row.Tab).." | уровень "..tostring(d and d.level or row.RequiredLevel or 1),0.75,0.7,0.6,true)
  if isTalent(row) then
   local rank=state and state.talents[row.ID] or 0
-  GameTooltip:AddLine("Ранг "..rank.." / "..tostring(d and d.max or #row.Spells).." · "..tostring(d and d.cost or row.TECost or 1).." TE за ранг",1,0.82,0.3)
+  GameTooltip:AddLine("Ранг "..rank.." / "..tostring(d and d.max or #row.Spells).." | "..tostring(d and d.cost or row.TECost or 1).." TE за ранг",1,0.82,0.3)
   if (row.RequiredTEInvestment or 0)>0 then GameTooltip:AddLine("Требуется "..row.RequiredTEInvestment.." TE в предыдущих рядах этой школы.",0.8,0.75,0.65,true) end
  end
  if d and state and d.owner==state.primary then GameTooltip:AddLine("Это ваш основной класс. Его способности и таланты изучаются штатно.",0.8,0.8,0.8,true)
- elseif d then GameTooltip:AddLine(isTalent(row) and "ЛКМ — вложить очко. ПКМ — вернуть ранг." or "ЛКМ — изучить / забыть. ПКМ — применить.",0.5,0.9,0.5,true)
+ elseif d then GameTooltip:AddLine(isTalent(row) and "ЛКМ - вложить очко. ПКМ - вернуть ранг." or "ЛКМ - изучить / забыть. ПКМ - применить.",0.5,0.9,0.5,true)
  else GameTooltip:AddLine("Для этой записи ещё нет совместимого обработчика Forever.",0.9,0.5,0.35,true) end
  GameTooltip:Show()
 end
@@ -104,8 +104,8 @@ local function makeNode(parent,talent)
  if talent then
   b.note=label(b,"","GameFontNormalSmall");b.note:SetPoint("BOTTOMRIGHT",5,-2)
  else
-  b.name=label(b,"","GameFontNormalSmall");b.name:SetPoint("TOPLEFT",48,-5);b.name:SetWidth(132);b.name:SetJustifyH("LEFT");b.name:SetTextColor(0.18,0.11,0.04)
-  b.note=label(b,"","GameFontHighlightSmall");b.note:SetPoint("TOPLEFT",48,-29);b.note:SetWidth(132);b.note:SetJustifyH("LEFT");b.note:SetTextColor(0.32,0.22,0.12)
+  b.name=label(b,"","GameFontNormalSmall");b.name:SetPoint("TOPLEFT",48,-5);b.name:SetWidth(132);b.name:SetJustifyH("LEFT");b.name:SetTextColor(0.18,0.11,0.04);b.name:SetShadowOffset(0,0)
+  b.note=label(b,"","GameFontHighlightSmall");b.note:SetPoint("TOPLEFT",48,-29);b.note:SetWidth(132);b.note:SetJustifyH("LEFT");b.note:SetTextColor(0.32,0.22,0.12);b.note:SetShadowOffset(0,0)
  end
  b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square","ADD");b:RegisterForClicks("LeftButtonUp","RightButtonUp")
  b:SetScript("OnClick",function(self,mouse)
@@ -150,7 +150,7 @@ local function renderAbilities(rows)
    elseif state and d.owner==state.primary then n.note:SetText("Основной класс")
    elseif state and d.level>state.level then n.note:SetText("Уровень "..d.level)
    elseif learned then n.note:SetText("Изучено")
-   else n.note:SetText("Изучить · ур. "..d.level) end
+   else n.note:SetText("Изучить | ур. "..d.level) end
    local locked=not d or (state and d.level>state.level)
    n:SetAlpha(locked and 0.55 or 1)
    if n.icon.SetDesaturated then n.icon:SetDesaturated(locked and true or false) end
@@ -160,12 +160,17 @@ local function renderAbilities(rows)
 end
 local function renderTalents(rows)
  local maxTier=0;local positions={}
+ for _,row in ipairs(rows) do maxTier=math.max(maxTier,math.floor((row.RequiredTEInvestment or 0)/3)) end
+ local viewport=math.max(400,talentScroll:GetHeight() or 418)
+ local rowStep=math.max(36,math.min(48,(viewport-20)/(maxTier+1)))
+ local nodeSize=math.min(42,rowStep-2);local iconSize=math.min(32,nodeSize-8)
  for index,row in ipairs(rows) do
   local n=talentNodes[index] or makeNode(talentCanvas,true);talentNodes[index]=n;n.entry=row
   local tier=math.floor((row.RequiredTEInvestment or 0)/3);local column=math.max(1,math.min(4,row.Column or 1))
   maxTier=math.max(maxTier,tier)
-  local x,y=65+(column-1)*107,-16-tier*47
-  n:ClearAllPoints();n:SetPoint("TOPLEFT",x,y);positions[row.ID]={x=x+20,y=y-20}
+  local x,y=68+(column-1)*127,-14-tier*rowStep
+  n:ClearAllPoints();n:SetPoint("TOPLEFT",x,y);n:SetSize(nodeSize,nodeSize);n.icon:SetSize(iconSize,iconSize);n.border:SetSize(iconSize+15,iconSize+15)
+  positions[row.ID]={x=x+nodeSize/2,y=y-nodeSize/2}
   local d=compatible[row.ID];local rank=state and state.talents[row.ID] or 0
   local max=d and d.max or #row.Spells
   n.icon:SetTexture(icon(row));n.note:SetText(rank.."/"..max)
@@ -188,7 +193,7 @@ local function renderTalents(rows)
    end
   end
  end
- talentCanvas:SetHeight(math.max(470,(maxTier+1)*47+30))
+ talentCanvas:SetHeight(math.max(viewport,18+(maxTier+1)*rowStep))
 end
 local function updatePowers()
  if state and ForeverAscensionSetResources then ForeverAscensionSetResources(state.powers,state.regen) end
@@ -202,9 +207,9 @@ end
 refresh=function()
  if not window then return end
  if state then
-  summary:SetText("Основной класс: "..name(state.primary).."  ·  Уровень "..state.level.."  ·  Умения "..state.used.."/"..state.limit)
+  summary:SetText("Основной класс: "..name(state.primary).."  |  Уровень "..state.level.."  |  Умения "..state.used.."/"..state.limit)
   talentPoints:SetText("Очки талантов: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
- else summary:SetText("Ожидаем состояние персонажа…");talentPoints:SetText("Очки талантов: —") end
+ else summary:SetText("Ожидаем состояние персонажа...");talentPoints:SetText("Очки талантов: —") end
  local tabs,seen={},{ }
  for _,row in ipairs(byClass[selectedClass] or {}) do if availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
  table.sort(tabs)
@@ -215,7 +220,7 @@ refresh=function()
   local count=0;if state then for learned in pairs(state.learned) do local row=byId[learned];if row and row.Class==classes[id][1] then count=count+1 end end end
   b.count:SetText(count>0 and tostring(count) or "")
  end
- selectedText:SetText(name(selectedClass).."  ·  "..tostring(schools[selectedTab] or selectedTab or ""));background()
+ selectedText:SetText(name(selectedClass).."  |  "..tostring(schools[selectedTab] or selectedTab or ""));background()
  local abilities,talents=visible();local pages=math.max(1,math.ceil(#abilities/16));page=math.min(page,pages)
  renderAbilities(abilities);renderTalents(talents)
  emptyAbilities:SetShown(#abilities==0)
@@ -231,7 +236,7 @@ local function panel(parent,x,y,width,height,paper)
  local f=CreateFrame("Frame",nil,parent,BackdropTemplateMixin and "BackdropTemplate" or nil);f:SetPoint("TOPLEFT",x,y);f:SetSize(width,height)
  if f.SetBackdrop then f:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=32,edgeSize=12,insets={left=3,right=3,top=3,bottom=3}});f:SetBackdropColor(0.12,0.08,0.035,1) end
  local fill=f:CreateTexture(nil,"BACKGROUND");fill:SetPoint("TOPLEFT",4,-4);fill:SetPoint("BOTTOMRIGHT",-4,4);fill:SetColorTexture(paper and 0.85 or 0.1,paper and 0.77 or 0.065,paper and 0.58 or 0.03,1)
- if paper then local parchment=f:CreateTexture(nil,"BORDER");parchment:SetAllPoints(fill);parchment:SetTexture("Interface\\QuestFrame\\QuestBG");parchment:SetVertexColor(0.95,0.88,0.72,1) end
+ if paper then local parchment=f:CreateTexture(nil,"BORDER");parchment:SetPoint("TOPLEFT",f,"TOPLEFT",4,-4);parchment:SetSize(width-8,height-8);parchment:SetTexCoord(0.05,0.85,0.05,0.55);parchment:SetTexture("Interface\\QuestFrame\\QuestBG");parchment:SetVertexColor(0.95,0.88,0.72,1) end
  return f
 end
 local function build()
@@ -239,7 +244,7 @@ local function build()
  window=CreateFrame("Frame","ForeverAscensionWindow",UIParent,"BasicFrameTemplateWithInset")
  window:SetSize(1040,730);window:SetPoint("CENTER");window:SetFrameStrata("DIALOG");window:SetClampedToScreen(true)
  if GetScreenHeight and GetScreenWidth then window:SetScale(math.min(1,(GetScreenWidth()-40)/1040,(GetScreenHeight()-40)/730)) end
- if window.TitleText then window.TitleText:SetText("Развитие персонажа — мультиклассы") end
+ if window.TitleText then window.TitleText:SetText("Развитие персонажа - мультиклассы") end
  window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
  window:SetScript("OnDragStart",window.StartMoving);window:SetScript("OnDragStop",window.StopMovingOrSizing)
  if UISpecialFrames then table.insert(UISpecialFrames,"ForeverAscensionWindow") end
@@ -264,23 +269,27 @@ local function build()
  search:SetScript("OnTextChanged",function(self) filter=fold(self:GetText());page=1;refresh() end);search:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
  local reload=button(window,"Обновить",125,function() send("status") end);reload:SetPoint("TOPRIGHT",-25,-165)
  local left=panel(window,18,-201,410,470,true)
- local heading=label(left,"Способности","GameFontNormalLarge");heading:SetPoint("TOP",0,-14);heading:SetTextColor(0.23,0.14,0.04)
+ local heading=label(left,"Способности","GameFontNormalLarge");heading:SetPoint("TOP",0,-14);heading:SetTextColor(0.23,0.14,0.04);heading:SetShadowOffset(0,0)
  local abilityCanvas=CreateFrame("Frame",nil,left);abilityCanvas:SetPoint("TOPLEFT",12,-47);abilityCanvas:SetSize(386,410)
  for i=1,16 do local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",((i-1)%2)*194,-math.floor((i-1)/2)*51);abilityNodes[i]=n end
- emptyAbilities=label(abilityCanvas,"","GameFontHighlight");emptyAbilities:SetPoint("CENTER",0,0);emptyAbilities:SetWidth(340);emptyAbilities:SetTextColor(0.25,0.17,0.08)
+ emptyAbilities=label(abilityCanvas,"","GameFontHighlightSmall");emptyAbilities:SetPoint("CENTER",0,0);emptyAbilities:SetWidth(340);emptyAbilities:SetTextColor(0.25,0.17,0.08);emptyAbilities:SetShadowOffset(0,0);emptyAbilities:SetJustifyH("CENTER");emptyAbilities:SetWordWrap(true)
  local right=panel(window,438,-201,584,470,false)
- for i=1,4 do local texture=right:CreateTexture(nil,"BORDER");texture:SetSize(288,231);texture:SetPoint("TOPLEFT",4+((i-1)%2)*288,-4-math.floor((i-1)/2)*231);texture:SetVertexColor(0.8,0.73,0.63);treeTextures[i]=texture end
+ for i=1,4 do local texture=right:CreateTexture(nil,"BORDER");local col=(i-1)%2;local row=math.floor((i-1)/2)
+  local leftWidth,topHeight=576*256/300,462*256/331
+  texture:SetSize(col==0 and leftWidth or 576-leftWidth,row==0 and topHeight or 462-topHeight)
+  texture:SetPoint("TOPLEFT",4+(col==0 and 0 or leftWidth),-4-(row==0 and 0 or topHeight))
+  texture:SetTexCoord(0,col==0 and 1 or 0.6875,0,row==0 and 1 or 0.5859375);texture:SetVertexColor(0.8,0.73,0.63);treeTextures[i]=texture end
  local title=label(right,"Таланты","GameFontNormalLarge");title:SetPoint("TOPLEFT",25,-14)
  talentPoints=label(right,"","GameFontNormal");talentPoints:SetPoint("TOPRIGHT",-25,-16)
  talentScroll=CreateFrame("ScrollFrame","ForeverAscensionTalentScroll",right);talentScroll:SetPoint("TOPLEFT",10,-44);talentScroll:SetPoint("BOTTOMRIGHT",-10,8)
  talentCanvas=CreateFrame("Frame",nil,talentScroll);talentCanvas:SetSize(560,470);talentScroll:SetScrollChild(talentCanvas);talentScroll:EnableMouseWheel(true)
- talentScroll:SetScript("OnMouseWheel",function(self,delta) local current=self:GetVerticalScroll() or 0;self:SetVerticalScroll(math.max(0,math.min(math.max(0,talentCanvas:GetHeight()-410),current-delta*40))) end)
+ talentScroll:SetScript("OnMouseWheel",function(self,delta) local current=self:GetVerticalScroll() or 0;self:SetVerticalScroll(math.max(0,math.min(math.max(0,talentCanvas:GetHeight()-math.max(400,self:GetHeight() or 418)),current-delta*40))) end)
  previous=button(window,"Назад",80,function() page=math.max(1,page-1);refresh() end);previous:SetPoint("BOTTOMLEFT",24,29)
  nextPage=button(window,"Далее",80,function() page=page+1;refresh() end);nextPage:SetPoint("LEFT",previous,"RIGHT",61,0)
  pageText=label(window,"");pageText:SetPoint("LEFT",previous,"RIGHT",12,0)
  showAllButton=button(window,"Все умения",135,function() showAll=not showAll;page=1;refresh() end);showAllButton:SetPoint("LEFT",nextPage,"RIGHT",9,0)
- message=label(window,"ЛКМ — изучить. ПКМ — вернуть ранг таланта или применить умение.","GameFontHighlightSmall");message:SetPoint("BOTTOMLEFT",26,10);message:SetWidth(985);message:SetJustifyH("LEFT")
- local hint=label(window,"Прокрутка колёсиком · Требования предыдущих рядов указаны в подсказках","GameFontHighlightSmall");hint:SetPoint("BOTTOMRIGHT",-28,36)
+ message=label(window,"ЛКМ - изучить. ПКМ - вернуть ранг таланта или применить умение.","GameFontHighlightSmall");message:SetPoint("BOTTOMLEFT",26,10);message:SetWidth(985);message:SetJustifyH("LEFT")
+ local hint=label(window,"Прокрутка колёсиком | Требования предыдущих рядов указаны в подсказках","GameFontHighlightSmall");hint:SetPoint("BOTTOMRIGHT",-28,36)
  local actions=CreateFrame("Frame","ForeverAscensionActions",UIParent);actions:SetSize(400,42);actions:SetPoint("BOTTOM",0,155)
  for i=1,8 do
   local b=CreateFrame("Button",nil,actions);b:SetSize(40,40);b:SetPoint("LEFT",(i-1)*48,0)

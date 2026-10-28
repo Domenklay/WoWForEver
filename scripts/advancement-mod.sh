@@ -35,15 +35,22 @@ case "$action" in
     docker compose logs --tail=300 worldserver | grep -E 'ForeverAdvancement|ready' || true
     exit ;;
   disable) ;;
-  install) client=${2:-/mnt/e/_classic_beta_} ;;
+  install|addon) client=${2:-/mnt/e/_classic_beta_} ;;
   rollback) backup=${2:?Usage: bash scripts/advancement-mod.sh rollback backups/advancement-TIMESTAMP}; ;;
-  *) echo 'Usage: bash scripts/advancement-mod.sh {build|install [CLIENT]|update [CLIENT]|status|disable|rollback BACKUP}';exit 2 ;;
+  *) echo 'Usage: bash scripts/advancement-mod.sh {build|install [CLIENT]|update [CLIENT]|addon [CLIENT]|status|disable|rollback BACKUP}';exit 2 ;;
 esac
 command -v flock >/dev/null
 umask 077
 mkdir -p backups
 exec 9>backups/content-port.lock
 flock -n 9 || { echo 'Another advancement migration is running';exit 1; }
+if [ "$action" = addon ]; then
+    backup=$(mktemp -d "backups/advancement-ui-$(date +%Y%m%d-%H%M%S)-XXXXXX")
+    python3 scripts/install-advancement-addon.py --client "$client" --backup "$backup/addon"
+    echo "AddOn updated without rebuilding or restarting the server. Backup: $backup"
+    echo "Rollback: bash scripts/advancement-mod.sh rollback $backup"
+    exit
+fi
 if [ "$action" = build ]; then
     docker compose build worldserver
     exit
@@ -56,6 +63,11 @@ if [ "$action" = disable ]; then
     exit
 fi
 if [ "$action" = rollback ]; then
+    if [ -f "$backup/addon/advancement-addon.json" ] && [ ! -f "$backup/old-image.txt" ]; then
+        python3 scripts/install-advancement-addon.py --backup "$backup/addon" --restore
+        echo 'AddOn restored. Server and database were not changed.'
+        exit
+    fi
     test -f "$backup/old-image.txt" && test -f "$backup/world-bindings.sql"
     docker image inspect "$(cat "$backup/old-image.txt")" >/dev/null
     trap 'docker compose up -d --no-deps worldserver bnetserver web || true' ERR

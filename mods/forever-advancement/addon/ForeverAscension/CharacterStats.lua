@@ -2,7 +2,7 @@ local panel,toggle
 local rows={}
 local function number(value)
  if type(value)=="string" then return value end
- if type(value)~="number" then return "—" end
+ if type(value)~="number" then return "-" end
  if value==math.floor(value) then return tostring(value) end
  return string.format("%.1f",value)
 end
@@ -11,9 +11,9 @@ local function call(fn,...)
  return fn(...)
 end
 local function resource(power)
- if not ForeverAscensionResourceValue then return "—" end
+ if not ForeverAscensionResourceValue then return "-" end
  local current,maximum=ForeverAscensionResourceValue(power)
- return current and (number(current).." / "..number(maximum)) or "—"
+ return current and (number(current).." / "..number(maximum)) or "-"
 end
 local function stat(id)
  local base,effective=call(UnitStat,"player",id);return effective or base
@@ -23,10 +23,10 @@ local function attack(fn)
  return base and base+(positive or 0)+(negative or 0)
 end
 local function percent(fn,...)
- local value=call(fn,...);return value and (number(value).."%") or "—"
+ local value=call(fn,...);return value and (number(value).."%") or "-"
 end
 local function damage(fn)
- local low,high=call(fn,"player");return low and (number(math.floor(low)).."–"..number(math.ceil(high or low)))
+ local low,high=call(fn,"player");return low and (number(math.floor(low)).."-"..number(math.ceil(high or low)))
 end
 local function rating(id,fn)
  local base=call(fn);local bonus=id and call(GetCombatRatingBonus,id)
@@ -48,7 +48,7 @@ local sections={
   {"Критический удар",function() return percent(GetCritChance) end},{"Мастерство",function() return call(GetExpertise) end},
  }},
  {"Дальний бой",{
-  {"Урон",function() local _,low,high=call(UnitRangedDamage,"player");return low and (number(math.floor(low)).."–"..number(math.ceil(high or low))) end},
+  {"Урон",function() local _,low,high=call(UnitRangedDamage,"player");return low and (number(math.floor(low)).."-"..number(math.ceil(high or low))) end},
   {"Скорость оружия",function() return call(UnitRangedDamage,"player") end},{"Сила атаки",function() return attack(UnitRangedAttackPower) end},
   {"Меткость",function() return rating(CR_HIT_RANGED,GetHitModifier) end},{"Критический удар",function() return percent(GetRangedCritChance) end},
  }},

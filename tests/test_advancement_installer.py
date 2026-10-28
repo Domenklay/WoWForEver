@@ -32,7 +32,7 @@ elif args[:2]==['compose','up'] and os.environ.get('FAKE_FAILURE')=='startup':
 
 
 class AdvancementInstallerTests(unittest.TestCase):
-    def run_install(self,root,failure=''):
+    def run_install(self,root,failure='',action='install'):
         scripts=root/'scripts';scripts.mkdir()
         for name in ['advancement-mod.sh','install-advancement-addon.py','subclass-log-config.py']:
             shutil.copy2(ROOT/'scripts'/name,scripts/name)
@@ -45,8 +45,8 @@ class AdvancementInstallerTests(unittest.TestCase):
         fake=root/'bin';fake.mkdir();(fake/'docker').write_text(FAKE_DOCKER);(fake/'docker').chmod(0o755)
         (fake/'git').write_text('#!/bin/sh\necho fixture-source-commit\n');(fake/'git').chmod(0o755)
         env=os.environ.copy();env.update(PATH=str(fake)+os.pathsep+env['PATH'],FAKE_DOCKER_LOG=str(root/'docker.log'),FAKE_FAILURE=failure)
-        result=subprocess.run(['bash',str(scripts/'advancement-mod.sh'),'install',str(client)],env=env,capture_output=True,text=True,timeout=20)
-        return result,client,(root/'docker.log').read_text()
+        result=subprocess.run(['bash',str(scripts/'advancement-mod.sh'),action,str(client)],env=env,capture_output=True,text=True,timeout=20)
+        return result,client,(root/'docker.log').read_text() if (root/'docker.log').exists() else ''
 
     def test_successful_migration_creates_backups_and_replaces_ui(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -60,6 +60,21 @@ class AdvancementInstallerTests(unittest.TestCase):
             self.assertEqual((backup/'addon/ForeverSubclass/user.lua').read_text(),'old user UI')
             self.assertLess(log.index('mysqldump'),log.index('CREATE TABLE IF NOT EXISTS'))
             self.assertNotIn('DROP TABLE',log)
+
+    def test_addon_only_update_and_rollback_never_invoke_docker(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);result,client,log=self.run_install(root,action='addon')
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(log,'')
+            self.assertTrue((client/'Interface/AddOns/ForeverAscension').is_dir())
+            self.assertEqual((root/'.env').read_text(),'SUBCLASS_ENABLED=1\nUNRELATED=preserved\n')
+            backup=next((root/'backups').glob('advancement-ui-*'))
+            env=os.environ.copy();env.update(PATH=str(root/'bin')+os.pathsep+env['PATH'],FAKE_DOCKER_LOG=str(root/'docker.log'))
+            result=subprocess.run(['bash',str(root/'scripts/advancement-mod.sh'),'rollback',str(backup)],env=env,capture_output=True,text=True,timeout=20)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual((client/'Interface/AddOns/ForeverSubclass/user.lua').read_text(),'old user UI')
+            self.assertFalse((client/'Interface/AddOns/ForeverAscension').exists())
+            self.assertFalse((root/'docker.log').exists())
 
     def test_backup_failure_does_not_remove_existing_power_records(self):
         with tempfile.TemporaryDirectory() as temp:
