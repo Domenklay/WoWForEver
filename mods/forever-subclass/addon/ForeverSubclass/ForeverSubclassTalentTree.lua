@@ -22,15 +22,15 @@ end
 local function backdrop(frame)
  if frame.SetBackdrop then
   frame:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=16,edgeSize=10,insets={left=3,right=3,top=3,bottom=3}})
-  frame:SetBackdropColor(0.018,0.018,0.018,0.985);frame:SetBackdropBorderColor(0.45,0.34,0.12,1)
+  frame:SetBackdropColor(0.018,0.018,0.018,0.985);frame:SetBackdropBorderColor(0.34,0.40,0.48,1)
  end
 end
 local function makeButton(parent,text,width)
  local template=BackdropTemplateMixin and "BackdropTemplate" or nil
  local b=CreateFrame("Button",nil,parent,template);b:SetSize(width or 130,28);backdrop(b)
- b.text=b:CreateFontString(nil,"OVERLAY","GameFontNormalSmall");b.text:SetPoint("CENTER");b.text:SetText(text)
- b:SetScript("OnEnter",function(self) if self.SetBackdropBorderColor then self:SetBackdropBorderColor(1,0.78,0.2,1) end end)
- b:SetScript("OnLeave",function(self) if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.45,0.34,0.12,1) end end)
+ b.text=b:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");b.text:SetPoint("CENTER");b.text:SetText(text);b.text:SetTextColor(0.92,0.92,0.92,1)
+ b:SetScript("OnEnter",function(self) if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.55,0.72,0.92,1) end end)
+ b:SetScript("OnLeave",function(self) if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.34,0.40,0.48,1) end end)
  return b
 end
 local function build()
@@ -41,24 +41,24 @@ local function build()
  toggle=makeButton(root,"Таланты подкласса",145);toggle:SetPoint("TOPRIGHT",root,"TOPRIGHT",-18,-54)
  panel=CreateFrame("Frame","ForeverSubclassTalentTreePanel",root,template)
  panel:SetPoint("TOPLEFT",root,"TOPLEFT",470,-78);panel:SetPoint("BOTTOMRIGHT",root,"BOTTOMRIGHT",-12,44);backdrop(panel);panel:EnableMouse(true)
- local title=panel:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");title:SetPoint("TOPLEFT",14,-12);title:SetText("Таланты подкласса")
+ local title=panel:CreateFontString(nil,"OVERLAY","GameFontHighlightLarge");title:SetPoint("TOPLEFT",14,-12);title:SetText("Таланты подкласса");title:SetTextColor(0.95,0.95,0.95,1)
  pointsText=panel:CreateFontString(nil,"OVERLAY","GameFontHighlight");pointsText:SetPoint("TOPRIGHT",-14,-15)
- local note=panel:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",title,"BOTTOMLEFT",0,-5);note:SetText("1 очко за уровень подкласса, начиная с 10-го. Следующий ряд требует 5 потраченных очков.")
+ local note=panel:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");note:SetPoint("TOPLEFT",title,"BOTTOMLEFT",0,-5);note:SetText("Первое очко на 10-м уровне подкласса, затем ещё одно каждые 2 уровня. Новый ряд требует 5 потраченных очков.")
  resetButton=makeButton(panel,"Сбросить",105);resetButton:SetPoint("BOTTOMRIGHT",-14,12);resetButton:SetScript("OnClick",function() send("talentreset") end)
  for index,id in ipairs(order) do
   local d=defs[id];local n=CreateFrame("Button",nil,panel,template);n:SetSize(265,104);backdrop(n)
   local col=(index-1)%2;local row=math.floor((index-1)/2);n:SetPoint("TOPLEFT",18+col*280,-72-row*116)
   n.icon=n:CreateTexture(nil,"ARTWORK");n.icon:SetSize(45,45);n.icon:SetPoint("TOPLEFT",10,-10);n.icon:SetTexture(d.icon)
-  n.name=n:CreateFontString(nil,"OVERLAY","GameFontNormal");n.name:SetPoint("TOPLEFT",65,-12);n.name:SetPoint("RIGHT",-45,0);n.name:SetJustifyH("LEFT");n.name:SetText(d.name)
+  n.name=n:CreateFontString(nil,"OVERLAY","GameFontHighlight");n.name:SetPoint("TOPLEFT",65,-12);n.name:SetPoint("RIGHT",-45,0);n.name:SetJustifyH("LEFT");n.name:SetText(d.name);n.name:SetTextColor(0.94,0.94,0.94,1)
   n.rank=n:CreateFontString(nil,"OVERLAY","GameFontHighlight");n.rank:SetPoint("TOPRIGHT",-10,-13)
   n.desc=n:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");n.desc:SetPoint("TOPLEFT",65,-36);n.desc:SetPoint("BOTTOMRIGHT",-8,8);n.desc:SetJustifyH("LEFT");n.desc:SetJustifyV("TOP");n.desc:SetWordWrap(true);n.desc:SetText(d.desc)
   n:SetScript("OnClick",function() send("talent "..id) end)
   n:SetScript("OnEnter",function(self)
-   if self.SetBackdropBorderColor then self:SetBackdropBorderColor(1,0.78,0.2,1) end
-   GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(d.name,1,0.82,0.2);GameTooltip:AddLine(d.desc,1,1,1,true)
+   if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.55,0.72,0.92,1) end
+   GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(d.name,0.95,0.95,0.95);GameTooltip:AddLine(d.desc,1,1,1,true)
    GameTooltip:AddLine("Ряд "..(d.tier+1)..". Максимум: "..d.max..".",0.7,0.7,0.7,true);GameTooltip:Show()
   end)
-  n:SetScript("OnLeave",function(self) GameTooltip:Hide();if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.45,0.34,0.12,1) end end)
+  n:SetScript("OnLeave",function(self) GameTooltip:Hide();if self.SetBackdropBorderColor then self:SetBackdropBorderColor(0.34,0.40,0.48,1) end end)
   nodes[id]=n
  end
  toggle:SetScript("OnClick",function()
@@ -78,7 +78,7 @@ local function refresh()
   local unlocked=(state.spent or 0)>=t.tier*5
   if n.SetBackdropColor then
    if t.rank>=t.max then n:SetBackdropColor(0.03,0.12,0.04,0.98)
-   elseif unlocked and (state.free or 0)>0 then n:SetBackdropColor(0.075,0.055,0.02,0.98)
+   elseif unlocked and (state.free or 0)>0 then n:SetBackdropColor(0.035,0.055,0.08,0.98)
    else n:SetBackdropColor(0.025,0.025,0.025,0.98) end
   end
   n:EnableMouse(unlocked and (state.free or 0)>0 and t.rank<t.max)
