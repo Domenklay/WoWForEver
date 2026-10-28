@@ -110,10 +110,24 @@ static int32 Cost(Player* p,SpellInfo const* info,Powers power)
     auto cost=info->CalcPowerCost(power,false,p,info->GetSchoolMask());
     return cost?std::max(0,(cost->Amount+Scale(power)-1)/Scale(power)):0;
 }
+static bool CompatibleCosts(SpellInfo const* info)
+{
+    if(info->HasAttribute(SPELL_ATTR1_USE_ALL_MANA)) return false;
+    std::set<int> seen;
+    for(auto cost:info->PowerCosts)
+    {
+        if(!cost) continue;
+        if(std::find(PowersList.begin(),PowersList.end(),Powers(cost->PowerType))==PowersList.end()) return false;
+        if(!seen.insert(cost->PowerType).second||cost->ManaPerSecond||cost->PowerPctPerSecond||
+            cost->OptionalCost||cost->OptionalCostPct||cost->RequiredAuraSpellID||cost->PowerCostPct||
+            cost->PowerCostMaxPct||cost->ManaCost<0||cost->ManaCostPerLevel<0) return false;
+    }
+    return true;
+}
 static bool CanCast(Player* p,State const& s,Definition const& d)
 {
     if(d.owner==p->GetClass()||!s.learned.count(d.entry)||d.level>p->GetLevel()||!p->IsAlive()) return false;
-    auto info=sSpellMgr->GetSpellInfo(d.spell,DIFFICULTY_NONE);if(!info) return false;
+    auto info=sSpellMgr->GetSpellInfo(d.spell,DIFFICULTY_NONE);if(!info||!CompatibleCosts(info)) return false;
     for(auto power:PowersList) if(Available(p,s,power)<Cost(p,info,power)) return false;
     return true;
 }
@@ -205,7 +219,7 @@ public:
         for(auto const& row:AscensionSourceEntries)
         {
             auto info=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
-            if(!info||info->IsPassive()||!info->SpellName||std::string(info->SpellName->Str[LOCALE_enUS])!=row.name) continue;
+            if(!info||!CompatibleCosts(info)||info->IsPassive()||!info->SpellName||!info->SpellName->Str[LOCALE_enUS]||std::string(info->SpellName->Str[LOCALE_enUS])!=row.name) continue;
             bool bound=false;auto bounds=sObjectMgr->GetSpellScriptsBounds(row.spell);
             for(auto it=bounds.first;it!=bounds.second;++it) if(it->second.first==script&&it->second.second) bound=true;
             if(!bound||claimed.count(row.spell)) continue;

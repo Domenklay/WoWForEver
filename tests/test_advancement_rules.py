@@ -20,7 +20,7 @@ class AdvancementRuleTests(unittest.TestCase):
         source=SOURCE.read_text()
         functions='\n'.join(function(source,name) for name in ['static bool Native(', 'static int32 Scale(',
             'static void Refresh(', 'static int32 Available(', 'static Definition const* Best(',
-            'static uint32 Used(', 'static int32 Cost(', 'static bool CanCast('])
+            'static uint32 Used(', 'static int32 Cost(', 'static bool CompatibleCosts(', 'static bool CanCast('])
         code=r'''
 #include <algorithm>
 #include <array>
@@ -33,7 +33,7 @@ class AdvancementRuleTests(unittest.TestCase):
 using uint32=uint32_t;using int32=int32_t;using uint64=uint64_t;
 using Clock=std::chrono::steady_clock;
 enum Powers {POWER_MANA=0,POWER_RAGE=1,POWER_ENERGY=3};
-constexpr int MAX_POWERS_PER_CLASS=6,CLASS_PRIEST=5,STAT_SPIRIT=4,DIFFICULTY_NONE=0;
+constexpr int MAX_POWERS_PER_CLASS=6,CLASS_PRIEST=5,STAT_SPIRIT=4,DIFFICULTY_NONE=0,SPELL_ATTR1_USE_ALL_MANA=1;
 constexpr std::array<Powers,3> PowersList={POWER_MANA,POWER_RAGE,POWER_ENERGY};
 struct Definition { uint32 entry,owner,spell,level; };
 struct Pool {int32 current=0,maximum=0;double fraction=0;};
@@ -51,7 +51,10 @@ struct Player {
 struct ObjectMgr {void GetPlayerClassLevelInfo(int cls,int,uint32& base) {assert(cls==5);base=500;}} objectMgr;
 auto sObjectMgr=&objectMgr;
 struct PowerCost {int Amount=30;};
+struct SpellPowerEntry {int PowerType=0,ManaPerSecond=0,PowerPctPerSecond=0,OptionalCost=0,OptionalCostPct=0,RequiredAuraSpellID=0,PowerCostPct=0,PowerCostMaxPct=0,ManaCost=20,ManaCostPerLevel=0;};
 struct SpellInfo {
+ std::array<SpellPowerEntry const*,2> PowerCosts={};
+ bool HasAttribute(int) const {return false;}
  PowerCost cost;
  PowerCost const* CalcPowerCost(Powers power,bool,Player*,int) const {return power==POWER_MANA?&cost:nullptr;}
  int GetSchoolMask() const {return 1;}
@@ -70,6 +73,10 @@ int main() {
  auto mage=Best(10,20);auto priest=Best(20,20);
  assert(mage->spell==116 && Best(10,30)->spell==205 && !Best(10,1));
  assert(CanCast(&p,s,*mage) && CanCast(&p,s,*priest));
+ SpellPowerEntry unsupported;unsupported.PowerType=4;spellMgr.info.PowerCosts[0]=&unsupported;
+ assert(!CanCast(&p,s,*mage));unsupported.PowerType=0;unsupported.OptionalCost=10;
+ assert(!CanCast(&p,s,*mage));unsupported.OptionalCost=0;unsupported.PowerCostPct=10;
+ assert(!CanCast(&p,s,*mage));spellMgr.info.PowerCosts[0]=nullptr;
  s.learned.erase(10);assert(!CanCast(&p,s,*mage));s.learned.insert(10);
  s.pools[POWER_MANA].current=29;assert(!CanCast(&p,s,*mage));
  s.pools[POWER_MANA].current=30;assert(CanCast(&p,s,*mage));

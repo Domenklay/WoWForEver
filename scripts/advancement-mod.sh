@@ -104,6 +104,7 @@ python3 scripts/preserve-container-image.py --container "$container" \
 cp .env "$backup/env.before"
 git rev-parse HEAD > "$backup/source-commit.txt"
 services_stopped=0
+native_power_changed=0
 finished=0
 restore_on_error() {
     code=$?
@@ -116,8 +117,10 @@ restore_on_error() {
             printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement');" | mysql_world || true
             mysql_world < "$backup/world-bindings.sql" || true
         fi
-        remove_native_power_hotfix || true
-        if [ -f "$backup/native-power.sql" ]; then mysql_hotfixes < "$backup/native-power.sql" || true; fi
+        if [ "$native_power_changed" = 1 ]; then
+            remove_native_power_hotfix || true
+            if [ -f "$backup/native-power.sql" ]; then mysql_hotfixes < "$backup/native-power.sql" || true; fi
+        fi
         cp "$backup/env.before" .env
         docker tag "$(cat "$backup/old-image.txt")" forever-trinitycore:latest || true
         if [ -f "$backup/addon/advancement-addon.json" ]; then
@@ -150,6 +153,7 @@ mv "$backup/native-power.sql.tmp" "$backup/native-power.sql"
 
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot characters' < mods/forever-advancement/sql/characters.sql
 mysql_world < mods/forever-advancement/sql/world.sql
+native_power_changed=1
 remove_native_power_hotfix
 python3 scripts/install-advancement-addon.py --client "$client" --backup "$backup/addon"
 python3 scripts/subclass-log-config.py --backup "$backup"

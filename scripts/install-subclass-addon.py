@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install only ForeverSubclass AddOn files. Does not touch CASC or executables."""
+"""Restore a legacy ForeverSubclass backup. New installs use install-advancement-addon.py."""
 import argparse
 import hashlib
 import json
@@ -65,5 +65,4 @@ if __name__=='__main__':
     args=parser.parse_args()
     if args.restore:print('Restored:',restore(args.backup))
     else:
-        if not args.client:parser.error('--client is required for installation')
-        print('AddOn:',install(args.client,args.backup))
+        parser.error('Use scripts/install-advancement-addon.py for new installations')

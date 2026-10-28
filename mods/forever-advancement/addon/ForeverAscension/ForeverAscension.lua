@@ -7,12 +7,10 @@ local classes={
  [8]={"Mage","Маг","MAGE"},[9]={"Warlock","Чернокнижник","WARLOCK"},[11]={"Druid","Друид","DRUID"},
 }
 local errors={disabled="Модуль выключен или основной класс не поддерживается.",
- rest_required="Менять второй класс можно только в городе или таверне.",
- invalid_secondary="Выберите второй класс, отличный от основного.",
- cannot_edit_now="Нельзя менять способности в бою, после смерти или во время каста.",
+  cannot_edit_now="Нельзя менять способности в бою, после смерти или во время каста.",
  unavailable_or_power="Способность недоступна или не хватает ресурса.",
  incompatible_or_level="Способность не адаптирована или уровень персонажа недостаточен.",
- ability_limit="Достигнут предел изученных способностей второго класса.",select_target="Выберите цель.",
+ ability_limit="Достигнут предел дополнительных способностей.",select_target="Выберите цель.",
  already_learned="Способность уже изучена."}
 local byClass,byId={},{ }
 for id in pairs(classes) do byClass[id]={} end
@@ -68,7 +66,8 @@ local function tooltip(self)
  if d and GameTooltip.SetSpellByID then GameTooltip:SetSpellByID(d.spell) else GameTooltip:SetText(spellName(row)) end
  GameTooltip:AddLine("Ascension: "..row.ID.." · "..tostring(row.Tab),1,0.82,0.3)
  GameTooltip:AddLine("AE "..tostring(row.AECost or 0).." / TE "..tostring(row.TECost or 0).." (исходные данные)",0.7,0.7,0.7,true)
- if d then GameTooltip:AddLine("ЛКМ — изучить/забыть; ПКМ — применить.",0.8,0.9,1,true)
+ if d and state and d.owner==state.primary then GameTooltip:AddLine("Способности основного класса изучаются штатно.",0.8,0.9,1,true)
+ elseif d then GameTooltip:AddLine("ЛКМ — изучить/забыть; ПКМ — применить.",0.8,0.9,1,true)
  else GameTooltip:AddLine("Нет проверенной реализации в Forever. Изучение отключено.",1,0.5,0.3,true) end
  GameTooltip:Show()
 end
@@ -113,6 +112,8 @@ local function render(nodes,rows)
    n.icon:SetTexture(icon(row));n.name:SetText(spellName(row))
    local d=compatible[row.ID];local learned=state and state.learned[row.ID]
    if not d then n.note:SetText("Не адаптировано");n:SetAlpha(0.5)
+   elseif state and d.owner==state.primary then n.note:SetText("Основной класс · книга заклинаний");n:SetAlpha(0.7)
+   elseif state and d.level>state.level then n.note:SetText("Требуется уровень "..d.level);n:SetAlpha(0.6)
    elseif learned then n.note:SetText("Изучено · ПКМ: применить");n:SetAlpha(1)
    else n.note:SetText("Ур. "..d.level.." · изучить");n:SetAlpha(1) end
    n:Show()
