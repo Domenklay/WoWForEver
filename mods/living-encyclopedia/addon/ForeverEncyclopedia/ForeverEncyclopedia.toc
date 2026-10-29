@@ -1,7 +1,8 @@
 ## Interface: 16001
 ## Title: Forever Encyclopedia
-## Notes: Живая энциклопедия WoW Forever: фильтры, прокрутка, книга спутника, таланты и облики
+## Notes: Живая энциклопедия WoW Forever: фильтры, прокрутка, книга спутника, таланты, облики и 3D-бестиарий
 ## Author: WoWForEver project
-## Version: 0.6.0-achievement-ui
+## Version: 0.6.1-model-preview
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopedia.lua
+ForeverEncyclopediaModel.lua
