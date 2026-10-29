@@ -109,6 +109,43 @@ static void Snapshot(Player* player)
     Send(player, "END");
 }
 
+static bool ValidKind(uint32 kind)
+{
+    return kind >= KIND_CREATURE && kind <= KIND_ZONE;
+}
+
+static void Recent(Player* player, uint32 kind)
+{
+    if (!ValidKind(kind))
+    {
+        Error(player, "invalid kind");
+        return;
+    }
+
+    uint32 account = Account(player);
+    if (!account)
+    {
+        Error(player, "no account");
+        return;
+    }
+
+    if (QueryResult rows = CharacterDatabase.PQuery(
+            "SELECT entry,first_map,first_zone FROM forever_encyclopedia_discovery "
+            "WHERE account_id={} AND kind={} ORDER BY first_seen DESC LIMIT 12",
+            account, kind))
+    {
+        do
+        {
+            Field* f = rows->Fetch();
+            Send(player, Trinity::StringFormat("REC {} {} {} {}", kind,
+                f[0].GetUInt32(), f[1].GetUInt32(), f[2].GetUInt32()));
+        }
+        while (rows->NextRow());
+    }
+
+    Send(player, Trinity::StringFormat("RECEND {}", kind));
+}
+
 static void Request(Player* player, std::string const& text)
 {
     if (!Ready)
@@ -130,17 +167,31 @@ static void Request(Player* player, std::string const& text)
     }
 
     std::istringstream input(text);
-    std::string command, extra;
+    std::string command;
     input >> command;
-    if (input >> extra)
-    {
-        Error(player, "invalid command");
-        return;
-    }
 
     if (command.empty() || command == "status")
     {
+        std::string extra;
+        if (input >> extra)
+        {
+            Error(player, "invalid command");
+            return;
+        }
         Snapshot(player);
+        return;
+    }
+
+    if (command == "recent")
+    {
+        uint32 kind = 0;
+        std::string extra;
+        if (!(input >> kind) || (input >> extra))
+        {
+            Error(player, "invalid recent request");
+            return;
+        }
+        Recent(player, kind);
         return;
     }
 
