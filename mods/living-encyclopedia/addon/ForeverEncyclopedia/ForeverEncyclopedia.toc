@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Forever Encyclopedia
-## Notes: Живая энциклопедия WoW Forever: V2 интерфейс, 3D-бестиарий, облики и дерево талантов
+## Notes: Живая энциклопедия WoW Forever: V2.1 интерфейс, 3D-бестиарий, облики и серверное дерево талантов
 ## Author: WoWForEver project
-## Version: 0.7.0-v2-talents
+## Version: 0.7.1-v2.1-talents
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopediaTalentData.lua
-ForeverEncyclopediaV2.lua
+ForeverEncyclopediaV21.lua
