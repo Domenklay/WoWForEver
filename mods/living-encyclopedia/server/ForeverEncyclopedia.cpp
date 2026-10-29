@@ -36,6 +36,17 @@ static uint32 Account(Player* player)
     return player && player->GetSession() ? player->GetSession()->GetAccountId() : 0;
 }
 
+static uint32 RewardFor(Kind kind)
+{
+    switch (kind)
+    {
+        case KIND_CREATURE: return 1;
+        case KIND_ITEM: return 1;
+        case KIND_ZONE: return 3;
+        default: return 0;
+    }
+}
+
 static void Send(Player* player, std::string const& text)
 {
     WorldPackets::Chat::Chat packet;
@@ -54,16 +65,29 @@ static void Record(Player* player, Kind kind, uint32 entry)
         return;
 
     uint32 account = Account(player);
-    if (!account)
+    uint32 reward = RewardFor(kind);
+    if (!account || !reward)
         return;
 
     uint32 mapId = player->GetMapId();
     uint32 zoneId = player->GetZoneId();
     CharacterDatabaseTransaction tx = CharacterDatabase.BeginTransaction();
+
+    // ROW_COUNT() in the second statement observes this INSERT IGNORE on the same
+    // transaction connection: 1 only for the first account-wide discovery, 0 for duplicates.
     tx->PAppend(
         "INSERT IGNORE INTO forever_encyclopedia_discovery "
         "(account_id,kind,entry,first_map,first_zone) VALUES ({},{},{},{},{})",
         account, uint32(kind), entry, mapId, zoneId);
+    tx->PAppend(
+        "INSERT INTO forever_encyclopedia_account "
+        "(account_id,knowledge_total,knowledge_spent,discoveries) "
+        "SELECT {},{},0,1 WHERE ROW_COUNT()=1 "
+        "ON DUPLICATE KEY UPDATE "
+        "knowledge_total=knowledge_total+VALUES(knowledge_total), "
+        "discoveries=discoveries+VALUES(discoveries)",
+        account, reward);
+
     CharacterDatabase.DirectCommitTransaction(tx);
 }
 
@@ -73,6 +97,13 @@ struct Counts
     uint32 items = 0;
     uint32 zones = 0;
     uint32 total = 0;
+};
+
+struct Progress
+{
+    uint64 total = 0;
+    uint64 spent = 0;
+    uint32 discoveries = 0;
 };
 
 static Counts LoadCounts(Player* player)
@@ -101,10 +132,32 @@ static Counts LoadCounts(Player* player)
     return counts;
 }
 
+static Progress LoadProgress(Player* player)
+{
+    Progress progress;
+    uint32 account = Account(player);
+    if (!account)
+        return progress;
+
+    if (QueryResult row = CharacterDatabase.PQuery(
+            "SELECT knowledge_total,knowledge_spent,discoveries "
+            "FROM forever_encyclopedia_account WHERE account_id={}", account))
+    {
+        Field* f = row->Fetch();
+        progress.total = f[0].GetUInt64();
+        progress.spent = f[1].GetUInt64();
+        progress.discoveries = f[2].GetUInt32();
+    }
+    return progress;
+}
+
 static void Snapshot(Player* player)
 {
     Counts c = LoadCounts(player);
+    Progress p = LoadProgress(player);
+    uint64 available = p.total >= p.spent ? p.total - p.spent : 0;
     Send(player, Trinity::StringFormat("STATE {} {} {} {}", c.total, c.creatures, c.items, c.zones));
+    Send(player, Trinity::StringFormat("KNOW {} {} {} {}", p.total, p.spent, available, p.discoveries));
     Send(player, Trinity::StringFormat("CURRENT {} {} {}", player->GetMapId(), player->GetZoneId(), player->GetAreaId()));
     Send(player, "END");
 }
@@ -250,14 +303,16 @@ public:
         if (!sConfigMgr->GetBoolDefault("ForeverEncyclopedia.Enable", false))
             return;
 
-        if (!CharacterDatabase.Query("SELECT COUNT(*) FROM forever_encyclopedia_discovery"))
+        bool discoverySchema = bool(CharacterDatabase.Query("SELECT COUNT(*) FROM forever_encyclopedia_discovery"));
+        bool accountSchema = bool(CharacterDatabase.Query("SELECT COUNT(*) FROM forever_encyclopedia_account"));
+        if (!discoverySchema || !accountSchema)
         {
             TC_LOG_ERROR("scripts", "ForeverEncyclopedia schema missing; feature disabled");
             return;
         }
 
         Ready = true;
-        TC_LOG_INFO("scripts", "ForeverEncyclopedia ready: account-wide creature/item/zone discovery enabled");
+        TC_LOG_INFO("scripts", "ForeverEncyclopedia ready: account-wide discovery and knowledge progression enabled");
     }
 };
 } // namespace ForeverEncyclopedia
