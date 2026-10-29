@@ -1,5 +1,7 @@
-local RESPONSE = "FTR1"
-local REQUEST = "FET1"
+local RESPONSE = "FBR1"
+local REQUEST = "FEB1"
+local TALENT_RESPONSE = "FTR1"
+local BASE_RESPONSE = "FER1"
 local SERVER_TARGET = "SERVER"
 
 local dock
@@ -28,6 +30,8 @@ local function sendStatus()
     end
 end
 
+_G.ForeverEncyclopediaRuntimeRefresh = sendStatus
+
 local function unlocked(bit)
     if bit32 then
         return bit32.band(state.mask, bit) ~= 0
@@ -36,23 +40,13 @@ local function unlocked(bit)
 end
 
 local function hideLegacyDock()
-    local legacy = _G.ForeverEncyclopediaV21BookDock
-    if legacy then
-        legacy:Hide()
-        legacy:SetAlpha(0)
-        legacy:EnableMouse(false)
-    end
-    local old = _G.ForeverEncyclopediaV2BookDock
-    if old then
-        old:Hide()
-        old:SetAlpha(0)
-        old:EnableMouse(false)
-    end
-    local older = _G.ForeverEncyclopediaBookDock
-    if older then
-        older:Hide()
-        older:SetAlpha(0)
-        older:EnableMouse(false)
+    for _, name in ipairs({"ForeverEncyclopediaV21BookDock", "ForeverEncyclopediaV2BookDock", "ForeverEncyclopediaBookDock"}) do
+        local legacy = _G[name]
+        if legacy then
+            legacy:Hide()
+            legacy:SetAlpha(0)
+            legacy:EnableMouse(false)
+        end
     end
 end
 
@@ -74,10 +68,6 @@ end
 local function placeDock()
     if not dock then return end
     dock:ClearAllPoints()
-
-    -- Keep the encyclopedia controls outside the chat text/tabs area.
-    -- ChatFrame1 is the stable visual anchor in this client; the old
-    -- ChatFrameMenuButton anchor placed the dock directly on top of chat.
     if ChatFrame1 then
         dock:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 8, 14)
     elseif ChatFrameMenuButton then
@@ -108,7 +98,6 @@ local function update()
         local isUnlocked = unlocked(def.bit)
         button.icon:SetAlpha(isUnlocked and 1 or 0.22)
         button.lock:SetShown(not isUnlocked)
-
         local seconds = tonumber(state.cooldowns[i]) or 0
         if button.cooldown and button.cooldown.SetCooldown then
             if seconds > 0 then
@@ -133,7 +122,6 @@ local function createDock()
     end
 
     hideLegacyDock()
-
     dock = CreateFrame("Frame", "ForeverEncyclopediaSafeDock", UIParent)
     dock:SetSize(164, 46)
     dock:SetFrameStrata("MEDIUM")
@@ -227,7 +215,7 @@ local function createDock()
 end
 
 local function parseBook(message)
-    local _, mask, mana, maxMana, _, shieldCd, healCd, supportCd, barrier = strsplit("|", tostring(message or ""))
+    local _, mask, mana, maxMana, shieldCd, healCd, supportCd, barrier = strsplit("|", tostring(message or ""))
     state.mask = tonumber(mask) or 0
     state.mana = tonumber(mana) or 0
     state.maxMana = tonumber(maxMana) or 100
@@ -247,15 +235,19 @@ events:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
         local name = ...
         if name ~= "ForeverEncyclopedia" then return end
-        registerPrefix(REQUEST)
-        registerPrefix(RESPONSE)
+        for _, p in ipairs({REQUEST, RESPONSE, TALENT_RESPONSE, BASE_RESPONSE}) do registerPrefix(p) end
         return
     end
 
     if event == "CHAT_MSG_ADDON" then
         local prefix, message = ...
-        if prefix == RESPONSE and tostring(message or ""):sub(1, 5) == "BOOK|" then
+        message = tostring(message or "")
+        if prefix == RESPONSE and message:sub(1, 5) == "BOOK|" then
             parseBook(message)
+        elseif prefix == TALENT_RESPONSE and (message:sub(1, 7) == "BOUGHT|" or message == "END") then
+            C_Timer.After(0.1, sendStatus)
+        elseif prefix == BASE_RESPONSE and message == "END" then
+            C_Timer.After(0.1, sendStatus)
         end
         return
     end
