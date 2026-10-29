@@ -114,6 +114,6 @@ public:
 void AddSC_forever_scaling()
 {
     new ForeverScaling::DamageGuard();
-    LOG_INFO("server.loading", "ForeverScaling: adapter registered (enabled={}, damageGuard={})",
+    LOG_INFO("server.loading", "ForeverScaling: encounter-runtime-v2 registered (enabled={}, damageGuard={})",
         ForeverScaling::Enabled(), ForeverScaling::DamageGuardEnabled());
 }
