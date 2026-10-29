@@ -74,12 +74,16 @@ end
 local function placeDock()
     if not dock then return end
     dock:ClearAllPoints()
-    if ChatFrameMenuButton and ChatFrameMenuButton.IsShown and ChatFrameMenuButton:IsShown() then
-        dock:SetPoint("LEFT", ChatFrameMenuButton, "RIGHT", 8, 0)
-    elseif ChatFrame1 then
-        dock:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 4, 8)
+
+    -- Keep the encyclopedia controls outside the chat text/tabs area.
+    -- ChatFrame1 is the stable visual anchor in this client; the old
+    -- ChatFrameMenuButton anchor placed the dock directly on top of chat.
+    if ChatFrame1 then
+        dock:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 8, 14)
+    elseif ChatFrameMenuButton then
+        dock:SetPoint("BOTTOMLEFT", ChatFrameMenuButton, "TOPLEFT", 0, 52)
     else
-        dock:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 28, 120)
+        dock:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 28, 210)
     end
 end
 
