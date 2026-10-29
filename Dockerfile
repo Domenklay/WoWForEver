@@ -75,7 +75,7 @@ CMD ["/wow", "wow_classic_beta"]
 FROM build AS casc-sandbox-check
 COPY tools/legion-casc-probe/check-storage.cpp /tmp/check-storage.cpp
 RUN c++ -std=c++20 -O2 -I/src/TrinityCore/dep/CascLib/src \
-        /tmp/legion-casc-probe.cpp /src/TrinityCore/build/dep/CascLib/libcasc.a \
+        /tmp/check-storage.cpp /src/TrinityCore/build/dep/CascLib/libcasc.a \
         -lz -lcrypto -o /usr/local/bin/check-storage
 ENTRYPOINT ["/usr/local/bin/check-storage"]
 
