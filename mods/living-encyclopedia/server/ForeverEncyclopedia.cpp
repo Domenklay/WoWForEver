@@ -36,10 +36,26 @@ enum Kind : uint8
 static std::atomic<bool> Ready{false};
 static std::mutex RequestMutex;
 static std::unordered_map<uint64, Clock::time_point> LastRequest;
+static std::mutex CatalogMutex;
+
+struct CatalogCreature
+{
+    uint32 entry = 0;
+    uint32 type = 0;
+    uint32 classification = 0;
+    std::string name;
+};
+
+static std::unordered_map<uint64, std::vector<CatalogCreature>> CatalogCache;
 
 static uint32 Account(Player* player)
 {
     return player && player->GetSession() ? player->GetSession()->GetAccountId() : 0;
+}
+
+static uint64 CatalogKey(uint32 mapId, uint32 zoneId)
+{
+    return (uint64(mapId) << 32) | uint64(zoneId);
 }
 
 static uint32 RewardFor(Kind kind)
@@ -121,12 +137,6 @@ struct Progress
     uint64 total = 0;
     uint64 spent = 0;
     uint32 discoveries = 0;
-};
-
-struct CatalogCreature
-{
-    uint32 entry = 0;
-    std::string name;
 };
 
 static Counts LoadCounts(Player* player)
@@ -241,36 +251,85 @@ static std::unordered_set<uint32> LoadKnownCreatures(uint32 account)
     return known;
 }
 
-static std::vector<CatalogCreature> LoadZoneCreatures(Player* player)
+static std::vector<CatalogCreature> BuildZoneCreatures(Player* player)
 {
-    std::vector<CatalogCreature> creatures;
-    if (!player)
-        return creatures;
+    std::vector<CatalogCreature> result;
+    if (!player || !player->GetMap())
+        return result;
 
     uint32 mapId = player->GetMapId();
     uint32 zoneId = player->GetZoneId();
     uint32 areaId = player->GetAreaId();
+    Map* map = player->GetMap();
 
+    std::unordered_map<uint32, CatalogCreature> unique;
     if (QueryResult rows = WorldDatabase.PQuery(
-            "SELECT DISTINCT c.id,ct.name "
+            "SELECT c.id,ct.name,ct.type,ct.Classification,c.zoneId,c.areaId," 
+            "c.position_x,c.position_y,c.position_z "
             "FROM creature c INNER JOIN creature_template ct ON ct.entry=c.id "
-            "WHERE c.map={} AND c.id<>0 AND (c.zoneId={} OR (c.zoneId=0 AND c.areaId={})) "
-            "ORDER BY c.id",
-            mapId, zoneId, areaId))
+            "WHERE c.map={} AND c.id<>0 ORDER BY c.id",
+            mapId))
     {
         do
         {
             Field* f = rows->Fetch();
-            CatalogCreature row;
-            row.entry = f[0].GetUInt32();
-            row.name = f[1].GetString();
-            if (row.entry)
-                creatures.push_back(std::move(row));
+            uint32 entry = f[0].GetUInt32();
+            uint32 storedZone = f[4].GetUInt32();
+            uint32 storedArea = f[5].GetUInt32();
+            float x = f[6].GetFloat();
+            float y = f[7].GetFloat();
+            float z = f[8].GetFloat();
+
+            bool inZone = storedZone == zoneId || (storedZone == 0 && storedArea == areaId);
+            if (!inZone)
+            {
+                uint32 actualZone = map->GetZoneId(player->GetPhaseShift(), x, y, z);
+                inZone = actualZone == zoneId;
+            }
+
+            if (!inZone || unique.find(entry) != unique.end())
+                continue;
+
+            CatalogCreature creature;
+            creature.entry = entry;
+            creature.name = f[1].GetString();
+            creature.type = f[2].GetUInt32();
+            creature.classification = f[3].GetUInt32();
+            unique.emplace(entry, std::move(creature));
         }
         while (rows->NextRow());
     }
 
-    return creatures;
+    result.reserve(unique.size());
+    for (auto& pair : unique)
+        result.push_back(std::move(pair.second));
+
+    std::sort(result.begin(), result.end(), [](CatalogCreature const& left, CatalogCreature const& right)
+    {
+        return left.entry < right.entry;
+    });
+    return result;
+}
+
+static std::vector<CatalogCreature> LoadZoneCreatures(Player* player)
+{
+    if (!player)
+        return {};
+
+    uint64 key = CatalogKey(player->GetMapId(), player->GetZoneId());
+    {
+        std::lock_guard<std::mutex> guard(CatalogMutex);
+        auto it = CatalogCache.find(key);
+        if (it != CatalogCache.end())
+            return it->second;
+    }
+
+    std::vector<CatalogCreature> built = BuildZoneCreatures(player);
+    {
+        std::lock_guard<std::mutex> guard(CatalogMutex);
+        auto [it, inserted] = CatalogCache.emplace(key, built);
+        return it->second;
+    }
 }
 
 static void Catalog(Player* player, uint32 page)
@@ -307,7 +366,10 @@ static void Catalog(Player* player, uint32 page)
         CatalogCreature const& creature = creatures[i];
         bool discovered = known.find(creature.entry) != known.end();
         std::string name = discovered ? ProtocolText(creature.name) : std::string();
-        Send(player, Trinity::StringFormat("CAT|{}|{}|{}", creature.entry, discovered ? 1 : 0, name));
+        uint32 type = discovered ? creature.type : 0;
+        uint32 classification = discovered ? creature.classification : 0;
+        Send(player, Trinity::StringFormat("CAT|{}|{}|{}|{}|{}",
+            creature.entry, discovered ? 1 : 0, type, classification, name));
     }
 
     Send(player, "CATEND");
@@ -442,7 +504,7 @@ public:
         }
 
         Ready = true;
-        TC_LOG_INFO("scripts", "ForeverEncyclopedia ready: discovery, knowledge and current-zone catalog enabled");
+        TC_LOG_INFO("scripts", "ForeverEncyclopedia ready: discovery, knowledge and coordinate-resolved zone catalog enabled");
     }
 };
 } // namespace ForeverEncyclopedia
