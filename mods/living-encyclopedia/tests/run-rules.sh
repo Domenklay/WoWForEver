@@ -10,5 +10,6 @@ c++ -std=c++17 -Wall -Wextra -Werror "$root/tests/talent_test.cpp" -o "$tmp/tale
 "$tmp/discovery"
 "$tmp/talents"
 python3 "$root/tests/inject_test.py"
+python3 "$root/tests/sql_lint.py"
 bash -n "$root/install-dev.sh"
 echo "Encyclopedia standalone tests passed"
