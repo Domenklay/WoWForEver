@@ -32,6 +32,17 @@ require_env() {
     test -f .env || { echo '.env not found. Run this from the initialized WoWForEver server.' >&2; exit 1; }
 }
 
+preflight() {
+    python3 - <<'PY'
+from pathlib import Path
+for name in ('scripts/inject-forever-scaling.py',):
+    compile(Path(name).read_text(), name, 'exec')
+print('ForeverScaling Python injector syntax passed')
+PY
+    docker compose config -q
+    bash mod-forever-scaling/tests/run.sh
+}
+
 check_label() {
     local label
     label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.scaling"}}' forever-trinitycore:latest 2>/dev/null || true)
@@ -48,7 +59,7 @@ case "$action" in
         ;;
     build)
         require_env
-        bash mod-forever-scaling/tests/run.sh
+        preflight
         docker compose build worldserver
         check_label
         echo 'ForeverScaling image built. Gameplay has not been enabled or restarted.'
@@ -74,7 +85,7 @@ case "$action" in
         require_env
         command -v docker >/dev/null
         command -v python3 >/dev/null
-        bash mod-forever-scaling/tests/run.sh
+        preflight
 
         container=$(docker compose ps -q worldserver)
         test -n "$container" || { echo 'worldserver must already be running before scaling installation.' >&2; exit 1; }
