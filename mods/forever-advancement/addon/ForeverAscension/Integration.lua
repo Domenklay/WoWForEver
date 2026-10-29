@@ -13,25 +13,11 @@ function ForeverAscensionPickupSpell(spell)
  end
  return false
 end
-local micro,talentHost,talentButton
+local talentHost,talentButton
 local function attach()
  if InCombatLockdown and InCombatLockdown() then return end
- local anchor=TalentMicroButton or PlayerSpellsMicroButton
- if anchor and not micro then
- micro=CreateFrame("Button","ForeverAscensionMicroButton",anchor)
- -- Keep the native bar's existing layout intact; this sits immediately above
- -- its talent button, rather than covering the adjacent quest button.
- micro:SetSize(28,32);micro:SetPoint("BOTTOM",anchor,"TOP",0,2)
- local icon=micro:CreateTexture(nil,"ARTWORK");icon:SetPoint("TOPLEFT",3,-3);icon:SetPoint("BOTTOMRIGHT",-3,3);icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
- local border=micro:CreateTexture(nil,"OVERLAY");border:SetAllPoints();border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
- micro:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square","ADD")
- micro:SetScript("OnClick",function() if ForeverAscensionToggle then ForeverAscensionToggle() end end)
- micro:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Мультиклассы",1,0.82,0);GameTooltip:AddLine("Развитие персонажа (/fa)",1,1,1);GameTooltip:Show() end end)
- micro:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
- end
- -- 70532 owns its modern talents in anonymous child panels. A button on
- -- one of those panels can be hidden even while the root is visible.
- local frame=PlayerSpellsFrame or PlayerTalentFrame or TalentFrame or ClassTalentFrame or ClassicTalentFrame
+ -- Do not float a micro button over the XP/reputation bar.
+ local frame=PlayerTalentFrame or TalentFrame or ClassTalentFrame or ClassicTalentFrame or (PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame) or PlayerSpellsFrame
  if frame and frame~=talentHost then
   if talentButton then talentButton:Hide() end
   talentHost=frame

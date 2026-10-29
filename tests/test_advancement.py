@@ -326,9 +326,8 @@ assert(card);card.scripts.OnDragStart(card);assert(picked==116)
 advance();card.scripts.OnClick(card,'LeftButton');assert(sent[#sent]=='cast 10')
 advance();card.scripts.OnClick(card,'RightButton');assert(sent[#sent]=='unlearn 10')
 for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'PLAYER_LOGIN') end end
-local micro=named.ForeverAscensionMicroButton;assert(micro and micro.parent==TalentMicroButton and micro.points[1][2]==TalentMicroButton)
+assert(not named.ForeverAscensionMicroButton,'no floating icon over the XP bar')
 assert(not named.ForeverAscensionSpellbook and not named.ForeverAscensionActions)
-window:Hide();micro.scripts.OnClick();assert(window:IsShown());micro.scripts.OnClick();assert(not window:IsShown())
 -- Missing modern pickup API falls back to the actual native book slot.
 C_Spell=nil;PickupSpell=nil
 GetSpellBookItemInfo=function(slot) if slot==1 then return 'SPELL',116 end end
@@ -370,7 +369,7 @@ assert(not previous:IsShown() and button.points[1][1]=='RIGHT')
 assert(button.points[1][2]==PlayerTalentFrame.SearchBox and button.points[1][3]=='LEFT' and button.points[1][4]==-12)
 """)
 
-    def test_modern_talent_button_uses_visible_root_instead_of_hidden_child(self):
+    def test_modern_talent_button_anchors_to_content_and_closes_root(self):
         self.lua(r"""
 open()
 PlayerSpellsFrame=CreateFrame('Frame','PlayerSpellsFrame',UIParent)
@@ -378,7 +377,7 @@ PlayerSpellsFrame.TalentsFrame=CreateFrame('Frame',nil,PlayerSpellsFrame)
 PlayerSpellsFrame.TalentsFrame:Hide()
 for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
 local button=ForeverAscensionTalentButton
-assert(button and button.parent==PlayerSpellsFrame)
+assert(button and button.parent==PlayerSpellsFrame.TalentsFrame)
 window:Hide();button.scripts.OnClick()
 assert(not PlayerSpellsFrame:IsShown() and window:IsShown())
 """)
