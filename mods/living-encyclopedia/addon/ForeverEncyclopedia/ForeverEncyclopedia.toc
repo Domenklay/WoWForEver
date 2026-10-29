@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Forever Encyclopedia
-## Notes: Живая энциклопедия WoW Forever: открытия, бестиарий зон, таланты и облики
+## Notes: Живая энциклопедия WoW Forever: фильтры, прокрутка, книга спутника, таланты и облики
 ## Author: WoWForEver project
-## Version: 0.5.0-archive-ui
+## Version: 0.6.0-achievement-ui
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopedia.lua
