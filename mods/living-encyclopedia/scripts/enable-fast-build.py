@@ -48,5 +48,18 @@ s = re.sub(r"(?m)^RUN cmake \.\. \\\n", build_mount + "cmake .. \\\n", s, count=
 # cache there as well or Docker would see an empty build directory in this RUN.
 s = re.sub(r"(?m)^RUN sed -i ", build_mount + "sed -i ", s, count=1)
 
+required = {
+    "Dockerfile frontend": s.startswith("# syntax=docker/dockerfile:"),
+    "ccache package": bool(re.search(r"\bccache\b", s.split("############################ database release", 1)[0])),
+    "TOOLS=0": bool(re.search(r"(?m)^ARG TOOLS=0\s*$", s)),
+    "C compiler launcher": "CMAKE_C_COMPILER_LAUNCHER=ccache" in s,
+    "CXX compiler launcher": "CMAKE_CXX_COMPILER_LAUNCHER=ccache" in s,
+    "persistent CMake cache on build": s.count("id=wowforever-tc-build") >= 2,
+    "persistent ccache": s.count("id=wowforever-ccache") >= 2,
+}
+missing = [name for name, ok in required.items() if not ok]
+if missing:
+    raise SystemExit("Fast build patch incomplete: " + ", ".join(missing))
+
 p.write_text(s)
 print("Fast TrinityCore dev build enabled: BuildKit object cache + ccache + TOOLS=0")
