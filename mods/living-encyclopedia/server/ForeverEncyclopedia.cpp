@@ -24,7 +24,7 @@ namespace ForeverEncyclopedia
 using Clock = std::chrono::steady_clock;
 constexpr char RequestPrefix[] = "FEC1";
 constexpr char ResponsePrefix[] = "FER1";
-constexpr uint32 CatalogPageSize = 10;
+constexpr uint32 CatalogPageSize = 8;
 
 enum Kind : uint8
 {
