@@ -16,6 +16,10 @@ local state = {
     creatures = 0,
     items = 0,
     zones = 0,
+    knowledgeTotal = 0,
+    knowledgeSpent = 0,
+    knowledgeAvailable = 0,
+    rewardedDiscoveries = 0,
     map = 0,
     zone = 0,
     area = 0,
@@ -120,9 +124,7 @@ end
 local function currentZoneName()
     local zone = GetRealZoneText and GetRealZoneText() or ""
     local sub = GetSubZoneText and GetSubZoneText() or ""
-    if sub and sub ~= "" and sub ~= zone then
-        return zone .. " — " .. sub
-    end
+    if sub and sub ~= "" and sub ~= zone then return zone .. " — " .. sub end
     if zone and zone ~= "" then return zone end
     return "Зона " .. tostring(state.zone)
 end
@@ -152,7 +154,7 @@ local function updateHeader()
 
     if statusText then
         if state.online then
-            statusText:SetText("●  Синхронизация активна")
+            statusText:SetText("●  Синхронизация активна   •   открытий: " .. tostring(state.total))
             statusText:SetTextColor(0.35, 0.9, 0.55)
         else
             statusText:SetText("●  Нет ответа сервера")
@@ -160,11 +162,9 @@ local function updateHeader()
         end
     end
 
-    if locationText then
-        locationText:SetText(currentZoneName())
-    end
+    if locationText then locationText:SetText(currentZoneName()) end
 
-    local values = { state.total, state.creatures, state.items, state.zones }
+    local values = { state.knowledgeAvailable, state.creatures, state.items, state.zones }
     for i = 1, 4 do
         if statValues[i] then statValues[i]:SetText(tostring(values[i] or 0)) end
     end
@@ -220,8 +220,7 @@ local function drawRecent(kind, title, subtitle)
     end
 
     local y = -232
-    local count = math.min(#records, 8)
-    for i = 1, count do
+    for i = 1, math.min(#records, 8) do
         local rec = records[i]
         local name
         local icon = "?"
@@ -242,7 +241,18 @@ end
 
 local function drawTalents()
     addText(214, -176, 520, "Таланты спутника", "GameFontHighlightLarge", 0.88, 0.95, 1.0)
-    addText(214, -201, 520, "Следующий игровой этап: очки знаний, ветки развития и реальные серверные эффекты.", "GameFontNormalSmall", 0.6, 0.7, 0.77)
+    addText(214, -201, 520, "Очки знаний уже начисляются сервером за первые уникальные открытия. Покупка талантов пока заблокирована.", "GameFontNormalSmall", 0.6, 0.7, 0.77)
+
+    local progress = addPanel(214, -232, 520, 54, 0.8)
+    local p1 = progress:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    p1:SetPoint("TOPLEFT", progress, "TOPLEFT", 12, -9)
+    p1:SetText("Доступно очков знаний: " .. tostring(state.knowledgeAvailable))
+    p1:SetTextColor(0.72, 0.92, 1.0)
+    local p2 = progress:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    p2:SetPoint("TOPLEFT", progress, "TOPLEFT", 12, -31)
+    p2:SetText(string.format("Всего получено: %d   •   потрачено: %d   •   награждённых открытий: %d",
+        state.knowledgeTotal, state.knowledgeSpent, state.rewardedDiscoveries))
+    p2:SetTextColor(0.58, 0.68, 0.75)
 
     local branches = {
         { "Защита", "Щиты и снижение входящего урона", "до 30% HP" },
@@ -251,24 +261,22 @@ local function drawTalents()
         { "Мудрость", "Эффективность маны спутника", "1/5 и 5/5 сек" },
         { "Познание", "Бонусы за заполнение энциклопедии", "подготовка" },
     }
+    local positions = {{214,-300},{480,-300},{214,-382},{480,-382},{347,-464}}
 
-    local positions = {
-        {214, -235}, {480, -235}, {214, -322}, {480, -322}, {347, -409}
-    }
     for i, branch in ipairs(branches) do
-        local p = addPanel(positions[i][1], positions[i][2], 250, 72, 0.72)
+        local p = addPanel(positions[i][1], positions[i][2], 250, 66, 0.72)
         local name = p:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        name:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -10)
+        name:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -9)
         name:SetText(branch[1])
         name:SetTextColor(0.75, 0.9, 1.0)
         local desc = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        desc:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -29)
+        desc:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -27)
         desc:SetWidth(220)
         desc:SetJustifyH("LEFT")
         desc:SetText(branch[2])
         desc:SetTextColor(0.7, 0.74, 0.78)
         local lock = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        lock:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 12, 8)
+        lock:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 12, 7)
         lock:SetText("Заблокировано  •  " .. branch[3])
         lock:SetTextColor(0.5, 0.55, 0.6)
     end
@@ -314,8 +322,8 @@ local function drawAppearances()
         {"Дух архива", "Редкая награда события", "Закрыто"},
         {"Малый конструкт", "Торговец / коллекция", "Закрыто"},
     }
-
     local positions = {{214,-236},{480,-236},{214,-337},{480,-337}}
+
     for i, data in ipairs(cards) do
         local p = addPanel(positions[i][1], positions[i][2], 250, 86, 0.72)
         local preview = p:CreateTexture(nil, "ARTWORK")
@@ -338,7 +346,7 @@ local function drawAppearances()
         local status = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         status:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 72, 10)
         status:SetText(data[3])
-        status:SetTextColor(i == 1 and 0.35 or 0.55, i == 1 and 0.9 or 0.58, i == 1 and 0.55 or 0.62)
+        if i == 1 then status:SetTextColor(0.35, 0.9, 0.55) else status:SetTextColor(0.55, 0.58, 0.62) end
     end
 end
 
@@ -347,15 +355,10 @@ local function Draw()
     clearDynamic()
     updateHeader()
 
-    if current == 1 then
-        drawTalents()
-    elseif current == 2 then
-        drawRecent(1, "Бестиарий", "Уникальные существа сохраняются на весь аккаунт. Показаны последние открытия.")
-    elseif current == 3 then
-        drawLocations()
-    else
-        drawAppearances()
-    end
+    if current == 1 then drawTalents()
+    elseif current == 2 then drawRecent(1, "Бестиарий", "Уникальные существа сохраняются на весь аккаунт. Показаны последние открытия.")
+    elseif current == 3 then drawLocations()
+    else drawAppearances() end
 end
 
 local function requestCurrentTab()
@@ -367,7 +370,7 @@ local function CreateUI()
     if frame then return end
 
     frame = CreateFrame("Frame", "ForeverEncyclopediaFrame", UIParent, "BasicFrameTemplateWithInset")
-    frame:SetSize(760, 520)
+    frame:SetSize(760, 540)
     frame:SetPoint("CENTER")
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -381,7 +384,7 @@ local function CreateUI()
     frame:Hide()
     frame.TitleText:SetText("Живая энциклопедия")
 
-    statusText = makeText(frame, "TOPLEFT", frame, "TOPLEFT", 22, -38, 230, "●  Проверка связи…", "GameFontNormalSmall")
+    statusText = makeText(frame, "TOPLEFT", frame, "TOPLEFT", 22, -38, 300, "●  Проверка связи…", "GameFontNormalSmall")
     statusText:SetTextColor(0.65, 0.7, 0.75)
     locationText = makeText(frame, "TOPRIGHT", frame, "TOPRIGHT", -48, -38, 360, "", "GameFontNormalSmall")
     locationText:SetJustifyH("RIGHT")
@@ -410,7 +413,7 @@ local function CreateUI()
         navButtons[i] = b
     end
 
-    local statNames = {"Всего открытий", "Существа", "Предметы", "Локации"}
+    local statNames = {"Очки знаний", "Существа", "Предметы", "Локации"}
     for i, name in ipairs(statNames) do
         local p = CreateFrame("Frame", nil, frame)
         p:SetSize(122, 58)
@@ -451,6 +454,12 @@ local function parseResponse(text)
         state.items = tonumber(c) or 0
         state.zones = tonumber(d) or 0
         state.online = true
+        Draw()
+    elseif tag == "KNOW" then
+        state.knowledgeTotal = tonumber(a) or 0
+        state.knowledgeSpent = tonumber(b) or 0
+        state.knowledgeAvailable = tonumber(c) or 0
+        state.rewardedDiscoveries = tonumber(d) or 0
         Draw()
     elseif tag == "CURRENT" then
         state.map = tonumber(a) or 0
