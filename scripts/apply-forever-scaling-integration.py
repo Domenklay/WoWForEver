@@ -62,7 +62,7 @@ def patch_dockerfile():
 
 
 def service_spans(text):
-    """Return 2-space-indented Compose service blocks without parsing/reformatting YAML."""
+    """Return 2-space-indented Compose blocks without parsing/reformatting YAML."""
     starts = list(re.finditer(r'(?m)^  ([A-Za-z0-9_.-]+):\s*$', text))
     for i, match in enumerate(starts):
         start = match.start()
@@ -90,17 +90,17 @@ def find_worldserver_service(text):
         raise SystemExit('docker-compose: no top-level worldserver service candidate found')
 
     best_score = max(item[0] for item in candidates)
-    best = [item for item in candidates if item[0] == best_score]
     if best_score < 4:
+        scores = ', '.join(str(item[0]) for item in candidates)
         raise SystemExit(
-            'docker-compose: worldserver candidates found, but none looks like the runnable worldserver service'
+            f'docker-compose: worldserver candidates do not look runnable (scores: {scores})'
         )
-    if len(best) != 1:
-        details = ', '.join(str(item[0]) for item in candidates)
-        raise SystemExit(
-            f'docker-compose: worldserver service is ambiguous after content scoring (scores: {details})'
-        )
-    return best[0][1], best[0][2], best[0][3]
+
+    # Local module installers may have left a duplicate/overlay service block.
+    # Choose the last highest-scoring block; docker compose config -q validates
+    # the resulting YAML before any image is preserved or rebuilt.
+    best = [item for item in candidates if item[0] == best_score]
+    return best[-1][1], best[-1][2], best[-1][3]
 
 
 def patch_compose():
@@ -120,10 +120,7 @@ def patch_compose():
         env_content_start += 1
 
     boundary = re.search(r'(?m)^    [A-Za-z_][A-Za-z0-9_-]*:\s*', block[env_content_start:])
-    if boundary:
-        insert_rel = env_content_start + boundary.start()
-    else:
-        insert_rel = len(block)
+    insert_rel = env_content_start + boundary.start() if boundary else len(block)
 
     block = block[:insert_rel] + SCALING_ENV_LINES + block[insert_rel:]
     text = text[:world_start] + block + text[world_end:]
@@ -145,7 +142,6 @@ def verify():
         if needle not in haystack:
             raise SystemExit(f'ForeverScaling integration verification failed: {name}')
 
-    # Verify the scaling variables landed in the actual runnable worldserver block.
     _, _, world_block = find_worldserver_service(compose)
     if 'FOREVER_SCALING_ENABLED:' not in world_block:
         raise SystemExit('ForeverScaling integration verification failed: variables are outside runnable worldserver')
