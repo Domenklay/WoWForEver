@@ -2,7 +2,7 @@
 """Apply minimal Forever Scaling wiring to the current local server checkout.
 
 The local WoWForEver checkout can contain uncommitted integrations from other
-modules.  Therefore this patcher deliberately uses stable build/service
+modules. Therefore this patcher deliberately uses stable build/service
 boundaries instead of depending on the exact subclass-adapter lines.
 """
 from pathlib import Path
@@ -44,15 +44,11 @@ def patch_dockerfile():
     path = Path('Dockerfile')
     text = path.read_text()
 
-    # Put the source integration after all existing core injectors/patches but
-    # before CMake starts.  This survives local changes to subclass/encyclopedia
-    # integrations as long as the build stage keeps its BUILD_JOBS boundary.
     if 'scripts/inject-forever-scaling.py' not in text:
         marker = '# BUILD_JOBS:'
         pos = exactly_once(text, marker, 'Dockerfile build-stage boundary')
         text = text[:pos] + SCALING_BUILD_BLOCK + text[pos:]
 
-    # A standalone runtime label is safer than rewriting another module's LABEL.
     if 'org.wowforever.scaling=' not in text:
         runtime_marker = '############################ runtime ############################\n'
         start = exactly_once(text, runtime_marker, 'Dockerfile runtime boundary') + len(runtime_marker)
@@ -65,33 +61,72 @@ def patch_dockerfile():
     path.write_text(text)
 
 
+def service_spans(text):
+    """Return 2-space-indented Compose service blocks without parsing/reformatting YAML."""
+    starts = list(re.finditer(r'(?m)^  ([A-Za-z0-9_.-]+):\s*$', text))
+    for i, match in enumerate(starts):
+        start = match.start()
+        end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
+        yield match.group(1), start, end, text[start:end]
+
+
+def find_worldserver_service(text):
+    candidates = []
+    for name, start, end, block in service_spans(text):
+        if name != 'worldserver':
+            continue
+        score = 0
+        if re.search(r'(?m)^    command:\s*\[\s*["\']worldserver["\']\s*\]\s*$', block):
+            score += 4
+        if re.search(r'(?m)^    image:\s*forever-trinitycore(?::[^\s]+)?\s*$', block):
+            score += 2
+        if re.search(r'(?m)^    build:\s*$', block):
+            score += 1
+        if re.search(r'(?m)^    environment:\s*$', block):
+            score += 1
+        candidates.append((score, start, end, block))
+
+    if not candidates:
+        raise SystemExit('docker-compose: no top-level worldserver service candidate found')
+
+    best_score = max(item[0] for item in candidates)
+    best = [item for item in candidates if item[0] == best_score]
+    if best_score < 4:
+        raise SystemExit(
+            'docker-compose: worldserver candidates found, but none looks like the runnable worldserver service'
+        )
+    if len(best) != 1:
+        details = ', '.join(str(item[0]) for item in candidates)
+        raise SystemExit(
+            f'docker-compose: worldserver service is ambiguous after content scoring (scores: {details})'
+        )
+    return best[0][1], best[0][2], best[0][3]
+
+
 def patch_compose():
     path = Path('docker-compose.yml')
     text = path.read_text()
     if 'FOREVER_SCALING_ENABLED:' in text:
         return
 
-    # Restrict all edits to the worldserver service.  Do not depend on the
-    # presence or exact wording of subclass environment variables.
-    world_start = exactly_once(text, '  worldserver:\n', 'docker-compose worldserver service')
-    next_service = text.find('\n  bnetserver:', world_start)
-    if next_service < 0:
-        raise SystemExit('docker-compose worldserver service: bnetserver boundary not found')
+    world_start, world_end, block = find_worldserver_service(text)
 
-    block = text[world_start:next_service]
-    env_rel = block.find('    environment:\n')
-    if env_rel < 0:
+    env_match = re.search(r'(?m)^    environment:\s*$', block)
+    if not env_match:
         raise SystemExit('docker-compose worldserver service: environment block not found')
 
-    # Find the next service-level key (four-space indentation) after environment.
-    env_content_start = env_rel + len('    environment:\n')
-    boundary = re.search(r'^    [A-Za-z_][A-Za-z0-9_-]*:', block[env_content_start:], re.M)
-    if not boundary:
-        raise SystemExit('docker-compose worldserver service: environment block end not found')
-    insert_rel = env_content_start + boundary.start()
+    env_content_start = env_match.end()
+    if env_content_start < len(block) and block[env_content_start] == '\n':
+        env_content_start += 1
+
+    boundary = re.search(r'(?m)^    [A-Za-z_][A-Za-z0-9_-]*:\s*', block[env_content_start:])
+    if boundary:
+        insert_rel = env_content_start + boundary.start()
+    else:
+        insert_rel = len(block)
 
     block = block[:insert_rel] + SCALING_ENV_LINES + block[insert_rel:]
-    text = text[:world_start] + block + text[next_service:]
+    text = text[:world_start] + block + text[world_end:]
     path.write_text(text)
 
 
@@ -109,6 +144,11 @@ def verify():
         haystack = docker if name.startswith('Dockerfile') else compose
         if needle not in haystack:
             raise SystemExit(f'ForeverScaling integration verification failed: {name}')
+
+    # Verify the scaling variables landed in the actual runnable worldserver block.
+    _, _, world_block = find_worldserver_service(compose)
+    if 'FOREVER_SCALING_ENABLED:' not in world_block:
+        raise SystemExit('ForeverScaling integration verification failed: variables are outside runnable worldserver')
 
 
 if __name__ == '__main__':
