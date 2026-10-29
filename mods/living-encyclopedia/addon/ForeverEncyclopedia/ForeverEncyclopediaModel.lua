@@ -21,60 +21,28 @@ local function ensureViewer()
     if not parent then return nil end
     if viewer then return viewer end
 
+    -- Transparent model-only layer. The main encyclopedia panel supplies the
+    -- visual container; the model viewer itself must not draw a square/card.
     viewer = CreateFrame("Frame", "ForeverEncyclopediaCreatureModelViewer", parent)
-    viewer:SetSize(158, 158)
-    viewer:SetPoint("TOPLEFT", parent, "TOPLEFT", 402, -194)
+    viewer:SetSize(176, 168)
+    viewer:SetPoint("TOPLEFT", parent, "TOPLEFT", 408, -218)
     viewer:SetFrameStrata(parent:GetFrameStrata())
     viewer:SetFrameLevel(parent:GetFrameLevel() + 8)
     viewer:EnableMouse(true)
     viewer:EnableMouseWheel(true)
     viewer:Hide()
 
-    local bg = viewer:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.045, 0.026, 0.012, 0.96)
-
-    local borderTop = viewer:CreateTexture(nil, "BORDER")
-    borderTop:SetPoint("TOPLEFT", viewer, "TOPLEFT", 0, 0)
-    borderTop:SetPoint("TOPRIGHT", viewer, "TOPRIGHT", 0, 0)
-    borderTop:SetHeight(1)
-    borderTop:SetColorTexture(0.72, 0.48, 0.16, 0.95)
-
-    local borderBottom = viewer:CreateTexture(nil, "BORDER")
-    borderBottom:SetPoint("BOTTOMLEFT", viewer, "BOTTOMLEFT", 0, 0)
-    borderBottom:SetPoint("BOTTOMRIGHT", viewer, "BOTTOMRIGHT", 0, 0)
-    borderBottom:SetHeight(1)
-    borderBottom:SetColorTexture(0.28, 0.17, 0.06, 0.95)
-
-    local borderLeft = viewer:CreateTexture(nil, "BORDER")
-    borderLeft:SetPoint("TOPLEFT", viewer, "TOPLEFT", 0, 0)
-    borderLeft:SetPoint("BOTTOMLEFT", viewer, "BOTTOMLEFT", 0, 0)
-    borderLeft:SetWidth(1)
-    borderLeft:SetColorTexture(0.46, 0.30, 0.12, 0.90)
-
-    local borderRight = viewer:CreateTexture(nil, "BORDER")
-    borderRight:SetPoint("TOPRIGHT", viewer, "TOPRIGHT", 0, 0)
-    borderRight:SetPoint("BOTTOMRIGHT", viewer, "BOTTOMRIGHT", 0, 0)
-    borderRight:SetWidth(1)
-    borderRight:SetColorTexture(0.46, 0.30, 0.12, 0.90)
-
     model = CreateFrame("PlayerModel", nil, viewer)
-    model:SetPoint("TOPLEFT", viewer, "TOPLEFT", 4, -4)
-    model:SetPoint("BOTTOMRIGHT", viewer, "BOTTOMRIGHT", -4, 18)
+    model:SetAllPoints(viewer)
     model:SetKeepModelOnHide(true)
     model:EnableMouse(false)
 
     fallback = viewer:CreateTexture(nil, "ARTWORK")
-    fallback:SetPoint("CENTER", viewer, "CENTER", 0, 4)
-    fallback:SetSize(64, 64)
+    fallback:SetPoint("CENTER", viewer, "CENTER", 0, 0)
+    fallback:SetSize(54, 54)
     fallback:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-    fallback:SetAlpha(0.32)
+    fallback:SetAlpha(0.24)
     fallback:Hide()
-
-    local hint = viewer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hint:SetPoint("BOTTOM", viewer, "BOTTOM", 0, 5)
-    hint:SetText("ЛКМ: вращать  •  колесо: масштаб")
-    hint:SetTextColor(0.62, 0.52, 0.38)
 
     viewer:SetScript("OnMouseDown", function(self, button)
         if button ~= "LeftButton" or not selectedEntry then return end
@@ -109,12 +77,16 @@ local function ensureViewer()
     return viewer
 end
 
+local function hideViewer()
+    selectedEntry = nil
+    if viewer then viewer:Hide() end
+end
+
 local function showCreature(entry)
     entry = tonumber(entry)
     local v = ensureViewer()
     if not v or not entry or entry <= 0 then
-        if viewer then viewer:Hide() end
-        selectedEntry = nil
+        hideViewer()
         return
     end
 
@@ -126,6 +98,8 @@ local function showCreature(entry)
     model:ClearModel()
 
     local ok = pcall(function()
+        -- WoW Forever exposes PlayerModel:SetCreature(creatureID), so entry is
+        -- enough; no separate display-id database is required client-side.
         model:SetCreature(entry)
         model:SetPortraitZoom(0)
         model:SetCamDistanceScale(zoom)
@@ -164,18 +138,21 @@ local function regionText(button)
     end
 end
 
-local function collectRowButtons(frame, out)
+-- Only creature-list rows are 320x28. Narrow matching is intentional: the
+-- previous broad scan also matched location rows and kept a creature model
+-- alive on other tabs.
+local function collectCreatureRows(frame, out)
     if not frame or not frame.GetChildren then return end
     local children = { frame:GetChildren() }
     for _, child in ipairs(children) do
         if child and child.IsShown and child:IsShown() then
             if child.GetObjectType and child:GetObjectType() == "Button" then
                 local w, h = child:GetSize()
-                if w and h and w >= 250 and w <= 330 and h >= 24 and h <= 34 and regionText(child) then
+                if w and h and w >= 318 and w <= 322 and h >= 27 and h <= 29 and regionText(child) then
                     out[#out + 1] = child
                 end
             end
-            collectRowButtons(child, out)
+            collectCreatureRows(child, out)
         end
     end
 end
@@ -183,14 +160,15 @@ end
 local function hookVisibleRows()
     local parent = getMainFrame()
     if not parent or not parent:IsShown() or #pageRecords == 0 then
-        if viewer then viewer:Hide() end
+        hideViewer()
         return
     end
 
     local buttons = {}
-    collectRowButtons(parent, buttons)
+    collectCreatureRows(parent, buttons)
     if #buttons == 0 then
-        if viewer then viewer:Hide() end
+        -- We are no longer on the creature tab (or the list is not drawn).
+        hideViewer()
         return
     end
 
@@ -200,33 +178,29 @@ local function hookVisibleRows()
         return at > bt
     end)
 
-    while #buttons > #pageRecords do
-        table.remove(buttons)
-    end
+    while #buttons > #pageRecords do table.remove(buttons) end
 
     for i, button in ipairs(buttons) do
         local rec = pageRecords[i]
         button._encyModelEntry = rec and rec.entry or nil
-        button._encyModelKnown = rec and rec.known or false
         if not button._encyModelHooked then
             button._encyModelHooked = true
             button:HookScript("OnClick", function(self)
-                -- The creature model is always visible. Discovery only controls the archive text.
-                if self._encyModelEntry then showCreature(self._encyModelEntry) end
+                if self._encyModelEntry then showCreature(self._encyModelEntry)
+                else hideViewer() end
             end)
         end
     end
 
-    -- Always preview the selected/first creature, including undiscovered entries.
-    local currentStillVisible = false
+    -- Model visibility is independent from discovery state. Discovery controls
+    -- records/progress, while the physical creature can always be inspected.
+    local entryStillVisible = false
     if selectedEntry then
         for _, rec in ipairs(pageRecords) do
-            if rec.entry == selectedEntry then currentStillVisible = true; break end
+            if rec.entry == selectedEntry then entryStillVisible = true; break end
         end
     end
-    if not currentStillVisible and pageRecords[1] then
-        showCreature(pageRecords[1].entry)
-    end
+    if not entryStillVisible and pageRecords[1] then showCreature(pageRecords[1].entry) end
 end
 
 local events = CreateFrame("Frame")
@@ -237,33 +211,29 @@ events:SetScript("OnEvent", function(_, _, prefix, text)
 
     if text:sub(1, 8) == "CATHEAD|" then
         wipe(pageRecords)
-        selectedEntry = nil
-        if viewer then viewer:Hide() end
+        hideViewer()
         return
     end
 
     if text:sub(1, 4) == "CAT|" then
-        local _, entry, known = strsplit("|", text)
-        pageRecords[#pageRecords + 1] = {
-            entry = tonumber(entry) or 0,
-            known = tonumber(known) == 1,
-        }
+        local _, entry = strsplit("|", text)
+        pageRecords[#pageRecords + 1] = { entry = tonumber(entry) or 0 }
         return
     end
 
     if text == "CATEND" then
-        C_Timer.After(0.08, hookVisibleRows)
+        C_Timer.After(0.03, hookVisibleRows)
     end
 end)
 
 events:SetScript("OnUpdate", function(_, elapsed)
     scanElapsed = scanElapsed + elapsed
-    if scanElapsed < 0.45 then return end
+    if scanElapsed < 0.15 then return end
     scanElapsed = 0
     local parent = getMainFrame()
     if parent and parent:IsShown() and #pageRecords > 0 then
         hookVisibleRows()
-    elseif viewer then
-        viewer:Hide()
+    else
+        hideViewer()
     end
 end)
