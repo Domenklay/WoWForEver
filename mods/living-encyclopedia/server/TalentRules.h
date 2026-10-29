@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -23,9 +24,27 @@ inline uint64_t Cost(TalentDef const& def, uint16_t currentRank)
     return uint64_t(def.baseCost) + uint64_t(def.stepCost) * r + uint64_t(def.quadraticCost) * r * r;
 }
 
+template <class RankMapT>
+inline uint16_t Rank(RankMapT const& ranks, std::string_view key)
+{
+    auto it = ranks.find(std::string(key));
+    return it == ranks.end() ? 0 : uint16_t(it->second);
+}
+
+inline uint64_t KnowledgeManaBonus(uint64_t totalKnowledge)
+{
+    return totalKnowledge / 10;
+}
+
+inline uint32_t RegenBasisPoints(uint16_t rank)
+{
+    // 0.2% maximum mana per rank, hard-capped at 1% / 5 sec.
+    return rank >= 5 ? 100u : uint32_t(rank) * 20u;
+}
+
 inline std::vector<TalentDef> const& All()
 {
-    // Early ranks are intentionally cheap.  Mastery ranks are the long-term
+    // Early ranks are intentionally cheap. Mastery ranks are the long-term
     // sink for accounts that eventually accumulate tens of thousands of knowledge.
     static std::vector<TalentDef> const defs = {
         // Protection
@@ -64,7 +83,7 @@ inline std::vector<TalentDef> const& All()
         {"mana_overflow", "wisdom", 5, 60, 30, 3, "mana_conservation", 5},
         {"wisdom_mastery", "wisdom", 15, 100, 20, 1, "mana_overflow", 5},
 
-        // Knowledge / bestiary information.  First benefit costs a single point.
+        // Knowledge / bestiary information. First benefit costs a single point.
         {"identify_name", "knowledge", 1, 1, 0, 0, "", 0},
         {"identify_rank", "knowledge", 1, 3, 0, 0, "identify_name", 1},
         {"identify_stats", "knowledge", 1, 5, 0, 0, "identify_rank", 1},
