@@ -7,15 +7,25 @@ from pathlib import Path
 
 
 def extend_addon_transport(core: Path) -> None:
-    """Install a dedicated FEC1 server-bound addon endpoint.
+    """Install dedicated FEC1 + FET1 server-bound addon endpoints.
 
-    This deliberately does not depend on ForeverSubclass / ForeverAdvancement
-    transport prefixes. It inserts after TrinityCore's stable addon-message
-    length check inside ChatHandler.cpp and is idempotent.
+    FEC1 is the encyclopedia/catalog protocol. FET1 is the talent/appearance
+    protocol. Both are self-whispers and are routed through the same ScriptMgr
+    callback without depending on ForeverAdvancement or other modules.
     """
     chat = core / "src/server/game/Handlers/ChatHandler.cpp"
     text = chat.read_text()
-    if 'prefix == "FEC1"' in text:
+
+    if 'prefix == "FEC1"' in text and 'prefix == "FET1"' in text:
+        return
+
+    # Upgrade an older encyclopedia injection in place.
+    old = re.compile(r'prefix\s*==\s*"FEC1"')
+    matches = list(old.finditer(text))
+    if len(matches) == 1 and 'prefix == "FET1"' not in text:
+        m = matches[0]
+        text = text[:m.start()] + '(prefix == "FEC1" || prefix == "FET1")' + text[m.end():]
+        chat.write_text(text)
         return
 
     pattern = re.compile(
@@ -32,8 +42,8 @@ def extend_addon_transport(core: Path) -> None:
     block = (
         m.group(0)
         + "\n\n"
-        + indent + '// ForeverEncyclopedia: server-bound client protocol; keep independent of other modules.\n'
-        + indent + 'if (type == CHAT_MSG_WHISPER && prefix == "FEC1")\n'
+        + indent + '// ForeverEncyclopedia: server-bound client protocols.\n'
+        + indent + 'if (type == CHAT_MSG_WHISPER && (prefix == "FEC1" || prefix == "FET1"))\n'
         + indent + '{\n'
         + indent + '    sScriptMgr->OnPlayerAddonMessageSent(sender, type, prefix, text, sender);\n'
         + indent + '    return;\n'
@@ -43,14 +53,7 @@ def extend_addon_transport(core: Path) -> None:
     chat.write_text(text)
 
 
-def inject(core: Path, module: Path) -> None:
-    extend_addon_transport(core)
-
-    loader = core / "src/server/scripts/Custom/custom_script_loader.cpp"
-    text = loader.read_text()
-    declaration = "void AddSC_forever_encyclopedia();"
-    call = "    AddSC_forever_encyclopedia();"
-
+def ensure_loader_registration(text: str, declaration: str, call: str) -> str:
     if declaration not in text:
         pattern = r"(^void AddCustomScripts\(\)\s*\{)"
         if len(re.findall(pattern, text, re.M)) != 1:
@@ -63,11 +66,25 @@ def inject(core: Path, module: Path) -> None:
             flags=re.M,
         )
     elif text.count(call) != 1:
-        raise ValueError("Inconsistent encyclopedia loader registration")
+        raise ValueError(f"Inconsistent loader registration for {declaration}")
+    return text
+
+
+def inject(core: Path, module: Path) -> None:
+    extend_addon_transport(core)
+
+    loader = core / "src/server/scripts/Custom/custom_script_loader.cpp"
+    text = loader.read_text()
+    text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia();", "    AddSC_forever_encyclopedia();")
+    text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia_talents();", "    AddSC_forever_encyclopedia_talents();")
 
     target = loader.parent / "ForeverEncyclopedia"
     target.mkdir(exist_ok=True)
-    shutil.copy2(module / "server/ForeverEncyclopedia.cpp", target / "ForeverEncyclopedia.cpp")
+    for name in ("ForeverEncyclopedia.cpp", "ForeverEncyclopediaTalents.cpp", "TalentRules.h"):
+        source = module / "server" / name
+        if not source.is_file():
+            raise ValueError(f"missing encyclopedia server source: {source}")
+        shutil.copy2(source, target / name)
     loader.write_text(text)
 
 
@@ -94,7 +111,9 @@ def self_test() -> None:
 
         server = module / "server"
         server.mkdir(parents=True)
-        server.joinpath("ForeverEncyclopedia.cpp").write_text("// test\n")
+        server.joinpath("ForeverEncyclopedia.cpp").write_text("// main test\n")
+        server.joinpath("ForeverEncyclopediaTalents.cpp").write_text("// talent test\n")
+        server.joinpath("TalentRules.h").write_text("// rules test\n")
 
         inject(core, module)
         inject(core, module)
@@ -103,9 +122,14 @@ def self_test() -> None:
         chat_text = chat.read_text()
         assert loader_text.count("void AddSC_forever_encyclopedia();") == 1
         assert loader_text.count("    AddSC_forever_encyclopedia();") == 1
+        assert loader_text.count("void AddSC_forever_encyclopedia_talents();") == 1
+        assert loader_text.count("    AddSC_forever_encyclopedia_talents();") == 1
         assert chat_text.count('prefix == "FEC1"') == 1
+        assert chat_text.count('prefix == "FET1"') == 1
         assert chat_text.count('text.length() > 255') == 1
-        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").read_text() == "// test\n"
+        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").read_text() == "// main test\n"
+        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").read_text() == "// talent test\n"
+        assert (loader.parent / "ForeverEncyclopedia/TalentRules.h").read_text() == "// rules test\n"
     print("ForeverEncyclopedia injector self-test passed")
 
 
