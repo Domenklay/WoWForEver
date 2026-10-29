@@ -113,6 +113,27 @@ void Player::SetReputation() {}
             self.assertIn('if (m_foreverAdvancementClassSkills.count(skillId)) return;',first)
             self.assertEqual(first.count('void Player::SyncForeverAdvancementClassSkills('),1)
 
+    def test_client_book_serialization_injection_is_idempotent_for_both_packet_paths(self):
+        injector=load('inject-advancement.py')
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            custom=root/'src/server/scripts/Custom';custom.mkdir(parents=True)
+            (custom/'custom_script_loader.cpp').write_text('void AddCustomScripts()\n{\n}\n')
+            data=root/'src/server/game/DataStores';data.mkdir(parents=True)
+            header=data/'DB2Stores.h'
+            header.write_text('class DB2Manager {\n    DB2StorageBase const* GetStorage(uint32 type) const;\n    int32 _maxHotfixId = 0;\n};\n')
+            source=data/'DB2Stores.cpp'
+            source.write_text('#include "DB2Stores.h"\nvoid DB2Manager::InsertNewHotfix(uint32 tableHash, uint32 recordId)\n{\n    HotfixRecord hotfixRecord;\n}\n')
+            handler=root/'src/server/game/Handlers/HotfixHandler.cpp';handler.parent.mkdir(parents=True)
+            handler.write_text('store->WriteRecord(record.RecordID, GetSessionDbcLocale(), dbReply.Data);\nstorage->WriteRecord(uint32(hotfixRecord.RecordID), GetSessionDbcLocale(), hotfixQueryResponse.HotfixContent);\n')
+            injector.inject(root)
+            first=[p.read_text() for p in (header,source,handler)]
+            injector.inject(root)
+            self.assertEqual(first,[p.read_text() for p in (header,source,handler)])
+            self.assertEqual(source.read_text().count('void DB2Manager::WriteForeverAdvancementClientRecord('),1)
+            self.assertEqual(handler.read_text().count('sDB2Manager.WriteForeverAdvancementClientRecord('),2)
+            self.assertNotIn('->WriteRecord(',handler.read_text())
+
     def test_injection_removes_old_engine_and_is_repeatable(self):
         injector=load('inject-advancement.py')
         with tempfile.TemporaryDirectory() as temp:

@@ -98,6 +98,28 @@ def inject(core,module=None):
         if marker+'\n'+valid not in original:
             if original.count(marker)!=1:raise ValueError('Unknown generated hotfix layout')
             db2_source.write_text(original.replace(marker,marker+'\n'+valid))
+    db2_header=core/'src/server/game/DataStores/DB2Stores.h'
+    hotfix_handler=core/'src/server/game/Handlers/HotfixHandler.cpp'
+    if db2_header.exists() and db2_source.exists() and hotfix_handler.exists():
+        header=db2_header.read_text();source=db2_source.read_text();handler=hotfix_handler.read_text()
+        if 'PublishForeverAdvancementBookSchool' not in header:
+            anchor='    DB2StorageBase const* GetStorage(uint32 type) const;'
+            if header.count(anchor)!=1:raise ValueError('Unknown DB2 storage accessor')
+            header=header.replace(anchor,anchor+'\n    void PublishForeverAdvancementBookSchool(uint32 recordId);\n    void WriteForeverAdvancementClientRecord(DB2StorageBase const* storage, uint32 recordId, LocaleConstant locale, ByteBuffer& buffer) const;')
+            anchor='    int32 _maxHotfixId = 0;'
+            if header.count(anchor)!=1:raise ValueError('Unknown DB2 hotfix storage')
+            header=header.replace(anchor,'    std::set<uint32> _foreverAdvancementBookSchools;\n'+anchor)
+            db2_header.write_text(header)
+        marker='// Client-only class-school visibility.'
+        if marker in source:source=source[:source.index(marker)].rstrip()+'\n'
+        if '#include "ByteBuffer.h"' not in source:source=source.replace('#include "DB2Stores.h"','#include "DB2Stores.h"\n#include "ByteBuffer.h"')
+        db2_source.write_text(source+'\n'+(module/'server/DB2BookSchools.inc').read_text())
+        for old,new in [
+            ('store->WriteRecord(record.RecordID, GetSessionDbcLocale(), dbReply.Data);','sDB2Manager.WriteForeverAdvancementClientRecord(store, record.RecordID, GetSessionDbcLocale(), dbReply.Data);'),
+            ('storage->WriteRecord(uint32(hotfixRecord.RecordID), GetSessionDbcLocale(), hotfixQueryResponse.HotfixContent);','sDB2Manager.WriteForeverAdvancementClientRecord(storage, uint32(hotfixRecord.RecordID), GetSessionDbcLocale(), hotfixQueryResponse.HotfixContent);')]:
+            if old in handler:handler=handler.replace(old,new)
+            elif new not in handler:raise ValueError('Unknown hotfix record serialization')
+        hotfix_handler.write_text(handler)
     loader.write_text(text)
 
 

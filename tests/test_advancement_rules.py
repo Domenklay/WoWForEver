@@ -173,6 +173,69 @@ int main() {
             self.assertEqual(result.returncode,0,result.stderr)
             subprocess.run([str(root/'test')],check=True,capture_output=True)
 
+    def test_client_school_hotfix_serialization_preserves_server_records(self):
+        code=r'''
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <map>
+#include <set>
+#include <vector>
+using uint32=uint32_t;using uint16=uint16_t;using int32=int32_t;using LocaleConstant=int;
+constexpr int SKILL_CATEGORY_CLASS=7;
+struct ByteBuffer {
+ std::vector<unsigned char> bytes;
+ std::size_t size() const{return bytes.size();}
+ template<class T> void put(std::size_t pos,T value){assert(pos+sizeof(T)<=size());std::memcpy(bytes.data()+pos,&value,sizeof(T));}
+ template<class T> T get(std::size_t pos) const{T value;assert(pos+sizeof(T)<=size());std::memcpy(&value,bytes.data()+pos,sizeof(T));return value;}
+};
+struct Skill {uint32 CategoryID=7,ParentSkillLineID=0;};
+struct Skills {std::map<uint32,Skill> rows;Skill const* LookupEntry(uint32 id){auto it=rows.find(id);return it==rows.end()?nullptr:&it->second;}} sSkillLineStore;
+struct Row {uint32 SkillID=6;int32 ClassMask=128;};
+struct DB2StorageBase {
+ uint32 hash=99;int length=25;Row row;
+ uint32 GetTableHash() const{return hash;}
+ void WriteRecord(uint32,LocaleConstant,ByteBuffer& buffer) const {
+  auto start=buffer.size();buffer.bytes.resize(start+length,0xAB);
+  if(length>=6){buffer.put<uint16>(start,uint16(row.SkillID));buffer.put<int32>(start+2,row.ClassMask);}
+ }
+};
+struct RaceClasses:DB2StorageBase {
+ Row const* LookupEntry(uint32 id){return id==10?&row:nullptr;}
+} sSkillRaceClassInfoStore;
+struct DB2Manager {
+ std::set<uint32> _foreverAdvancementBookSchools,notifications;
+ void InsertNewHotfix(uint32 hash,uint32 id){assert(hash==99);notifications.insert(id);}
+ void PublishForeverAdvancementBookSchool(uint32 recordId);
+ void WriteForeverAdvancementClientRecord(DB2StorageBase const*,uint32,LocaleConstant,ByteBuffer&) const;
+};
+'''+(SOURCE.parent/'DB2BookSchools.inc').read_text()+r'''
+int main(){
+ DB2Manager manager;sSkillLineStore.rows[6]={};
+ manager.PublishForeverAdvancementBookSchool(999);assert(manager.notifications.empty());
+ sSkillLineStore.rows[6].CategoryID=11;manager.PublishForeverAdvancementBookSchool(10);assert(manager.notifications.empty());
+ sSkillLineStore.rows[6]={7,100};manager.PublishForeverAdvancementBookSchool(10);assert(manager.notifications.empty());
+ sSkillLineStore.rows[6]={7,0};manager.PublishForeverAdvancementBookSchool(10);assert(manager.notifications==std::set<uint32>{10});
+ ByteBuffer original,client;original.bytes.resize(9,0xDD);client=original;
+ sSkillRaceClassInfoStore.WriteRecord(10,0,original);
+ manager.WriteForeverAdvancementClientRecord(&sSkillRaceClassInfoStore,10,0,client);
+ assert(sSkillRaceClassInfoStore.row.ClassMask==128&&original.get<int32>(11)==128&&client.get<int32>(11)==0);
+ for(std::size_t i=0;i<original.size();++i)if((i<11||i>=15)&&(i<26||i>=34))assert(original.bytes[i]==client.bytes[i]);
+ assert(client.get<int32>(26)==0&&client.get<int32>(30)==0&&original.get<int32>(26)!=0);
+ ByteBuffer unregistered;manager.WriteForeverAdvancementClientRecord(&sSkillRaceClassInfoStore,11,0,unregistered);assert(unregistered.get<int32>(2)==128);
+ DB2StorageBase other;other.hash=100;ByteBuffer unrelated;manager.WriteForeverAdvancementClientRecord(&other,10,0,unrelated);assert(unrelated.get<int32>(2)==128);
+ sSkillRaceClassInfoStore.length=24;ByteBuffer drift;manager.WriteForeverAdvancementClientRecord(&sSkillRaceClassInfoStore,10,0,drift);assert(drift.get<int32>(2)==128);
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+        injector=(SOURCE.parents[3]/'scripts/inject-advancement.py').read_text()
+        self.assertIn('sDB2Manager.WriteForeverAdvancementClientRecord(store, record.RecordID',injector)
+        self.assertIn('sDB2Manager.WriteForeverAdvancementClientRecord(storage, uint32(hotfixRecord.RecordID)',injector)
+
     def test_native_school_skills_are_transient_and_never_grant_other_spells(self):
         source=SOURCE.read_text()
         code=r'''#include <algorithm>

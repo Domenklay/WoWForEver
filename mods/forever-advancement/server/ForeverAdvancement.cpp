@@ -617,6 +617,26 @@ static void PublishBookMetadata()
     for(auto id:rows) hotfix.ApplyHotfix(id,[](SkillLineAbilityEntry* row) { row->ClassMask=0; },true);
     TC_LOG_INFO("scripts","ForeverAdvancement spellbook metadata: {} native class masks published to client",rows.size());
 }
+static void PublishBookSchoolMetadata()
+{
+    std::map<uint32,uint32> skills;
+    for(auto const& [id,definitions]:Catalog) for(auto const& d:definitions)
+    {
+        auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(d.spell);
+        for(auto it=bounds.first;it!=bounds.second;++it)
+        {
+            auto skill=sSkillLineStore.LookupEntry(it->second->SkillLine);
+            if(skill&&skill->CategoryID==SKILL_CATEGORY_CLASS&&!skill->ParentSkillLineID&&
+                (!it->second->ClassMask||(uint32(it->second->ClassMask)&(1u<<(d.owner-1)))))
+                skills[skill->ID]|=1u<<(d.owner-1);
+        }
+    }
+    uint32 count=0;
+    for(auto row:sSkillRaceClassInfoStore)
+        if(auto it=skills.find(row->SkillID);it!=skills.end()&&(uint32(row->ClassMask)&it->second))
+        { sDB2Manager.PublishForeverAdvancementBookSchool(row->ID);++count; }
+    TC_LOG_INFO("scripts","ForeverAdvancement book school metadata: {} client-only class records; server masks preserved",count);
+}
 class Startup final:public WorldScript
 {
 public:
@@ -691,7 +711,7 @@ public:
         TC_LOG_INFO("scripts","ForeverAdvancement catalog rows rejected: missing={}, costs={}, passive={}, names={}, binding={}",rejected[0],rejected[1],rejected[2],rejected[3],rejected[4]);
         TC_LOG_INFO("scripts","ForeverAdvancement catalog remapped: {} abilities by case-folded name, class family and native rank",remapped);
         if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement compatible catalog empty; disabled");return; }
-        PublishBookMetadata();
+        PublishBookSchoolMetadata();PublishBookMetadata();
         TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: accepted={}; rejected_effects={}; missing_spells={}",traitTalents,traitRejected,traitMissing);
         TC_LOG_INFO("scripts","ForeverAdvancement talent metadata: {} native class/rank records accepted",nativeTalents);
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} compatible Ascension abilities; {} passive talents; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
