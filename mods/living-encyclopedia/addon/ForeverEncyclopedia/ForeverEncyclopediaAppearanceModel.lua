@@ -14,7 +14,7 @@ local model
 local fallback
 local currentEntry
 local rotation = 0.25
-local zoom = 1.0
+local zoom = 1.22
 local dragging = false
 local dragStartX = 0
 local dragStartRotation = 0
@@ -33,20 +33,20 @@ local function ensureViewer()
     viewer:SetSize(210, 166)
     viewer:SetPoint("TOPLEFT", parent, "TOPLEFT", 630, -246)
     viewer:SetFrameStrata(parent:GetFrameStrata())
-    viewer:SetFrameLevel(parent:GetFrameLevel() + 9)
+    viewer:SetFrameLevel(parent:GetFrameLevel() + 12)
     viewer:EnableMouse(true)
     viewer:EnableMouseWheel(true)
     viewer:Hide()
 
     local plate = viewer:CreateTexture(nil, "BACKGROUND")
     plate:SetPoint("CENTER", viewer, "CENTER", 0, -2)
-    plate:SetSize(154, 112)
-    plate:SetColorTexture(0.012, 0.010, 0.008, 0.86)
+    plate:SetSize(180, 138)
+    plate:SetColorTexture(0.012, 0.010, 0.008, 0.98)
 
     local glow = viewer:CreateTexture(nil, "BACKGROUND", nil, 1)
     glow:SetPoint("CENTER", plate, "CENTER", 0, 8)
-    glow:SetSize(142, 78)
-    glow:SetColorTexture(0.13, 0.075, 0.024, 0.20)
+    glow:SetSize(166, 100)
+    glow:SetColorTexture(0.13, 0.075, 0.024, 0.18)
 
     local function edge(a, b, vertical)
         local e = viewer:CreateTexture(nil, "BORDER")
@@ -67,15 +67,16 @@ local function ensureViewer()
     edge("TOPRIGHT", "BOTTOMRIGHT", true)
 
     model = CreateFrame("PlayerModel", nil, viewer)
-    model:SetAllPoints(viewer)
+    model:SetPoint("CENTER", viewer, "CENTER", 0, -2)
+    model:SetSize(180, 138)
     model:SetKeepModelOnHide(true)
     model:EnableMouse(false)
 
     fallback = viewer:CreateTexture(nil, "ARTWORK")
-    fallback:SetPoint("CENTER", viewer, "CENTER", 0, 2)
-    fallback:SetSize(62, 62)
+    fallback:SetPoint("CENTER", viewer, "CENTER", 0, 0)
+    fallback:SetSize(58, 58)
     fallback:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-    fallback:SetAlpha(0.28)
+    fallback:SetAlpha(0.26)
     fallback:Hide()
 
     viewer:SetScript("OnMouseDown", function(self, button)
@@ -98,7 +99,7 @@ local function ensureViewer()
 
     viewer:SetScript("OnMouseWheel", function(_, delta)
         if not currentEntry or not model then return end
-        zoom = math.max(0.58, math.min(1.80, zoom - delta * 0.10))
+        zoom = math.max(0.78, math.min(2.15, zoom - delta * 0.10))
         model:SetCamDistanceScale(zoom)
         model:RefreshCamera()
     end)
@@ -126,7 +127,7 @@ local function showEntry(entry)
 
     currentEntry = entry
     rotation = 0.25
-    zoom = 1.0
+    zoom = 1.22
     fallback:Hide()
     model:Show()
     model:ClearModel()
