@@ -2,6 +2,6 @@
 ## Title: Forever Encyclopedia
 ## Notes: Живая энциклопедия WoW Forever: открытия существ, предметов и локаций
 ## Author: WoWForEver project
-## Version: 0.2.0-server-discovery
+## Version: 0.3.0-codex-ui
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopedia.lua
