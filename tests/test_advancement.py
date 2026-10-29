@@ -370,6 +370,19 @@ assert(not previous:IsShown() and button.points[1][1]=='RIGHT')
 assert(button.points[1][2]==PlayerTalentFrame.SearchBox and button.points[1][3]=='LEFT' and button.points[1][4]==-12)
 """)
 
+    def test_modern_talent_button_uses_visible_root_instead_of_hidden_child(self):
+        self.lua(r"""
+open()
+PlayerSpellsFrame=CreateFrame('Frame','PlayerSpellsFrame',UIParent)
+PlayerSpellsFrame.TalentsFrame=CreateFrame('Frame',nil,PlayerSpellsFrame)
+PlayerSpellsFrame.TalentsFrame:Hide()
+for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
+local button=ForeverAscensionTalentButton
+assert(button and button.parent==PlayerSpellsFrame)
+window:Hide();button.scripts.OnClick()
+assert(not PlayerSpellsFrame:IsShown() and window:IsShown())
+""")
+
     def test_trait_description_uses_native_entry_rank_and_reports_actual_aura_values(self):
         self.lua(r"""
 local requestedEntry,requestedRank,lines

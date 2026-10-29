@@ -29,7 +29,9 @@ local function attach()
  micro:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Мультиклассы",1,0.82,0);GameTooltip:AddLine("Развитие персонажа (/fa)",1,1,1);GameTooltip:Show() end end)
  micro:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
  end
- local frame=PlayerTalentFrame or TalentFrame or ClassTalentFrame or ClassicTalentFrame or (PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame)
+ -- 70532 owns its modern talents in anonymous child panels. A button on
+ -- one of those panels can be hidden even while the root is visible.
+ local frame=PlayerSpellsFrame or PlayerTalentFrame or TalentFrame or ClassTalentFrame or ClassicTalentFrame
  if frame and frame~=talentHost then
   if talentButton then talentButton:Hide() end
   talentHost=frame
