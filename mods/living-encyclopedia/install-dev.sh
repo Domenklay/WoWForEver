@@ -15,9 +15,12 @@ value=sys.argv[1]
 rows=[];found=False
 for row in p.read_text().splitlines():
     if row.startswith('ENCYCLOPEDIA_ENABLED='):
-        if not found: rows.append('ENCYCLOPEDIA_ENABLED='+value);found=True
-    else: rows.append(row)
-if not found: rows.append('ENCYCLOPEDIA_ENABLED='+value)
+        if not found:
+            rows.append('ENCYCLOPEDIA_ENABLED='+value);found=True
+    else:
+        rows.append(row)
+if not found:
+    rows.append('ENCYCLOPEDIA_ENABLED='+value)
 p.write_text('\n'.join(rows)+'\n')
 PY
 }
@@ -27,40 +30,70 @@ prepare_source() {
   local stamp="backups/encyclopedia-source-$(date +%Y%m%d-%H%M%S)"
   python3 - "$stamp" <<'PY'
 from pathlib import Path
-import shutil,sys
+import datetime,re,shutil,sys
 backup=Path(sys.argv[1]);backup.mkdir(parents=True,exist_ok=False)
-paths=[Path('Dockerfile'),Path('docker/entrypoint.sh'),Path('docker-compose.yml'),Path('docker/patches/0004-forever-subclass-server-addon-endpoint.patch')]
+paths=[Path('Dockerfile'),Path('docker/entrypoint.sh'),Path('docker-compose.yml')]
 for p in paths:
     if not p.is_file(): raise SystemExit(f'missing required source file: {p}')
     q=backup/p;q.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,q)
 
-def replace_once(path,old,new,marker):
-    p=Path(path);s=p.read_text()
-    if marker in s:return
-    if s.count(old)!=1:raise SystemExit(f'{path}: integration anchor not found exactly once')
-    p.write_text(s.replace(old,new,1))
+def one(pattern,text,label):
+    found=list(re.finditer(pattern,text,re.M))
+    if len(found)!=1: raise SystemExit(f'{label}: expected one integration point, found {len(found)}')
+    return found[0]
 
-replace_once('Dockerfile',
-'''RUN python3 /tmp/inject-subclass.py /src/TrinityCore --module /subclass-module\n''',
-'''RUN python3 /tmp/inject-subclass.py /src/TrinityCore --module /subclass-module\n\n# Living Encyclopedia is injected independently after the subclass adapter.\nCOPY mods/living-encyclopedia /encyclopedia-module\nRUN python3 /encyclopedia-module/server/inject.py /src/TrinityCore --module /encyclopedia-module\n''',
-'/encyclopedia-module/server/inject.py')
-replace_once('Dockerfile',
-'''LABEL org.wowforever.subclass="0.4.0-freepick.1"\n''',
-'''LABEL org.wowforever.subclass="0.4.0-freepick.1"\nLABEL org.wowforever.encyclopedia="0.2.0-server-discovery"\n''',
-'org.wowforever.encyclopedia=')
-replace_once('docker/entrypoint.sh',
-'''    setkey "$f" ForeverSubclass.Freepick "${SUBCLASS_FREEPICK:-0}"\n''',
-'''    setkey "$f" ForeverSubclass.Freepick "${SUBCLASS_FREEPICK:-0}"\n    setkey "$f" ForeverEncyclopedia.Enable "${ENCYCLOPEDIA_ENABLED:-0}"\n''',
-'ForeverEncyclopedia.Enable')
-replace_once('docker-compose.yml',
-'''      SUBCLASS_FREEPICK: ${SUBCLASS_FREEPICK:-0}\n''',
-'''      SUBCLASS_FREEPICK: ${SUBCLASS_FREEPICK:-0}\n      ENCYCLOPEDIA_ENABLED: ${ENCYCLOPEDIA_ENABLED:-0}\n''',
-'ENCYCLOPEDIA_ENABLED:')
-replace_once('docker/patches/0004-forever-subclass-server-addon-endpoint.patch',
-'''    if (type == CHAT_MSG_WHISPER && prefix == "FSC1")\n''',
-'''    if (type == CHAT_MSG_WHISPER && (prefix == "FSC1" || prefix == "FEC1"))\n''',
-'prefix == "FEC1"')
-print(f'Prepared source integration. Backup: {backup}')
+# Dockerfile: inject independently of whatever exact subclass installer version is present.
+p=Path('Dockerfile');s=p.read_text()
+if '/encyclopedia-module/server/inject.py' not in s:
+    block='''# Living Encyclopedia: independent Custom script injection.\nCOPY mods/living-encyclopedia /encyclopedia-module\nRUN python3 /encyclopedia-module/server/inject.py /src/TrinityCore --module /encyclopedia-module\n\n'''
+    points=[]
+    for pat in (r'(?m)^ARG BUILD_JOBS=.*$',r'(?m)^WORKDIR /src/TrinityCore/build\s*$'):
+        found=list(re.finditer(pat,s))
+        if len(found)==1:
+            points=found;break
+    if len(points)!=1: raise SystemExit('Dockerfile: cannot locate build-stage insertion point (BUILD_JOBS/WORKDIR)')
+    m=points[0];s=s[:m.start()]+block+s[m.start():]
+
+if 'org.wowforever.encyclopedia=' not in s:
+    runtime=one(r'(?m)^############################ runtime ############################\s*$',s,'Dockerfile runtime stage')
+    after=s[runtime.end():]
+    found=list(re.finditer(r'(?m)^FROM\s+ubuntu:\$\{UBUNTU_VERSION\}\s*$',after))
+    if len(found)!=1: raise SystemExit(f'Dockerfile runtime FROM: expected one after runtime marker, found {len(found)}')
+    m=found[0];pos=runtime.end()+m.end()
+    s=s[:pos]+'\nLABEL org.wowforever.encyclopedia="0.2.3-server-discovery"'+s[pos:]
+p.write_text(s)
+
+# Runtime feature flag.
+p=Path('docker/entrypoint.sh');s=p.read_text()
+if 'ForeverEncyclopedia.Enable' not in s:
+    candidates=list(re.finditer(r'(?m)^(\s*setkey\s+"\$f"\s+ForeverSubclass\.(?:Freepick|Enable)\s+.*)$',s))
+    if candidates:
+        m=candidates[-1];indent=re.match(r'\s*',m.group(1)).group(0)
+        ins=m.group(1)+'\n'+indent+'setkey "$f" ForeverEncyclopedia.Enable "${ENCYCLOPEDIA_ENABLED:-0}"'
+        s=s[:m.start()]+ins+s[m.end():]
+    else:
+        m=one(r'(?m)^(\s*apply_overrides\s+"\$f"\s+worldserver\s*)$',s,'entrypoint worldserver overrides')
+        indent=re.match(r'\s*',m.group(1)).group(0)
+        ins=indent+'setkey "$f" ForeverEncyclopedia.Enable "${ENCYCLOPEDIA_ENABLED:-0}"\n'+m.group(1)
+        s=s[:m.start()]+ins+s[m.end():]
+p.write_text(s)
+
+# Compose environment flag.
+p=Path('docker-compose.yml');s=p.read_text()
+if 'ENCYCLOPEDIA_ENABLED:' not in s:
+    candidates=list(re.finditer(r'(?m)^(\s*SUBCLASS_(?:FREEPICK|ENABLED):\s*.*)$',s))
+    if candidates:
+        m=candidates[-1];indent=re.match(r'\s*',m.group(1)).group(0)
+        ins=m.group(1)+'\n'+indent+'ENCYCLOPEDIA_ENABLED: ${ENCYCLOPEDIA_ENABLED:-0}'
+        s=s[:m.start()]+ins+s[m.end():]
+    else:
+        m=one(r'(?m)^(\s*PACKET_LOG:\s*.*)$',s,'docker-compose worldserver environment')
+        indent=re.match(r'\s*',m.group(1)).group(0)
+        ins=m.group(1)+'\n'+indent+'ENCYCLOPEDIA_ENABLED: ${ENCYCLOPEDIA_ENABLED:-0}'
+        s=s[:m.start()]+ins+s[m.end():]
+p.write_text(s)
+
+print(f'Prepared encyclopedia source integration. Backup: {backup}')
 PY
 }
 
@@ -76,6 +109,7 @@ case "$action" in
   build)
     prepare_source
     bash mods/living-encyclopedia/tests/run-rules.sh
+    python3 mods/living-encyclopedia/server/inject.py --self-test
     docker compose build worldserver
     ;;
   status)
@@ -121,6 +155,7 @@ if [ -d "$addon" ]; then cp -a "$addon" "$backup/addon/ForeverEncyclopedia"; fi
 
 prepare_source
 bash mods/living-encyclopedia/tests/run-rules.sh
+python3 mods/living-encyclopedia/server/inject.py --self-test
 
 echo 'Building worldserver with ForeverEncyclopedia...'
 docker compose build worldserver
