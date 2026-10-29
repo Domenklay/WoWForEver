@@ -43,3 +43,24 @@ CREATE TABLE IF NOT EXISTS `forever_encyclopedia_appearance_selection` (
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`character_guid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Idempotent historical backfill. Accounts that opened records before knowledge
+-- rewards were enabled receive the same baseline they would receive now.
+-- Re-running installation is safe because GREATEST never adds the baseline twice.
+INSERT INTO `forever_encyclopedia_account`
+    (`account_id`,`knowledge_total`,`knowledge_spent`,`discoveries`)
+SELECT
+    `account_id`,
+    SUM(CASE `kind`
+        WHEN 1 THEN 1
+        WHEN 2 THEN 1
+        WHEN 3 THEN 3
+        ELSE 0
+    END),
+    0,
+    COUNT(*)
+FROM `forever_encyclopedia_discovery`
+GROUP BY `account_id`
+ON DUPLICATE KEY UPDATE
+    `knowledge_total` = GREATEST(`knowledge_total`, VALUES(`knowledge_total`)),
+    `discoveries` = GREATEST(`discoveries`, VALUES(`discoveries`));
