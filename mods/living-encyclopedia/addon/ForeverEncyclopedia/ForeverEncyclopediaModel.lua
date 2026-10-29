@@ -16,13 +16,21 @@ local function getMainFrame()
     return _G.ForeverEncyclopediaFrame
 end
 
+local function makeEdge(parent, pointA, relA, xA, yA, pointB, relB, xB, yB, width, height)
+    local edge = parent:CreateTexture(nil, "BORDER")
+    edge:SetPoint(pointA, parent, relA, xA, yA)
+    if pointB then edge:SetPoint(pointB, parent, relB, xB, yB) end
+    if width then edge:SetWidth(width) end
+    if height then edge:SetHeight(height) end
+    edge:SetColorTexture(0.42, 0.27, 0.10, 0.92)
+    return edge
+end
+
 local function ensureViewer()
     local parent = getMainFrame()
     if not parent then return nil end
     if viewer then return viewer end
 
-    -- Transparent model-only layer. The main encyclopedia panel supplies the
-    -- visual container; the model viewer itself must not draw a square/card.
     viewer = CreateFrame("Frame", "ForeverEncyclopediaCreatureModelViewer", parent)
     viewer:SetSize(176, 168)
     viewer:SetPoint("TOPLEFT", parent, "TOPLEFT", 408, -218)
@@ -31,6 +39,42 @@ local function ensureViewer()
     viewer:EnableMouse(true)
     viewer:EnableMouseWheel(true)
     viewer:Hide()
+
+    -- Compact dark pedestal. The model is allowed to extend beyond it, so the
+    -- preview keeps contrast without consuming the whole information panel.
+    local plate = viewer:CreateTexture(nil, "BACKGROUND")
+    plate:SetPoint("CENTER", viewer, "CENTER", 0, -4)
+    plate:SetSize(138, 106)
+    plate:SetColorTexture(0.015, 0.012, 0.010, 0.84)
+
+    local plateGlow = viewer:CreateTexture(nil, "BACKGROUND", nil, 1)
+    plateGlow:SetPoint("CENTER", plate, "CENTER", 0, 8)
+    plateGlow:SetSize(126, 72)
+    plateGlow:SetColorTexture(0.12, 0.070, 0.025, 0.20)
+
+    local plateTop = viewer:CreateTexture(nil, "BORDER")
+    plateTop:SetPoint("TOPLEFT", plate, "TOPLEFT", 0, 0)
+    plateTop:SetPoint("TOPRIGHT", plate, "TOPRIGHT", 0, 0)
+    plateTop:SetHeight(1)
+    plateTop:SetColorTexture(0.48, 0.31, 0.11, 0.92)
+
+    local plateBottom = viewer:CreateTexture(nil, "BORDER")
+    plateBottom:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 0, 0)
+    plateBottom:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", 0, 0)
+    plateBottom:SetHeight(1)
+    plateBottom:SetColorTexture(0.16, 0.095, 0.035, 0.92)
+
+    local plateLeft = viewer:CreateTexture(nil, "BORDER")
+    plateLeft:SetPoint("TOPLEFT", plate, "TOPLEFT", 0, 0)
+    plateLeft:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 0, 0)
+    plateLeft:SetWidth(1)
+    plateLeft:SetColorTexture(0.29, 0.18, 0.07, 0.88)
+
+    local plateRight = viewer:CreateTexture(nil, "BORDER")
+    plateRight:SetPoint("TOPRIGHT", plate, "TOPRIGHT", 0, 0)
+    plateRight:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", 0, 0)
+    plateRight:SetWidth(1)
+    plateRight:SetColorTexture(0.29, 0.18, 0.07, 0.88)
 
     model = CreateFrame("PlayerModel", nil, viewer)
     model:SetAllPoints(viewer)
@@ -98,8 +142,6 @@ local function showCreature(entry)
     model:ClearModel()
 
     local ok = pcall(function()
-        -- WoW Forever exposes PlayerModel:SetCreature(creatureID), so entry is
-        -- enough; no separate display-id database is required client-side.
         model:SetCreature(entry)
         model:SetPortraitZoom(0)
         model:SetCamDistanceScale(zoom)
@@ -138,9 +180,6 @@ local function regionText(button)
     end
 end
 
--- Only creature-list rows are 320x28. Narrow matching is intentional: the
--- previous broad scan also matched location rows and kept a creature model
--- alive on other tabs.
 local function collectCreatureRows(frame, out)
     if not frame or not frame.GetChildren then return end
     local children = { frame:GetChildren() }
@@ -167,7 +206,6 @@ local function hookVisibleRows()
     local buttons = {}
     collectCreatureRows(parent, buttons)
     if #buttons == 0 then
-        -- We are no longer on the creature tab (or the list is not drawn).
         hideViewer()
         return
     end
@@ -192,8 +230,6 @@ local function hookVisibleRows()
         end
     end
 
-    -- Model visibility is independent from discovery state. Discovery controls
-    -- records/progress, while the physical creature can always be inspected.
     local entryStillVisible = false
     if selectedEntry then
         for _, rec in ipairs(pageRecords) do
