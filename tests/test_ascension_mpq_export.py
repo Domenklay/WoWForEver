@@ -38,3 +38,35 @@ class MPQExportTests(unittest.TestCase):
             root=Path(tmp);data=root/'Data';data.mkdir();(data/'patch.mpq').touch();reader=Partial()
             report=export.extract(data,root/'export.zip',reader)
             self.assertFalse(report['tables']);self.assertEqual(len(report['errors']),1);self.assertEqual(reader.closed,['patch.mpq'])
+
+    def test_target_archive_only_and_split_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);data=root/'Data';data.mkdir()
+            for name in ['common.MPQ','patch-T.MPQ']:(data/name).touch()
+            report=export.extract(data,root/'tables.zip',Reader(),'PATCH-T.MPQ',('Spell',))
+            self.assertEqual(report['archives'],['patch-T.MPQ'])
+            self.assertEqual(len(report['tables']),1)
+            original=(root/'tables.zip').read_bytes()
+            parts=export.split_export(root/'tables.zip',64)
+            self.assertEqual(b''.join(p.read_bytes() for p in parts),original)
+            with self.assertRaises(FileExistsError):export.split_export(root/'tables.zip',64)
+
+    def test_storm_reads_large_table_in_bounded_chunks(self):
+        import ctypes as C
+        class Library:
+            def __init__(self):self.pos=0;self.calls=[];self.closed=False
+            def SFileOpenFileEx(self,a,b,c,p):p._obj.value=1;return True
+            def SFileGetFileSize(self,h,high):high._obj.value=0;return len(payload)
+            def SFileReadFile(self,h,target,count,got,unused):
+                self.calls.append(count);C.memmove(target,payload[self.pos:self.pos+count],count)
+                self.pos+=count;got._obj.value=count;return True
+            def SFileCloseFile(self,h):self.closed=True
+        payload=b'WDBC'+b'0'*(2*1024*1024+7)
+        reader=export.Storm.__new__(export.Storm);reader.lib=Library();reader.max_size=len(payload)
+        with reader.read(None,'DBFilesClient\\Spell.dbc') as content:
+            self.assertEqual(content.read(),payload)
+        self.assertTrue(reader.lib.closed)
+        self.assertLessEqual(max(reader.lib.calls),1024*1024)
+        reader.lib=Library();reader.max_size=128
+        with self.assertRaises(RuntimeError):reader.read(None,'DBFilesClient\\Spell.dbc')
+        self.assertTrue(reader.lib.closed)
