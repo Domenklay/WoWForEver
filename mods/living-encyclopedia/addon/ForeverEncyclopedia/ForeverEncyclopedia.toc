@@ -2,7 +2,7 @@
 ## Title: Forever Encyclopedia
 ## Notes: Живая энциклопедия WoW Forever: V2.1 интерфейс, 3D-бестиарий, облики и безопасное серверное дерево талантов
 ## Author: WoWForEver project
-## Version: 0.7.4-v2.1-safe-runtime
+## Version: 0.7.5-v2.1-sql-fix
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopediaTalentData.lua
 ForeverEncyclopediaV21.lua
