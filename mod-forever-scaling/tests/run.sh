@@ -4,11 +4,16 @@ cd "$(dirname "$0")/.."
 
 run_local() {
     local compiler=$1
-    local tmp
+    local tmp rc=0
     tmp=$(mktemp)
-    trap 'rm -f "$tmp"' EXIT
-    "$compiler" -std=c++17 -Wall -Wextra -Werror -pedantic tests/policy_test.cpp -o "$tmp"
-    "$tmp"
+
+    "$compiler" -std=c++17 -Wall -Wextra -Werror -pedantic tests/policy_test.cpp -o "$tmp" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+        "$tmp" || rc=$?
+    fi
+
+    rm -f -- "$tmp"
+    return "$rc"
 }
 
 if command -v c++ >/dev/null 2>&1; then
