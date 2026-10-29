@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Forever Encyclopedia
-## Notes: Живая энциклопедия WoW Forever: открытия существ, предметов и локаций
+## Notes: Живая энциклопедия WoW Forever: открытия, каталог зон, таланты и облики
 ## Author: WoWForEver project
-## Version: 0.3.1-knowledge
+## Version: 0.4.0-zone-catalog
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopedia.lua
