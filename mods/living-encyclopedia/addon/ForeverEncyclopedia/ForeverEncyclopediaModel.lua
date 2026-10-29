@@ -46,9 +46,21 @@ local function ensureViewer()
     borderBottom:SetHeight(1)
     borderBottom:SetColorTexture(0.28, 0.17, 0.06, 0.95)
 
+    local borderLeft = viewer:CreateTexture(nil, "BORDER")
+    borderLeft:SetPoint("TOPLEFT", viewer, "TOPLEFT", 0, 0)
+    borderLeft:SetPoint("BOTTOMLEFT", viewer, "BOTTOMLEFT", 0, 0)
+    borderLeft:SetWidth(1)
+    borderLeft:SetColorTexture(0.46, 0.30, 0.12, 0.90)
+
+    local borderRight = viewer:CreateTexture(nil, "BORDER")
+    borderRight:SetPoint("TOPRIGHT", viewer, "TOPRIGHT", 0, 0)
+    borderRight:SetPoint("BOTTOMRIGHT", viewer, "BOTTOMRIGHT", 0, 0)
+    borderRight:SetWidth(1)
+    borderRight:SetColorTexture(0.46, 0.30, 0.12, 0.90)
+
     model = CreateFrame("PlayerModel", nil, viewer)
     model:SetPoint("TOPLEFT", viewer, "TOPLEFT", 4, -4)
-    model:SetPoint("BOTTOMRIGHT", viewer, "BOTTOMRIGHT", -4, 4)
+    model:SetPoint("BOTTOMRIGHT", viewer, "BOTTOMRIGHT", -4, 18)
     model:SetKeepModelOnHide(true)
     model:EnableMouse(false)
 
@@ -60,8 +72,8 @@ local function ensureViewer()
     fallback:Hide()
 
     local hint = viewer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hint:SetPoint("BOTTOM", viewer, "BOTTOM", 0, 6)
-    hint:SetText("ЛКМ: вращать   •   колесо: масштаб")
+    hint:SetPoint("BOTTOM", viewer, "BOTTOM", 0, 5)
+    hint:SetText("ЛКМ: вращать  •  колесо: масштаб")
     hint:SetTextColor(0.62, 0.52, 0.38)
 
     viewer:SetScript("OnMouseDown", function(self, button)
@@ -199,22 +211,21 @@ local function hookVisibleRows()
         if not button._encyModelHooked then
             button._encyModelHooked = true
             button:HookScript("OnClick", function(self)
-                if self._encyModelKnown and self._encyModelEntry then
-                    showCreature(self._encyModelEntry)
-                else
-                    showCreature(nil)
-                end
+                -- The creature model is always visible. Discovery only controls the archive text.
+                if self._encyModelEntry then showCreature(self._encyModelEntry) end
             end)
         end
     end
 
-    if not selectedEntry then
+    -- Always preview the selected/first creature, including undiscovered entries.
+    local currentStillVisible = false
+    if selectedEntry then
         for _, rec in ipairs(pageRecords) do
-            if rec.known then
-                showCreature(rec.entry)
-                break
-            end
+            if rec.entry == selectedEntry then currentStillVisible = true; break end
         end
+    end
+    if not currentStillVisible and pageRecords[1] then
+        showCreature(pageRecords[1].entry)
     end
 end
 
