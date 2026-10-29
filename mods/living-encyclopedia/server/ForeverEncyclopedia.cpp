@@ -8,17 +8,23 @@
 #include "WorldSession.h"
 #include "Log.h"
 #include "Map.h"
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <mutex>
 #include <sstream>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace ForeverEncyclopedia
 {
 using Clock = std::chrono::steady_clock;
 constexpr char RequestPrefix[] = "FEC1";
 constexpr char ResponsePrefix[] = "FER1";
+constexpr uint32 CatalogPageSize = 10;
 
 enum Kind : uint8
 {
@@ -59,6 +65,19 @@ static void Error(Player* player, std::string const& text)
     Send(player, "ERROR " + text);
 }
 
+static std::string ProtocolText(std::string value)
+{
+    for (char& c : value)
+    {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (c == '|' || c == '\r' || c == '\n' || uc < 32)
+            c = ' ';
+    }
+    if (value.size() > 180)
+        value.resize(180);
+    return value;
+}
+
 static void Record(Player* player, Kind kind, uint32 entry)
 {
     if (!Ready || !player || !entry)
@@ -73,8 +92,6 @@ static void Record(Player* player, Kind kind, uint32 entry)
     uint32 zoneId = player->GetZoneId();
     CharacterDatabaseTransaction tx = CharacterDatabase.BeginTransaction();
 
-    // ROW_COUNT() in the second statement observes this INSERT IGNORE on the same
-    // transaction connection: 1 only for the first account-wide discovery, 0 for duplicates.
     tx->PAppend(
         "INSERT IGNORE INTO forever_encyclopedia_discovery "
         "(account_id,kind,entry,first_map,first_zone) VALUES ({},{},{},{},{})",
@@ -104,6 +121,12 @@ struct Progress
     uint64 total = 0;
     uint64 spent = 0;
     uint32 discoveries = 0;
+};
+
+struct CatalogCreature
+{
+    uint32 entry = 0;
+    std::string name;
 };
 
 static Counts LoadCounts(Player* player)
@@ -199,6 +222,97 @@ static void Recent(Player* player, uint32 kind)
     Send(player, Trinity::StringFormat("RECEND {}", kind));
 }
 
+static std::unordered_set<uint32> LoadKnownCreatures(uint32 account)
+{
+    std::unordered_set<uint32> known;
+    if (!account)
+        return known;
+
+    if (QueryResult rows = CharacterDatabase.PQuery(
+            "SELECT entry FROM forever_encyclopedia_discovery WHERE account_id={} AND kind={}",
+            account, uint32(KIND_CREATURE)))
+    {
+        do
+        {
+            known.insert(rows->Fetch()[0].GetUInt32());
+        }
+        while (rows->NextRow());
+    }
+    return known;
+}
+
+static std::vector<CatalogCreature> LoadZoneCreatures(Player* player)
+{
+    std::vector<CatalogCreature> creatures;
+    if (!player)
+        return creatures;
+
+    uint32 mapId = player->GetMapId();
+    uint32 zoneId = player->GetZoneId();
+    uint32 areaId = player->GetAreaId();
+
+    if (QueryResult rows = WorldDatabase.PQuery(
+            "SELECT DISTINCT c.id,ct.name "
+            "FROM creature c INNER JOIN creature_template ct ON ct.entry=c.id "
+            "WHERE c.map={} AND c.id<>0 AND (c.zoneId={} OR (c.zoneId=0 AND c.areaId={})) "
+            "ORDER BY c.id",
+            mapId, zoneId, areaId))
+    {
+        do
+        {
+            Field* f = rows->Fetch();
+            CatalogCreature row;
+            row.entry = f[0].GetUInt32();
+            row.name = f[1].GetString();
+            if (row.entry)
+                creatures.push_back(std::move(row));
+        }
+        while (rows->NextRow());
+    }
+
+    return creatures;
+}
+
+static void Catalog(Player* player, uint32 page)
+{
+    uint32 account = Account(player);
+    if (!account)
+    {
+        Error(player, "no account");
+        return;
+    }
+
+    std::vector<CatalogCreature> creatures = LoadZoneCreatures(player);
+    std::unordered_set<uint32> known = LoadKnownCreatures(account);
+
+    uint32 knownInZone = 0;
+    for (CatalogCreature const& creature : creatures)
+        if (known.find(creature.entry) != known.end())
+            ++knownInZone;
+
+    uint32 total = uint32(creatures.size());
+    uint32 pages = std::max<uint32>(1, (total + CatalogPageSize - 1) / CatalogPageSize);
+    if (page < 1)
+        page = 1;
+    if (page > pages)
+        page = pages;
+
+    Send(player, Trinity::StringFormat("CATHEAD|{}|{}|{}|{}|{}",
+        player->GetZoneId(), page, pages, total, knownInZone));
+
+    size_t begin = size_t(page - 1) * CatalogPageSize;
+    size_t end = std::min(creatures.size(), begin + size_t(CatalogPageSize));
+    for (size_t i = begin; i < end; ++i)
+    {
+        CatalogCreature const& creature = creatures[i];
+        bool discovered = known.find(creature.entry) != known.end();
+        std::string name = discovered ? ProtocolText(creature.name) : std::string();
+        Send(player, Trinity::StringFormat("CAT|{}|{}|{}", creature.entry, discovered ? 1 : 0, name));
+    }
+
+    Send(player, "CATEND");
+}
+
 static void Request(Player* player, std::string const& text)
 {
     if (!Ready)
@@ -245,6 +359,22 @@ static void Request(Player* player, std::string const& text)
             return;
         }
         Recent(player, kind);
+        return;
+    }
+
+    if (command == "catalog")
+    {
+        uint32 page = 1;
+        std::string extra;
+        if (input >> page)
+        {
+            if (input >> extra)
+            {
+                Error(player, "invalid catalog request");
+                return;
+            }
+        }
+        Catalog(player, page);
         return;
     }
 
@@ -312,7 +442,7 @@ public:
         }
 
         Ready = true;
-        TC_LOG_INFO("scripts", "ForeverEncyclopedia ready: account-wide discovery and knowledge progression enabled");
+        TC_LOG_INFO("scripts", "ForeverEncyclopedia ready: discovery, knowledge and current-zone catalog enabled");
     }
 };
 } // namespace ForeverEncyclopedia
