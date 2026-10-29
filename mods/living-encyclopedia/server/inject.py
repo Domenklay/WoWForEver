@@ -7,28 +7,39 @@ from pathlib import Path
 
 
 def extend_addon_transport(core: Path) -> None:
-    """Allow the encyclopedia FEC1 prefix on the proven server-bound addon endpoint.
+    """Install a dedicated FEC1 server-bound addon endpoint.
 
-    The subclass-owned patch stays untouched. This runs after docker patches and
-    only extends the resulting ChatHandler source. It deliberately tolerates
-    extra conditions added around FSC1 by later subclass revisions.
+    This deliberately does not depend on ForeverSubclass / ForeverAdvancement
+    transport prefixes. It inserts after TrinityCore's stable addon-message
+    length check inside ChatHandler.cpp and is idempotent.
     """
     chat = core / "src/server/game/Handlers/ChatHandler.cpp"
     text = chat.read_text()
     if 'prefix == "FEC1"' in text:
         return
 
-    needle = 'prefix == "FSC1"'
-    count = text.count(needle)
-    if count != 1:
-        raise ValueError(
-            f"FSC1 server-bound addon prefix not found exactly once in ChatHandler.cpp (found {count})"
-        )
-    text = text.replace(
-        needle,
-        '(prefix == "FSC1" || prefix == "FEC1")',
-        1,
+    pattern = re.compile(
+        r'(?m)^(?P<indent>\s*)if\s*\(\s*text\.length\(\)\s*>\s*255\s*\)\s*\n\s*return;\s*$'
     )
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        raise ValueError(
+            f"addon message length-check anchor not found exactly once in ChatHandler.cpp (found {len(matches)})"
+        )
+
+    m = matches[0]
+    indent = m.group("indent")
+    block = (
+        m.group(0)
+        + "\n\n"
+        + indent + '// ForeverEncyclopedia: server-bound client protocol; keep independent of other modules.\n'
+        + indent + 'if (type == CHAT_MSG_WHISPER && prefix == "FEC1")\n'
+        + indent + '{\n'
+        + indent + '    sScriptMgr->OnPlayerAddonMessageSent(sender, type, prefix, text, sender);\n'
+        + indent + '    return;\n'
+        + indent + '}'
+    )
+    text = text[:m.start()] + block + text[m.end():]
     chat.write_text(text)
 
 
@@ -73,9 +84,12 @@ def self_test() -> None:
         chat = core / "src/server/game/Handlers/ChatHandler.cpp"
         chat.parent.mkdir(parents=True)
         chat.write_text(
-            'void test()\n{\n'
-            '    if (type == CHAT_MSG_WHISPER && sender && prefix == "FSC1")\n'
-            '    {\n    }\n}\n'
+            'void WorldSession::HandleChatAddonMessage()\n{\n'
+            '    Player* sender = GetPlayer();\n'
+            '    if (text.length() > 255)\n'
+            '        return;\n\n'
+            '    switch (type) { }\n'
+            '}\n'
         )
 
         server = module / "server"
@@ -90,7 +104,7 @@ def self_test() -> None:
         assert loader_text.count("void AddSC_forever_encyclopedia();") == 1
         assert loader_text.count("    AddSC_forever_encyclopedia();") == 1
         assert chat_text.count('prefix == "FEC1"') == 1
-        assert chat_text.count('prefix == "FSC1"') == 1
+        assert chat_text.count('text.length() > 255') == 1
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").read_text() == "// test\n"
     print("ForeverEncyclopedia injector self-test passed")
 
