@@ -54,13 +54,21 @@ def patch_creature(core):
     source = replace_once(
         source,
         '#include <sstream>\n',
-        '#include <algorithm>\n#include <cstdlib>\n#include <cstring>\n#include <sstream>\n',
+        '#include <algorithm>\n#include <cstdlib>\n#include <cstring>\n#include <sstream>\n#include <unordered_map>\n',
         'Creature.cpp standard include anchor',
     )
 
     helper = r'''namespace ForeverScalingCore
 {
 enum class Rank { Normal, Elite, RareElite, Boss };
+
+struct EncounterState
+{
+    uint8 originalLevel = 1;
+    uint8 scaledLevel = 1;
+};
+
+static std::unordered_map<uint64, EncounterState> Encounters;
 
 static bool EnvBool(char const* name, bool fallback)
 {
@@ -135,6 +143,91 @@ static uint8 LevelFor(Creature const* creature, Player const* player)
     int baseline = playerLevel + RankOffset(RankOf(creature));
     return uint8(std::clamp(baseline, low, high));
 }
+
+static uint64 EncounterKey(Creature const* creature)
+{
+    return uint64(creature->GetGUID().GetCounter());
+}
+
+static uint8 LockedLevel(Creature const* creature)
+{
+    auto itr = Encounters.find(EncounterKey(creature));
+    return itr == Encounters.end() ? 0 : itr->second.scaledLevel;
+}
+
+static void RescalePreservingHealth(Creature* creature, uint8 level)
+{
+    uint64 oldMax = creature->GetMaxHealth();
+    uint64 oldHealth = creature->GetHealth();
+    bool alive = creature->IsAlive();
+
+    creature->SetLevel(level);
+    creature->UpdateLevelDependantStats();
+
+    if (!alive || !oldMax)
+        return;
+
+    uint64 newMax = creature->GetMaxHealth();
+    uint64 newHealth = oldHealth >= oldMax ? newMax : (newMax * oldHealth / oldMax);
+    creature->SetHealth(std::max<uint64>(1, std::min<uint64>(newHealth, newMax)));
+}
+
+static Player* EncounterPlayer(Creature* creature)
+{
+    Unit* victim = creature->GetVictim();
+    if (!victim)
+        return nullptr;
+    return victim->GetCharmerOrOwnerPlayerOrPlayerItself();
+}
+
+static void UpdateEncounter(Creature* creature)
+{
+    uint64 key = EncounterKey(creature);
+    auto itr = Encounters.find(key);
+
+    if (!EnvBool("FOREVER_SCALING_ENABLED", false))
+    {
+        if (itr != Encounters.end() && creature->IsAlive())
+            RescalePreservingHealth(creature, itr->second.originalLevel);
+        Encounters.erase(key);
+        return;
+    }
+
+    if (!creature->IsAlive())
+    {
+        Encounters.erase(key);
+        return;
+    }
+
+    if (creature->IsEngaged())
+    {
+        if (itr != Encounters.end())
+            return;
+
+        Player* player = EncounterPlayer(creature);
+        if (!player || !EnabledFor(creature, player))
+            return;
+
+        EncounterState state;
+        state.originalLevel = creature->GetLevel();
+        state.scaledLevel = LevelFor(creature, player);
+        Encounters.emplace(key, state);
+        RescalePreservingHealth(creature, state.scaledLevel);
+        return;
+    }
+
+    if (itr != Encounters.end())
+    {
+        uint8 originalLevel = itr->second.originalLevel;
+        Encounters.erase(itr);
+        RescalePreservingHealth(creature, originalLevel);
+    }
+}
+
+static void ForgetEncounter(Creature const* creature)
+{
+    Encounters.erase(EncounterKey(creature));
+}
 } // namespace ForeverScalingCore
 
 '''
@@ -151,8 +244,16 @@ static uint8 LevelFor(Creature const* creature, Player const* player)
         source = replace_once(source, old, new, f'Creature::{function} scaling gate')
 
     level_anchor = '''uint8 Creature::GetLevelForTarget(WorldObject const* target) const\n{\n'''
-    level_replacement = level_anchor + '''    if (ForeverScalingCore::EnabledFor(this, target))\n        return ForeverScalingCore::LevelFor(this, target->ToPlayer());\n\n'''
+    level_replacement = level_anchor + '''    if (uint8 lockedLevel = ForeverScalingCore::LockedLevel(this))\n        return lockedLevel;\n\n    if (ForeverScalingCore::EnabledFor(this, target))\n        return ForeverScalingCore::LevelFor(this, target->ToPlayer());\n\n'''
     source = replace_once(source, level_anchor, level_replacement, 'Creature::GetLevelForTarget entry')
+
+    update_anchor = '''    GetThreatManager().Update(diff);\n\n    switch (m_deathState)'''
+    update_replacement = '''    GetThreatManager().Update(diff);\n\n    // Lock one visible/stat level for the whole encounter. This avoids target-switch\n    // oscillation and makes classic fixed-level creatures visibly scale in combat.\n    ForeverScalingCore::UpdateEncounter(this);\n\n    switch (m_deathState)'''
+    source = replace_once(source, update_anchor, update_replacement, 'Creature::Update encounter scaling anchor')
+
+    remove_anchor = '''void Creature::RemoveFromWorld()\n{\n    if (IsInWorld())\n    {'''
+    remove_replacement = '''void Creature::RemoveFromWorld()\n{\n    ForeverScalingCore::ForgetEncounter(this);\n    if (IsInWorld())\n    {'''
+    source = replace_once(source, remove_anchor, remove_replacement, 'Creature::RemoveFromWorld scaling cleanup anchor')
 
     path.write_text(source)
 
