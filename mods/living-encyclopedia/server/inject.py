@@ -7,30 +7,28 @@ from pathlib import Path
 
 
 def extend_addon_transport(core: Path) -> None:
-    """Allow the encyclopedia FEC1 prefix on the already-patched server endpoint.
+    """Allow the encyclopedia FEC1 prefix on the proven server-bound addon endpoint.
 
-    The subclass-owned 0004 patch stays untouched. This runs after docker patches,
-    so it only extends the resulting ChatHandler source and is idempotent.
+    The subclass-owned patch stays untouched. This runs after docker patches and
+    only extends the resulting ChatHandler source. It deliberately tolerates
+    extra conditions added around FSC1 by later subclass revisions.
     """
     chat = core / "src/server/game/Handlers/ChatHandler.cpp"
     text = chat.read_text()
     if 'prefix == "FEC1"' in text:
         return
 
-    pattern = re.compile(
-        r'(?m)^(\s*)if\s*\(\s*type\s*==\s*CHAT_MSG_WHISPER\s*&&\s*prefix\s*==\s*"FSC1"\s*\)\s*$'
-    )
-    matches = list(pattern.finditer(text))
-    if len(matches) != 1:
+    needle = 'prefix == "FSC1"'
+    count = text.count(needle)
+    if count != 1:
         raise ValueError(
-            f"FSC1 server-bound addon endpoint not found exactly once in ChatHandler.cpp (found {len(matches)})"
+            f"FSC1 server-bound addon prefix not found exactly once in ChatHandler.cpp (found {count})"
         )
-    m = matches[0]
-    replacement = (
-        m.group(1)
-        + 'if (type == CHAT_MSG_WHISPER && (prefix == "FSC1" || prefix == "FEC1"))'
+    text = text.replace(
+        needle,
+        '(prefix == "FSC1" || prefix == "FEC1")',
+        1,
     )
-    text = text[:m.start()] + replacement + text[m.end():]
     chat.write_text(text)
 
 
@@ -76,7 +74,7 @@ def self_test() -> None:
         chat.parent.mkdir(parents=True)
         chat.write_text(
             'void test()\n{\n'
-            '    if (type == CHAT_MSG_WHISPER && prefix == "FSC1")\n'
+            '    if (type == CHAT_MSG_WHISPER && sender && prefix == "FSC1")\n'
             '    {\n    }\n}\n'
         )
 
