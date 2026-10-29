@@ -22,7 +22,7 @@ def collect(client, output, runner=run):
         raise ValueError('Report directory must be outside Data and _classic_beta_')
     if output.exists():raise FileExistsError('Use a new report directory: '+str(output))
     output.mkdir(parents=True)
-    report=dict(format='wowforever-outland-readiness-v1',map_id=530,client=str(client),checks={},
+    report=dict(format='wowforever-outland-readiness-v2',map_id=530,client=str(client),checks={},
                 playable_map_confirmed=False,negative_name_lookup_proves_absence=False,
                 note='Read-only checks; resource dependencies, client rendering and VMAP coverage are not validated.')
     def check(label,command,stdin=None):
