@@ -103,6 +103,27 @@ function ForeverAscensionNativeBookReport()
   local num=query("C_SpellBook.GetNumSpellBookSkillLines",C_SpellBook.GetNumSpellBookSkillLines)
   if type(num)=="number" then for i=1,math.min(num,32) do query("SkillLine "..i,C_SpellBook.GetSpellBookSkillLineInfo,i) end end
  end
+ -- This client can load renamed native panels that have no legacy globals.
+ if EnumerateFrames then
+  local frame=EnumerateFrames();local count=0
+  while frame and count<80 do
+   local name=frame.GetName and frame:GetName()
+   if type(name)=="string" and (name:lower():find("talent",1,true) or name:lower():find("spellbook",1,true) or name:lower():find("playerspell",1,true)) and not name:find("ForeverAscension",1,true) then
+    count=count+1
+    local parent=frame.GetParent and frame:GetParent()
+    add("Native panel: "..name.." shown="..tostring(frame.IsShown and frame:IsShown()).." parent="..tostring(parent and parent.GetName and parent:GetName()))
+   end
+   frame=EnumerateFrames(frame)
+  end
+ end
+ if C_SpellBook and C_SpellBook.GetSpellBookItemInfo then
+  local bank=Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
+  for slot=1,80 do
+   local ok,info=pcall(C_SpellBook.GetSpellBookItemInfo,slot,bank)
+   if not ok or not info then break end
+   add("Book slot "..slot..": "..scalar(info))
+  end
+ end
  for _,name in ipairs({"SpellBook_UpdatePlayerTab","SpellBook_GetSpellBookSlot","ToggleSpellBook"}) do source(name,_G[name]) end
  for _,name in ipairs({"SpellBookFrame","PlayerSpellsFrame","PlayerTalentFrame","TalentFrame","ClassTalentFrame","ClassicTalentFrame"}) do
   local frame=_G[name]
