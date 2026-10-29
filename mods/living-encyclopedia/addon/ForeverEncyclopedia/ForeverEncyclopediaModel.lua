@@ -6,7 +6,7 @@ local model
 local fallback
 local selectedEntry
 local rotation = 0.35
-local zoom = 1.0
+local zoom = 1.28
 local dragging = false
 local dragStartX = 0
 local dragStartRotation = 0
@@ -16,76 +16,67 @@ local function getMainFrame()
     return _G.ForeverEncyclopediaFrame
 end
 
-local function makeEdge(parent, pointA, relA, xA, yA, pointB, relB, xB, yB, width, height)
-    local edge = parent:CreateTexture(nil, "BORDER")
-    edge:SetPoint(pointA, parent, relA, xA, yA)
-    if pointB then edge:SetPoint(pointB, parent, relB, xB, yB) end
-    if width then edge:SetWidth(width) end
-    if height then edge:SetHeight(height) end
-    edge:SetColorTexture(0.42, 0.27, 0.10, 0.92)
-    return edge
-end
-
 local function ensureViewer()
     local parent = getMainFrame()
     if not parent then return nil end
     if viewer then return viewer end
 
     viewer = CreateFrame("Frame", "ForeverEncyclopediaCreatureModelViewer", parent)
-    viewer:SetSize(176, 168)
-    viewer:SetPoint("TOPLEFT", parent, "TOPLEFT", 408, -218)
+    viewer:SetSize(164, 146)
+    viewer:SetPoint("TOPLEFT", parent, "TOPLEFT", 412, -222)
     viewer:SetFrameStrata(parent:GetFrameStrata())
-    viewer:SetFrameLevel(parent:GetFrameLevel() + 8)
+    viewer:SetFrameLevel(parent:GetFrameLevel() + 12)
     viewer:EnableMouse(true)
     viewer:EnableMouseWheel(true)
     viewer:Hide()
 
-    -- Compact dark pedestal. The model is allowed to extend beyond it, so the
-    -- preview keeps contrast without consuming the whole information panel.
+    -- Compact opaque stage. The model viewport uses exactly the same bounds,
+    -- so no creature geometry can spill outside the dark background.
     local plate = viewer:CreateTexture(nil, "BACKGROUND")
-    plate:SetPoint("CENTER", viewer, "CENTER", 0, -4)
-    plate:SetSize(138, 106)
-    plate:SetColorTexture(0.015, 0.012, 0.010, 0.84)
+    plate:SetPoint("CENTER", viewer, "CENTER", 0, -2)
+    plate:SetSize(154, 128)
+    plate:SetColorTexture(0.012, 0.010, 0.008, 0.98)
 
-    local plateGlow = viewer:CreateTexture(nil, "BACKGROUND", nil, 1)
-    plateGlow:SetPoint("CENTER", plate, "CENTER", 0, 8)
-    plateGlow:SetSize(126, 72)
-    plateGlow:SetColorTexture(0.12, 0.070, 0.025, 0.20)
+    local glow = viewer:CreateTexture(nil, "BACKGROUND", nil, 1)
+    glow:SetPoint("CENTER", plate, "CENTER", 0, 6)
+    glow:SetSize(142, 92)
+    glow:SetColorTexture(0.10, 0.055, 0.020, 0.18)
 
-    local plateTop = viewer:CreateTexture(nil, "BORDER")
-    plateTop:SetPoint("TOPLEFT", plate, "TOPLEFT", 0, 0)
-    plateTop:SetPoint("TOPRIGHT", plate, "TOPRIGHT", 0, 0)
-    plateTop:SetHeight(1)
-    plateTop:SetColorTexture(0.48, 0.31, 0.11, 0.92)
+    local top = viewer:CreateTexture(nil, "BORDER")
+    top:SetPoint("TOPLEFT", plate, "TOPLEFT", 0, 0)
+    top:SetPoint("TOPRIGHT", plate, "TOPRIGHT", 0, 0)
+    top:SetHeight(1)
+    top:SetColorTexture(0.49, 0.31, 0.11, 0.94)
 
-    local plateBottom = viewer:CreateTexture(nil, "BORDER")
-    plateBottom:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 0, 0)
-    plateBottom:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", 0, 0)
-    plateBottom:SetHeight(1)
-    plateBottom:SetColorTexture(0.16, 0.095, 0.035, 0.92)
+    local bottom = viewer:CreateTexture(nil, "BORDER")
+    bottom:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 0, 0)
+    bottom:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", 0, 0)
+    bottom:SetHeight(1)
+    bottom:SetColorTexture(0.16, 0.095, 0.035, 0.92)
 
-    local plateLeft = viewer:CreateTexture(nil, "BORDER")
-    plateLeft:SetPoint("TOPLEFT", plate, "TOPLEFT", 0, 0)
-    plateLeft:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 0, 0)
-    plateLeft:SetWidth(1)
-    plateLeft:SetColorTexture(0.29, 0.18, 0.07, 0.88)
+    local left = viewer:CreateTexture(nil, "BORDER")
+    left:SetPoint("TOPLEFT", plate, "TOPLEFT", 0, 0)
+    left:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 0, 0)
+    left:SetWidth(1)
+    left:SetColorTexture(0.29, 0.18, 0.07, 0.90)
 
-    local plateRight = viewer:CreateTexture(nil, "BORDER")
-    plateRight:SetPoint("TOPRIGHT", plate, "TOPRIGHT", 0, 0)
-    plateRight:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", 0, 0)
-    plateRight:SetWidth(1)
-    plateRight:SetColorTexture(0.29, 0.18, 0.07, 0.88)
+    local right = viewer:CreateTexture(nil, "BORDER")
+    right:SetPoint("TOPRIGHT", plate, "TOPRIGHT", 0, 0)
+    right:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", 0, 0)
+    right:SetWidth(1)
+    right:SetColorTexture(0.29, 0.18, 0.07, 0.90)
 
     model = CreateFrame("PlayerModel", nil, viewer)
-    model:SetAllPoints(viewer)
+    model:SetPoint("CENTER", viewer, "CENTER", 0, -2)
+    model:SetSize(154, 128)
     model:SetKeepModelOnHide(true)
     model:EnableMouse(false)
 
     fallback = viewer:CreateTexture(nil, "ARTWORK")
-    fallback:SetPoint("CENTER", viewer, "CENTER", 0, 0)
-    fallback:SetSize(54, 54)
+    fallback:SetPoint("CENTER", viewer, "CENTER", 0, -2)
+    fallback:SetSize(50, 50)
     fallback:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-    fallback:SetAlpha(0.24)
+    fallback:SetAlpha(0.22)
     fallback:Hide()
 
     viewer:SetScript("OnMouseDown", function(self, button)
@@ -108,7 +99,7 @@ local function ensureViewer()
 
     viewer:SetScript("OnMouseWheel", function(_, delta)
         if not selectedEntry or not model then return end
-        zoom = math.max(0.55, math.min(1.85, zoom - delta * 0.10))
+        zoom = math.max(0.78, math.min(2.20, zoom - delta * 0.10))
         model:SetCamDistanceScale(zoom)
         model:RefreshCamera()
     end)
@@ -136,7 +127,7 @@ local function showCreature(entry)
 
     selectedEntry = entry
     rotation = 0.35
-    zoom = 1.0
+    zoom = 1.28
     fallback:Hide()
     model:Show()
     model:ClearModel()
@@ -180,6 +171,33 @@ local function regionText(button)
     end
 end
 
+local function hasLegacyBookIcon(frame)
+    if not frame or not frame.GetRegions then return false end
+    local regions = { frame:GetRegions() }
+    for _, region in ipairs(regions) do
+        if region and region.GetObjectType and region:GetObjectType() == "Texture" and region.GetTexture then
+            local tex = region:GetTexture()
+            if type(tex) == "string" and tex:find("INV_Misc_Book_09", 1, true) then return true end
+        end
+    end
+    return false
+end
+
+local function hideLegacyCreatureSeal(frame)
+    if not frame or not frame.GetChildren then return end
+    local children = { frame:GetChildren() }
+    for _, child in ipairs(children) do
+        if child and child.IsShown and child:IsShown() then
+            local w, h = child:GetSize()
+            if w and h and w >= 124 and w <= 128 and h >= 124 and h <= 128 and hasLegacyBookIcon(child) then
+                child:Hide()
+            else
+                hideLegacyCreatureSeal(child)
+            end
+        end
+    end
+end
+
 local function collectCreatureRows(frame, out)
     if not frame or not frame.GetChildren then return end
     local children = { frame:GetChildren() }
@@ -209,6 +227,10 @@ local function hookVisibleRows()
         hideViewer()
         return
     end
+
+    -- Remove the old 2D book preview from the creature card. It is recreated
+    -- by the legacy layout on every Draw(), so this is intentionally repeated.
+    hideLegacyCreatureSeal(parent)
 
     table.sort(buttons, function(a, b)
         local at = a:GetTop() or 0
@@ -264,7 +286,7 @@ end)
 
 events:SetScript("OnUpdate", function(_, elapsed)
     scanElapsed = scanElapsed + elapsed
-    if scanElapsed < 0.15 then return end
+    if scanElapsed < 0.12 then return end
     scanElapsed = 0
     local parent = getMainFrame()
     if parent and parent:IsShown() and #pageRecords > 0 then
