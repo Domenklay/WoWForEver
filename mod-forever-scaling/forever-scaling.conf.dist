@@ -1,17 +1,14 @@
-# Design defaults only. This file is not wired to TrinityCore yet.
-ForeverScaling.Enable = 0
-ForeverScaling.World = 1
-ForeverScaling.Dungeons = 1
-ForeverScaling.Raids = 1
-ForeverScaling.PlayerMaxLevel = 60
-ForeverScaling.MinLevelOffset = -9
-ForeverScaling.MaxLevelOffset = 10
-ForeverScaling.NormalOffset = 0
-ForeverScaling.EliteOffset = 5
-ForeverScaling.RareEliteOffset = 7
-ForeverScaling.BossOffset = 8
-ForeverScaling.DamageCap.NormalPct = 20
-ForeverScaling.DamageCap.ElitePct = 30
-ForeverScaling.DamageCap.RareElitePct = 40
-ForeverScaling.DamageCap.BossPct = 45
-ForeverScaling.Debug = 0
+# Reference defaults. Runtime values are passed to worldserver from .env via docker-compose.yml.
+FOREVER_SCALING_ENABLED=0
+FOREVER_SCALING_DAMAGE_GUARD=1
+FOREVER_SCALING_MIN_OFFSET=-9
+FOREVER_SCALING_MAX_OFFSET=10
+FOREVER_SCALING_CREATURE_MAX_LEVEL=70
+FOREVER_SCALING_NORMAL_OFFSET=0
+FOREVER_SCALING_ELITE_OFFSET=5
+FOREVER_SCALING_RARE_ELITE_OFFSET=7
+FOREVER_SCALING_BOSS_OFFSET=8
+FOREVER_SCALING_CAP_NORMAL=20
+FOREVER_SCALING_CAP_ELITE=30
+FOREVER_SCALING_CAP_RARE_ELITE=40
+FOREVER_SCALING_CAP_BOSS=45
