@@ -35,9 +35,9 @@ require_env() {
 preflight() {
     python3 - <<'PY'
 from pathlib import Path
-for name in ('scripts/inject-forever-scaling.py',):
+for name in ('scripts/apply-forever-scaling-integration.py', 'scripts/inject-forever-scaling.py'):
     compile(Path(name).read_text(), name, 'exec')
-print('ForeverScaling Python injector syntax passed')
+print('ForeverScaling Python integration syntax passed')
 PY
     docker compose config -q
     bash mod-forever-scaling/tests/run.sh
@@ -47,6 +47,12 @@ check_label() {
     local label
     label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.scaling"}}' forever-trinitycore:latest 2>/dev/null || true)
     test "$label" = "$version" || { echo "Expected scaling image label $version, got: ${label:-missing}" >&2; exit 1; }
+}
+
+restore_source_files() {
+    local backup=$1
+    test -f "$backup/Dockerfile.before" && cp "$backup/Dockerfile.before" Dockerfile
+    test -f "$backup/docker-compose.yml.before" && cp "$backup/docker-compose.yml.before" docker-compose.yml
 }
 
 case "$action" in
@@ -59,6 +65,7 @@ case "$action" in
         ;;
     build)
         require_env
+        python3 scripts/apply-forever-scaling-integration.py
         preflight
         docker compose build worldserver
         check_label
@@ -77,15 +84,15 @@ case "$action" in
         old_image=$(cat "$backup/old-image.txt")
         docker image inspect "$old_image" >/dev/null
         cp "$backup/env.before" .env
+        restore_source_files "$backup"
         docker tag "$old_image" forever-trinitycore:latest
         docker compose up -d --no-deps --force-recreate worldserver
-        echo "ForeverScaling rollback restored $old_image"
+        echo "ForeverScaling rollback restored $old_image and the previous Docker source files"
         ;;
     install)
         require_env
         command -v docker >/dev/null
         command -v python3 >/dev/null
-        preflight
 
         container=$(docker compose ps -q worldserver)
         test -n "$container" || { echo 'worldserver must already be running before scaling installation.' >&2; exit 1; }
@@ -95,26 +102,37 @@ case "$action" in
         backup="backups/scaling-$(date +%Y%m%d-%H%M%S)"
         mkdir "$backup"
         cp .env "$backup/env.before"
+        cp Dockerfile "$backup/Dockerfile.before"
+        cp docker-compose.yml "$backup/docker-compose.yml.before"
         git rev-parse HEAD > "$backup/source-commit.txt" 2>/dev/null || true
+
+        activated=0
+        image_preserved=0
+        restore_on_error() {
+            code=$?
+            trap - EXIT
+            cp "$backup/env.before" .env || true
+            restore_source_files "$backup" || true
+            if [ "$image_preserved" = 1 ]; then
+                old_image=$(cat "$backup/old-image.txt")
+                docker tag "$old_image" forever-trinitycore:latest || true
+            fi
+            if [ "$activated" = 1 ]; then
+                docker compose up -d --no-deps --force-recreate worldserver || true
+            fi
+            echo "Scaling installation failed. Previous files/config/image were restored from $backup" >&2
+            exit "$code"
+        }
+        trap restore_on_error EXIT
+
+        python3 scripts/apply-forever-scaling-integration.py
+        preflight
+
         python3 scripts/preserve-container-image.py \
             --container "$container" \
             --tag "forever-trinitycore:before-scaling-$(basename "$backup")" \
             --backup "$backup"
-
-        activated=0
-        restore_on_error() {
-            code=$?
-            trap - EXIT
-            old_image=$(cat "$backup/old-image.txt")
-            cp "$backup/env.before" .env
-            docker tag "$old_image" forever-trinitycore:latest || true
-            if [ "$activated" = 1 ]; then
-                docker compose up -d --no-deps --force-recreate worldserver || true
-            fi
-            echo "Scaling installation failed. Previous image/config restored from $backup" >&2
-            exit "$code"
-        }
-        trap restore_on_error EXIT
+        image_preserved=1
 
         # Building changes the image tag but does not touch the currently running container.
         docker compose build worldserver
