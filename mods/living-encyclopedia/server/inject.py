@@ -6,25 +6,36 @@ import tempfile
 from pathlib import Path
 
 
-def extend_addon_transport(core: Path) -> None:
-    """Install dedicated FEC1 + FET1 server-bound addon endpoints.
+PREFIXES = ("FEC1", "FET1", "FEB1")
 
-    FEC1 is the encyclopedia/catalog protocol. FET1 is the talent/appearance
-    protocol. Both are self-whispers and are routed through the same ScriptMgr
-    callback without depending on ForeverAdvancement or other modules.
-    """
+
+def extend_addon_transport(core: Path) -> None:
+    """Install dedicated encyclopedia server-bound addon endpoints."""
     chat = core / "src/server/game/Handlers/ChatHandler.cpp"
     text = chat.read_text()
 
-    if 'prefix == "FEC1"' in text and 'prefix == "FET1"' in text:
+    if all(f'prefix == "{p}"' in text for p in PREFIXES):
         return
 
-    # Upgrade an older encyclopedia injection in place.
+    # Upgrade an existing encyclopedia condition in place when possible.
+    condition = re.compile(
+        r'\((?:prefix\s*==\s*"FE[CTB]1"\s*(?:\|\|\s*)?)+\)'
+    )
+    candidates = [m for m in condition.finditer(text) if 'prefix == "FEC1"' in m.group(0)]
+    if len(candidates) == 1:
+        m = candidates[0]
+        replacement = '(' + ' || '.join(f'prefix == "{p}"' for p in PREFIXES) + ')'
+        text = text[:m.start()] + replacement + text[m.end():]
+        chat.write_text(text)
+        return
+
+    # Older single-prefix injection.
     old = re.compile(r'prefix\s*==\s*"FEC1"')
     matches = list(old.finditer(text))
-    if len(matches) == 1 and 'prefix == "FET1"' not in text:
+    if len(matches) == 1:
         m = matches[0]
-        text = text[:m.start()] + '(prefix == "FEC1" || prefix == "FET1")' + text[m.end():]
+        replacement = '(' + ' || '.join(f'prefix == "{p}"' for p in PREFIXES) + ')'
+        text = text[:m.start()] + replacement + text[m.end():]
         chat.write_text(text)
         return
 
@@ -39,11 +50,12 @@ def extend_addon_transport(core: Path) -> None:
 
     m = matches[0]
     indent = m.group("indent")
+    prefix_condition = ' || '.join(f'prefix == "{p}"' for p in PREFIXES)
     block = (
         m.group(0)
         + "\n\n"
         + indent + '// ForeverEncyclopedia: server-bound client protocols.\n'
-        + indent + 'if (type == CHAT_MSG_WHISPER && (prefix == "FEC1" || prefix == "FET1"))\n'
+        + indent + f'if (type == CHAT_MSG_WHISPER && ({prefix_condition}))\n'
         + indent + '{\n'
         + indent + '    sScriptMgr->OnPlayerAddonMessageSent(sender, type, prefix, text, sender);\n'
         + indent + '    return;\n'
@@ -77,10 +89,16 @@ def inject(core: Path, module: Path) -> None:
     text = loader.read_text()
     text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia();", "    AddSC_forever_encyclopedia();")
     text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia_talents();", "    AddSC_forever_encyclopedia_talents();")
+    text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia_runtime();", "    AddSC_forever_encyclopedia_runtime();")
 
     target = loader.parent / "ForeverEncyclopedia"
     target.mkdir(exist_ok=True)
-    for name in ("ForeverEncyclopedia.cpp", "ForeverEncyclopediaTalents.cpp", "TalentRules.h"):
+    for name in (
+        "ForeverEncyclopedia.cpp",
+        "ForeverEncyclopediaTalents.cpp",
+        "ForeverEncyclopediaRuntime.cpp",
+        "TalentRules.h",
+    ):
         source = module / "server" / name
         if not source.is_file():
             raise ValueError(f"missing encyclopedia server source: {source}")
@@ -113,6 +131,7 @@ def self_test() -> None:
         server.mkdir(parents=True)
         server.joinpath("ForeverEncyclopedia.cpp").write_text("// main test\n")
         server.joinpath("ForeverEncyclopediaTalents.cpp").write_text("// talent test\n")
+        server.joinpath("ForeverEncyclopediaRuntime.cpp").write_text("// runtime test\n")
         server.joinpath("TalentRules.h").write_text("// rules test\n")
 
         inject(core, module)
@@ -120,15 +139,15 @@ def self_test() -> None:
 
         loader_text = loader.read_text()
         chat_text = chat.read_text()
-        assert loader_text.count("void AddSC_forever_encyclopedia();") == 1
-        assert loader_text.count("    AddSC_forever_encyclopedia();") == 1
-        assert loader_text.count("void AddSC_forever_encyclopedia_talents();") == 1
-        assert loader_text.count("    AddSC_forever_encyclopedia_talents();") == 1
-        assert chat_text.count('prefix == "FEC1"') == 1
-        assert chat_text.count('prefix == "FET1"') == 1
+        for name in ("forever_encyclopedia", "forever_encyclopedia_talents", "forever_encyclopedia_runtime"):
+            assert loader_text.count(f"void AddSC_{name}();") == 1
+            assert loader_text.count(f"    AddSC_{name}();") == 1
+        for prefix in PREFIXES:
+            assert chat_text.count(f'prefix == "{prefix}"') == 1
         assert chat_text.count('text.length() > 255') == 1
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").read_text() == "// main test\n"
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").read_text() == "// talent test\n"
+        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").read_text() == "// runtime test\n"
         assert (loader.parent / "ForeverEncyclopedia/TalentRules.h").read_text() == "// rules test\n"
     print("ForeverEncyclopedia injector self-test passed")
 
