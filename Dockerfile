@@ -33,6 +33,12 @@ COPY mods/forever-subclass /subclass-module
 COPY scripts/inject-subclass.py /tmp/inject-subclass.py
 RUN python3 /tmp/inject-subclass.py /src/TrinityCore --module /subclass-module
 
+# Forever Scaling uses the pinned core's per-target creature stat path and a UnitScript damage guard.
+# It is compiled into the image but disabled at runtime until FOREVER_SCALING_ENABLED=1.
+COPY mod-forever-scaling /forever-scaling-module
+COPY scripts/inject-forever-scaling.py /tmp/inject-forever-scaling.py
+RUN python3 /tmp/inject-forever-scaling.py /src/TrinityCore --module /forever-scaling-module
+
 # BUILD_JOBS: lower it on small machines (GCC needs ~2 GB RAM per job on the biggest files)
 ARG BUILD_JOBS=4
 # TOOLS=1: also build mapextractor / vmap4extractor / vmap4assembler / mmaps_generator
@@ -69,7 +75,7 @@ CMD ["/wow", "wow_classic_beta"]
 FROM build AS casc-sandbox-check
 COPY tools/legion-casc-probe/check-storage.cpp /tmp/check-storage.cpp
 RUN c++ -std=c++20 -O2 -I/src/TrinityCore/dep/CascLib/src \
-        /tmp/check-storage.cpp /src/TrinityCore/build/dep/CascLib/libcasc.a \
+        /tmp/legion-casc-probe.cpp /src/TrinityCore/build/dep/CascLib/libcasc.a \
         -lz -lcrypto -o /usr/local/bin/check-storage
 ENTRYPOINT ["/usr/local/bin/check-storage"]
 
@@ -94,7 +100,8 @@ RUN curl -fL --retry 3 -o tdb.7z "${TDB_URL}" \
 
 ############################ runtime ############################
 FROM ubuntu:${UBUNTU_VERSION}
-LABEL org.wowforever.subclass="0.4.0-freepick.1"
+LABEL org.wowforever.subclass="0.4.0-freepick.1" \
+      org.wowforever.scaling="0.1.0"
 
 ARG DEBIAN_FRONTEND=noninteractive
 # mysql-client is required: the TrinityCore DB updater shells out to the `mysql` binary
