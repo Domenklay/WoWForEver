@@ -31,6 +31,20 @@ int main()
     assert(Cost(*Find("mend_unlock"), 0) == 3);
     assert(Cost(*Find("insight_unlock"), 0) == 5);
 
+    // Permanent mana stat: every complete 10 knowledge grants exactly +1 mana.
+    assert(KnowledgeManaBonus(0) == 0);
+    assert(KnowledgeManaBonus(9) == 0);
+    assert(KnowledgeManaBonus(10) == 1);
+    assert(KnowledgeManaBonus(9999) == 999);
+    assert(KnowledgeManaBonus(10000) == 1000);
+
+    // Percentage regeneration scales by 0.2% per rank and never exceeds 1% / 5 sec.
+    assert(RegenBasisPoints(0) == 0);
+    assert(RegenBasisPoints(1) == 20);
+    assert(RegenBasisPoints(4) == 80);
+    assert(RegenBasisPoints(5) == 100);
+    assert(RegenBasisPoints(50) == 100);
+
     // The tree must offer an early benefit while retaining a long-tail sink.
     uint64_t masteryTotal = 0;
     for (std::string_view key : {"aegis_mastery", "mend_mastery", "insight_mastery", "wisdom_mastery", "knowledge_mastery"})
