@@ -31,14 +31,14 @@ with tempfile.TemporaryDirectory() as td:
 
     loader_text = loader.read_text()
     chat_text = chat.read_text()
-    assert loader_text.count("void AddSC_forever_encyclopedia();") == 1
-    assert loader_text.count("    AddSC_forever_encyclopedia();") == 1
-    assert loader_text.count("void AddSC_forever_encyclopedia_talents();") == 1
-    assert loader_text.count("    AddSC_forever_encyclopedia_talents();") == 1
-    assert chat_text.count('prefix == "FEC1"') == 1
-    assert chat_text.count('prefix == "FET1"') == 1
+    for name in ("forever_encyclopedia", "forever_encyclopedia_talents", "forever_encyclopedia_runtime"):
+        assert loader_text.count(f"void AddSC_{name}();") == 1
+        assert loader_text.count(f"    AddSC_{name}();") == 1
+    for prefix in ("FEC1", "FET1", "FEB1"):
+        assert chat_text.count(f'prefix == "{prefix}"') == 1
     assert chat_text.count('text.length() > 255') == 1
     assert (custom / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").is_file()
     assert (custom / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").is_file()
+    assert (custom / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").is_file()
     assert (custom / "ForeverEncyclopedia/TalentRules.h").is_file()
 print("Encyclopedia injector test passed")
