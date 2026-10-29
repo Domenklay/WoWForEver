@@ -73,7 +73,7 @@ static RankMap LoadRanks(uint32 account)
 {
     RankMap ranks;
     if (QueryResult rows = CharacterDatabase.PQuery(
-            "SELECT talent_key,rank FROM forever_encyclopedia_talent WHERE account_id={}", account))
+            "SELECT talent_key,`rank` FROM forever_encyclopedia_talent WHERE account_id={}", account))
     {
         do
         {
@@ -225,8 +225,8 @@ static void Buy(Player* player, std::string const& key)
     CharacterDatabaseTransaction tx = CharacterDatabase.BeginTransaction();
     tx->PAppend("UPDATE forever_encyclopedia_account SET knowledge_spent=knowledge_spent+{} WHERE account_id={}", cost, account);
     tx->PAppend(
-        "INSERT INTO forever_encyclopedia_talent (account_id,talent_key,rank) VALUES ({},'{}',{}) "
-        "ON DUPLICATE KEY UPDATE rank=VALUES(rank)",
+        "INSERT INTO forever_encyclopedia_talent (account_id,talent_key,`rank`) VALUES ({},'{}',{}) "
+        "ON DUPLICATE KEY UPDATE `rank`=VALUES(`rank`)",
         account, talentKey, uint32(current + 1));
     CharacterDatabase.DirectCommitTransaction(tx);
 
