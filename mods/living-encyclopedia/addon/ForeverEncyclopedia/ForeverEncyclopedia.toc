@@ -2,8 +2,9 @@
 ## Title: Forever Encyclopedia
 ## Notes: Живая энциклопедия WoW Forever: фильтры, прокрутка, книга спутника, таланты, облики и 3D-бестиарий
 ## Author: WoWForEver project
-## Version: 0.6.3-stable-model-ui
+## Version: 0.6.4-compact-model-and-appearance-3d
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopedia.lua
 ForeverEncyclopediaModel.lua
+ForeverEncyclopediaAppearanceModel.lua
 ForeverEncyclopediaSkin.lua
