@@ -637,6 +637,23 @@ static void PublishBookSchoolMetadata()
         { sDB2Manager.PublishForeverAdvancementBookSchool(row->ID);++count; }
     TC_LOG_INFO("scripts","ForeverAdvancement book school metadata: {} client-only class records; server masks preserved",count);
 }
+static NativeTrait const* ResolveNamedTrait(uint32 owner,std::array<char const*,9> const& names,NativeTraits const& traits,NameIndex const& index)
+{
+    NativeTrait const* found=nullptr;
+    for(auto name:names)
+    {
+        auto key=NameKey(name);if(key.empty()) continue;
+        auto it=index.find(key);if(it==index.end()) continue;
+        for(auto info:it->second)
+        {
+            auto candidate=ResolveTrait(info->Id,owner,1,traits);
+            if(!candidate) continue;
+            if(found&&(found->definition!=candidate->definition||found->spell!=candidate->spell)) return nullptr;
+            if(!found||candidate->max<found->max) found=candidate;
+        }
+    }
+    return found;
+}
 class Startup final:public WorldScript
 {
 public:
@@ -693,10 +710,11 @@ public:
         TC_LOG_INFO("scripts","ForeverAdvancement native abilities: {} ranks verified by class skill metadata",nativeAbilities);
         auto nativeTraits=LoadNativeTraits();std::map<uint32,uint32> firstSpells;
         for(auto const& row:AscensionTalentSourceEntries) if(row.rank==1) firstSpells[row.id]=row.spell;
-        std::map<uint32,uint32> talentSpells;uint32 nativeTalents=0,traitTalents=0,traitRejected=0,traitMissing=0;
+        std::map<uint32,uint32> talentSpells;uint32 nativeTalents=0,traitTalents=0,traitRejected=0,traitMissing=0,namedTraits=0;
         for(auto const& row:AscensionTalentSourceEntries)
         {
             auto trait=ResolveTrait(firstSpells[row.id],row.owner,1,nativeTraits);
+            bool named=false;if(!trait) { trait=ResolveNamedTrait(row.owner,row.names,nativeTraits,names);named=trait!=nullptr; }
             if(trait&&row.rank>trait->max) continue;
             auto info=trait?sSpellMgr->GetSpellInfo(trait->spell,DIFFICULTY_NONE):ResolveNativeTalent(row.spell,row.owner,row.rank,talentOwners);
             if(trait&&!info) { ++traitMissing;continue; }
@@ -706,13 +724,14 @@ public:
             auto it=TalentCatalog.find(row.id);uint32 expected=it==TalentCatalog.end()?1:it->second.size()+1;
             if(row.rank!=expected||(talentSpells.count(info->Id)&&talentSpells.at(info->Id)!=row.id)) continue;
             TalentCatalog[row.id].push_back({row.id,row.owner,info->Id,row.rank,std::max(row.level,info->SpellLevel),row.cost,row.investment,row.tab,trait?trait->definition:0,trait?trait->entry:0});
-            talentSpells[info->Id]=row.id;if(native) ++nativeTalents;if(trait) ++traitTalents;
+            talentSpells[info->Id]=row.id;if(native) ++nativeTalents;if(trait) ++traitTalents;if(named) ++namedTraits;
         }
         TC_LOG_INFO("scripts","ForeverAdvancement catalog rows rejected: missing={}, costs={}, passive={}, names={}, binding={}",rejected[0],rejected[1],rejected[2],rejected[3],rejected[4]);
         TC_LOG_INFO("scripts","ForeverAdvancement catalog remapped: {} abilities by case-folded name, class family and native rank",remapped);
         if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement compatible catalog empty; disabled");return; }
         PublishBookSchoolMetadata();PublishBookMetadata();
         TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: accepted={}; rejected_effects={}; missing_spells={}",traitTalents,traitRejected,traitMissing);
+        TC_LOG_INFO("scripts","ForeverAdvancement named trait ranks: {} accepted by exact localized name and class tree",namedTraits);
         TC_LOG_INFO("scripts","ForeverAdvancement talent metadata: {} native class/rank records accepted",nativeTalents);
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} compatible Ascension abilities; {} passive talents; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }

@@ -309,6 +309,37 @@ int main() {
             self.assertEqual(result.returncode,0,result.stderr)
             subprocess.run([str(root/'test')],check=True,capture_output=True)
 
+    def test_named_trait_resolution_changed_ids_class_and_ambiguity(self):
+        source=SOURCE.read_text()
+        code=r'''
+#include <array>
+#include <map>
+#include <vector>
+#include <string>
+#include <cassert>
+using uint32=unsigned;
+struct SpellInfo {uint32 Id;};
+using NameIndex=std::map<std::wstring,std::vector<SpellInfo const*>>;
+'''+UTF8_UTIL_STUB+function(source,'static std::wstring NameKey(')+source[source.index('struct NativeTrait {'):source.index('static NativeTraits LoadNativeTraits(')]+function(source,'static NativeTrait const* ResolveNamedTrait(')+r'''
+int main(){
+ SpellInfo mage{900001},priest{900002},trade{900003};
+ NameIndex index;index[NameKey("Improved Fireball")]={&mage,&priest,&trade};
+ NativeTraits traits;traits[900001]={{700,900001,8,5,100}};traits[900002]={{701,900002,5,3,101}};
+ std::array<char const*,9> names={"Improved Fireball","","","","","","","",""};
+ auto result=ResolveNamedTrait(8,names,traits,index);assert(result&&result->spell==900001&&result->max==5);
+ assert(ResolveTrait(result->spell,8,5,traits)&&!ResolveTrait(result->spell,8,6,traits));
+ assert(!ResolveNamedTrait(11,names,traits,index));
+ SpellInfo duplicate{900004};index[NameKey("Improved Fireball")].push_back(&duplicate);traits[900004]={{702,900004,8,5,102}};
+ assert(!ResolveNamedTrait(8,names,traits,index));
+ traits.erase(900004);names[0]="Mana-forged Barrier";assert(!ResolveNamedTrait(8,names,traits,index));
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
     def test_combat_traits_resolve_without_legacy_talent_rows(self):
         source=SOURCE.read_text()
         code=r'''#include <cassert>
