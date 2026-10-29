@@ -1,6 +1,7 @@
-## Interface: 110000
-## Title: Forever Encyclopedia (prototype)
-## Notes: Local UI prototype. Server integration pending.
-## Version: 0.1.0-dev
+## Interface: 16001
+## Title: Forever Encyclopedia
+## Notes: Живая энциклопедия WoW Forever: открытия существ, предметов и локаций
+## Author: WoWForEver project
+## Version: 0.2.0-server-discovery
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopedia.lua
