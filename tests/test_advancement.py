@@ -156,6 +156,8 @@ function methods:SetHeight(value) self.height=value end
 function methods:GetHeight() return self.height or 10 end
 function methods:SetSize(w,h) self.width=w;self.height=h end
 function methods:GetFrameLevel() return 1 end
+function methods:SetFrameLevel(value) self.level=value end
+function methods:SetFrameStrata(value) self.strata=value end
 function methods:GetAlpha() return self.alpha or 1 end
 function methods:SetAlpha(value) self.alpha=value end
 function methods:HookScript(k,f) self.scripts[k]=f end
@@ -357,7 +359,8 @@ for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnE
 local button=ForeverAscensionTalentButton
 assert(button and button.parent==PlayerTalentFrame and button.text=='Мультикласс')
 assert(button.points[1][1]=='BOTTOMRIGHT' and button.points[1][4]==-24)
-window:Hide();button.scripts.OnClick();assert(window:IsShown())
+window:Hide();button.scripts.OnClick();assert(window:IsShown() and not PlayerTalentFrame:IsShown())
+assert(button.enabled and button.level==101 and button.strata=="DIALOG")
 local previous=button
 PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrameWithSearch',UIParent)
 PlayerTalentFrame.SearchBox=CreateFrame('EditBox',nil,PlayerTalentFrame)

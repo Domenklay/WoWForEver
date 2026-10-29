@@ -35,6 +35,8 @@ local function attach()
   talentHost=frame
   talentButton=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate")
   talentButton:SetSize(146,24);talentButton:SetText("Мультикласс")
+  talentButton:EnableMouse(true);talentButton:SetEnabled(true);talentButton:RegisterForClicks("LeftButtonUp")
+  talentButton:SetFrameStrata("DIALOG");talentButton:SetFrameLevel(frame:GetFrameLevel()+100)
   local search
   for _,key in ipairs({"SearchBox","SearchEditBox","SearchBar","SearchContainer"}) do
    local candidate=frame[key]
@@ -48,7 +50,16 @@ local function attach()
    -- in the empty footer instead of guessing coordinates in the header.
    talentButton:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-24,14)
   end
-  talentButton:SetScript("OnClick",function() if ForeverAscensionToggle then ForeverAscensionToggle() end end)
+  talentButton:SetScript("OnClick",function()
+   if InCombatLockdown and InCombatLockdown() then return end
+   -- The native full-screen talent UI can cover a DIALOG window even after
+   -- a successful click. Close its top-level panel before opening ours.
+   local host=PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame==frame and PlayerSpellsFrame or frame
+   if HideUIPanel then HideUIPanel(host) end
+   host:Hide()
+   if ForeverAscensionWindow then ForeverAscensionWindow:Hide() end
+   if ForeverAscensionToggle then ForeverAscensionToggle() end
+  end)
   talentButton:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_BOTTOM");GameTooltip:SetText("Мультикласс",1,0.82,0);GameTooltip:AddLine("Способности и таланты других классов",1,1,1);GameTooltip:Show() end end)
   talentButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
   ForeverAscensionTalentButton=talentButton
@@ -103,6 +114,15 @@ function ForeverAscensionNativeBookReport()
    if frame.GetScript then local ok,fn=pcall(frame.GetScript,frame,"OnShow");if ok then source(name.." OnShow script",fn) end end
    for _,method in ipairs({"Update","UpdateSkillLineTabs","UpdateSkillLineSelection","UpdateTabs","OnEvent"}) do source(name.."."..method,frame[method]) end
   end
+ end
+ if ForeverAscensionTalentButton then
+  local button=ForeverAscensionTalentButton
+  query("Talent button strata",button.GetFrameStrata,button)
+  query("Talent button level",button.GetFrameLevel,button)
+  query("Talent button mouse",button.IsMouseEnabled,button)
+ end
+ if C_Spell and C_Spell.GetSpellInfo then
+  for _,id in ipairs({1515,883,2641,6991,339,133,168}) do query("Native spell "..id,C_Spell.GetSpellInfo,id) end
  end
  add("Multiclass talent button: "..tostring(ForeverAscensionTalentButton~=nil))
  local report=table.concat(lines,"\n")
