@@ -4,6 +4,7 @@
 #include "DatabaseEnv.h"
 #include "ChatPackets.h"
 #include "WorldSession.h"
+#include "ObjectMgr.h"
 #include "TalentRules.h"
 #include <algorithm>
 #include <mutex>
@@ -274,16 +275,22 @@ static void CreatureInfo(Player* player, uint32 entry)
         return;
     }
 
-    if (QueryResult row = WorldDatabase.PQuery(
-            "SELECT name,type,Classification,minlevel,maxlevel FROM creature_template WHERE entry={}", entry))
+    CreatureTemplate const* creature = sObjectMgr->GetCreatureTemplate(entry);
+    if (!creature)
     {
-        Field* f = row->Fetch();
-        std::string name = f[0].GetString();
-        for (char& c : name)
-            if (c == '|' || c == '\r' || c == '\n') c = ' ';
-        Send(player, Trinity::StringFormat("CBASE|{}|{}|{}|{}|{}", name,
-            f[1].GetUInt32(), f[2].GetUInt32(), f[3].GetUInt32(), f[4].GetUInt32()));
+        Send(player, "CEND");
+        return;
     }
+
+    std::string name = creature->Name;
+    for (char& c : name)
+        if (c == '|' || c == '\r' || c == '\n') c = ' ';
+
+    // Avoid ad-hoc SQL against creature_template here. The Forever/master schema
+    // differs from the legacy minlevel/maxlevel layout and bad SQL is fatal in
+    // this pinned TrinityCore. Use the already validated ObjectMgr template.
+    Send(player, Trinity::StringFormat("CBASE|{}|{}|{}|0|0", name,
+        uint32(creature->type), uint32(creature->Classification)));
     Send(player, "CEND");
 }
 
