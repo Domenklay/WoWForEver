@@ -148,7 +148,7 @@ static void SyncBookSchools(Player* p,State const& s)
 {
     std::set<uint32> skills;
     for(auto entry:s.learned)
-        if(auto d=BestFor(p,s,entry);d&&d->owner!=p->GetClass())
+        if(auto d=BestFor(p,s,entry);d&&d->owner!=p->GetClass()&&d->owner==s.active)
         {
             auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(d->spell);
             for(auto it=bounds.first;it!=bounds.second;++it)
@@ -170,7 +170,7 @@ static void SyncSpellbook(Player* p,State& s)
 {
     std::set<uint32> desired;
     for(auto entry:s.learned)
-        if(auto d=BestFor(p,s,entry);d&&d->owner!=p->GetClass()) desired.insert(d->spell);
+        if(auto d=BestFor(p,s,entry);d&&d->owner!=p->GetClass()&&d->owner==s.active) desired.insert(d->spell);
     std::vector<uint32> removed,added;std::set<uint32> release;
     for(auto spell:s.bookSpells)
         if(!desired.count(spell)||!TemporaryBookSpell(p,spell))
@@ -203,7 +203,7 @@ static void SyncSpellbook(Player* p,State& s)
 static uint32 BookEntry(Player* p,State const& s,uint32 spell)
 {
     if(!s.bookSpells.count(spell)||!TemporaryBookSpell(p,spell)) return 0;
-    for(auto entry:s.learned) if(auto d=BestFor(p,s,entry);d&&d->spell==spell&&d->owner!=p->GetClass()) return entry;
+    for(auto entry:s.learned) if(auto d=BestFor(p,s,entry);d&&d->spell==spell&&d->owner!=p->GetClass()&&d->owner==s.active) return entry;
     return 0;
 }
 static uint32 Used(State const& s)
@@ -325,7 +325,7 @@ static bool CompatibleTalent(SpellInfo const* info)
 }
 static bool CanCast(Player* p,State const& s,Definition const& d)
 {
-    if(d.owner==p->GetClass()||!s.learned.count(d.entry)||d.level>ClassLevel(p,s,d.owner)||!p->IsAlive()) return false;
+    if(d.owner!=s.active||d.owner==p->GetClass()||!s.learned.count(d.entry)||d.level>ClassLevel(p,s,d.owner)||!p->IsAlive()) return false;
     auto info=sSpellMgr->GetSpellInfo(d.spell,DIFFICULTY_NONE);if(!info||!CompatibleCosts(info)) return false;
     for(auto power:PowersList) if(Available(p,s,power)<Cost(p,info,power)) return false;
     return true;
@@ -402,7 +402,7 @@ static void Request(Player* p,std::string const& payload)
     {
         if(arg&&(!SupportedClass(arg)||arg==p->GetClass())) { Error(p,"invalid_subclass");return; }
         s.active=arg;if(arg) s.classes.try_emplace(arg);
-        SyncTalents(p,s);Save(p,s);Snapshot(p,s,true);return;
+        SyncTalents(p,s);SyncBookSchools(p,s);SyncSpellbook(p,s);Refresh(p,s);Save(p,s);Snapshot(p,s,true);return;
     }
     if(command=="talent"||command=="untalent")
     {

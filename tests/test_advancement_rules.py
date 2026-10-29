@@ -156,6 +156,11 @@ int main() {
  SyncSpellbook(&p,s);assert(p.added.size()==1);
  p.level=26;SyncSpellbook(&p,s);assert(!p.HasSpell(116)&&p.HasSpell(205));
  assert(BookEntry(&p,s,116)==0&&BookEntry(&p,s,205)==10&&p.removed.back()==116);
+ s.active=5;SyncSpellbook(&p,s);assert(!p.HasSpell(205)&&p.HasSpell(2061)&&s.bookSpells.empty());
+ assert(s.learned==std::set<uint32>({10,20}));
+ s.active=8;SyncSpellbook(&p,s);assert(p.HasSpell(205)&&p.HasSpell(2061));
+ s.active=0;SyncSpellbook(&p,s);assert(!p.HasSpell(205)&&p.HasSpell(2061));
+ s.active=8;SyncSpellbook(&p,s);
  s.learned.clear();SyncSpellbook(&p,s);assert(!p.HasSpell(205)&&p.HasSpell(2061)&&s.bookSpells.empty());
  assert(p.removed.back()==205);
  // Purchase remains authoritative across relog. A native spell is never removed.
@@ -286,7 +291,9 @@ int main() {
  p.skills.insert(8);s.learned={10,11};SyncBookSchools(&p,s);
  assert(p.skills==std::set<uint32>({6,8})&&p.m_foreverAdvancementClassSkills==std::set<uint32>{6});
  assert(!p.rewarded&&!p.removedSpells);
- s.learned.insert(20);SyncBookSchools(&p,s);assert(p.HasSkill(56));
+ s.learned.insert(20);SyncBookSchools(&p,s);assert(!p.HasSkill(56));
+ s.active=5;SyncBookSchools(&p,s);assert(p.HasSkill(56)&&!p.HasSkill(6));
+ s.active=8;SyncBookSchools(&p,s);assert(!p.HasSkill(56)&&p.HasSkill(6));
  s.learned.erase(10);SyncBookSchools(&p,s);assert(!p.HasSkill(6)&&p.mSkillStatus[6].uState==SKILL_UNCHANGED);
  s.learned.clear();SyncBookSchools(&p,s);assert(p.skills==std::set<uint32>{8}&&p.m_foreverAdvancementClassSkills.empty());
  p.SyncForeverAdvancementClassSkills({200,201,999});assert(p.skills==std::set<uint32>{8});
@@ -548,7 +555,11 @@ int main() {
  s.learned={10,20};assert(Used(s)==2);
  auto mage=Best(10,20);auto priest=Best(20,20);
  assert(mage->spell==116 && Best(10,30)->spell==205 && !Best(10,1));
- assert(CanCast(&p,s,*mage) && CanCast(&p,s,*priest));
+ assert(CanCast(&p,s,*mage) && !CanCast(&p,s,*priest));
+ s.active=5;assert(CanCast(&p,s,*priest)&&!CanCast(&p,s,*mage));
+ s.active=0;assert(!CanCast(&p,s,*priest)&&!CanCast(&p,s,*mage));
+ Refresh(&p,s);assert(Available(&p,s,POWER_MANA)==550&&Available(&p,s,POWER_ENERGY)==100&&Available(&p,s,POWER_RAGE)==25);
+ s.active=8;
  SpellPowerEntry unsupported;unsupported.PowerType=4;spellMgr.info.PowerCosts[0]=&unsupported;
  assert(!CanCast(&p,s,*mage));unsupported.PowerType=0;unsupported.OptionalCost=10;
  assert(!CanCast(&p,s,*mage));unsupported.OptionalCost=0;unsupported.PowerCostPct=10;

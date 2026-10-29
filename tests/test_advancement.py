@@ -174,6 +174,7 @@ function methods:GetText() return self.text or '' end
 function methods:SetValue(value) self.value=value end
 function methods:SetMinMaxValues(lo,hi) self.maximum=hi end
 function methods:SetHeight(value) self.height=value end
+function methods:SetWidth(value) self.width=value end
 function methods:GetHeight() return self.height or 10 end
 function methods:SetSize(w,h) self.width=w;self.height=h end
 function methods:GetFrameLevel() return 1 end
@@ -282,6 +283,27 @@ assert(found.points[1][2]==285 and found.points[1][3]==-14)
 advance();found.scripts.OnClick(found,'LeftButton');assert(sent[#sent]=='talent 398')
 advance();found.scripts.OnClick(found,'RightButton');assert(sent[#sent]=='untalent 398')
 assert(state.talentFree==9 and state.talentTotal==11)
+""")
+
+    def test_portrait_resources_survive_switch_and_missing_native_bar(self):
+        self.lua(r"""
+PlayerFrameManaBar=nil;PlayerFrame.ManaBar=nil;PlayerFrame.manabar=nil;PlayerFrame.PlayerFrameContent=nil
+open();parse('STATE 11 20 0 8');parse('ACTIVE 8')
+parse('POWER 0 400 500');parse('POWER 1 25 100');parse('POWER 3 90 100');parse('END')
+local portrait=named.ForeverAscensionPortraitResources
+assert(portrait and portrait:IsShown() and portrait.parent==PlayerFrame)
+assert(portrait.points[1][2]==PlayerFrame and portrait.width==122)
+parse('STATE 11 20 0 8');parse('ACTIVE 0')
+parse('POWER 0 400 500');parse('POWER 1 25 100');parse('POWER 3 90 100');parse('END')
+assert(portrait:IsShown() and powerBars[1].value==400 and powerBars[2].value==90 and powerBars[3].value==25)
+""")
+
+    def test_portrait_supports_lowercase_native_manabar(self):
+        self.lua(r"""
+local actual=PlayerFrameManaBar;PlayerFrameManaBar=nil;PlayerFrame.manabar=actual
+open();parse('STATE 11 20 0 8');parse('ACTIVE 0')
+parse('POWER 0 400 500');parse('POWER 1 25 100');parse('POWER 3 90 100');parse('END')
+assert(named.ForeverAscensionPortraitResources.points[1][2]==actual and actual.alpha==0)
 """)
 
     def test_portrait_resources_replace_native_power_bar_and_stats_keep_text_values(self):

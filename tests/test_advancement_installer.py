@@ -15,7 +15,7 @@ with open(os.environ['FAKE_DOCKER_LOG'],'a') as f:
  if args[:3]==['compose','exec','-T'] and 'mysqldump' not in text:
   f.write(sys.stdin.read()+'\n')
 if args[:2]==['image','inspect']:
- print('1.8.0')
+ print('1.9.0')
 elif args[:2]==['inspect','--format']:
  print('2026-10-28T00:00:00Z')
 elif args[:2]==['compose','ps']:

@@ -142,7 +142,7 @@ local function makeNode(parent,talent)
   b:RegisterForDrag("LeftButton")
   b:SetScript("OnDragStart",function(self)
    local row=self.entry;local d=row and compatible[row.ID]
-   if d and state and (state.learned[row.ID] or state.known[row.ID]) and ForeverAscensionPickupSpell then ForeverAscensionPickupSpell(state.known[row.ID] or d.spell) end
+   if d and state and ((state.learned[row.ID] and state.active==d.owner) or state.known[row.ID]) and ForeverAscensionPickupSpell then ForeverAscensionPickupSpell(state.known[row.ID] or d.spell) end
   end)
  end
  b:SetScript("OnClick",function(self,mouse)
@@ -155,7 +155,9 @@ local function makeNode(parent,talent)
   if isTalent(row) and state.active~=d.owner then message:SetText("Сначала активируйте этот подкласс.");return end
   if isTalent(row) then send((mouse=="RightButton" and "untalent " or "talent ")..row.ID)
   elseif mouse=="RightButton" then if state.learned[row.ID] then send("unlearn "..row.ID) end
-  elseif state.learned[row.ID] then send("cast "..row.ID)
+  elseif state.learned[row.ID] then
+   if state.active~=d.owner then message:SetText("Активируйте этот подкласс для применения способности.");return end
+   send("cast "..row.ID)
   else send("learn "..row.ID) end
  end)
  b:SetScript("OnEnter",tooltip);b:SetScript("OnLeave",function() GameTooltip:Hide() end)
@@ -194,6 +196,7 @@ local function renderAbilities(rows)
    elseif known and not learned then n.note:SetText("Известно персонажу")
    elseif state and d.owner==state.primary then n.note:SetText("Основной класс: у наставника")
    elseif state and d.level>classLevel(d.owner) then n.note:SetText("Уровень "..d.level)
+   elseif learned and state.active~=d.owner then n.note:SetText("Изучено | подкласс не активен")
    elseif learned then n.note:SetText("Изучено")
    else n.note:SetText("Изучить | ур. "..d.level) end
    local locked=not d or (state and not known and d.level>classLevel(d.owner))
