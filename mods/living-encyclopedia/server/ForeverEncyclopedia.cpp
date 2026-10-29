@@ -25,6 +25,7 @@ using Clock = std::chrono::steady_clock;
 constexpr char RequestPrefix[] = "FEC1";
 constexpr char ResponsePrefix[] = "FER1";
 constexpr uint32 CatalogPageSize = 8;
+constexpr uint32 BaseMaxMana = 100;
 
 enum Kind : uint8
 {
@@ -139,6 +140,16 @@ struct Progress
     uint32 discoveries = 0;
 };
 
+struct BookState
+{
+    uint32 mana = BaseMaxMana;
+    uint32 maxMana = BaseMaxMana;
+    bool abilitiesEnabled = false;
+    uint32 shieldCooldown = 0;
+    uint32 healCooldown = 0;
+    uint32 utilityCooldown = 0;
+};
+
 static Counts LoadCounts(Player* player)
 {
     Counts counts;
@@ -184,14 +195,37 @@ static Progress LoadProgress(Player* player)
     return progress;
 }
 
+static BookState LoadBookState(Player* player)
+{
+    BookState state;
+    if (!player)
+        return state;
+
+    uint64 guid = player->GetGUID().GetCounter();
+    CharacterDatabase.DirectPExecute(
+        "INSERT IGNORE INTO forever_encyclopedia_character "
+        "(character_guid,mana,shield_enabled,heal_enabled,shield_threshold,heal_threshold,mana_reserve) "
+        "VALUES ({},{},1,1,80,50,0)", guid, BaseMaxMana);
+
+    if (QueryResult row = CharacterDatabase.PQuery(
+            "SELECT mana FROM forever_encyclopedia_character WHERE character_guid={}", guid))
+    {
+        state.mana = std::min(row->Fetch()[0].GetUInt32(), state.maxMana);
+    }
+    return state;
+}
+
 static void Snapshot(Player* player)
 {
     Counts c = LoadCounts(player);
     Progress p = LoadProgress(player);
+    BookState book = LoadBookState(player);
     uint64 available = p.total >= p.spent ? p.total - p.spent : 0;
     Send(player, Trinity::StringFormat("STATE {} {} {} {}", c.total, c.creatures, c.items, c.zones));
     Send(player, Trinity::StringFormat("KNOW {} {} {} {}", p.total, p.spent, available, p.discoveries));
     Send(player, Trinity::StringFormat("CURRENT {} {} {}", player->GetMapId(), player->GetZoneId(), player->GetAreaId()));
+    Send(player, Trinity::StringFormat("BOOK {} {} {} {} {} {}", book.mana, book.maxMana,
+        book.abilitiesEnabled ? 1 : 0, book.shieldCooldown, book.healCooldown, book.utilityCooldown));
     Send(player, "END");
 }
 
@@ -264,7 +298,7 @@ static std::vector<CatalogCreature> BuildZoneCreatures(Player* player)
 
     std::unordered_map<uint32, CatalogCreature> unique;
     if (QueryResult rows = WorldDatabase.PQuery(
-            "SELECT c.id,ct.name,ct.type,ct.Classification,c.zoneId,c.areaId," 
+            "SELECT c.id,ct.name,ct.type,ct.Classification,c.zoneId,c.areaId,"
             "c.position_x,c.position_y,c.position_z "
             "FROM creature c INNER JOIN creature_template ct ON ct.entry=c.id "
             "WHERE c.map={} AND c.id<>0 ORDER BY c.id",
@@ -332,7 +366,21 @@ static std::vector<CatalogCreature> LoadZoneCreatures(Player* player)
     }
 }
 
-static void Catalog(Player* player, uint32 page)
+static bool MatchesCatalogFilter(CatalogCreature const& creature, bool discovered,
+    uint32 knownFilter, uint32 typeFilter, int32 classificationFilter)
+{
+    if (knownFilter == 1 && !discovered)
+        return false;
+    if (knownFilter == 2 && discovered)
+        return false;
+    if (typeFilter != 0 && creature.type != typeFilter)
+        return false;
+    if (classificationFilter >= 0 && int32(creature.classification) != classificationFilter)
+        return false;
+    return true;
+}
+
+static void Catalog(Player* player, uint32 page, uint32 knownFilter, uint32 typeFilter, int32 classificationFilter)
 {
     uint32 account = Account(player);
     if (!account)
@@ -341,29 +389,59 @@ static void Catalog(Player* player, uint32 page)
         return;
     }
 
+    if (knownFilter > 2 || typeFilter > 12 || classificationFilter < -1 || classificationFilter > 4)
+    {
+        Error(player, "invalid catalog filter");
+        return;
+    }
+
     std::vector<CatalogCreature> creatures = LoadZoneCreatures(player);
     std::unordered_set<uint32> known = LoadKnownCreatures(account);
 
-    uint32 knownInZone = 0;
+    uint32 zoneKnown = 0;
+    std::vector<CatalogCreature const*> filtered;
+    filtered.reserve(creatures.size());
     for (CatalogCreature const& creature : creatures)
-        if (known.find(creature.entry) != known.end())
-            ++knownInZone;
+    {
+        bool discovered = known.find(creature.entry) != known.end();
+        if (discovered)
+            ++zoneKnown;
+        if (MatchesCatalogFilter(creature, discovered, knownFilter, typeFilter, classificationFilter))
+            filtered.push_back(&creature);
+    }
 
-    uint32 total = uint32(creatures.size());
-    uint32 pages = std::max<uint32>(1, (total + CatalogPageSize - 1) / CatalogPageSize);
+    std::stable_sort(filtered.begin(), filtered.end(), [&known](CatalogCreature const* left, CatalogCreature const* right)
+    {
+        bool leftKnown = known.find(left->entry) != known.end();
+        bool rightKnown = known.find(right->entry) != known.end();
+        if (leftKnown != rightKnown)
+            return leftKnown > rightKnown;
+        if (leftKnown && rightKnown && left->name != right->name)
+            return left->name < right->name;
+        return left->entry < right->entry;
+    });
+
+    uint32 matchedKnown = 0;
+    for (CatalogCreature const* creature : filtered)
+        if (known.find(creature->entry) != known.end())
+            ++matchedKnown;
+
+    uint32 matchedTotal = uint32(filtered.size());
+    uint32 zoneTotal = uint32(creatures.size());
+    uint32 pages = std::max<uint32>(1, (matchedTotal + CatalogPageSize - 1) / CatalogPageSize);
     if (page < 1)
         page = 1;
     if (page > pages)
         page = pages;
 
-    Send(player, Trinity::StringFormat("CATHEAD|{}|{}|{}|{}|{}",
-        player->GetZoneId(), page, pages, total, knownInZone));
+    Send(player, Trinity::StringFormat("CATHEAD|{}|{}|{}|{}|{}|{}|{}",
+        player->GetZoneId(), page, pages, matchedTotal, matchedKnown, zoneTotal, zoneKnown));
 
     size_t begin = size_t(page - 1) * CatalogPageSize;
-    size_t end = std::min(creatures.size(), begin + size_t(CatalogPageSize));
+    size_t end = std::min(filtered.size(), begin + size_t(CatalogPageSize));
     for (size_t i = begin; i < end; ++i)
     {
-        CatalogCreature const& creature = creatures[i];
+        CatalogCreature const& creature = *filtered[i];
         bool discovered = known.find(creature.entry) != known.end();
         std::string name = discovered ? ProtocolText(creature.name) : std::string();
         uint32 type = discovered ? creature.type : 0;
@@ -427,16 +505,27 @@ static void Request(Player* player, std::string const& text)
     if (command == "catalog")
     {
         uint32 page = 1;
+        uint32 knownFilter = 0;
+        uint32 typeFilter = 0;
+        int32 classificationFilter = -1;
         std::string extra;
+
         if (input >> page)
         {
-            if (input >> extra)
-            {
-                Error(player, "invalid catalog request");
-                return;
-            }
+            if (!(input >> knownFilter))
+                input.clear();
+            else if (!(input >> typeFilter))
+                input.clear();
+            else if (!(input >> classificationFilter))
+                input.clear();
         }
-        Catalog(player, page);
+        if (input >> extra)
+        {
+            Error(player, "invalid catalog request");
+            return;
+        }
+
+        Catalog(player, page, knownFilter, typeFilter, classificationFilter);
         return;
     }
 
@@ -451,7 +540,10 @@ public:
     void OnLogin(Player* player, bool) override
     {
         if (Ready)
+        {
+            LoadBookState(player);
             Record(player, KIND_ZONE, player->GetZoneId());
+        }
     }
 
     void OnLogout(Player* player) override
@@ -497,14 +589,15 @@ public:
 
         bool discoverySchema = bool(CharacterDatabase.Query("SELECT COUNT(*) FROM forever_encyclopedia_discovery"));
         bool accountSchema = bool(CharacterDatabase.Query("SELECT COUNT(*) FROM forever_encyclopedia_account"));
-        if (!discoverySchema || !accountSchema)
+        bool characterSchema = bool(CharacterDatabase.Query("SELECT COUNT(*) FROM forever_encyclopedia_character"));
+        if (!discoverySchema || !accountSchema || !characterSchema)
         {
             TC_LOG_ERROR("scripts", "ForeverEncyclopedia schema missing; feature disabled");
             return;
         }
 
         Ready = true;
-        TC_LOG_INFO("scripts", "ForeverEncyclopedia ready: discovery, knowledge and coordinate-resolved zone catalog enabled");
+        TC_LOG_INFO("scripts", "ForeverEncyclopedia ready: filtered catalog and book state enabled");
     }
 };
 } // namespace ForeverEncyclopedia
