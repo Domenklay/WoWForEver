@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Forever Encyclopedia
-## Notes: Живая энциклопедия WoW Forever: V2.1, 3D-бестиарий, таланты, облики и поэтапно тестируемый физический спутник
+## Notes: Живая энциклопедия WoW Forever: V2.1, 3D-бестиарий, таланты, облики и физический спутник с нативными кастами
 ## Author: WoWForEver project
-## Version: 0.9.1-v2.1-staged-companion
+## Version: 0.9.2-v2.1-native-cast-diagnostics
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopediaTalentData.lua
 ForeverEncyclopediaTalentOverrides.lua
