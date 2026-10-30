@@ -2,7 +2,7 @@
 ## Title: Forever Encyclopedia
 ## Notes: Живая энциклопедия WoW Forever: V2.1, 3D-бестиарий, таланты, облики и живые PvE-способности книги
 ## Author: WoWForEver project
-## Version: 0.8.0-v2.1-live-runtime
+## Version: 0.8.1-v2.1-runtime-v2
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopediaTalentData.lua
 ForeverEncyclopediaTalentOverrides.lua
