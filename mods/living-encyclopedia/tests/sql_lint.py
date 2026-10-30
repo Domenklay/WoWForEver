@@ -43,16 +43,23 @@ if "RegenBasisPoints(rank)" not in runtime:
     raise SystemExit("runtime must use the capped percentage mana regen policy")
 
 required_companion = [
-    "SummonCreature",
+    "CompanionChassisEntry = WORLD_TRIGGER",
+    "GetFirstVisibleModel()",
+    "SetDisplayId(displayId, true)",
+    "SummonCreature(CompanionChassisEntry, spawnPos",
     "MoveFollow(player",
     "SetCanFly(true)",
     "SetDisableGravity(true)",
+    "SetHover(true)",
     "CastSpell(player, SpellBookShield, false)",
     "CastSpell(player, SpellBookHeal, false)",
 ]
 for needle in required_companion:
     if needle not in runtime:
         raise SystemExit(f"native companion runtime missing: {needle}")
+
+if "SummonCreature(appearanceEntry" in runtime:
+    raise SystemExit("appearance donor NPC must never be spawned as the companion chassis")
 
 on_damage = runtime.split("void OnDamage", 1)[1].split("class Players", 1)[0]
 if "PQuery(" in on_damage or "DirectPExecute(" in on_damage:
