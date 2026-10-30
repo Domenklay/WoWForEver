@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import hashlib
 import json
+import ntpath
 from pathlib import Path
 import re
 import shutil
@@ -32,6 +33,28 @@ def game_processes():
         return dict(available=False,reason='Could not query game executable paths')
 
 
+def process_identity(client, snapshot):
+    """Compare paths only; never collect process command lines or credentials."""
+    posix = str(Path(client)/'_classic_beta_/WowB.exe')
+    match = re.fullmatch(r'/mnt/([a-zA-Z])/(.+)', posix)
+    expected = match[1].upper()+':\\'+match[2].replace('/', '\\') if match else None
+    result = dict(expected_executable_wsl=posix, expected_executable_windows=expected,
+                  matching_test_copy_running=None, other_copy_running=None)
+    if not snapshot.get('available') or not expected:
+        return result
+    rows = snapshot.get('processes', [])
+    if isinstance(rows, dict): rows = [rows]
+    if not isinstance(rows, list): return result
+    paths = [r.get('ExecutablePath') for r in rows if isinstance(r,dict)]
+    known = [p for p in paths if isinstance(p,str) and p]
+    same = lambda p: ntpath.normcase(ntpath.normpath(p)) == ntpath.normcase(ntpath.normpath(expected))
+    # Missing executable-path access is unknown, never proof of a wrong copy.
+    unknown=len(known)<len(rows)
+    result['matching_test_copy_running'] = True if any(map(same,known)) else None if unknown else False
+    result['other_copy_running'] = True if any(not same(p) for p in known) else None if unknown else False
+    return result
+
+
 def collect(client,output=None,stage='after_user_test'):
     client=Path(client).resolve(strict=True)
     output=Path(output).resolve() if output is not None else default_root(client)
@@ -55,6 +78,7 @@ def collect(client,output=None,stage='after_user_test'):
     result=folder/'result.json'
     if result.is_file() and not result.is_symlink():shutil.copyfile(result,target/'result.json')
     entries=[];logroot=client/'_classic_beta_/Logs';(target/'logs').mkdir()
+    build_mtime=(client/'.build.info').stat().st_mtime
     if (client/'_classic_beta_').is_symlink() or logroot.is_symlink():raise ValueError('Linked log directory')
     tact_max=None
     for name in LOGS:
@@ -64,7 +88,8 @@ def collect(client,output=None,stage='after_user_test'):
             stream.seek(0,2);size=stream.tell();stream.seek(max(0,size-MAX_LOG_BYTES));body=stream.read(MAX_LOG_BYTES)
         (target/'logs'/name).write_bytes(body)
         entries.append(dict(name=name,source_bytes=size,copied_bytes=len(body),tail_only=size>MAX_LOG_BYTES,
-                            source_mtime_utc=datetime.fromtimestamp(source.stat().st_mtime,timezone.utc).isoformat()))
+                            source_mtime_utc=datetime.fromtimestamp(source.stat().st_mtime,timezone.utc).isoformat(),
+                            not_older_than_build_info=source.stat().st_mtime>=build_mtime))
         if name=='Tact.log':
             archives=[int(x) for x in re.findall(rb'Archive\[\s*(\d+)\]',body)]
             tact_max=max(archives) if archives else None
@@ -77,6 +102,11 @@ def collect(client,output=None,stage='after_user_test'):
                  newest_archive_number_in_tact_log=tact_max,
                  operation_added_archives=[name for name in journal.get('added',{}) if re.fullmatch(r'data\.\d{3}',name)],
                  logs=entries,live_game_processes=game_processes(),client_modified=False,server_modified=False)
+    summary['process_identity']=process_identity(client,summary['live_game_processes'])
+    summary['build_info_mtime_utc']=datetime.fromtimestamp(build_mtime,timezone.utc).isoformat()
+    summary['fresh_client_log_present']=any(e['name']=='Client.log' and e['not_older_than_build_info'] for e in entries)
+    summary['fresh_tact_log_present']=any(e['name']=='Tact.log' and e['not_older_than_build_info'] for e in entries)
+    summary['game_resource_loading_confirmed']=False
     (target/'summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False)+'\n')
     archive=target.with_suffix('.zip')
     with zipfile.ZipFile(archive,'x',zipfile.ZIP_DEFLATED) as dest:

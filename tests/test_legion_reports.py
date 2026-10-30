@@ -1,6 +1,7 @@
 """Reports go to the work directory and exclude game payloads and settings."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -56,3 +57,31 @@ class ReportTests(unittest.TestCase):
         with self.assertRaises(ValueError):reports.collect(self.client,self.client/'reports')
         (self.ops/'active.json').write_text('{"operation":"../foreign"}')
         with self.assertRaisesRegex(ValueError,'token'):reports.collect(self.client)
+
+    def test_windows_process_identity_distinguishes_test_copy_and_original(self):
+        client=Path('/mnt/e/WoWForEver-work/experiments/Forever-Legion-client-v1')
+        expected=r'E:\WoWForEver-work\experiments\Forever-Legion-client-v1\_classic_beta_\WowB.exe'
+        row=reports.process_identity(client,dict(available=True,processes={'ExecutablePath':expected.lower()}))
+        self.assertEqual(row['expected_executable_windows'],expected)
+        self.assertTrue(row['matching_test_copy_running']);self.assertFalse(row['other_copy_running'])
+        row=reports.process_identity(client,dict(available=True,processes=[{'ExecutablePath':r'E:\_classic_beta_\WowB.exe'}]))
+        self.assertFalse(row['matching_test_copy_running']);self.assertTrue(row['other_copy_running'])
+
+    def test_process_query_without_path_access_is_unknown(self):
+        client=Path('/mnt/e/experiments/copy')
+        for snapshot in [dict(available=False),dict(available=True,processes=[{'ExecutablePath':None}]),
+                         dict(available=True,processes=[{'ExecutablePath':r'E:\_classic_beta_\WowB.exe'},{'ExecutablePath':None}])]:
+            self.assertIsNone(reports.process_identity(client,snapshot)['matching_test_copy_running'])
+        row=reports.process_identity(client,dict(available=True,processes=[]))
+        self.assertFalse(row['matching_test_copy_running']);self.assertFalse(row['other_copy_running'])
+
+    def test_log_freshness_and_build_hash_are_reported_independently(self):
+        os.utime(self.logs/'Client.log',(10,10));os.utime(self.logs/'Tact.log',(10,10))
+        os.utime(self.client/'.build.info',(20,20))
+        with patch.object(reports,'game_processes',return_value=dict(available=False)):
+            archive=reports.collect(self.client)
+        with zipfile.ZipFile(archive) as z:
+            summary=json.loads(z.read('summary.json'))
+        self.assertTrue(summary['build_matches_operation'])
+        self.assertFalse(summary['fresh_client_log_present']);self.assertFalse(summary['fresh_tact_log_present'])
+        self.assertFalse(summary['game_resource_loading_confirmed'])
