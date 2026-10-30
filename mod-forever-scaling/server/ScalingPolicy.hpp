@@ -8,26 +8,18 @@ namespace forever_scaling {
 enum class Rank { Normal, Elite, RareElite, Boss };
 struct Config {
     int minOffset = -9;
-    int maxOffset = 10;
     int maxCreatureLevel = 70;
     double normalCap = .20;
     double eliteCap = .30;
     double rareEliteCap = .40;
     double bossCap = .45;
 };
-inline int Offset(Rank rank) {
-    switch(rank) {
-        case Rank::Elite: return 5;
-        case Rank::RareElite: return 7;
-        case Rank::Boss: return 8;
-        default: return 0;
-    }
-}
-inline int Level(int playerLevel, Rank rank, Config const& c = {}) {
+inline int Level(int playerLevel, int creatureLevel, Rank /*rank*/, Config const& c = {}) {
     int p = std::max(1, playerLevel);
-    int low = std::max(1, p + c.minOffset);
-    int high = std::max(low, std::min(c.maxCreatureLevel, p + c.maxOffset));
-    return std::clamp(p + Offset(rank), low, high);
+    int original = std::max(1, creatureLevel);
+    int minimumXpLevel = std::max(1, p + c.minOffset);
+    int raisedLevel = std::min(c.maxCreatureLevel, minimumXpLevel);
+    return std::max(original, raisedLevel);
 }
 inline double CapFraction(Rank rank, Config const& c = {}) {
     switch(rank) {
