@@ -41,6 +41,13 @@ local CREATURE_TYPES={
     [7]="Гуманоид",[8]="Существо",[9]="Механизм",[10]="Существо",[11]="Тотем",[12]="Спутник",
 }
 local CLASSIFICATIONS={[0]="Обычный",[1]="Элита",[2]="Редкая элита",[3]="Мировой босс",[4]="Редкий"}
+local CREATURE_FAMILIES={
+    [0]="Нет",[1]="Волк",[2]="Кошка",[3]="Паук",[4]="Медведь",[5]="Вепрь",[6]="Кроколиск",
+    [7]="Падальщик",[8]="Краб",[9]="Горилла",[11]="Ящер",[12]="Долгоног",[20]="Скорпид",
+    [21]="Черепаха",[24]="Летучая мышь",[25]="Гиена",[26]="Сова",[27]="Ветрокрыл",
+}
+local CREATURE_CLASSES={[1]="Воин",[2]="Паладин",[4]="Разбойник",[8]="Маг"}
+local DAMAGE_SCHOOLS={[0]="Физический",[1]="Свет",[2]="Огонь",[3]="Природа",[4]="Лёд",[5]="Тьма",[6]="Тайная магия"}
 
 local function registerPrefixes()
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
@@ -190,7 +197,15 @@ local function drawCreatureTab()
 
     fs(right,238,-96,286,rec.known and "Запись встречена" or "Запись ещё не встречена","GameFontHighlight",rec.known and 0.52 or 0.86,rec.known and 0.82 or 0.68,rec.known and 0.45 or 0.42)
     fs(right,238,-128,286,"Встречается: "..zoneName(),"GameFontNormal",0.82,0.76,0.66)
-    if info and state.infoLevel>=3 then fs(right,238,-160,286,string.format("Уровни: %d–%d",info.minLevel or 0,info.maxLevel or 0),"GameFontNormal",0.82,0.76,0.66) end
+    if info and state.infoLevel>=3 then
+        local minL,maxL=tonumber(info.minLevel) or 0,tonumber(info.maxLevel) or 0
+        fs(right,238,-158,286,(minL>0 and maxL>0) and string.format("Уровни: %d–%d",minL,maxL) or "Уровни: нет данных","GameFontNormal",0.82,0.76,0.66)
+        fs(right,238,-178,286,"Семейство: "..(CREATURE_FAMILIES[info.family or 0] or ("#"..tostring(info.family or 0))),"GameFontNormalSmall",0.76,0.70,0.61)
+        fs(right,238,-196,286,"Класс: "..(CREATURE_CLASSES[info.unitClass or 0] or ("#"..tostring(info.unitClass or 0))),"GameFontNormalSmall",0.76,0.70,0.61)
+        fs(right,238,-214,286,"Базовый урон: "..(DAMAGE_SCHOOLS[info.damageSchool or 0] or ("Школа #"..tostring(info.damageSchool or 0))),"GameFontNormalSmall",0.76,0.70,0.61)
+        local melee=(tonumber(info.baseAttackTime) or 0)/1000; local ranged=(tonumber(info.rangeAttackTime) or 0)/1000
+        fs(right,238,-232,286,string.format("Интервал атак: %.1fс / %.1fс",melee,ranged),"GameFontNormalSmall",0.76,0.70,0.61)
+    end
     fs(right,24,-270,500,"Архивные сведения","GameFontHighlight",0.98,0.82,0.54)
     local rows={{1,"Название и тип"},{2,"Класс угрозы"},{3,"Уровни и параметры"},{4,"Способности"},{5,"Сопротивления"},{6,"Полезный лут"},{7,"Ареал обитания"},{8,"Редкие примечания"}}
     for i,r in ipairs(rows) do local unlocked=state.infoLevel>=r[1]; fs(right,24,-300-(i-1)*18,480,(unlocked and "✓ " or "• ")..r[2],"GameFontNormalSmall",unlocked and 0.55 or 0.56,unlocked and 0.80 or 0.51,unlocked and 0.48 or 0.44) end
@@ -293,7 +308,7 @@ local function createUI()
     ui.status=fs(ui,24,-49,230,"Нет связи","GameFontNormalSmall",0.8,0.4,0.35); ui.stats=fs(ui,280,-49,420,"","GameFontNormalSmall",0.82,0.75,0.63,"CENTER"); ui.zone=fs(ui,720,-49,230,"","GameFontHighlight",0.93,0.85,0.70,"RIGHT")
     local labels={"Существа","Локации","Таланты","Облики"}; for i,label in ipairs(labels) do tabButtons[i]=raised(ui,26+(i-1)*232,-91,216,34,label,function() switchTab(i) end,i==currentTab,true) end
     content=CreateFrame("Frame",nil,ui); content:SetPoint("TOPLEFT",ui,"TOPLEFT",16,-132); content:SetSize(948,486)
-    fs(ui,0,-616,950,"Forever Encyclopedia 0.7.1 V2.1","GameFontNormalSmall",0.46,0.40,0.33,"RIGHT")
+    fs(ui,0,-616,950,"Forever Encyclopedia 0.9.4 V2.1","GameFontNormalSmall",0.46,0.40,0.33,"RIGHT")
     ui:SetScript("OnShow",function() requestBaseStatus(); requestTalentStatus(); if currentTab==1 then requestCatalog(state.catalogPage) elseif currentTab==2 then requestZones() end end)
     updateHeader(); Draw()
 end
@@ -340,7 +355,16 @@ local function parseTalent(msg)
     elseif msg:sub(1,11)=="APPEARANCE|" then local _,k,u,thr=strsplit("|",msg); state.appearances[k]={unlocked=tonumber(u)==1,threshold=tonumber(thr) or 0}
     elseif msg:sub(1,9)=="SELECTED|" then local _,k=strsplit("|",msg); state.selectedAppearance=k or "living_book"
     elseif msg:sub(1,9)=="CREATURE|" then local _,entry,level=strsplit("|",msg); pendingCreatureInfo=tonumber(entry) or pendingCreatureInfo; if pendingCreatureInfo then state.creatureInfo[pendingCreatureInfo]=state.creatureInfo[pendingCreatureInfo] or {}; state.creatureInfo[pendingCreatureInfo].level=tonumber(level) or 0 end
-    elseif msg:sub(1,6)=="CBASE|" then local _,name,ctype,class,minL,maxL=strsplit("|",msg); if pendingCreatureInfo then local ci=state.creatureInfo[pendingCreatureInfo] or {}; ci.name=name or ""; ci.creatureType=tonumber(ctype) or 0; ci.classification=tonumber(class) or 0; ci.minLevel=tonumber(minL) or 0; ci.maxLevel=tonumber(maxL) or 0; state.creatureInfo[pendingCreatureInfo]=ci end
+    elseif msg:sub(1,6)=="CBASE|" then
+        local _,name,ctype,class,minL,maxL,family,unitClass,damageSchool,baseAttack,rangeAttack=strsplit("|",msg)
+        if pendingCreatureInfo then
+            local ci=state.creatureInfo[pendingCreatureInfo] or {}
+            ci.name=name or ""; ci.creatureType=tonumber(ctype) or 0; ci.classification=tonumber(class) or 0
+            ci.minLevel=tonumber(minL) or 0; ci.maxLevel=tonumber(maxL) or 0; ci.family=tonumber(family) or 0
+            ci.unitClass=tonumber(unitClass) or 0; ci.damageSchool=tonumber(damageSchool) or 0
+            ci.baseAttackTime=tonumber(baseAttack) or 0; ci.rangeAttackTime=tonumber(rangeAttack) or 0
+            state.creatureInfo[pendingCreatureInfo]=ci
+        end
     elseif msg=="CEND" then pendingCreatureInfo=nil; if #infoQueue>0 then requestCreatureInfo(table.remove(infoQueue,1)) elseif ui and ui:IsShown() and currentTab==1 then Draw() end
     elseif msg:sub(1,7)=="BOUGHT|" then requestTalentStatus()
     elseif msg:sub(1,6)=="ERROR|" then local _,err=strsplit("|",msg); if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffff8040[Энциклопедия]|r "..(err or "Ошибка")) end
