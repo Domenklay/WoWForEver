@@ -7,6 +7,8 @@ local SERVER_TARGET = "SERVER"
 local dock
 local manaBar
 local manaText
+local feedbackText
+local feedbackSerial = 0
 local abilityButtons = {}
 local state = {
     mana = 0,
@@ -83,6 +85,20 @@ local abilityDefs = {
     { bit = 4, icon = "Interface\\Icons\\Spell_Arcane_Arcane01", name = "Тактическая подсказка" },
 }
 
+local function feedback(text, r, g, b)
+    if not feedbackText then return end
+    feedbackSerial = feedbackSerial + 1
+    local serial = feedbackSerial
+    feedbackText:SetText(text or "")
+    feedbackText:SetTextColor(r or 1, g or 1, b or 1)
+    feedbackText:SetAlpha(1)
+    C_Timer.After(2.0, function()
+        if feedbackText and serial == feedbackSerial then
+            feedbackText:SetText("")
+        end
+    end)
+end
+
 local function update()
     if not dock then return end
     hideLegacyDock()
@@ -108,8 +124,14 @@ local function update()
         end
     end
 
-    if abilityButtons[1] and abilityButtons[1].glow then
-        abilityButtons[1].glow:SetAlpha((tonumber(state.barrier) or 0) > 0 and 0.75 or 0)
+    if abilityButtons[1] then
+        local barrier = tonumber(state.barrier) or 0
+        if abilityButtons[1].glow then
+            abilityButtons[1].glow:SetAlpha(barrier > 0 and 0.75 or 0)
+        end
+        if abilityButtons[1].value then
+            abilityButtons[1].value:SetText(barrier > 0 and tostring(barrier) or "")
+        end
     end
 end
 
@@ -128,6 +150,11 @@ local function createDock()
     dock:SetClampedToScreen(true)
     dock:EnableMouse(false)
     placeDock()
+
+    feedbackText = dock:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    feedbackText:SetPoint("BOTTOMLEFT", dock, "TOPLEFT", 0, 3)
+    feedbackText:SetJustifyH("LEFT")
+    feedbackText:SetText("")
 
     local book = CreateFrame("Button", nil, dock)
     book:SetSize(42, 42)
@@ -194,6 +221,10 @@ local function createDock()
             button.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
             button.glow:SetBlendMode("ADD")
             button.glow:SetAlpha(0)
+
+            button.value = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            button.value:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+            button.value:SetTextColor(0.72, 0.88, 1.0)
         end
 
         button:SetScript("OnEnter", function(self)
@@ -202,6 +233,9 @@ local function createDock()
             if unlocked(def.bit) then
                 local cd = tonumber(state.cooldowns[i]) or 0
                 GameTooltip:AddLine(cd > 0 and ("Перезарядка: " .. cd .. " сек.") or "Готово", 0.72, 0.82, 0.68)
+                if i == 1 and (tonumber(state.barrier) or 0) > 0 then
+                    GameTooltip:AddLine("Остаток щита: " .. tostring(state.barrier), 0.55, 0.78, 1.0)
+                end
             else
                 GameTooltip:AddLine("Не изучено в дереве талантов.", 0.62, 0.62, 0.62)
             end
@@ -226,6 +260,25 @@ local function parseBook(message)
     update()
 end
 
+local function parseEvent(message)
+    local _, kind, amount, remaining = strsplit("|", tostring(message or ""))
+    amount = tonumber(amount) or 0
+    remaining = tonumber(remaining) or 0
+
+    if kind == "SHIELD" then
+        state.barrier = remaining > 0 and remaining or amount
+        feedback("Щит +" .. amount, 0.45, 0.75, 1.0)
+    elseif kind == "ABSORB" then
+        state.barrier = remaining
+        feedback("Поглощено " .. amount, 0.55, 0.82, 1.0)
+    elseif kind == "HEAL" then
+        feedback("Лечение +" .. amount, 0.35, 1.0, 0.42)
+    elseif kind == "SUPPORT" then
+        feedback("Подсказка: " .. amount .. " сек.", 0.78, 0.62, 1.0)
+    end
+    update()
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
@@ -244,6 +297,8 @@ events:SetScript("OnEvent", function(_, event, ...)
         message = tostring(message or "")
         if prefix == RESPONSE and message:sub(1, 5) == "BOOK|" then
             parseBook(message)
+        elseif prefix == RESPONSE and message:sub(1, 6) == "EVENT|" then
+            parseEvent(message)
         elseif prefix == TALENT_RESPONSE and (message:sub(1, 7) == "BOUGHT|" or message == "END") then
             C_Timer.After(0.1, sendStatus)
         elseif prefix == BASE_RESPONSE and message == "END" then
