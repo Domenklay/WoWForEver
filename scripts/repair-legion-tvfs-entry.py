@@ -131,7 +131,9 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=
     if parent['phase']!='verified' or not parent.get('root_types_repaired'):
         raise ValueError('Expected a verified type-repaired resource layer')
     if layout_only:
-        if not parent.get('tvfs_entry_canary') or parent.get('tvfs_layout_canary'):
+        if parent.get('tvfs_entry_canary') and parent.get('tvfs_layout_canary'):
+            raise ValueError('TVFS layout experiment is already active; nothing changed. Do not reapply; use audit-legion-texture-route.py CLIENT for a read-only comparison')
+        if not parent.get('tvfs_entry_canary'):
             raise ValueError('Expected the active entry canary without a layout experiment')
         if parent.get('tvfs_canary_original_id')!=old_id or parent.get('tvfs_canary_new_id')!=new_id:
             raise ValueError('Active texture canary IDs differ')

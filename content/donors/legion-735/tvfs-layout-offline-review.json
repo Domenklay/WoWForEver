@@ -15,6 +15,7 @@
   "native_output_sha256": "b43dfc2a5084f7123aa17551d7ab273fc39a838dd98a42241e8f1be54739d4ca",
   "native_tvfs_reader_validates_game_engine": false,
   "wowb_texture_render_verified": false,
-  "real_client_installation_pending": true,
+  "real_client_installation_pending": false,
+  "runtime_review": "tvfs-layout-runtime-review.json",
   "client_or_server_modified": false
 }

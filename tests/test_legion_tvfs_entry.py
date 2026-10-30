@@ -146,7 +146,7 @@ class TvfsEntryTests(unittest.TestCase):
         layout_store=lib.Store(client,synthetic_only=False)
         layout_child=lib.tvfs.parse_tvfs(canary.configured(layout_store,'vfs-4'),raw_paths=True)
         self.assertEqual(layout_child['leaves'],lib.tvfs.parse_tvfs(canary.configured(current,'vfs-3'),raw_paths=True)['leaves'])
-        with self.assertRaisesRegex(ValueError,'without a layout experiment'):
+        with self.assertRaisesRegex(ValueError,'already active; nothing changed'):
             canary.apply(client,os.environ['CASC_SANDBOX_CHECKER'],progress=lambda _:None,old_id=old_id,new_id=new_id,layout_only=True)
         canary.rollback(client)
         self.assertEqual(install.operation(client)[0],entry_folder)
