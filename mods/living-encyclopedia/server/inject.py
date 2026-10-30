@@ -17,10 +17,7 @@ def extend_addon_transport(core: Path) -> None:
     if all(f'prefix == "{p}"' in text for p in PREFIXES):
         return
 
-    # Upgrade an existing encyclopedia condition in place when possible.
-    condition = re.compile(
-        r'\((?:prefix\s*==\s*"FE[CTB]1"\s*(?:\|\|\s*)?)+\)'
-    )
+    condition = re.compile(r'\((?:prefix\s*==\s*"FE[CTB]1"\s*(?:\|\|\s*)?)+\)')
     candidates = [m for m in condition.finditer(text) if 'prefix == "FEC1"' in m.group(0)]
     if len(candidates) == 1:
         m = candidates[0]
@@ -29,7 +26,6 @@ def extend_addon_transport(core: Path) -> None:
         chat.write_text(text)
         return
 
-    # Older single-prefix injection.
     old = re.compile(r'prefix\s*==\s*"FEC1"')
     matches = list(old.finditer(text))
     if len(matches) == 1:
@@ -93,16 +89,17 @@ def inject(core: Path, module: Path) -> None:
 
     target = loader.parent / "ForeverEncyclopedia"
     target.mkdir(exist_ok=True)
-    for name in (
-        "ForeverEncyclopedia.cpp",
-        "ForeverEncyclopediaTalents.cpp",
-        "ForeverEncyclopediaRuntime.cpp",
-        "TalentRules.h",
-    ):
-        source = module / "server" / name
+    copies = (
+        ("ForeverEncyclopedia.cpp", "ForeverEncyclopedia.cpp"),
+        ("ForeverEncyclopediaTalents.cpp", "ForeverEncyclopediaTalents.cpp"),
+        ("ForeverEncyclopediaRuntimeV2.cpp", "ForeverEncyclopediaRuntime.cpp"),
+        ("TalentRules.h", "TalentRules.h"),
+    )
+    for source_name, target_name in copies:
+        source = module / "server" / source_name
         if not source.is_file():
             raise ValueError(f"missing encyclopedia server source: {source}")
-        shutil.copy2(source, target / name)
+        shutil.copy2(source, target / target_name)
     loader.write_text(text)
 
 
@@ -131,7 +128,7 @@ def self_test() -> None:
         server.mkdir(parents=True)
         server.joinpath("ForeverEncyclopedia.cpp").write_text("// main test\n")
         server.joinpath("ForeverEncyclopediaTalents.cpp").write_text("// talent test\n")
-        server.joinpath("ForeverEncyclopediaRuntime.cpp").write_text("// runtime test\n")
+        server.joinpath("ForeverEncyclopediaRuntimeV2.cpp").write_text("// runtime v2 test\n")
         server.joinpath("TalentRules.h").write_text("// rules test\n")
 
         inject(core, module)
@@ -147,7 +144,7 @@ def self_test() -> None:
         assert chat_text.count('text.length() > 255') == 1
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").read_text() == "// main test\n"
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").read_text() == "// talent test\n"
-        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").read_text() == "// runtime test\n"
+        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").read_text() == "// runtime v2 test\n"
         assert (loader.parent / "ForeverEncyclopedia/TalentRules.h").read_text() == "// rules test\n"
     print("ForeverEncyclopedia injector self-test passed")
 
