@@ -92,7 +92,7 @@ def inject(core: Path, module: Path) -> None:
     copies = (
         ("ForeverEncyclopedia.cpp", "ForeverEncyclopedia.cpp"),
         ("ForeverEncyclopediaTalents.cpp", "ForeverEncyclopediaTalents.cpp"),
-        ("ForeverEncyclopediaRuntimeV4.cpp", "ForeverEncyclopediaRuntime.cpp"),
+        ("ForeverEncyclopediaRuntimeV5.cpp", "ForeverEncyclopediaRuntime.cpp"),
         ("TalentRules.h", "TalentRules.h"),
     )
     for source_name, target_name in copies:
@@ -128,7 +128,7 @@ def self_test() -> None:
         server.mkdir(parents=True)
         server.joinpath("ForeverEncyclopedia.cpp").write_text("// main test\n")
         server.joinpath("ForeverEncyclopediaTalents.cpp").write_text("// talent test\n")
-        server.joinpath("ForeverEncyclopediaRuntimeV4.cpp").write_text("// runtime v4 test\n")
+        server.joinpath("ForeverEncyclopediaRuntimeV5.cpp").write_text("// runtime v5 test\n")
         server.joinpath("TalentRules.h").write_text("// rules test\n")
 
         inject(core, module)
@@ -144,7 +144,7 @@ def self_test() -> None:
         assert chat_text.count('text.length() > 255') == 1
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").read_text() == "// main test\n"
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").read_text() == "// talent test\n"
-        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").read_text() == "// runtime v4 test\n"
+        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").read_text() == "// runtime v5 test\n"
         assert (loader.parent / "ForeverEncyclopedia/TalentRules.h").read_text() == "// rules test\n"
     print("ForeverEncyclopedia injector self-test passed")
 
