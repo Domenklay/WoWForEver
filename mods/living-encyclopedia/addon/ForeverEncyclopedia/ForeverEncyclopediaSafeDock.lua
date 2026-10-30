@@ -126,12 +126,8 @@ local function update()
 
     if abilityButtons[1] then
         local barrier = tonumber(state.barrier) or 0
-        if abilityButtons[1].glow then
-            abilityButtons[1].glow:SetAlpha(barrier > 0 and 0.75 or 0)
-        end
-        if abilityButtons[1].value then
-            abilityButtons[1].value:SetText(barrier > 0 and tostring(barrier) or "")
-        end
+        if abilityButtons[1].glow then abilityButtons[1].glow:SetAlpha(barrier > 0 and 0.75 or 0) end
+        if abilityButtons[1].value then abilityButtons[1].value:SetText(barrier > 0 and tostring(barrier) or "") end
     end
 end
 
@@ -233,11 +229,8 @@ local function createDock()
             if unlocked(def.bit) then
                 local cd = tonumber(state.cooldowns[i]) or 0
                 GameTooltip:AddLine(cd > 0 and ("Перезарядка: " .. cd .. " сек.") or "Готово", 0.72, 0.82, 0.68)
-                if i == 1 and (tonumber(state.barrier) or 0) > 0 then
-                    GameTooltip:AddLine("Остаток щита: " .. tostring(state.barrier), 0.55, 0.78, 1.0)
-                end
             else
-                GameTooltip:AddLine("Не изучено в дереве талантов.", 0.62, 0.62, 0.62)
+                GameTooltip:AddLine(i == 3 and "Нативная версия этой способности ещё не подключена." or "Не изучено в дереве талантов.", 0.62, 0.62, 0.62)
             end
             GameTooltip:Show()
         end)
@@ -261,20 +254,21 @@ local function parseBook(message)
 end
 
 local function parseEvent(message)
-    local _, kind, amount, remaining = strsplit("|", tostring(message or ""))
+    local _, kind, amount, extra = strsplit("|", tostring(message or ""))
     amount = tonumber(amount) or 0
-    remaining = tonumber(remaining) or 0
-
-    if kind == "SHIELD" then
-        state.barrier = remaining > 0 and remaining or amount
-        feedback("Щит +" .. amount, 0.45, 0.75, 1.0)
+    extra = tonumber(extra) or 0
+    if kind == "CAST_SHIELD" then
+        feedback("Книга накладывает щит", 0.45, 0.75, 1.0)
+    elseif kind == "CAST_HEAL" then
+        feedback("Книга начинает лечение", 0.35, 1.0, 0.42)
+    elseif kind == "COMPANION" then
+        feedback("Живая книга рядом", 0.95, 0.78, 0.42)
+    elseif kind == "COMPANION_MISSING" then
+        feedback("Модель спутника не найдена на сервере", 1.0, 0.35, 0.25)
+    elseif kind == "SHIELD" then
+        state.barrier = extra > 0 and extra or amount
     elseif kind == "ABSORB" then
-        state.barrier = remaining
-        feedback("Поглощено " .. amount, 0.55, 0.82, 1.0)
-    elseif kind == "HEAL" then
-        feedback("Лечение +" .. amount, 0.35, 1.0, 0.42)
-    elseif kind == "SUPPORT" then
-        feedback("Подсказка: " .. amount .. " сек.", 0.78, 0.62, 1.0)
+        state.barrier = extra
     end
     update()
 end
@@ -299,7 +293,7 @@ events:SetScript("OnEvent", function(_, event, ...)
             parseBook(message)
         elseif prefix == RESPONSE and message:sub(1, 6) == "EVENT|" then
             parseEvent(message)
-        elseif prefix == TALENT_RESPONSE and (message:sub(1, 7) == "BOUGHT|" or message == "END") then
+        elseif prefix == TALENT_RESPONSE and (message:sub(1, 7) == "BOUGHT|" or message == "END" or message:sub(1, 9) == "SELECTED|") then
             C_Timer.After(0.1, sendStatus)
         elseif prefix == BASE_RESPONSE and message == "END" then
             C_Timer.After(0.1, sendStatus)
