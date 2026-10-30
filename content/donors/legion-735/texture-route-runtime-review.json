@@ -1,0 +1,20 @@
+{
+  "format": "wowforever-texture-route-runtime-review-v1",
+  "source_report": "Dalaran-texture-route-20261030-204137.json",
+  "operation": "019930f895f84a43b7c51c19fdf4ede0",
+  "build_info_sha256": "5dc1558979ef07d9a8f50182d41b468756b54f00ba8b34f180569f55467c6daf",
+  "native_root_profiles": 2,
+  "private_root_profiles": 1,
+  "missing_private_profile_first_flag": 1,
+  "both_tvfs_directory_references_match": true,
+  "both_private_paths_reuse_original_vfs_rows": true,
+  "base_variant_local_read": "READ_OK",
+  "alternate_variant_local_read": "Reference content has no local encoding",
+  "alternate_variant_readable_by_game_known": false,
+  "green_texture_cause_proven": false,
+  "next_experiment": "Add only the original alternate ROOT profile to the private ID, preserving existing TVFS aliases and resource payloads",
+  "owned_native_fixture_install_readback_and_rollback_passed": true,
+  "actual_client_root_variant_install_pending": true,
+  "client_modified_by_review": false,
+  "server_modified": false
+}
