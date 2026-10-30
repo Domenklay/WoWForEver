@@ -32,14 +32,17 @@ constexpr char RequestPrefix[] = "FEB1";
 constexpr char ResponsePrefix[] = "FBR1";
 constexpr uint32 BaseMaxMana = 100;
 
+// Appearance donors. We use only their display models; their AI/templates are
+// never used as the live companion body.
 constexpr uint32 EntryLivingBook = 171120;
 constexpr uint32 EntryArchivist = 205781;
 constexpr uint32 EntryKnowledgeSpirit = 161896;
 constexpr uint32 EntrySmallConstruct = 183783;
 constexpr uint32 EntryRunekeeper = 130946;
+constexpr uint32 CompanionChassisEntry = WORLD_TRIGGER;
 
 // First native-spell pass: the physical companion casts ordinary game spells.
-// This gives us the normal WoW cast system, animations and aura/heal presentation.
+// This gives normal WoW cast animations, cast time, aura/heal visuals and combat log.
 constexpr uint32 SpellBookShield = 35944; // Power Word: Shield (NPC variant)
 constexpr uint32 SpellBookHeal = 2061;    // Flash Heal
 
@@ -146,12 +149,24 @@ static uint32 AppearanceEntry(Player* player)
 
 static uint32 ValidAppearanceEntry(uint32 preferred)
 {
-    if (sObjectMgr->GetCreatureTemplate(preferred))
-        return preferred;
+    if (CreatureTemplate const* creatureTemplate = sObjectMgr->GetCreatureTemplate(preferred))
+        if (creatureTemplate->GetFirstVisibleModel())
+            return preferred;
+
     for (uint32 entry : { EntryLivingBook, EntryArchivist, EntryKnowledgeSpirit, EntrySmallConstruct, EntryRunekeeper })
-        if (sObjectMgr->GetCreatureTemplate(entry))
-            return entry;
+        if (CreatureTemplate const* creatureTemplate = sObjectMgr->GetCreatureTemplate(entry))
+            if (creatureTemplate->GetFirstVisibleModel())
+                return entry;
     return 0;
+}
+
+static uint32 AppearanceDisplayId(uint32 entry)
+{
+    CreatureTemplate const* creatureTemplate = sObjectMgr->GetCreatureTemplate(entry);
+    if (!creatureTemplate)
+        return 0;
+    CreatureModel const* model = creatureTemplate->GetFirstVisibleModel();
+    return model ? model->CreatureDisplayID : 0;
 }
 
 static uint32 MaxMana(uint64 knowledgeTotal, RankMap const& ranks)
@@ -168,7 +183,7 @@ static uint32 AbilityMask(RankMap const& ranks)
     uint32 mask = 0;
     if (GetRank(ranks, "aegis_unlock")) mask |= 1;
     if (GetRank(ranks, "mend_unlock")) mask |= 2;
-    // Support stays disabled until it also has a proper native NPC spell.
+    // Support remains hidden until it also uses a proper native companion spell.
     return mask;
 }
 
@@ -256,22 +271,23 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
 
     if (Creature* existing = Companion(player, state))
     {
-        if (existing->GetEntry() == state.appearanceEntry && existing->GetMap() == player->GetMap())
+        if (existing->GetMap() == player->GetMap())
             return existing;
         DespawnCompanion(player, state);
     }
 
-    uint32 entry = ValidAppearanceEntry(state.appearanceEntry);
-    if (!entry)
+    uint32 appearanceEntry = ValidAppearanceEntry(state.appearanceEntry);
+    uint32 displayId = AppearanceDisplayId(appearanceEntry);
+    if (!appearanceEntry || !displayId || !sObjectMgr->GetCreatureTemplate(CompanionChassisEntry))
     {
         SendEvent(player, "COMPANION_MISSING");
         return nullptr;
     }
-    state.appearanceEntry = entry;
+    state.appearanceEntry = appearanceEntry;
 
     Position spawnPos = player->GetNearPosition(1.5f, 1.65f);
     spawnPos.m_positionZ += 1.0f;
-    TempSummon* summoned = player->SummonCreature(entry, spawnPos, TEMPSUMMON_MANUAL_DESPAWN);
+    TempSummon* summoned = player->SummonCreature(CompanionChassisEntry, spawnPos, TEMPSUMMON_MANUAL_DESPAWN);
     if (!summoned)
         return nullptr;
     Creature* companion = summoned;
@@ -281,7 +297,8 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
     companion->SetImmuneToAll(true);
     companion->SetUninteractible(true);
     companion->SetLevel(player->GetLevel());
-    companion->SetObjectScale(CompanionScale(entry));
+    companion->SetDisplayId(displayId, true);
+    companion->SetObjectScale(CompanionScale(appearanceEntry));
     companion->SetCanFly(true);
     companion->SetDisableGravity(true);
     companion->SetHover(true);
@@ -292,7 +309,7 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
 
     state.companionGuid = companion->GetGUID();
     state.lastFollow = Clock::now();
-    SendEvent(player, "COMPANION", entry, 1);
+    SendEvent(player, "COMPANION", appearanceEntry, displayId);
     return companion;
 }
 
