@@ -11,10 +11,13 @@
 #include "WorldSession.h"
 #include "ObjectAccessor.h"
 #include "MotionMaster.h"
+#include "SpellMgr.h"
+#include "Map.h"
 #include "TalentRules.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <initializer_list>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -30,13 +33,12 @@ using ForeverEncyclopedia::Talents::RegenBasisPoints;
 constexpr char RequestPrefix[] = "FEB1";
 constexpr char ResponsePrefix[] = "FBR1";
 constexpr uint32 BaseMaxMana = 100;
+constexpr float CompanionFollowDistance = 1.0f;
+constexpr float CompanionFollowAngle = 1.65f;
 
-// V4 diagnostic shell. NPC 1933 (Sheep) exists in WoW Forever/Classic data and
-// is used without display-id substitution. Once movement/casting are proven stable,
-// the shell will be replaced by a client-verified flying-book display.
+// Diagnostic shell. NPC 1933 (Sheep) is known to exist in the Forever/Classic data.
+// Once native casting is proven stable it will be replaced by a client-verified book display.
 constexpr uint32 SafeCompanionEntry = 1933;
-constexpr uint32 SpellBookShield = 17;   // Power Word: Shield, classic spell
-constexpr uint32 SpellBookHeal = 2061;   // Flash Heal, classic spell
 
 static std::mutex RuntimeMutex;
 using RankMap = std::unordered_map<std::string, uint16>;
@@ -210,6 +212,30 @@ static void DespawnCompanion(Player* player, RuntimeState& state)
     state.companionGuid.Clear();
 }
 
+static uint32 ResolveSpell(Player* player, std::initializer_list<uint32> candidates)
+{
+    if (!player || !player->GetMap())
+        return 0;
+
+    Difficulty difficulty = player->GetMap()->GetDifficultyID();
+    for (uint32 spellId : candidates)
+        if (sSpellMgr->GetSpellInfo(spellId, difficulty))
+            return spellId;
+    return 0;
+}
+
+static uint32 ResolveShieldSpell(Player* player)
+{
+    // Prefer the classic low-rank spell, then fall back through known priest ranks.
+    return ResolveSpell(player, { 17, 592, 600, 3747, 6065, 6066, 10898, 10899, 10900, 10901 });
+}
+
+static uint32 ResolveHealSpell(Player* player)
+{
+    // Flash Heal ranks: all keep the normal native cast-time/animation path.
+    return ResolveSpell(player, { 2061, 9472, 9473, 9474, 10915, 10916, 10917 });
+}
+
 static Creature* EnsureCompanion(Player* player, RuntimeState& state)
 {
     if (!state.companionEnabled || !player || !player->IsAlive() || !player->IsInWorld())
@@ -222,7 +248,7 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
         DespawnCompanion(player, state);
     }
 
-    Position spawnPos = player->GetNearPosition(1.6f, 1.65f);
+    Position spawnPos = player->GetNearPosition(CompanionFollowDistance, CompanionFollowAngle);
     spawnPos.m_positionZ += 1.0f;
     TempSummon* summoned = player->SummonCreature(SafeCompanionEntry, spawnPos, TEMPSUMMON_MANUAL_DESPAWN);
     if (!summoned)
@@ -236,6 +262,7 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
     companion->SetFaction(player->GetFaction());
     companion->SetImmuneToAll(true);
     companion->SetUninteractible(true);
+    companion->SetLevel(player->GetLevel());
     companion->SetObjectScale(0.55f);
     companion->SetCanFly(true);
     companion->SetDisableGravity(true);
@@ -243,7 +270,7 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
     companion->SetPowerType(POWER_MANA);
     companion->SetMaxPower(POWER_MANA, 100000);
     companion->SetPower(POWER_MANA, 100000);
-    companion->GetMotionMaster()->MoveFollow(player, 2.2f, 1.65f);
+    companion->GetMotionMaster()->MoveFollow(player, CompanionFollowDistance, CompanionFollowAngle);
 
     state.companionGuid = companion->GetGUID();
     state.lastFollow = Clock::now();
@@ -346,6 +373,18 @@ static bool CanSpend(RuntimeState const& state, uint32 cost)
     return state.mana >= cost && state.mana - cost >= std::min(state.manaReserve, state.maxMana);
 }
 
+static bool CastNative(Player* player, Creature* companion, uint32 spellId, char const* eventName)
+{
+    if (!player || !companion || !spellId || companion->IsNonMeleeSpellCast(false))
+        return false;
+    companion->StopMoving();
+    companion->SetFacingToObject(player);
+    companion->SetPower(POWER_MANA, companion->GetMaxPower(POWER_MANA));
+    companion->CastSpell(player, spellId, false);
+    SendEvent(player, eventName, spellId, 0);
+    return true;
+}
+
 static bool StartShieldCast(Player* player, RuntimeState& state, Creature* companion)
 {
     if (!state.castsEnabled || !player || !companion || companion->IsNonMeleeSpellCast(false))
@@ -353,14 +392,22 @@ static bool StartShieldCast(Player* player, RuntimeState& state, Creature* compa
     uint32 cost = ShieldManaCost(state);
     if (!CanSpend(state, cost) || Clock::now() < state.shieldReady)
         return false;
-    companion->StopMoving();
-    companion->SetFacingToObject(player);
-    companion->CastSpell(player, SpellBookShield, false);
+
+    uint32 spellId = ResolveShieldSpell(player);
+    if (!spellId)
+    {
+        state.wantShield = false;
+        SendEvent(player, "SPELL_MISSING", 1, 0);
+        return false;
+    }
+
+    if (!CastNative(player, companion, spellId, "CAST_SHIELD"))
+        return false;
+
     state.mana -= cost;
     state.shieldReady = Clock::now() + std::chrono::seconds(ShieldCooldownSeconds(state));
     state.wantShield = false;
     state.dirty = true;
-    SendEvent(player, "CAST_SHIELD", SpellBookShield, cost);
     SendBook(player, state);
     return true;
 }
@@ -372,16 +419,44 @@ static bool StartHealCast(Player* player, RuntimeState& state, Creature* compani
     uint32 cost = HealManaCost(state);
     if (!CanSpend(state, cost) || Clock::now() < state.healReady)
         return false;
-    companion->StopMoving();
-    companion->SetFacingToObject(player);
-    companion->CastSpell(player, SpellBookHeal, false);
+
+    uint32 spellId = ResolveHealSpell(player);
+    if (!spellId)
+    {
+        state.wantHeal = false;
+        SendEvent(player, "SPELL_MISSING", 2, 0);
+        return false;
+    }
+
+    if (!CastNative(player, companion, spellId, "CAST_HEAL"))
+        return false;
+
     state.mana -= cost;
     state.healReady = Clock::now() + std::chrono::seconds(HealCooldownSeconds(state));
     state.wantHeal = false;
     state.dirty = true;
-    SendEvent(player, "CAST_HEAL", SpellBookHeal, cost);
     SendBook(player, state);
     return true;
+}
+
+static void TestCast(Player* player, RuntimeState& state, std::string const& which)
+{
+    state.companionEnabled = true;
+    state.castsEnabled = true;
+    Creature* companion = EnsureCompanion(player, state);
+    if (!companion)
+        return;
+
+    uint32 spellId = which == "shield" ? ResolveShieldSpell(player) : ResolveHealSpell(player);
+    uint64 kind = which == "shield" ? 1 : 2;
+    if (!spellId)
+    {
+        SendEvent(player, "SPELL_MISSING", kind, 0);
+        return;
+    }
+
+    if (CastNative(player, companion, spellId, which == "shield" ? "TEST_SHIELD" : "TEST_HEAL"))
+        SendBook(player, state);
 }
 
 class Combat final : public UnitScript
@@ -461,16 +536,19 @@ public:
         {
             bool enable = arg == "on" || (arg == "toggle" && !state->companionEnabled);
             state->companionEnabled = enable;
+            state->castsEnabled = enable;
             if (!enable)
             {
-                state->castsEnabled = false;
                 state->wantShield = false;
                 state->wantHeal = false;
                 DespawnCompanion(player, *state);
                 SendEvent(player, "COMPANION_OFF", 0, 0);
             }
             else
+            {
                 EnsureCompanion(player, *state);
+                SendEvent(player, "CASTS_ON", 0, 0);
+            }
             SendBook(player, *state);
             return;
         }
@@ -483,6 +561,13 @@ public:
             state->wantHeal = false;
             SendEvent(player, enable ? "CASTS_ON" : "CASTS_OFF", 0, 0);
             SendBook(player, *state);
+            return;
+        }
+
+        if (cmd == "test" && (arg == "shield" || arg == "heal"))
+        {
+            TestCast(player, *state, arg);
+            return;
         }
     }
 };
@@ -545,7 +630,7 @@ public:
                             EnsureCompanion(player, *state);
                         }
                         else
-                            companion->GetMotionMaster()->MoveFollow(player, 2.2f, 1.65f);
+                            companion->GetMotionMaster()->MoveFollow(player, CompanionFollowDistance, CompanionFollowAngle);
                         state->lastFollow = now;
                     }
                 }
