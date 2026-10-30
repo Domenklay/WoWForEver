@@ -1,6 +1,7 @@
 #include "forever_subclass/SubclassSystem.hpp"
 
 #include <cmath>
+#include <limits>
 #include <sstream>
 
 namespace forever {
@@ -22,6 +23,18 @@ std::optional<CharacterState> MemoryPersistence::load(std::uint64_t guid) {
 }
 
 SubclassSystem::SubclassSystem(SystemConfig config) : config_(config) {}
+
+ManaShieldAbsorption resolveManaShieldAbsorption(std::uint32_t damage, std::uint32_t remaining,
+                                                std::uint32_t mana, double manaPerDamage) {
+    ManaShieldAbsorption result{0, 0, remaining};
+    if (!std::isfinite(manaPerDamage) || manaPerDamage <= 0) return result;
+    auto affordable = static_cast<std::uint32_t>(std::min<double>(
+        std::numeric_limits<std::uint32_t>::max(), std::floor(mana / manaPerDamage)));
+    result.absorbed = std::min({damage, remaining, affordable});
+    result.manaSpent = static_cast<std::uint32_t>(std::min<double>(mana, std::ceil(result.absorbed * manaPerDamage)));
+    result.remaining -= result.absorbed;
+    return result;
+}
 
 void SubclassSystem::registerSpell(SpellDefinition spell) {
     spells_[spell.spellId] = std::move(spell);
@@ -147,7 +160,92 @@ std::uint8_t SubclassSystem::usedSubclassSlots(const CharacterState& c) const {
     return static_cast<std::uint8_t>(std::min<std::uint32_t>(used, 255));
 }
 
+std::uint32_t SubclassSystem::representedClassMask(const CharacterState& c) const {
+    auto bit = [](ClassId id) -> std::uint32_t {
+        auto value = static_cast<unsigned>(id);
+        return value > 0 && value < 32 ? 1u << value : 0;
+    };
+    auto mask = bit(c.primaryClass);
+    for (auto id : c.selectedSubclassSpells) {
+        auto spell = getSpell(id);
+        if (spell && !spell->custom && spell->secondaryAllowed) mask |= bit(spell->ownerClass);
+    }
+    return mask;
+}
+
+std::uint8_t SubclassSystem::representedMagicClasses(const CharacterState& c) const {
+    auto mask = representedClassMask(c);
+    std::uint8_t count = 0;
+    for (auto id : {ClassId::Paladin, ClassId::Priest, ClassId::Shaman, ClassId::Mage,
+                    ClassId::Warlock, ClassId::Druid})
+        if (mask & (1u << static_cast<unsigned>(id))) ++count;
+    return count;
+}
+
+bool SubclassSystem::meetsCustomRequirements(const CharacterState& c, const SpellDefinition& spell,
+                                            std::string* error) const {
+    if (!spell.custom) return true;
+    if (!config_.freepickMode) {
+        setError(error, "custom abilities require Freepick");
+        return false;
+    }
+    if (representedMagicClasses(c) < spell.requiredMagicClasses ||
+        (representedClassMask(c) & spell.requiredClassMask) != spell.requiredClassMask) {
+        setError(error, "custom class requirements not met");
+        return false;
+    }
+    return true;
+}
+
+std::vector<SpellDefinition> customSpellCatalog() {
+    std::vector<SpellDefinition> result;
+    auto add = [&](std::uint32_t id, const char* name, std::uint8_t level, std::uint8_t magic, std::uint32_t mask) {
+        SpellDefinition spell;
+        spell.spellId = id;
+        spell.name = name;
+        spell.ownerClass = ClassId::Unknown;
+        spell.requiredClassLevel = level;
+        spell.custom = true;
+        spell.requiredMagicClasses = magic;
+        spell.requiredClassMask = mask;
+        // DBC references and WotLK effects are not an implementation for the Forever client/core.
+        spell.implementationAvailable = false;
+        result.push_back(spell);
+    };
+    // Only Freepick records corroborated by the donor's Freepick SQL are eligible here.
+    add(1463, "Mana Shield", 10, 2, 0);
+    result.back().ownerClass = ClassId::Mage;
+    result.back().implementationAvailable = true;
+    add(982085, "Cold Seeking Missiles", 10, 2, 1u << unsigned(ClassId::Mage));
+    add(278016, "Big Flaming Grimfire", 10, 2, (1u << unsigned(ClassId::Mage)) | (1u << unsigned(ClassId::Warlock)));
+    add(282083, "Lunar Synergy", 10, 2, (1u << unsigned(ClassId::Mage)) | (1u << unsigned(ClassId::Druid)));
+    return result;
+}
+
 bool SubclassSystem::selectSubclassSpell(CharacterState& c, std::uint32_t spellId, std::string* error) const {
+    return selectSpell(c, spellId, error, false);
+}
+
+bool SubclassSystem::restoreSubclassSpells(CharacterState& c, const std::vector<std::uint32_t>& spells,
+                                          std::string* error) const {
+    auto restored = c;
+    restored.selectedSubclassSpells.clear();
+    // SQL ID order is not a dependency order: Mana Shield (1463) precedes Lesser Heal (2050).
+    for (bool custom : {false, true}) {
+        for (auto id : spells) {
+            auto spell = getSpell(id);
+            if (!spell) {
+                setError(error, "saved spell is not registered: " + std::to_string(id));
+                return false;
+            }
+            if (spell->custom == custom && !selectSpell(restored, id, error, true)) return false;
+        }
+    }
+    c = std::move(restored);
+    return true;
+}
+
+bool SubclassSystem::selectSpell(CharacterState& c, std::uint32_t spellId, std::string* error, bool restoring) const {
     if (!config_.freepickMode && !c.activeSubclass) {
         setError(error, "no active subclass");
         return false;
@@ -157,7 +255,12 @@ bool SubclassSystem::selectSubclassSpell(CharacterState& c, std::uint32_t spellI
         setError(error, "spell is not registered");
         return false;
     }
-    if (spell->ownerClass == c.primaryClass || !spell->secondaryAllowed ||
+    if (!meetsCustomRequirements(c, *spell, error)) return false;
+    if (spell->custom && !spell->implementationAvailable && !restoring) {
+        setError(error, "custom ability requires a Forever implementation");
+        return false;
+    }
+    if ((!spell->custom && spell->ownerClass == c.primaryClass) || !spell->secondaryAllowed ||
         (!config_.freepickMode && spell->ownerClass != *c.activeSubclass)) {
         setError(error, "spell is not available to the active subclass");
         return false;
@@ -181,9 +284,19 @@ bool SubclassSystem::selectSubclassSpell(CharacterState& c, std::uint32_t spellI
     return true;
 }
 
-bool SubclassSystem::unselectSubclassSpell(CharacterState& c, std::uint32_t spellId) const {
+bool SubclassSystem::unselectSubclassSpell(CharacterState& c, std::uint32_t spellId, std::string* error) const {
     if (config_.freepickMode && !canSwitch(c, nullptr)) return false;
     const bool removed = c.selectedSubclassSpells.erase(spellId) > 0;
+    if (removed && config_.freepickMode) {
+        for (auto id : c.selectedSubclassSpells) {
+            auto spell = getSpell(id);
+            if (spell && !meetsCustomRequirements(c, *spell)) {
+                c.selectedSubclassSpells.insert(spellId);
+                setError(error, "refund dependent custom abilities first");
+                return false;
+            }
+        }
+    }
     if (removed) rebuildResourcePools(c);
     return removed;
 }
@@ -332,11 +445,16 @@ CastResult SubclassSystem::tryCast(CharacterState& c, std::uint32_t spellId) con
         r.error = "spell is not registered";
         return r;
     }
+    if (!meetsCustomRequirements(c, *spell, &r.error)) return r;
+    if (spell->custom && !spell->implementationAvailable) {
+        r.error = "custom ability requires a Forever implementation";
+        return r;
+    }
 
     bool allowed = false;
     auto cp = c.classes.find(config_.freepickMode ? c.primaryClass : spell->ownerClass);
     if (cp != c.classes.end() && cp->second.level >= spell->requiredClassLevel) {
-        if (spell->ownerClass == c.primaryClass) {
+        if (!spell->custom && spell->ownerClass == c.primaryClass) {
             allowed = true;
         } else if ((config_.freepickMode || (c.activeSubclass && spell->ownerClass == *c.activeSubclass)) && c.selectedSubclassSpells.count(spellId)) {
             allowed = true;

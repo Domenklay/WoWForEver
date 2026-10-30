@@ -7,16 +7,19 @@ local hooked=setmetatable({}, {__mode="k"})
 local spellState={}
 local localCooldowns={}
 local RESPONSE="FSR1"
+local function customInfo(id) return _G.ForeverSubclassCustomSpellInfo and _G.ForeverSubclassCustomSpellInfo[id] end
 
 local function chat(msg)
  if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff67d9ff[Подклассы]|r "..tostring(msg)) end
 end
 local function spellName(id)
+ if customInfo(id) then return customInfo(id).name end
  if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) or ("Заклинание "..id) end
  if GetSpellInfo then return GetSpellInfo(id) or ("Заклинание "..id) end
  return "Заклинание "..id
 end
 local function spellTexture(id)
+ if customInfo(id) then id=customInfo(id).displayID;if not id then return 134400 end end
  if C_Spell and C_Spell.GetSpellTexture then return C_Spell.GetSpellTexture(id) or 134400 end
  if GetSpellTexture then return GetSpellTexture(id) or 134400 end
  return 134400
@@ -51,7 +54,8 @@ local function pickupNative(id)
 end
 
 local function macroBody(id)
- return "#showtooltip "..tostring(id).."\n/fsubcast "..tostring(id)
+ local info=customInfo(id);local display=info and info.displayID or (not info and id)
+ return "#showtooltip"..(display and (" "..tostring(display)) or "").."\n/fsubcast "..tostring(id)
 end
 local function macroInternalName(id) return "FSub"..tostring(id) end
 
@@ -70,7 +74,8 @@ local function pickup(spell)
  if not spell or not spell.id then return end
  if InCombatLockdown and InCombatLockdown() then chat("Перетаскивать способности на панель можно только вне боя.");return end
  local id=tonumber(spell.id)
- if pickupNative(id) then return end
+ if spell.custom and (not spell.selected or not spell.implemented) then chat("Кастомная способность пока недоступна.");return end
+ if not spell.custom and pickupNative(id) then return end
  if pickupFallback(id) then chat("Способность добавлена на обычную панель действий.");return end
  chat("Не удалось взять способность на курсор.")
 end
@@ -96,6 +101,7 @@ local function getButtonSpell(button)
 end
 
 local function queryNativeCooldown(id)
+ if customInfo(id) then id=customInfo(id).displayID;if not id then return nil,nil end end
  if C_Spell and C_Spell.GetSpellCooldown then
   local ok,info=pcall(C_Spell.GetSpellCooldown,id)
   if ok and info and (info.duration or 0)>0 then return info.startTime or 0,info.duration or 0 end
@@ -132,15 +138,17 @@ local function showTooltip(button,id)
  if not GameTooltip or not id then return end
  GameTooltip:SetOwner(button,"ANCHOR_RIGHT")
  GameTooltip:ClearLines()
- if GameTooltip.SetSpellByID then
+ if customInfo(id) then
+  GameTooltip:SetText(customInfo(id).name);GameTooltip:AddLine(customInfo(id).description,0.88,0.88,0.88,true)
+ elseif GameTooltip.SetSpellByID then
   local ok=pcall(GameTooltip.SetSpellByID,GameTooltip,id)
   if not ok then GameTooltip:SetText(spellName(id)) end
  else GameTooltip:SetText(spellName(id)) end
  local sp=spellState[id]
  if sp then
   GameTooltip:AddLine(" ")
-  GameTooltip:AddLine("Способность подкласса",0.45,0.82,1,true)
-  GameTooltip:AddLine("Уровень "..tostring(sp.level or 1).."   Стоимость: "..tostring(sp.cost or 0),0.78,0.78,0.78,true)
+  GameTooltip:AddLine(sp.custom and "Способность Freepick" or "Способность подкласса",0.45,0.82,1,true)
+  GameTooltip:AddLine("Уровень "..tostring(sp.level or 1)..(sp.custom and "" or ("   Стоимость: "..tostring(sp.cost or 0))),0.78,0.78,0.78,true)
  end
  GameTooltip:Show()
 end
@@ -196,6 +204,8 @@ local function parse(msg)
  if w[1]=="STATE" then pending={spells={}}
  elseif w[1]=="SPELL" and pending then
   local id=tonumber(w[2]);if id then pending.spells[id]={id=id,root=tonumber(w[3]),level=tonumber(w[4]) or 1,selected=w[5]=="1",cost=tonumber(w[6]) or 0,power=tonumber(w[7])} end
+ elseif w[1]=="CUSTOM" and pending then
+  local id=tonumber(w[2]);if id then pending.spells[id]={id=id,root=id,custom=true,level=tonumber(w[3]) or 10,selected=w[4]=="1",implemented=w[10]=="1",cost=0,power=0} end
  elseif w[1]=="END" and pending then spellState=pending.spells;pending=nil;scanButtons() end
 end
 

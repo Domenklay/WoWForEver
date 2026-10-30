@@ -1,32 +1,59 @@
 {
-  "date": "2026-10-27",
+  "date": "2026-10-30",
+  "mode": "Freepick with a permanent native main class",
   "core_commit": "91d49b230f89c3ab4719f5b2b2d1e70ed36613c4",
   "python_test_suite": {
-    "passed": 48,
-    "skipped": 0,
-    "native_casc_helpers_enabled": true,
-    "lua_api_double_enabled": true
+    "run": 220,
+    "passed": 194,
+    "skipped": 26,
+    "failed": 0,
+    "errors": 0
+  },
+  "skip_groups": {
+    "Native CascLib checker required": 19,
+    "Native tag-mask checker required": 1,
+    "Real CascLib checker required": 1,
+    "Compile tools/legion-casc-probe/probe.cpp with real CascLib first": 1,
+    "Compile tools/legion-casc-probe/check-storage.cpp with real CascLib first": 1,
+    "native DB2 loader checker not configured": 1,
+    "Native checker required": 2
   },
   "native_adapter": {
-    "compiler": "GCC 13.3 / C++20 / Release flags from pinned core CMake",
-    "translation_units_compiled": 2,
+    "compiler": "GCC 13.3 / C++20 / Release / Ubuntu 24.04",
+    "translation_units_compiled": 5,
     "relocatable_link_internal_symbols_resolved": true
   },
+  "full_server_build": {
+    "worldserver_link_verified": true,
+    "bnetserver_link_verified": true,
+    "scripts": "static (full standard selection, including Custom)",
+    "tools": false,
+    "precompiled_headers": true,
+    "module_linked_into_worldserver": true,
+    "both_version_commands_exit_zero": true,
+    "source_archive_banner": "Archived/unknown banner in the validation build; production Docker builds use the pinned Git checkout"
+  },
   "mysql_fixture_checks": {
-    "mysql": "8.0",
-    "schema_applied_twice": true,
-    "world_bindings_applied_twice": true,
-    "other_spell_scripts_preserved": true,
-    "progress_and_resource_roundtrip": true,
-    "primary_character_class_and_level_unchanged": true,
-    "disable_unbind_keeps_progress": true,
-    "installer_exact_bindings_dump_and_restore": true
+    "mysql": "8.0.46",
+    "schema_reapplied_twice": true,
+    "bindings_reapplied_twice": true,
+    "native_bindings_preserved": true,
+    "primary_class_and_level_preserved": true,
+    "freepick_purchases_and_mana_preserved": true,
+    "legacy_progress_preserved": true,
+    "all_three_script_names_backed_up_and_restored": true
+  },
+  "runtime_readiness_checks": {
+    "installer_requires_current_world_module_freepick_and_mana_shield": true,
+    "doctor_checks_all_freepick_tables_and_both_shield_bindings": true,
+    "freepick_does_not_require_legacy_mage_power_hotfixes": true,
+    "legacy_checks_preserved": true
   },
   "compose_config_valid": true,
   "shell_syntax_valid": true,
-  "complete_worldserver_link_verified": false,
+  "complete_worldserver_link_verified": true,
   "complete_runtime_docker_image_verified": false,
   "real_wow_client_runtime_verified": false,
   "installed_on_user_machine": false,
-  "limits": "Adapter translation units and their relocatable link were checked against the real core; full worldserver/image build and live client/server behavior still require the local installation and gameplay test. SQL and Lua tests use isolated fixtures."
+  "limits": "Full native server binaries and CLI startup were verified. SQL checks used isolated MySQL 8.0, readiness checks used controlled logs and Docker doubles. No user WSL server or client is connected to this cloud task; production-image installation and combat acceptance require the local backup installer."
 }

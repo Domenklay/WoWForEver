@@ -9,6 +9,8 @@
 |---|---|
 | `0002-classic-surname-invite-and-names.patch` | В `normalizePlayerName` оставляет первое слово имени, когда клиент передаёт «Name Surname». |
 | `0003-classic-contact-list-request.patch` | Пропускает дополнительный байт перед флагами в `CMSG_SEND_CONTACT_LIST` клиента 1.60. |
+| `0005-script-owned-runtime-auras.patch` | Добавляет признак владения аурой серверным скриптом: такая аура не сохраняется в базу и не переносится Spellsteal. Нужен для щита с виртуальной маной Freepick; обычные ауры не меняются. |
+| `0006-mana-shield-default-action.patch` | Разрешает `PreventDefaultAction` в обработчике Mana Shield, чтобы скрипт списывал общую ману без повторной обработки ядром. |
 
 ## Что уже реализовано в ядре
 

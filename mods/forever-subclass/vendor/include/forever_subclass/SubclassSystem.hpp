@@ -82,6 +82,10 @@ struct SpellDefinition {
     SpellEffectKind effectKind = SpellEffectKind::Utility;
     double baseEffect = 0.0;
     double spellPowerCoefficient = 0.0;
+    bool custom = false;
+    std::uint8_t requiredMagicClasses = 0;
+    std::uint32_t requiredClassMask = 0;
+    bool implementationAvailable = true;
 };
 
 struct ClassProgress {
@@ -116,6 +120,15 @@ struct CastResult {
     double computedEffect = 0.0;
 };
 
+struct ManaShieldAbsorption {
+    std::uint32_t absorbed = 0;
+    std::uint32_t manaSpent = 0;
+    std::uint32_t remaining = 0;
+};
+
+ManaShieldAbsorption resolveManaShieldAbsorption(std::uint32_t damage, std::uint32_t remaining,
+                                                std::uint32_t mana, double manaPerDamage);
+
 class ISubclassPersistence {
 public:
     virtual ~ISubclassPersistence() = default;
@@ -146,8 +159,14 @@ public:
     std::uint8_t grantXp(CharacterState& character, std::uint64_t xp);
 
     bool selectSubclassSpell(CharacterState& character, std::uint32_t spellId, std::string* error = nullptr) const;
-    bool unselectSubclassSpell(CharacterState& character, std::uint32_t spellId) const;
+    bool restoreSubclassSpells(CharacterState& character, const std::vector<std::uint32_t>& spells,
+                              std::string* error = nullptr) const;
+    bool unselectSubclassSpell(CharacterState& character, std::uint32_t spellId, std::string* error = nullptr) const;
     std::uint8_t usedSubclassSlots(const CharacterState& character) const;
+    std::uint32_t representedClassMask(const CharacterState& character) const;
+    std::uint8_t representedMagicClasses(const CharacterState& character) const;
+    bool meetsCustomRequirements(const CharacterState& character, const SpellDefinition& spell,
+                                 std::string* error = nullptr) const;
 
     std::vector<PowerType> activePowerTypes(const CharacterState& character) const;
     void setStats(CharacterState& character, CharacterStats stats) const;
@@ -165,6 +184,7 @@ public:
     const SystemConfig& config() const { return config_; }
 
 private:
+    bool selectSpell(CharacterState& character, std::uint32_t spellId, std::string* error, bool restoring) const;
     bool canSwitch(const CharacterState& character, std::string* error) const;
     static PowerType nativePower(ClassId classId);
     static std::int32_t defaultPowerMaximum(PowerType type, std::uint8_t classLevel);
@@ -175,5 +195,6 @@ private:
 
 std::string toString(ClassId id);
 std::string toString(PowerType type);
+std::vector<SpellDefinition> customSpellCatalog();
 
 } // namespace forever

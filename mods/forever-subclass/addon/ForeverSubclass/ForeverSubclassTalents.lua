@@ -39,19 +39,41 @@ local errors={
  ["Freepick XP belongs to the primary class"]="В Freepick весь опыт получает основной класс.",
  ["command unavailable in Freepick ability prototype"]="Эта функция пока недоступна в пробном Freepick.",
  ["selection unchanged"]="Изменений нет.",
+ ["custom class requirements not met"]="Не выполнены требования к сочетанию классов кастомной способности.",
+ ["custom ability requires a Forever implementation"]="Способность найдена в Ascension, но её перенос в Forever ещё не завершён.",
+ ["refund dependent custom abilities first"]="Сначала верните кастомные способности, которым нужен этот класс.",
 }
 
 local owner,host,tab,panel,header,left,right
 local cards,spellNodes,talentNodes={},{},{}
 local titleText,detailText,statusText,xpText,noticeText
 local learnButton,activeButton,xpButton,clearButton
-local modeAbilities,modeTalents,viewTitle
+local modeAbilities,modeTalents,modeCustom,viewTitle
 local abilityContent,spellGrid,emptySpells,resourceBar
 local talentContent,talentPoints,talentNote,resetTalents
 local state,pending,selectedClass
 local built=false
 local customActive=false
 local currentMode="abilities"
+local customInfo={
+ [1463]={name="Щит маны",displayID=1463,active=true,description="Freepick: поглощает урон, расходуя общий запас маны. Наложение стоит 7% запаса; объём щита, длительность и мана за поглощение определяются нативным рангом Forever. Нужны два разных магических класса."},
+ [982085]={name="Cold Seeking Missiles",description="Мистические чары Freepick: Frostbolt усиливает урон ваших Arcane Missiles по цели."},
+ [278016]={name="Big Flaming Grimfire",description="Freepick / мистические чары: связка Pyroblast, Soul Fire и Living Bomb. Требуется перенос связанных эффектов."},
+ [282083]={name="Lunar Synergy",description="Freepick / мистические чары: Arcane Missiles взаимодействуют с Lunar Eclipse и Owlkin Frenzy. Требуется перенос связанных эффектов."},
+}
+_G.ForeverSubclassCustomSpellInfo=customInfo
+local function customRequirements(sp)
+ local text="Магические классы: "..sp.magicCount.." / "..sp.requiredMagic
+ local required={}
+ for _,id in ipairs(classOrder) do if math.floor(sp.requiredMask/(2^id))%2==1 then table.insert(required,classInfo[id].name) end end
+ if #required>0 then text=text.."; "..table.concat(required," + ") end
+ return text
+end
+local function customLocked(sp)
+ local level=state and state.classes[state.primary] and state.classes[state.primary].level or 0
+ return not sp.implemented or sp.level>level or sp.magicCount<sp.requiredMagic or
+  (sp.requiredMask~=0 and not sp.classesMet)
+end
 local nativeHooks=setmetatable({}, {__mode="k"})
 
 local function debug(text) if _G.ForeverSubclassDebugAdd then _G.ForeverSubclassDebugAdd("TALENTS "..tostring(text)) end end
@@ -157,13 +179,14 @@ local function createCard(id,index)
 end
 
 local function clearSpellNodes() for _,node in ipairs(spellNodes) do node:Hide() end end
-local function visibleSpells(s)
+local function visibleSpells(s,mode)
  local out,best={},{};if not s then return out end
  if not s.freepick and (not s.active or s.active==0 or not s.classes[s.active]) then return out end
  local progress=s.classes[s.freepick and s.primary or s.active]
  local level=progress and progress.level or 1
- for _,sp in pairs(s.spells or {}) do if sp.level<=level and (not best[sp.root] or best[sp.root].level<sp.level) then best[sp.root]=sp end end
- for _,sp in pairs(s.spells or {}) do if (best[sp.root] and best[sp.root].id==sp.id) or sp.selected then table.insert(out,sp) end end
+ local custom=(mode or currentMode)=="custom"
+ for _,sp in pairs(s.spells or {}) do if (sp.custom==true)==custom and sp.level<=level and (not best[sp.root] or best[sp.root].level<sp.level) then best[sp.root]=sp end end
+ for _,sp in pairs(s.spells or {}) do if (sp.custom==true)==custom and (sp.custom or (best[sp.root] and best[sp.root].id==sp.id) or sp.selected) then table.insert(out,sp) end end
  table.sort(out,function(a,b) if a.level==b.level then return a.id<b.id end return a.level<b.level end);return out
 end
 local function makeSpellNode(index)
@@ -176,11 +199,29 @@ local function makeSpellNode(index)
  n.name=label(n,"GameFontNormalSmall","");n.name:SetPoint("TOPLEFT",5,-62);n.name:SetPoint("RIGHT",-5,0);n.name:SetJustifyH("CENTER");n.name:SetWordWrap(false)
  n.meta=label(n,"GameFontHighlightSmall","");n.meta:SetPoint("TOPLEFT",5,-80);n.meta:SetPoint("RIGHT",-5,0);n.meta:SetJustifyH("CENTER")
  n.state=label(n,"GameFontHighlightSmall","");n.state:SetPoint("BOTTOM",0,7)
- n:RegisterForClicks("LeftButtonUp");n:RegisterForDrag("LeftButton")
- n:SetScript("OnClick",function(self) if self.spell then send((self.spell.selected and "remove " or "select ")..self.spell.id) end end)
- n:SetScript("OnDragStart",function(self) if self.spell and _G.ForeverSubclassPickupSpell then _G.ForeverSubclassPickupSpell(self.spell) end end)
+ n:RegisterForClicks("LeftButtonUp","RightButtonUp");n:RegisterForDrag("LeftButton")
+ n:SetScript("OnClick",function(self,button)
+  local sp=self.spell;if not sp then return end
+  if button=="RightButton" then
+   if sp.custom and sp.selected and not customLocked(sp) and customInfo[sp.id] and customInfo[sp.id].active then send("cast "..sp.id) end
+  elseif sp.selected or not (sp.custom and customLocked(sp)) then send((sp.selected and "remove " or "select ")..sp.id) end
+ end)
+ n:SetScript("OnDragStart",function(self) if self.spell and self.spell.selected and not (self.spell.custom and customLocked(self.spell)) and _G.ForeverSubclassPickupSpell then _G.ForeverSubclassPickupSpell(self.spell) end end)
  n:SetScript("OnEnter",function(self)
-  if self.spell and GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetSpellByID(self.spell.id);GameTooltip:AddLine(" ");GameTooltip:AddLine(self.spell.selected and "Нажмите, чтобы убрать способность" or "Нажмите, чтобы выбрать способность",0.45,0.82,1,true);GameTooltip:AddLine("Перетащите на обычную панель действий",0.72,0.72,0.72,true);GameTooltip:Show() end
+  if self.spell and GameTooltip then
+   local sp=self.spell;GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+   if sp.custom then
+    local info=customInfo[sp.id];GameTooltip:SetText(info and info.name or "Кастомная способность")
+    GameTooltip:AddLine(info and info.description or "Описание отсутствует.",0.88,0.88,0.88,true)
+    GameTooltip:AddLine(customRequirements(sp),0.85,0.75,0.4,true)
+    GameTooltip:AddLine("Предварительно: ур. "..sp.level..", "..sp.ae.." AE",0.7,0.7,0.7,true)
+    if not sp.implemented then GameTooltip:AddLine("Требуется перенос в Forever. Покупка и применение недоступны.",1,0.4,0.3,true) end
+    if sp.implemented then GameTooltip:AddLine("Левый клик — покупка/возврат. Правый — применение выбранной активной способности. Можно перетащить на панель.",0.45,0.82,1,true) end
+   else
+    GameTooltip:SetSpellByID(sp.id);GameTooltip:AddLine(" ");GameTooltip:AddLine(sp.selected and "Нажмите, чтобы убрать способность" or "Нажмите, чтобы выбрать способность",0.45,0.82,1,true);GameTooltip:AddLine("Перетащите на обычную панель действий",0.72,0.72,0.72,true)
+   end
+   GameTooltip:Show()
+  end
  end)
  n:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
  spellNodes[index]=n;return n
@@ -222,7 +263,12 @@ local function refreshAbilities()
  local spells=visibleSpells(state)
  if #spells==0 then emptySpells:SetText("Для текущего уровня доступных способностей пока нет.");emptySpells:Show() else emptySpells:Hide() end
  for index,sp in ipairs(spells) do
-  local n=spellNodes[index] or makeSpellNode(index);n.spell=sp;n.icon:SetTexture(spellTexture(sp.id));n.name:SetText(spellName(sp.id));n.meta:SetText("ур. "..sp.level.."   |   "..(powerNames[sp.power] or "Ресурс").." "..sp.cost);n.state:SetText(sp.selected and "Выбрано" or "Нажмите для выбора")
+  local n=spellNodes[index] or makeSpellNode(index);n.spell=sp;n.icon:SetTexture(sp.custom and 134400 or spellTexture(sp.id));n.name:SetText(sp.custom and "Кастомная способность" or spellName(sp.id));n.meta:SetText("ур. "..sp.level.."   |   "..(powerNames[sp.power] or "Ресурс").." "..sp.cost);n.state:SetText(sp.selected and "Выбрано" or "Нажмите для выбора")
+  if sp.custom then
+   local info=customInfo[sp.id];n.icon:SetTexture(info and info.displayID and spellTexture(info.displayID) or 134400);n.name:SetText(info and info.name or "Кастомная способность")
+   n.meta:SetText("Маг. классы: "..sp.magicCount.." / "..sp.requiredMagic);n.state:SetText(not sp.implemented and "Требуется перенос" or (sp.selected and "Выбрано" or (customLocked(sp) and "Условия не выполнены" or "Доступно")))
+  end
+  n:SetAlpha(sp.custom and customLocked(sp) and 0.55 or 1)
   if n.SetBackdropColor then if sp.selected then n:SetBackdropColor(0.03,0.09,0.04,0.96);n:SetBackdropBorderColor(0.20,0.82,0.36,1) else n:SetBackdropColor(0.028,0.028,0.028,0.96);n:SetBackdropBorderColor(0.30,0.36,0.44,0.95) end end;n:Show()
  end
  local p=choosePower(state)
@@ -243,12 +289,13 @@ local function refreshTalents()
 end
 
 local function setMode(mode)
- currentMode=(not (state and state.freepick) and mode=="talents") and "talents" or "abilities"
- if abilityContent then abilityContent:SetShown(currentMode=="abilities") end
+ currentMode=(state and state.freepick and mode=="custom") and "custom" or ((not (state and state.freepick) and mode=="talents") and "talents" or "abilities")
+ if abilityContent then abilityContent:SetShown(currentMode~="talents") end
  if talentContent then talentContent:SetShown(currentMode=="talents") end
  if modeAbilities then modeAbilities:SetEnabled(currentMode~="abilities") end
  if modeTalents then modeTalents:SetEnabled(not (state and state.freepick) and currentMode~="talents") end
- if viewTitle then viewTitle:SetText(currentMode=="talents" and "Древо талантов подкласса" or "Способности подкласса") end
+ if modeCustom then modeCustom:SetShown(state and state.freepick or false);modeCustom:SetEnabled(currentMode~="custom") end
+ if viewTitle then viewTitle:SetText(currentMode=="custom" and "Кастомное" or (currentMode=="talents" and "Древо талантов подкласса" or "Способности подкласса")) end
  if currentMode=="talents" then refreshTalents() else refreshAbilities() end
 end
 
@@ -330,6 +377,7 @@ local function build(allowStandalone)
  viewTitle=label(right,"GameFontNormalLarge","Способности подкласса");viewTitle:SetPoint("TOPLEFT",14,-12)
  modeTalents=makeButton(right,"Таланты",105,function() setMode("talents") end);modeTalents:SetPoint("TOPRIGHT",-12,-9);modeTalents:SetHeight(24)
  modeAbilities=makeButton(right,"Способности",115,function() setMode("abilities") end);modeAbilities:SetPoint("RIGHT",modeTalents,"LEFT",-6,0);modeAbilities:SetHeight(24)
+ modeCustom=makeButton(right,"Кастомное",105,function() setMode("custom") end);modeCustom:SetPoint("RIGHT",modeAbilities,"LEFT",-6,0);modeCustom:SetHeight(24)
 
  abilityContent=CreateFrame("Frame",nil,right);abilityContent:SetPoint("TOPLEFT",8,-45);abilityContent:SetPoint("BOTTOMRIGHT",-8,8);abilityContent:EnableMouse(false)
  local rh=label(abilityContent,"GameFontHighlightSmall","До 8 способностей. Клик выбирает способность, перетаскивание кладёт её на обычную панель.");rh:SetPoint("TOPLEFT",6,-2);rh:SetWidth(555);rh:SetJustifyH("LEFT")
@@ -374,6 +422,12 @@ local function parse(text)
  elseif pending and kind=="CLASS" then pending.classes[tonumber(words[2])]={level=tonumber(words[3]) or 1,xp=tonumber(words[4]) or 0,next=tonumber(words[5]) or 0}
  elseif pending and kind=="POWER" then local p=tonumber(words[2]);if p then pending.powers[p]={kind=p,current=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1} end
  elseif pending and kind=="SPELL" then local id=tonumber(words[2]);if id then pending.spells[id]={id=id,root=tonumber(words[3]),level=tonumber(words[4]) or 1,selected=words[5]=="1",cost=tonumber(words[6]) or 0,power=tonumber(words[7])} end
+ elseif pending and kind=="CUSTOM" then
+  local id=tonumber(words[2]);local mask=tonumber(words[9]) or 0;local required=tonumber(words[8]) or 0
+  local met=true
+  for class=1,12 do local bit=2^class;if math.floor(required/bit)%2==1 and math.floor(mask/bit)%2~=1 then met=false end end
+  if id then pending.spells[id]={id=id,root=id,custom=true,level=tonumber(words[3]) or 10,selected=words[4]=="1",ae=tonumber(words[5]) or 1,
+   requiredMagic=tonumber(words[6]) or 0,magicCount=tonumber(words[7]) or 0,requiredMask=required,classesMet=met,implemented=words[10]=="1",cost=0,power=0} end
  elseif pending and kind=="TPOINTS" then pending.talentFree=tonumber(words[2]) or 0;pending.talentSpent=tonumber(words[3]) or 0;pending.talentTotal=tonumber(words[4]) or 0
  elseif pending and kind=="TALENT" then local id=tonumber(words[2]);if id then pending.talents[id]={rank=tonumber(words[3]) or 0,max=tonumber(words[4]) or 1,tier=tonumber(words[5]) or 0} end
  elseif pending and kind=="END" then state=pending;pending=nil;if panel and panel:IsShown() then refresh() end end

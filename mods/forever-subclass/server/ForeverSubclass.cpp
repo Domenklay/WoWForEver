@@ -6,6 +6,8 @@
 #include "SpellInfo.h"
 #include "SpellMgr.h"
 #include "Spell.h"
+#include "SpellAuras.h"
+#include "SpellAuraEffects.h"
 #include "Player.h"
 #include "Creature.h"
 #include "Pet.h"
@@ -36,6 +38,9 @@ constexpr char RequestPrefix[] = "FSC1";
 constexpr char ResponsePrefix[] = "FSR1";
 constexpr char SpellScriptName[] = "spell_forever_subclass";
 constexpr uint32 HunterTameSpell = 1515;
+constexpr uint32 FreepickManaShield = 1463;
+constexpr char CustomShieldSpellScript[] = "spell_forever_custom_mana_shield";
+constexpr char CustomShieldAuraScript[] = "aura_forever_custom_mana_shield";
 
 struct RootSpell
 {
@@ -84,6 +89,7 @@ static TalentDef const Talents[] = {
 };
 
 struct CastTag { };
+struct CustomCastTag { uint32 spell; };
 struct Entry
 {
     forever::CharacterState state;
@@ -107,10 +113,34 @@ static forever::SystemConfig MakePolicyConfig()
 static std::recursive_mutex Mutex;
 static std::map<uint64,Entry> Entries;
 static std::map<uint32,Definition> Definitions;
+static std::map<uint32,uint32> CustomShieldRanks;
 static forever::SubclassSystem Policy(MakePolicyConfig());
 static std::atomic<bool> Ready{false};
 
 static bool Freepick() { return Policy.config().freepickMode; }
+static void CancelCustomManaShield(Player* p);
+
+static bool IsNativeManaShield(SpellInfo const* info)
+{
+    return info&&info->GetFirstRankSpell()->Id==FreepickManaShield;
+}
+
+static uint32 CustomShieldRank(Player* p)
+{
+    uint32 best=FreepickManaShield,bestLevel=0;
+    for(auto const& [id,level]:CustomShieldRanks)
+        if(level<=p->GetLevel()&&(level>bestLevel||(level==bestLevel&&id>best))) { best=id;bestLevel=level; }
+    return best;
+}
+
+static void RemoveRuntimeShields(Player* p)
+{
+    std::vector<Aura*> auras;
+    for(auto effect:p->GetAuraEffectsByType(SPELL_AURA_MANA_SHIELD))
+        if(IsNativeManaShield(effect->GetSpellInfo())&&effect->GetBase()->GetCasterGUID()==p->GetGUID()&&effect->GetBase()->IsScriptOwned())
+            auras.push_back(effect->GetBase());
+    for(auto aura:auras) aura->Remove();
+}
 
 static bool ValidClass(uint32 id) { return id==1||id==2||id==3||id==4||id==5||id==7||id==8||id==9||id==11; }
 
@@ -324,12 +354,14 @@ static Entry& State(Player* p)
         }
         if(e.valid)
         {
+            std::vector<uint32> purchases;
             if(auto rows=CharacterDatabase.PQuery("SELECT spell_id FROM forever_character_freepick_spells WHERE guid={} ORDER BY spell_id",guid)) do
             {
-                std::string error;uint32 id=rows->Fetch()[0].GetUInt32();
-                if(!Policy.selectSubclassSpell(e.state,id,&error))
-                { e.valid=false;TC_LOG_ERROR("scripts","Freepick saved purchase {} rejected for guid {}: {}",id,guid,error); }
+                purchases.push_back(rows->Fetch()[0].GetUInt32());
             } while(rows->NextRow());
+            std::string error;
+            if(!Policy.restoreSubclassSpells(e.state,purchases,&error))
+            { e.valid=false;TC_LOG_ERROR("scripts","Freepick saved purchases rejected for guid {}: {}",guid,error); }
             if(auto rows=CharacterDatabase.PQuery("SELECT power_type,current_value FROM forever_character_freepick_resources WHERE guid={}",guid)) do
             {
                 Field* v=rows->Fetch();if(v[0].GetUInt8()==POWER_MANA) e.pools[POWER_MANA]={int32(std::min<uint32>(v[1].GetUInt32(),1000000)),1000000};
@@ -395,6 +427,21 @@ static bool Allowed(Player* p,Entry& e,uint32 spell)
     return e.state.activeSubclass&&uint8(*e.state.activeSubclass)==d.root.owner&&Selected(e,spell)&&
         e.state.classes[*e.state.activeSubclass].level>=d.level&&HasClassPower(*e.state.activeSubclass,d.root.power)&&
         Available(p,e,d.root.power)>=Cost(p,e,spell,d);
+}
+
+static int32 CustomShieldCost(Player* p,Entry const& e)
+{
+    int32 maximum=p->GetPowerIndex(POWER_MANA)<MAX_POWERS_PER_CLASS?p->GetMaxPower(POWER_MANA):PowerMaximum(p,e,POWER_MANA);
+    // The reviewed Freepick rank costs 7% mana. Non-mana primaries use the shared Freepick pool.
+    return int32((int64(std::max(0,maximum))*7+99)/100);
+}
+
+static bool CanUseCustomShield(Player* p,Entry const& e)
+{
+    auto spell=Policy.getSpell(FreepickManaShield);
+    return Freepick()&&e.valid&&spell&&spell->implementationAvailable&&p->IsAlive()&&
+        p->GetLevel()>=spell->requiredClassLevel&&e.state.selectedSubclassSpells.count(FreepickManaShield)&&
+        Policy.meetsCustomRequirements(e.state,*spell);
 }
 
 static bool HunterFeatureReady(Entry const& e)
@@ -477,6 +524,14 @@ static void SnapshotFreepick(Player* p,Entry& e)
         uint32 id=BestRank(e,root.id);auto const& d=Definitions.at(id);
         Send(p,Trinity::StringFormat("SPELL {} {} {} {} {} {}",id,root.id,d.level,Selected(e,root.id)?1:0,Cost(p,e,id,d),int(d.root.power)));
     }
+    for(auto const& record:forever::customSpellCatalog())
+    {
+        auto const& spell=*Policy.getSpell(record.spellId);
+        Send(p,Trinity::StringFormat("CUSTOM {} {} {} {} {} {} {} {} {}",spell.spellId,
+            spell.requiredClassLevel,c.selectedSubclassSpells.count(spell.spellId)?1:0,spell.slotCost,
+            spell.requiredMagicClasses,Policy.representedMagicClasses(c),spell.requiredClassMask,
+            Policy.representedClassMask(c),spell.implementationAvailable?1:0));
+    }
     Send(p,"END");
 }
 
@@ -542,6 +597,17 @@ static void Request(Player* p,std::string const& text)
     if (command=="status") { Snapshot(p,e);return; }
     if (command=="cast")
     {
+        auto custom=Policy.getSpell(arg);
+        if(custom&&custom->custom)
+        {
+            std::string error;
+            if(!Policy.meetsCustomRequirements(e.state,*custom,&error)) { Error(p,error);return; }
+            if(arg!=FreepickManaShield||!custom->implementationAvailable) { Error(p,"custom ability requires a Forever implementation");return; }
+            if(!CanUseCustomShield(p,e)) { Error(p,"spell unavailable or not enough power");return; }
+            SpellCastResult result=p->CastSpell(p,CustomShieldRank(p),CastSpellExtraArgs(TRIGGERED_IGNORE_POWER_COST).SetCustomArg(CustomCastTag{arg}));
+            if(result!=SPELL_CAST_OK) Error(p,Trinity::StringFormat("native cast rejected: {}",uint32(result)));
+            return;
+        }
         arg=BestRank(e,arg);if(!p->IsAlive()||!Allowed(p,e,arg)) { Error(p,"spell unavailable or not enough power");return; }
         auto info=sSpellMgr->GetSpellInfo(arg,DIFFICULTY_NONE);Unit* target=p->GetSelectedUnit();if(!target&&info->IsPositive()) target=p;
         if(!target) { Error(p,"select a target");return; }
@@ -581,10 +647,17 @@ static void Request(Player* p,std::string const& text)
     }
     else if(command=="select")
     {
+        auto custom=Policy.getSpell(arg);
+        if(custom&&custom->custom)
+        {
+            if(!Policy.selectSubclassSpell(e.state,arg,&error)) Error(p,error);
+            else { Refresh(p,e);Save(e);Snapshot(p,e); }
+            return;
+        }
         auto def=Definitions.find(arg);if(def==Definitions.end()) { Error(p,"unknown subclass spell");return; }
         changed=Policy.selectSubclassSpell(e.state,def->second.root.id,&error);
     }
-    else if(command=="remove") changed=Policy.unselectSubclassSpell(e.state,RootId(arg));
+    else if(command=="remove") changed=Policy.unselectSubclassSpell(e.state,RootId(arg),&error);
     else if(command=="talent")
     {
         if(!Resting(p)) { Error(p,"subclass talents can only be changed in a rest area");return; }
@@ -597,6 +670,7 @@ static void Request(Player* p,std::string const& text)
     }
     else { Error(p,"unknown command");return; }
     if(!changed) { Error(p,error.empty()?"selection unchanged":error);return; }
+    if(Freepick()) CancelCustomManaShield(p);
     Refresh(p,e);Save(e);Snapshot(p,e);
 }
 
@@ -679,6 +753,33 @@ public:
                 if(!CharacterDatabase.Query(Trinity::StringFormat("SELECT COUNT(*) FROM {}",table).c_str()))
                 { TC_LOG_ERROR("scripts","Freepick schema missing: {}. Feature disabled.",table);return; }
             auto cfg=MakePolicyConfig();cfg.freepickMode=true;Policy=forever::SubclassSystem(cfg);
+            auto backend=sSpellMgr->GetSpellInfo(FreepickManaShield,DIFFICULTY_NONE);
+            uint32 rankCount=0;
+            for(auto info=backend;info&&rankCount++<64;info=info->GetNextRankSpell())
+            {
+                bool valid=!info->GetEffects().empty()&&info->GetEffect(EFFECT_0).ApplyAuraName==SPELL_AURA_MANA_SHIELD&&
+                    info->GetEffect(EFFECT_0).MiscValue==SPELL_SCHOOL_MASK_ALL&&info->IsPositive()&&!info->IsChanneled();
+                if(valid)
+                {
+                    float ratio=info->GetEffect(EFFECT_0).CalcValueMultiplier(nullptr);
+                    valid=std::isfinite(ratio)&&ratio>0;
+                }
+                for(auto const& effect:info->GetEffects())
+                    if(effect.EffectIndex!=EFFECT_0&&effect.IsEffect()) valid=false;
+                for(char const* name:{CustomShieldSpellScript,CustomShieldAuraScript})
+                {
+                    uint32 matches=0;auto bounds=sObjectMgr->GetSpellScriptsBounds(info->Id);
+                    for(auto i=bounds.first;i!=bounds.second;++i) if(i->second.first==sObjectMgr->GetScriptId(name)&&i->second.second) ++matches;
+                    valid=valid&&matches==1;
+                }
+                if(valid) CustomShieldRanks[info->Id]=info->SpellLevel;
+            }
+            bool shieldReady=CustomShieldRanks.count(FreepickManaShield)>0;
+            for(auto spell:forever::customSpellCatalog())
+            {
+                if(spell.spellId==FreepickManaShield) spell.implementationAvailable=shieldReady;
+                Policy.registerSpell(spell);
+            }
         }
         uint32 scriptId=sObjectMgr->GetScriptId(SpellScriptName);
         for(auto const& root:Roots)
@@ -701,6 +802,7 @@ public:
         if(Freepick()&&(!Definitions.count(2050)||!Definitions.count(116)))
             { TC_LOG_ERROR("scripts","Freepick requires both validated chains 2050 and 116. Feature disabled.");return; }
         if(Definitions.empty()) { TC_LOG_ERROR("scripts","Subclass catalogue empty. Feature disabled.");return; }
+        if(Freepick()) TC_LOG_INFO("scripts","Freepick custom Mana Shield: {} (native aura 1463 and both script bindings required)",Policy.getSpell(FreepickManaShield)->implementationAvailable?"available":"unavailable");
         if(Freepick()) TC_LOG_INFO("scripts","ForeverSubclass Freepick ability prototype enabled: 8 AE, native primary class and XP, shared mana; talents disabled");
         Ready=true;TC_LOG_INFO("scripts","ForeverSubclass ready: {} supported spell ranks; auto-ranks, multi-resource, talents and hunter pet foundation enabled",Definitions.size());
     }
@@ -746,7 +848,130 @@ class spell_forever_subclass final : public SpellScript
     }
 };
 
+class aura_forever_custom_mana_shield final : public AuraScript
+{
+    PrepareAuraScript(aura_forever_custom_mana_shield);
+    uint32 _source=0;
+public:
+    void Enable(uint32 source)
+    {
+        _source=source;
+        GetAura()->SetScriptOwned(true);
+    }
+    bool Enabled() const { return _source!=0; }
+private:
+    bool Validate(SpellInfo const* info) override
+    {
+        return info&&!info->GetEffects().empty()&&info->GetEffect(EFFECT_0).ApplyAuraName==SPELL_AURA_MANA_SHIELD;
+    }
+    void Absorb(AuraEffect* effect,DamageInfo& damage,uint32& amount)
+    {
+        if(!_source) return;
+        PreventDefaultAction();amount=0;
+        using namespace ForeverSubclass;
+        std::lock_guard<std::recursive_mutex> g(Mutex);
+        Player* p=GetTarget()->ToPlayer();
+        auto found=p?Entries.find(p->GetGUID().GetCounter()):Entries.end();
+        if(found==Entries.end()||damage.GetVictim()!=p||GetCasterGUID()!=p->GetGUID()||!CanUseCustomShield(p,found->second))
+        { GetAura()->Remove();return; }
+        auto& e=found->second;Refresh(p,e);
+        uint32 mana=uint32(std::max(0,Available(p,e,POWER_MANA)));
+        uint32 capacity=uint32(std::max(0,effect->GetAmountAsInt()));
+        double ratio=effect->GetSpellEffectInfo().CalcValueMultiplier(p);
+        auto result=forever::resolveManaShieldAbsorption(damage.GetDamage(),capacity,mana,ratio);
+        if(p->GetPowerIndex(POWER_MANA)<MAX_POWERS_PER_CLASS)
+        {
+            uint32 paid=uint32(-p->ModifyPower(POWER_MANA,-int32(result.manaSpent)));
+            if(paid!=result.manaSpent)
+            {
+                result=forever::resolveManaShieldAbsorption(damage.GetDamage(),capacity,paid,ratio);
+                p->ModifyPower(POWER_MANA,int32(paid-result.manaSpent));
+            }
+        }
+        else e.pools[POWER_MANA].current-=int32(result.manaSpent);
+        damage.AbsorbDamage(result.absorbed);amount=result.absorbed;
+        if(auto application=GetAura()->GetApplicationOfTarget(p->GetGUID()))
+        {
+            uint32 procAbsorb=amount;
+            GetAura()->CallScriptEffectAfterManaShieldHandlers(effect,application,damage,procAbsorb);
+        }
+        if(!GetAura()->IsRemoved())
+        {
+            effect->ChangeAmount(int32(result.remaining));
+            if(!result.remaining||Available(p,e,POWER_MANA)<=0) GetAura()->Remove();
+        }
+    }
+    void Register() override
+    {
+        OnEffectManaShield+=AuraEffectManaShieldFn(aura_forever_custom_mana_shield::Absorb,EFFECT_0);
+    }
+};
+
+class spell_forever_custom_mana_shield final : public SpellScript
+{
+    PrepareSpellScript(spell_forever_custom_mana_shield);
+    uint32 _source=0;
+    bool Load() override
+    {
+        using namespace ForeverSubclass;
+        if(!Ready||!Freepick()||!GetCaster()->ToPlayer()) return false;
+        if(auto tag=std::any_cast<CustomCastTag>(&GetSpell()->m_customArg)) _source=tag->spell;
+        return true;
+    }
+    SpellCastResult Check()
+    {
+        using namespace ForeverSubclass;
+        std::lock_guard<std::recursive_mutex> g(Mutex);
+        Player* p=GetCaster()->ToPlayer();
+        Aura* old=p->GetAura(GetSpellInfo()->Id,p->GetGUID());
+        if(!_source) return old&&old->IsScriptOwned()?SPELL_FAILED_AURA_BOUNCED:SPELL_CAST_OK;
+        if(_source!=FreepickManaShield||!CanUseCustomShield(p,State(p))) return SPELL_FAILED_NOT_KNOWN;
+        for(auto effect:p->GetAuraEffectsByType(SPELL_AURA_MANA_SHIELD))
+            if(IsNativeManaShield(effect->GetSpellInfo())&&effect->GetBase()->GetCasterGUID()==p->GetGUID()&&!effect->GetBase()->IsScriptOwned())
+                return SPELL_FAILED_AURA_BOUNCED;
+        auto& e=State(p);
+        return Available(p,e,POWER_MANA)>=CustomShieldCost(p,e)?SPELL_CAST_OK:SPELL_FAILED_NO_POWER;
+    }
+    void PrepareAura()
+    {
+        if(!_source) return;
+        ForeverSubclass::RemoveRuntimeShields(GetCaster()->ToPlayer());
+    }
+    void Activate()
+    {
+        if(!_source) return;
+        using namespace ForeverSubclass;
+        std::lock_guard<std::recursive_mutex> g(Mutex);
+        Player* p=GetCaster()->ToPlayer();auto& e=State(p);
+        Aura* aura=p->GetAura(GetSpellInfo()->Id,p->GetGUID());
+        if(!aura||aura->GetCastId()!=GetSpell()->m_castId) return;
+        auto script=aura->GetScript<aura_forever_custom_mana_shield>();
+        int32 cost=CustomShieldCost(p,e);
+        if(!script||!CanUseCustomShield(p,e)||Available(p,e,POWER_MANA)<cost)
+        { aura->Remove();return; }
+        script->Enable(_source);
+        if(p->GetPowerIndex(POWER_MANA)<MAX_POWERS_PER_CLASS) p->ModifyPower(POWER_MANA,-cost);
+        else e.pools[POWER_MANA].current-=cost;
+        Save(e);Snapshot(p,e);
+    }
+    void Register() override
+    {
+        OnCheckCast+=SpellCheckCastFn(spell_forever_custom_mana_shield::Check);
+        OnCast+=SpellCastFn(spell_forever_custom_mana_shield::PrepareAura);
+        AfterCast+=SpellCastFn(spell_forever_custom_mana_shield::Activate);
+    }
+};
+
+void ForeverSubclass::CancelCustomManaShield(Player* p)
+{
+    auto found=Entries.find(p->GetGUID().GetCounter());
+    if(found!=Entries.end()&&CanUseCustomShield(p,found->second)) return;
+    RemoveRuntimeShields(p);
+}
+
 void AddSC_forever_subclass()
 {
     new ForeverSubclass::Startup();new ForeverSubclass::Players();new ForeverSubclass::Damage();RegisterSpellScript(spell_forever_subclass);
+    RegisterSpellScript(spell_forever_custom_mana_shield);
+    RegisterSpellScript(aura_forever_custom_mana_shield);
 }

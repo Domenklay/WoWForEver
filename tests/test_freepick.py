@@ -25,7 +25,7 @@ class FreepickTests(unittest.TestCase):
         installer=(ROOT/'scripts/subclass-mod.sh').read_text()
         self.assertLess(installer.index('gzip -t'),installer.index('set_freepick "$freepick_install"'))
         self.assertIn('cp "$backup/env.before" .env',installer)
-        self.assertIn('Freepick mode was overridden or did not start',installer)
+        self.assertIn('check-subclass-ready.py --mode',installer)
         for table in ('state','spells','resources'):
             self.assertIn('forever_character_freepick_'+table,(MODULE/'sql/characters.sql').read_text())
 
@@ -68,6 +68,19 @@ snapshot(0,true) -- Clearing only the filter also preserves the purchased loadou
 assert(#visible(getState())==2)
 snapshot(5,false) -- The opt-in mode must not leak across later legacy snapshots.
 assert(not getState().freepick)
+parse('STATE 2 5 2 1 8 10000');parse('MODE FREEPICK 1');parse('CLASS 2 20 0 1000')
+parse('SPELL 2050 2050 1 1 30 0')
+parse('CUSTOM 1463 10 0 1 2 2 0 36 0')
+parse('CUSTOM 278016 20 0 1 2 2 768 36 0');parse('END')
+local current=getState()
+assert(#visible(current,'abilities')==1 and #visible(current,'custom')==2)
+assert(current.spells[1463].custom and current.spells[1463].classesMet)
+assert(not current.spells[1463].implemented)
+assert(not current.spells[278016].classesMet)
+parse('STATE 1 5 1 2 8 10000');parse('MODE FREEPICK 1');parse('CLASS 1 20 0 1000')
+parse('CUSTOM 278016 20 0 1 2 2 768 770 0');parse('END')
+assert(getState().spells[278016].classesMet)
+assert(#visible(getState(),'abilities')==0 and #visible(getState(),'custom')==1)
 '''
         state=lua.luaL_newstate()
         try:

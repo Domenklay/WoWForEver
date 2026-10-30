@@ -1,0 +1,42 @@
+--- a/src/server/game/Spells/Auras/SpellAuras.h
++++ b/src/server/game/Spells/Auras/SpellAuras.h
+@@ -251,6 +251,8 @@
+         bool IsRemovedOnShapeLost(Unit* target) const;
+ 
+         bool CanBeSaved() const;
++        bool IsScriptOwned() const { return m_scriptOwned; }
++        void SetScriptOwned(bool value) { m_scriptOwned = value; }
+         bool IsRemoved() const { return m_isRemoved; }
+         // Single cast aura helpers
+         bool IsSingleTarget() const {return m_isSingleTarget; }
+@@ -413,6 +415,7 @@
+         AuraEffectVector m_effects;
+         ApplicationMap m_applications;
+ 
++        bool m_scriptOwned = false;
+         bool m_isRemoved;
+         bool m_isSingleTarget;                              // true if it's a single target spell and registered at caster - can change at spell steal for example
+         bool m_isUsingCharges;
+--- a/src/server/game/Spells/Auras/SpellAuras.cpp
++++ b/src/server/game/Spells/Auras/SpellAuras.cpp
+@@ -1175,6 +1175,9 @@
+ 
+ bool Aura::CanBeSaved() const
+ {
++    if (IsScriptOwned())
++        return false;
++
+     if (IsPassive())
+         return false;
+ 
+--- a/src/server/game/Spells/SpellEffects.cpp
++++ b/src/server/game/Spells/SpellEffects.cpp
+@@ -4784,7 +4784,7 @@
+         if ((aura->GetSpellInfo()->GetDispelMask()) & dispelMask)
+         {
+             // Need check for passive? this
+-            if (!aurApp->IsPositive() || aura->IsPassive() || aura->GetSpellInfo()->HasAttribute(SPELL_ATTR4_CANNOT_BE_STOLEN))
++            if (!aurApp->IsPositive() || aura->IsPassive() || aura->IsScriptOwned() || aura->GetSpellInfo()->HasAttribute(SPELL_ATTR4_CANNOT_BE_STOLEN))
+                 continue;
+ 
+             // 2.4.3 Patch Notes: "Dispel effects will no longer attempt to remove effects that have 100% dispel resistance."
