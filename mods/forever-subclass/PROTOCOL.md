@@ -38,35 +38,11 @@ STATE PRIMARY ACTIVE XP_TARGET USED_SLOTS SLOT_BUDGET EFFECTIVENESS_BASIS_POINTS
 CLASS CLASS_ID LEVEL XP XP_TO_NEXT_LEVEL
 POWER POWER_ID CURRENT MAXIMUM
 SPELL SPELL_ID ROOT_SPELL_ID REQUIRED_LEVEL SELECTED COST POWER_ID
-CUSTOM SPELL_ID REQUIRED_LEVEL SELECTED AE_COST REQUIRED_MAGIC_COUNT MAGIC_COUNT REQUIRED_CLASS_MASK CLASS_MASK IMPLEMENTED
 TPOINTS FREE SPENT TOTAL
 TALENT TALENT_ID RANK MAX_RANK TIER
 FEATURE FEATURE_NAME ...
 END
 ```
-
-`CUSTOM` is an additive Freepick-only catalogue record. Old clients may ignore it.
-Class masks use `1 << ClassId` (Priest=32, Warlock=512). `CLASS_MASK` includes the
-permanent primary class and owners of purchased ordinary abilities, never all
-learned classes or the current catalogue filter. Distinct magical classes are
-Paladin, Priest, Shaman, Mage, Warlock and Druid. Custom abilities contribute no
-class. A required class mask is an all-of requirement.
-
-`IMPLEMENTED=0` means that the Freepick record has been reviewed but has no
-available Forever implementation. Such records are displayed only in the
-«Кастомное» page, cannot be purchased or dragged, and both `select` and `cast`
-are rejected by the server without spending AE or mana. They are not `SPELL`
-records: their IDs must not be looked up or cast as arbitrary native Forever
-spells. Mana Shield 1463 is an explicit native-backed implementation: it uses
-a dedicated spell tag, two validated bindings, a runtime-owned aura and the
-shared Freepick mana pool. Its `IMPLEMENTED` flag reflects startup validation;
-the other three Mystic Enchant candidates remain unavailable. Native casts
-of a main-class ability are distinct from the custom action-bar macro.
-The class policy rechecks
-requirements on purchase and cast, and disallows refunds that would invalidate
-an implemented dependent custom purchase. Login restores ordinary purchases
-before custom dependencies, and preserves disabled owned records for refunds.
-Script-owned shields are not persisted as native character auras or stolen.
 
 `CLASS`, `POWER`, `SPELL`, `TALENT` and `FEATURE` may repeat. `POWER`, `SPELL`,
 `TPOINTS`, `TALENT` and class-specific `FEATURE` records are omitted without an

@@ -1,7 +1,7 @@
 -- Bind only the subclass script; preserve all existing scripts on these spells.
 -- Negative IDs ask TrinityCore to include the complete native rank chain.
 START TRANSACTION;
-DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_custom_mana_shield','aura_forever_custom_mana_shield');
+DELETE FROM spell_script_names WHERE ScriptName='spell_forever_subclass';
 INSERT INTO spell_script_names (spell_id,ScriptName) VALUES
 (-6673,'spell_forever_subclass'),(-635,'spell_forever_subclass'),
 (-3044,'spell_forever_subclass'),(-1752,'spell_forever_subclass'),
@@ -13,7 +13,4 @@ INSERT INTO spell_script_names (spell_id,ScriptName) VALUES
 (-5176,'spell_forever_subclass'),(-5185,'spell_forever_subclass'),
 (-5487,'spell_forever_subclass'),(-768,'spell_forever_subclass'),
 (-6807,'spell_forever_subclass'),(-1082,'spell_forever_subclass');
-INSERT INTO spell_script_names (spell_id,ScriptName) VALUES
-(-1463,'spell_forever_custom_mana_shield'),
-(-1463,'aura_forever_custom_mana_shield');
 COMMIT;

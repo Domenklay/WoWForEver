@@ -65,7 +65,7 @@ if [ "$action" = rollback ]; then
     docker image inspect "$(cat "$backup/old-image.txt")" >/dev/null
     trap 'docker compose up -d --no-deps worldserver bnetserver web || true' ERR
     docker compose stop web bnetserver worldserver
-    printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_custom_mana_shield','aura_forever_custom_mana_shield');" | mysql_world
+    printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName='spell_forever_subclass';" | mysql_world
     mysql_world < "$backup/world-bindings.sql"
     remove_native_power_hotfix
     docker tag "$(cat "$backup/old-image.txt")" forever-trinitycore:latest
@@ -78,9 +78,6 @@ if [ "$action" = rollback ]; then
     echo 'Rolled back server image, native-power hotfix and AddOn. Subclass progress retained for later use.'
     exit
 fi
-if [ ! -f scripts/check-subclass-ready.py ]; then
-    echo 'Readiness helper is missing. Update all module files before installation.' >&2;exit 1
-fi
 python3 - "$client" <<'PY'
 from pathlib import Path
 import sys
@@ -89,9 +86,9 @@ if not (p/'WowB.exe').is_file():raise SystemExit('Client folder must contain Wow
 if (p/'Interface/AddOns/ForeverSubclass').is_symlink():raise SystemExit('Symlinked AddOn folder is not supported')
 PY
 label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' forever-trinitycore:latest)
-if [ "$label" = '0.4.2-freepick-custom.1' ] || [ "$label" = '0.4.0-freepick.1' ] || [ "$label" = '0.3.6-forever.9' ] || [ "$label" = '0.3.5-forever.8' ]; then :
+if [ "$label" = '0.4.0-freepick.1' ] || [ "$label" = '0.3.6-forever.9' ] || [ "$label" = '0.3.5-forever.8' ]; then :
 else echo 'Built image is stale or missing native-power-slot support. Run: bash scripts/subclass-mod.sh build';exit 1;fi
-if [ "$freepick_install" = 1 ] && [ "$label" != '0.4.2-freepick-custom.1' ]; then
+if [ "$freepick_install" = 1 ] && [ "$label" != '0.4.0-freepick.1' ]; then
     echo 'Freepick requires the new image. Run: bash scripts/subclass-mod.sh build';exit 1
 fi
 running=$(docker compose ps --status running --services)
@@ -122,7 +119,7 @@ restore_on_error() {
         docker compose logs --no-color --timestamps --tail=3000 worldserver > "$backup/failed-worldserver.log" 2>&1 || true
         docker compose ps -a > "$backup/failed-services.txt" 2>&1 || true
         if [ -f "$backup/world-bindings.sql" ]; then
-            printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_custom_mana_shield','aura_forever_custom_mana_shield');" | mysql_world || true
+            printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName='spell_forever_subclass';" | mysql_world || true
             mysql_world < "$backup/world-bindings.sql" || true
         fi
         remove_native_power_hotfix || true
@@ -145,7 +142,7 @@ docker compose exec -T mysql sh -c '
 ' | gzip > "$backup/databases.sql.gz"
 gzip -t "$backup/databases.sql.gz"
 docker compose exec -T mysql sh -c '
- MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --no-create-info --skip-add-locks --skip-disable-keys --compact --no-tablespaces --set-gtid-purged=OFF --where="ScriptName IN ('\''spell_forever_subclass'\'','\''spell_forever_custom_mana_shield'\'','\''aura_forever_custom_mana_shield'\'')" world spell_script_names
+ MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --no-create-info --skip-add-locks --skip-disable-keys --compact --no-tablespaces --set-gtid-purged=OFF --where="ScriptName='\''spell_forever_subclass'\''" world spell_script_names
 ' > "$backup/world-bindings.sql.tmp"
 mv "$backup/world-bindings.sql.tmp" "$backup/world-bindings.sql"
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot characters' < mods/forever-subclass/sql/characters.sql
@@ -159,19 +156,19 @@ set_freepick "$freepick_install"
 docker compose up -d --no-deps --force-recreate worldserver bnetserver web
 container=$(docker compose ps -q worldserver)
 started=$(docker inspect --format '{{.State.StartedAt}}' "$container")
-runtime_mode=legacy
-if [ "$freepick_install" = 1 ]; then runtime_mode=freepick;fi
 for ((attempt=0;attempt<90;attempt++)); do
     logs=$(docker compose logs --since "$started" --tail=1200 worldserver)
-    if readiness=$(python3 scripts/check-subclass-ready.py --mode "$runtime_mode" <<< "$logs"); then
+    if grep -q 'ForeverSubclass ready:' <<< "$logs" && grep -q 'worldserver-daemon.*ready' <<< "$logs"; then
+        if [ "$freepick_install" = 1 ] && ! grep -q 'Freepick ability prototype enabled' <<< "$logs"; then
+            echo 'Freepick mode was overridden or did not start; rolling back.' >&2;exit 1
+        fi
+        if [ "$freepick_install" = 0 ] && grep -q 'Freepick ability prototype enabled' <<< "$logs"; then
+            echo 'Legacy mode was overridden by Freepick; rolling back.' >&2;exit 1
+        fi
         finished=1
         echo "Subclass module installed. Backup: $backup"
-        echo "$readiness"
         echo 'Enable ForeverSubclass in the game AddOns list, log in, and type /fsub.'
         exit 0
-    else
-        readiness_code=$?
-        if [ "$readiness_code" = 2 ]; then echo "$readiness Rolling back." >&2;exit 1;fi
     fi
     if (( attempt % 5 == 0 )); then echo 'Waiting for worldserver and subclass catalogue...';fi
     sleep 2

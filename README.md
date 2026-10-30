@@ -1,5 +1,11 @@
 # WoWForEver
 
+**Рабочий аддон ForeverAscension находится в ветке
+[`feat/forever-ascension`](https://github.com/Domenklay/WoWForEver/tree/feat/forever-ascension).**
+Его установка и обновление описаны в
+[инструкции ForeverAdvancement](https://github.com/Domenklay/WoWForEver/blob/feat/forever-ascension/mods/forever-advancement/README.ru.md).
+Старый ForeverSubclass в `main` не является обновлением этого аддона.
+
 Сервер **World of Warcraft Forever Beta** на основе
 [ветки forever проекта TrinityCore](https://github.com/advocaite/TrinityCore/tree/forever).
 В комплект входят Docker-конфигурация, MySQL, сервер авторизации, игровой сервер,

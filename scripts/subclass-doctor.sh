@@ -4,7 +4,6 @@ set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 ok=1
-freepick=0
 pass() { printf '[ OK ] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; ok=0; }
 fail() { printf '[FAIL] %s\n' "$*"; ok=0; }
@@ -18,7 +17,6 @@ else
     enabled=$(grep -E '^SUBCLASS_ENABLED=' .env | tail -n1 | cut -d= -f2- || true)
     if [ "$enabled" = "1" ]; then pass 'SUBCLASS_ENABLED=1';
     else warn "SUBCLASS_ENABLED=${enabled:-<unset>} (expected 1)"; fi
-    if grep -q '^SUBCLASS_FREEPICK=1$' .env; then freepick=1;fi
 fi
 
 if ! command -v docker >/dev/null 2>&1; then fail 'docker command not found';exit 1;fi
@@ -29,11 +27,10 @@ container=$(docker compose ps -q worldserver 2>/dev/null)
 image=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)
 label=$(docker inspect --format '{{index .Config.Labels "org.wowforever.subclass"}}' "$container" 2>/dev/null || true)
 printf 'Running image: %s\n' "${image:-unknown}"
-if [ "$label" = '0.4.2-freepick-custom.1' ]; then pass "subclass image label: $label (Freepick opt-in available)"
-elif [ "$label" = '0.4.0-freepick.1' ]; then pass "subclass image label: $label (older Freepick; custom catalogue requires a rebuild)"
+if [ "$label" = '0.4.0-freepick.1' ]; then pass "subclass image label: $label (Freepick opt-in available)"
 elif [ "$label" = '0.3.6-forever.9' ]; then pass "subclass image label: $label (staged Mage native Rage/Energy hotfix experiment)"
 elif [ "$label" = '0.3.5-forever.8' ]; then pass "subclass image label: $label (compatible native-slot runtime; staged hotfix supplied by DB)"
-elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then fail "subclass image label: $label (expected a supported 0.3.5/0.3.6/0.4.0 image or 0.4.2-freepick-custom.1)"
+elif [ -n "$label" ] && [ "$label" != '<no value>' ]; then fail "subclass image label: $label (expected 0.3.5-forever.8 or 0.3.6-forever.9)"
 else fail 'running image has no org.wowforever.subclass label';fi
 
 transport_patch='docker/patches/0004-forever-subclass-server-addon-endpoint.patch'
@@ -45,15 +42,7 @@ if [ -f "$transport_patch" ]; then
     else fail 'running image predates the FSC1 server endpoint patch; rebuild/install the subclass server image';fi
 fi
 
-started=$(docker inspect --format '{{.State.StartedAt}}' "$container" 2>/dev/null || true)
-if [ -z "$started" ]; then fail 'cannot determine current worldserver start time';logs=''
-else logs=$(docker compose logs --since "$started" --no-color --tail=2500 worldserver 2>/dev/null || true);fi
-if grep -q 'Freepick ability prototype enabled' <<<"$logs"; then freepick=1;fi
-runtime_mode=legacy
-if [ "$freepick" = 1 ]; then runtime_mode=freepick;fi
-if [ ! -f scripts/check-subclass-ready.py ]; then fail 'readiness helper is missing; update all module files';exit 1;fi
-if readiness=$(python3 scripts/check-subclass-ready.py --mode "$runtime_mode" <<<"$logs"); then pass "$readiness"
-else fail "$readiness";fi
+logs=$(docker compose logs --no-color --tail=2500 worldserver 2>/dev/null || true)
 if grep -q 'ForeverSubclass ready:' <<<"$logs"; then ready=$(grep 'ForeverSubclass ready:' <<<"$logs" | tail -n1);pass "$ready"
 else
     fail 'worldserver log has no "ForeverSubclass ready:" line'
@@ -62,42 +51,23 @@ fi
 
 if docker compose ps --status running --services 2>/dev/null | grep -qx mysql; then
     pass 'mysql container is running'
-    tables='forever_character_class_progress forever_character_subclass_state forever_character_subclass_spells forever_character_subclass_resources forever_character_subclass_talents'
-    if [ "$freepick" = 1 ]; then tables="$tables forever_character_freepick_state forever_character_freepick_spells forever_character_freepick_resources";fi
-    for table in $tables; do
+    for table in forever_character_class_progress forever_character_subclass_state forever_character_subclass_spells forever_character_subclass_resources forever_character_subclass_talents; do
         count=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot characters -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='characters' AND table_name='$table';\"" 2>/dev/null || echo 0)
         if [ "$count" = "1" ]; then pass "characters.$table exists"; else fail "characters.$table missing";fi
     done
     bindings=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot world -e \"SELECT COUNT(*) FROM spell_script_names WHERE ScriptName='spell_forever_subclass';\"" 2>/dev/null || echo 0)
     if [ "${bindings:-0}" -ge 20 ] 2>/dev/null; then pass "world spell bindings: $bindings (includes druid forms/rage/energy roots)"; else fail "world spell bindings: ${bindings:-0} (expected at least 20)";fi
 
-    if [ "$freepick" = 1 ]; then
-        shield_bindings=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot world -e \"SELECT COUNT(*) FROM spell_script_names WHERE spell_id=-1463 AND ScriptName IN ('spell_forever_custom_mana_shield','aura_forever_custom_mana_shield');\"" 2>/dev/null || echo 0)
-        if [ "$shield_bindings" = 2 ]; then pass 'custom Mana Shield: both rank-chain script bindings exist'
-        else fail "custom Mana Shield script bindings: ${shield_bindings:-0} (expected 2)";fi
-    fi
-
     mage_power_rows=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot hotfixes -e \"SELECT COUNT(*) FROM chr_classes_x_power_types WHERE ID IN (190031901,190031902) AND ClassID=8 AND PowerType IN (1,3) AND VerifiedBuild=70532;\"" 2>/dev/null || echo 0)
-    if [ "$freepick" = 1 ]; then
-        if [ "$mage_power_rows" = 0 ]; then pass 'Freepick: experimental Mage native-power rows are absent'
-        else fail "Freepick: unexpected experimental Mage power rows: ${mage_power_rows:-0}";fi
-    elif [ "$mage_power_rows" = "2" ]; then pass 'hotfixes: Mage native Rage/Energy DB2 rows = 2'; else fail "hotfixes: Mage native Rage/Energy DB2 rows = ${mage_power_rows:-0} (expected 2)";fi
+    if [ "$mage_power_rows" = "2" ]; then pass 'hotfixes: Mage native Rage/Energy DB2 rows = 2'; else fail "hotfixes: Mage native Rage/Energy DB2 rows = ${mage_power_rows:-0} (expected 2)";fi
 
     mage_hotfix_rows=$(docker compose exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -N -B -uroot hotfixes -e \"SELECT COUNT(*) FROM hotfix_data WHERE TableHash=3224459983 AND RecordId IN (190031901,190031902) AND Status=1 AND VerifiedBuild=70532;\"" 2>/dev/null || echo 0)
-    if [ "$freepick" = 1 ]; then
-        if [ "$mage_hotfix_rows" = 0 ]; then pass 'Freepick: experimental Mage native-power publications are absent'
-        else fail "Freepick: unexpected experimental Mage hotfix publications: ${mage_hotfix_rows:-0}";fi
-    elif [ "$mage_hotfix_rows" = "2" ]; then pass 'hotfixes: Mage native-power records published to client = 2'; else fail "hotfixes: Mage native-power published records = ${mage_hotfix_rows:-0} (expected 2)";fi
+    if [ "$mage_hotfix_rows" = "2" ]; then pass 'hotfixes: Mage native-power records published to client = 2'; else fail "hotfixes: Mage native-power published records = ${mage_hotfix_rows:-0} (expected 2)";fi
 else fail 'mysql container is not running';fi
 
 printf '\n'
-if [ "$ok" = "1" ]; then
-    if [ "$freepick" = 1 ]; then printf 'RESULT: Freepick, custom Mana Shield, shared mana and FSC1 transport look ready.\n'
-    else printf 'RESULT: staged Mage native Rage/Energy hotfix, native-slot subclass runtime, talents/pets and FSC1 transport look ready.\n';fi
-    exit 0
+if [ "$ok" = "1" ]; then printf 'RESULT: staged Mage native Rage/Energy hotfix, native-slot subclass runtime, talents/pets and FSC1 transport look ready.\n';exit 0
 else
     printf 'RESULT: server-side subclass runtime is incomplete or stale. Do not recreate the character; rebuild/install the module.\n'
-    if [ "$freepick" = 1 ]; then printf 'Repair: bash scripts/subclass-mod.sh build && bash scripts/subclass-mod.sh install-freepick /mnt/e/_classic_beta_/\n'
-    else printf 'Repair: bash scripts/subclass-mod.sh build && bash scripts/subclass-mod.sh install /mnt/e/_classic_beta_/\n';fi
-    exit 1
+    printf 'Repair: bash scripts/subclass-mod.sh build && bash scripts/subclass-mod.sh install /mnt/e/_classic_beta_/\n';exit 1
 fi
