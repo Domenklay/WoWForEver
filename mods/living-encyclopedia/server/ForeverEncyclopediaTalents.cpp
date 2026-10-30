@@ -18,6 +18,7 @@ using ForeverEncyclopedia::Talents::All;
 using ForeverEncyclopedia::Talents::AppearanceThreshold;
 using ForeverEncyclopedia::Talents::Cost;
 using ForeverEncyclopedia::Talents::Find;
+using ForeverEncyclopedia::Talents::KnowledgeManaBonus;
 using ForeverEncyclopedia::Talents::TalentDef;
 
 constexpr char RequestPrefix[] = "FET1";
@@ -117,9 +118,13 @@ static uint32 InformationLevel(RankMap const& ranks)
     return level;
 }
 
-static uint32 MaxMana(RankMap const& ranks)
+static uint32 MaxMana(uint64 knowledgeTotal, RankMap const& ranks)
 {
-    return BaseMaxMana + Rank(ranks, "mana_capacity") * 10 + Rank(ranks, "wisdom_mastery") * 2;
+    uint64 value = uint64(BaseMaxMana) + KnowledgeManaBonus(knowledgeTotal);
+    value += uint64(Rank(ranks, "mana_capacity")) * 10;
+    value += uint64(Rank(ranks, "mana_overflow")) * 15;
+    value += uint64(Rank(ranks, "wisdom_mastery")) * 2;
+    return uint32(std::min<uint64>(value, UINT32_MAX));
 }
 
 static uint32 CurrentMana(Player* player, uint32 maxMana)
@@ -154,7 +159,7 @@ static void Snapshot(Player* player)
     Progress p = LoadProgress(account);
     RankMap ranks = LoadRanks(account);
     uint64 available = p.total >= p.spent ? p.total - p.spent : 0;
-    uint32 maxMana = MaxMana(ranks);
+    uint32 maxMana = MaxMana(p.total, ranks);
     uint32 mana = CurrentMana(player, maxMana);
 
     Send(player, Trinity::StringFormat("POINTS|{}|{}|{}", p.total, p.spent, available));
@@ -165,8 +170,6 @@ static void Snapshot(Player* player)
             Send(player, Trinity::StringFormat("RANK|{}|{}", std::string(def.key), rank));
     }
 
-    // Safe mode: talents and encyclopedia data stay active, combat runtime is disabled.
-    // Cooldowns and barrier are intentionally zero until the runtime is re-enabled after isolation testing.
     Send(player, Trinity::StringFormat("BOOK|{}|{}|{}|{}|0|0|0|0",
         AbilityMask(ranks), mana, maxMana, InformationLevel(ranks)));
 
@@ -286,11 +289,20 @@ static void CreatureInfo(Player* player, uint32 entry)
     for (char& c : name)
         if (c == '|' || c == '\r' || c == '\n') c = ' ';
 
-    // Avoid ad-hoc SQL against creature_template here. The Forever/master schema
-    // differs from the legacy minlevel/maxlevel layout and bad SQL is fatal in
-    // this pinned TrinityCore. Use the already validated ObjectMgr template.
-    Send(player, Trinity::StringFormat("CBASE|{}|{}|{}|0|0", name,
-        uint32(creature->type), uint32(creature->Classification)));
+    uint32 minLevel = 0;
+    uint32 maxLevel = 0;
+    if (std::pair<uint8, uint8> const* classicLevel = sObjectMgr->GetCreatureClassicLevel(entry))
+    {
+        minLevel = classicLevel->first;
+        maxLevel = classicLevel->second;
+    }
+
+    // Same source used by Creature::ApplyLevelScaling() in the pinned Classic core.
+    // No ad-hoc world DB query is performed here.
+    Send(player, Trinity::StringFormat("CBASE|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", name,
+        uint32(creature->type), uint32(creature->Classification), minLevel, maxLevel,
+        uint32(creature->family), uint32(creature->unit_class), uint32(creature->dmgschool),
+        creature->BaseAttackTime, creature->RangeAttackTime));
     Send(player, "CEND");
 }
 
