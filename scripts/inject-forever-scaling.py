@@ -102,17 +102,6 @@ static Rank RankOf(Creature const* creature)
     return Rank::Normal;
 }
 
-static int RankOffset(Rank rank)
-{
-    switch (rank)
-    {
-        case Rank::Elite: return EnvInt("FOREVER_SCALING_ELITE_OFFSET", 5, -100, 100);
-        case Rank::RareElite: return EnvInt("FOREVER_SCALING_RARE_ELITE_OFFSET", 7, -100, 100);
-        case Rank::Boss: return EnvInt("FOREVER_SCALING_BOSS_OFFSET", 8, -100, 100);
-        default: return EnvInt("FOREVER_SCALING_NORMAL_OFFSET", 0, -100, 100);
-    }
-}
-
 static bool EnabledFor(Creature const* creature, WorldObject const* target)
 {
     if (!EnvBool("FOREVER_SCALING_ENABLED", false) || !creature || !target)
@@ -132,16 +121,17 @@ static bool EnabledFor(Creature const* creature, WorldObject const* target)
 static uint8 LevelFor(Creature const* creature, Player const* player)
 {
     int playerLevel = std::max(1, int(player->GetEffectiveLevel()));
+    int originalLevel = std::max(1, int(creature->GetLevel()));
     int minOffset = EnvInt("FOREVER_SCALING_MIN_OFFSET", -9, -100, 100);
-    int maxOffset = EnvInt("FOREVER_SCALING_MAX_OFFSET", 10, -100, 100);
-    if (maxOffset < minOffset)
-        std::swap(minOffset, maxOffset);
-
     int creatureMax = EnvInt("FOREVER_SCALING_CREATURE_MAX_LEVEL", 70, 1, 255);
-    int low = std::max(1, playerLevel + minOffset);
-    int high = std::max(low, std::min(creatureMax, playerLevel + maxOffset));
-    int baseline = playerLevel + RankOffset(RankOf(creature));
-    return uint8(std::clamp(baseline, low, high));
+
+    // Forever progression rule: never pull a normal old-world creature all the
+    // way to the player's level. Raise it only when it is below the minimum-XP
+    // floor. Example: player 20 + creature 6 => 11; player 11 + creature 6 => 6.
+    // Existing higher-level enemies are never downscaled here.
+    int minimumXpLevel = std::max(1, playerLevel + minOffset);
+    int raisedLevel = std::min(creatureMax, minimumXpLevel);
+    return uint8(std::clamp(std::max(originalLevel, raisedLevel), 1, 255));
 }
 
 static uint64 EncounterKey(Creature const* creature)
@@ -212,15 +202,18 @@ static void UpdateEncounter(Creature* creature)
         state.originalLevel = creature->GetLevel();
         state.scaledLevel = LevelFor(creature, player);
         Encounters.emplace(key, state);
-        RescalePreservingHealth(creature, state.scaledLevel);
+        if (state.scaledLevel != state.originalLevel)
+            RescalePreservingHealth(creature, state.scaledLevel);
         return;
     }
 
     if (itr != Encounters.end())
     {
         uint8 originalLevel = itr->second.originalLevel;
+        uint8 scaledLevel = itr->second.scaledLevel;
         Encounters.erase(itr);
-        RescalePreservingHealth(creature, originalLevel);
+        if (scaledLevel != originalLevel)
+            RescalePreservingHealth(creature, originalLevel);
     }
 }
 
