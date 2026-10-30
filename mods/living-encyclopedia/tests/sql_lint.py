@@ -26,6 +26,9 @@ required_talent = [
     "talent_key,`rank`",
     "`rank`=VALUES(`rank`)",
     "sObjectMgr->GetCreatureTemplate(entry)",
+    "sObjectMgr->GetCreatureClassicLevel(entry)",
+    "creature->BaseAttackTime",
+    "creature->RangeAttackTime",
 ]
 for needle in required_talent:
     if needle not in talents:
@@ -34,6 +37,8 @@ for needle in required_talent:
 creature_block = talents.split("static void CreatureInfo", 1)[1].split("static void Request", 1)[0]
 if "WorldDatabase.PQuery" in creature_block or "FROM creature_template" in creature_block:
     raise SystemExit("CreatureInfo must not issue ad-hoc world DB queries; use ObjectMgr CreatureTemplate")
+if "|0|0" in creature_block:
+    raise SystemExit("CreatureInfo must not send the old hard-coded 0-0 level range")
 
 if "WorldDatabase" in runtime:
     raise SystemExit("companion runtime must not query WorldDatabase")
@@ -90,4 +95,4 @@ status_block = runtime.split('if (cmd.empty() || cmd == "status")', 1)[1].split(
 if "EnsureCompanion" in status_block:
     raise SystemExit("status/login path must not auto-spawn the diagnostic companion")
 
-print("Encyclopedia SQL/ObjectMgr/native-spell 1:1 mana lint passed")
+print("Encyclopedia SQL/ObjectMgr/native-spell 1:1 mana + bestiary data lint passed")
