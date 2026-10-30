@@ -28,6 +28,23 @@ local function hideModelDescendants(frame)
     end
 end
 
+local function scrubInternalCreatureClass(frame)
+    if not frame or not frame.GetRegions then return end
+    for _, region in ipairs({ frame:GetRegions() }) do
+        if region and region.GetObjectType and region:GetObjectType() == "FontString" and region.GetText then
+            local text = region:GetText()
+            if type(text) == "string" and text:find("^Класс:") then
+                region:SetText("")
+            end
+        end
+    end
+    if frame.GetChildren then
+        for _, child in ipairs({ frame:GetChildren() }) do
+            scrubInternalCreatureClass(child)
+        end
+    end
+end
+
 local hookedMain
 local function protectMainFrame()
     local main = _G.ForeverEncyclopediaV21Frame
@@ -40,6 +57,8 @@ local function protectMainFrame()
     end
     if not main:IsShown() then
         hideModelDescendants(main)
+    else
+        scrubInternalCreatureClass(main)
     end
 end
 
