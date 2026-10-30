@@ -44,18 +44,22 @@ if "RegenBasisPoints(rank)" not in runtime:
 
 required_staging = [
     "SafeCompanionEntry = 1933",
+    "CompanionFollowDistance = 1.0f",
     "bool companionEnabled = false",
     "bool castsEnabled = false",
     "if (!state.companionEnabled",
     'cmd == "companion"',
     'cmd == "casts"',
+    'cmd == "test"',
     "SummonCreature(SafeCompanionEntry, spawnPos",
-    "MoveFollow(player",
+    "MoveFollow(player, CompanionFollowDistance",
     "SetCanFly(true)",
     "SetDisableGravity(true)",
     "SetHover(true)",
-    "CastSpell(player, SpellBookShield, false)",
-    "CastSpell(player, SpellBookHeal, false)",
+    "sSpellMgr->GetSpellInfo(spellId, difficulty)",
+    "ResolveShieldSpell(player)",
+    "ResolveHealSpell(player)",
+    "CastSpell(player, spellId, false)",
 ]
 for needle in required_staging:
     if needle not in runtime:
