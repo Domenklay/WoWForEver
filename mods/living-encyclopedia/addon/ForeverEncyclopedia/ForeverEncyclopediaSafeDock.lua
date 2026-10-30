@@ -155,6 +155,7 @@ local function createDock()
         GameTooltip:AddLine("ПКМ: показать/скрыть спутника", 0.78, 0.78, 0.78)
         GameTooltip:AddLine("Спутник: " .. (state.companion and "в мире" or "скрыт"), state.companion and 0.45 or 0.65, state.companion and 1.0 or 0.65, 0.45)
         GameTooltip:AddLine("Боевые касты: " .. (state.casts and "включены" or "выключены"), state.casts and 1.0 or 0.65, state.casts and 0.7 or 0.65, 0.35)
+        GameTooltip:AddLine("Тест: /encycast shield или /encycast heal", 0.72, 0.72, 0.72)
         GameTooltip:Show()
     end)
     book:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -204,7 +205,6 @@ local function createDock()
             if unlocked(def.bit) then
                 local cd = tonumber(state.cooldowns[i]) or 0
                 GameTooltip:AddLine(cd > 0 and ("Перезарядка: " .. cd .. " сек.") or "Готово", 0.72, 0.82, 0.68)
-                if not state.casts then GameTooltip:AddLine("Диагностика: касты временно выключены.", 0.85, 0.55, 0.25) end
             else
                 GameTooltip:AddLine(i == 3 and "Нативная версия ещё не подключена." or "Не изучено в дереве талантов.", 0.62, 0.62, 0.62)
             end
@@ -236,12 +236,12 @@ local function parseEvent(message)
     extra = tonumber(extra) or 0
     if kind == "COMPANION_ON" then
         state.companion = true
-        feedback("Диагностический спутник появился", 0.45, 1.0, 0.45)
+        feedback("Спутник появился; способности включены", 0.45, 1.0, 0.45)
     elseif kind == "COMPANION_OFF" then
         state.companion = false; state.casts = false
         feedback("Спутник скрыт", 0.8, 0.7, 0.55)
     elseif kind == "COMPANION_FAILED" then
-        feedback("Не удалось создать безопасного спутника", 1.0, 0.35, 0.25)
+        feedback("Не удалось создать спутника", 1.0, 0.35, 0.25)
     elseif kind == "CASTS_ON" then
         state.casts = true
         feedback("Боевые касты включены", 1.0, 0.72, 0.30)
@@ -249,9 +249,15 @@ local function parseEvent(message)
         state.casts = false
         feedback("Боевые касты выключены", 0.8, 0.7, 0.55)
     elseif kind == "CAST_SHIELD" then
-        feedback("Спутник кастует щит", 0.45, 0.75, 1.0)
+        feedback("Спутник кастует щит (spell " .. amount .. ")", 0.45, 0.75, 1.0)
     elseif kind == "CAST_HEAL" then
-        feedback("Спутник кастует лечение", 0.35, 1.0, 0.42)
+        feedback("Спутник кастует лечение (spell " .. amount .. ")", 0.35, 1.0, 0.42)
+    elseif kind == "TEST_SHIELD" then
+        feedback("Тест щита: spell " .. amount, 0.45, 0.75, 1.0)
+    elseif kind == "TEST_HEAL" then
+        feedback("Тест лечения: spell " .. amount, 0.35, 1.0, 0.42)
+    elseif kind == "SPELL_MISSING" then
+        feedback(amount == 1 and "На сервере не найден подходящий щит" or "На сервере не найден подходящий Flash Heal", 1.0, 0.30, 0.20)
     end
     update()
 end
@@ -268,6 +274,16 @@ SlashCmdList["FOREVERENCYCASTS"] = function(msg)
     msg = tostring(msg or ""):lower()
     if msg ~= "on" and msg ~= "off" then msg = "toggle" end
     sendRuntime("casts " .. msg)
+end
+
+SLASH_FOREVERENCYCAST1 = "/encycast"
+SlashCmdList["FOREVERENCYCAST"] = function(msg)
+    msg = tostring(msg or ""):lower():match("^%s*(.-)%s*$")
+    if msg ~= "shield" and msg ~= "heal" then
+        feedback("Используй: /encycast shield или /encycast heal", 1.0, 0.72, 0.30)
+        return
+    end
+    sendRuntime("test " .. msg)
 end
 
 local events = CreateFrame("Frame")
