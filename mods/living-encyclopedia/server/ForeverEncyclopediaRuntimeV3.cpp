@@ -1,6 +1,7 @@
 #include "ScriptMgr.h"
 #include "Player.h"
 #include "Creature.h"
+#include "TemporarySummon.h"
 #include "Unit.h"
 #include "Group.h"
 #include "World.h"
@@ -31,15 +32,14 @@ constexpr char RequestPrefix[] = "FEB1";
 constexpr char ResponsePrefix[] = "FBR1";
 constexpr uint32 BaseMaxMana = 100;
 
-// Existing client/server creature entries used by the appearance collection.
 constexpr uint32 EntryLivingBook = 171120;
 constexpr uint32 EntryArchivist = 205781;
 constexpr uint32 EntryKnowledgeSpirit = 161896;
 constexpr uint32 EntrySmallConstruct = 183783;
 constexpr uint32 EntryRunekeeper = 130946;
 
-// First native-spell pass. These are deliberately ordinary game spells so the
-// companion uses the same cast system, animations and aura/heal presentation as NPCs.
+// First native-spell pass: the physical companion casts ordinary game spells.
+// This gives us the normal WoW cast system, animations and aura/heal presentation.
 constexpr uint32 SpellBookShield = 35944; // Power Word: Shield (NPC variant)
 constexpr uint32 SpellBookHeal = 2061;    // Flash Heal
 
@@ -168,8 +168,7 @@ static uint32 AbilityMask(RankMap const& ranks)
     uint32 mask = 0;
     if (GetRank(ranks, "aegis_unlock")) mask |= 1;
     if (GetRank(ranks, "mend_unlock")) mask |= 2;
-    // Support is intentionally withheld from the live mask until it has a proper
-    // native spell instead of a hidden damage modifier.
+    // Support stays disabled until it also has a proper native NPC spell.
     return mask;
 }
 
@@ -270,9 +269,12 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
     }
     state.appearanceEntry = entry;
 
-    Creature* companion = player->SummonCreature(entry, *player, TEMPSUMMON_MANUAL_DESPAWN);
-    if (!companion)
+    Position spawnPos = player->GetNearPosition(1.5f, 1.65f);
+    spawnPos.m_positionZ += 1.0f;
+    TempSummon* summoned = player->SummonCreature(entry, spawnPos, TEMPSUMMON_MANUAL_DESPAWN);
+    if (!summoned)
         return nullptr;
+    Creature* companion = summoned;
 
     companion->SetReactState(REACT_PASSIVE);
     companion->SetFaction(player->GetFaction());
@@ -282,6 +284,7 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
     companion->SetObjectScale(CompanionScale(entry));
     companion->SetCanFly(true);
     companion->SetDisableGravity(true);
+    companion->SetHover(true);
     companion->SetPowerType(POWER_MANA);
     companion->SetMaxPower(POWER_MANA, 100000);
     companion->SetPower(POWER_MANA, 100000);
@@ -572,8 +575,6 @@ public:
             }
             else if (!companion->IsNonMeleeSpellCast(false))
             {
-                // Protection gets priority when both are requested. Shield is an
-                // instant native spell; the following tick can then begin the heal cast.
                 if (state->wantShield)
                     StartShieldCast(player, *state, companion);
                 else if (state->wantHeal)
