@@ -4,9 +4,9 @@ import re
 
 root = Path(__file__).resolve().parents[1]
 talents = (root / "server/ForeverEncyclopediaTalents.cpp").read_text()
-runtime = (root / "server/ForeverEncyclopediaRuntimeV3.cpp").read_text()
+runtime = (root / "server/ForeverEncyclopediaRuntimeV4.cpp").read_text()
 
-for source_name, source in (("talents", talents), ("runtime-v3", runtime)):
+for source_name, source in (("talents", talents), ("runtime-v4", runtime)):
     bad_patterns = [
         r"SELECT\s+talent_key\s*,\s*rank\b",
         r"\(account_id\s*,\s*talent_key\s*,\s*rank\b",
@@ -42,11 +42,14 @@ if "KnowledgeManaBonus(knowledgeTotal)" not in runtime:
 if "RegenBasisPoints(rank)" not in runtime:
     raise SystemExit("runtime must use the capped percentage mana regen policy")
 
-required_companion = [
-    "CompanionChassisEntry = WORLD_TRIGGER",
-    "GetFirstVisibleModel()",
-    "SetDisplayId(displayId, true)",
-    "SummonCreature(CompanionChassisEntry, spawnPos",
+required_staging = [
+    "SafeCompanionEntry = 1933",
+    "bool companionEnabled = false",
+    "bool castsEnabled = false",
+    "if (!state.companionEnabled",
+    'cmd == "companion"',
+    'cmd == "casts"',
+    "SummonCreature(SafeCompanionEntry, spawnPos",
     "MoveFollow(player",
     "SetCanFly(true)",
     "SetDisableGravity(true)",
@@ -54,12 +57,12 @@ required_companion = [
     "CastSpell(player, SpellBookShield, false)",
     "CastSpell(player, SpellBookHeal, false)",
 ]
-for needle in required_companion:
+for needle in required_staging:
     if needle not in runtime:
-        raise SystemExit(f"native companion runtime missing: {needle}")
+        raise SystemExit(f"staged companion runtime missing: {needle}")
 
-if "SummonCreature(appearanceEntry" in runtime:
-    raise SystemExit("appearance donor NPC must never be spawned as the companion chassis")
+if "SetDisplayId(" in runtime or "GetFirstVisibleModel()" in runtime:
+    raise SystemExit("v4 diagnostic runtime must not substitute unverified display models")
 
 on_damage = runtime.split("void OnDamage", 1)[1].split("class Players", 1)[0]
 if "PQuery(" in on_damage or "DirectPExecute(" in on_damage:
@@ -69,4 +72,8 @@ if "ModifyHealth" in on_damage:
 if "damage -=" in on_damage or "barrier" in on_damage.lower():
     raise SystemExit("native companion runtime must not implement a hidden C++ absorb in OnDamage")
 
-print("Encyclopedia SQL/ObjectMgr/native-companion safety lint passed")
+status_block = runtime.split('if (cmd.empty() || cmd == "status")', 1)[1].split('if (cmd == "companion")', 1)[0]
+if "EnsureCompanion" in status_block:
+    raise SystemExit("status/login path must not auto-spawn the diagnostic companion")
+
+print("Encyclopedia SQL/ObjectMgr/staged-companion safety lint passed")
