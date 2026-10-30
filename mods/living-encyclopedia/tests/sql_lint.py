@@ -4,9 +4,9 @@ import re
 
 root = Path(__file__).resolve().parents[1]
 talents = (root / "server/ForeverEncyclopediaTalents.cpp").read_text()
-runtime = (root / "server/ForeverEncyclopediaRuntimeV2.cpp").read_text()
+runtime = (root / "server/ForeverEncyclopediaRuntimeV3.cpp").read_text()
 
-for source_name, source in (("talents", talents), ("runtime-v2", runtime)):
+for source_name, source in (("talents", talents), ("runtime-v3", runtime)):
     bad_patterns = [
         r"SELECT\s+talent_key\s*,\s*rank\b",
         r"\(account_id\s*,\s*talent_key\s*,\s*rank\b",
@@ -36,20 +36,30 @@ if "WorldDatabase.PQuery" in creature_block or "FROM creature_template" in creat
     raise SystemExit("CreatureInfo must not issue ad-hoc world DB queries; use ObjectMgr CreatureTemplate")
 
 if "WorldDatabase" in runtime:
-    raise SystemExit("combat runtime must not query WorldDatabase")
+    raise SystemExit("companion runtime must not query WorldDatabase")
 if "KnowledgeManaBonus(knowledgeTotal)" not in runtime:
     raise SystemExit("runtime must grant +1 max mana per 10 total knowledge")
 if "RegenBasisPoints(rank)" not in runtime:
     raise SystemExit("runtime must use the capped percentage mana regen policy")
-if "pendingHealAt" not in runtime or 'SendEvent(player, "HEAL"' not in runtime:
-    raise SystemExit("healing must resolve after the triggering damage and emit feedback")
-if 'SendEvent(player, "SHIELD"' not in runtime or 'SendEvent(player, "ABSORB"' not in runtime:
-    raise SystemExit("shield runtime must emit creation and absorption feedback")
+
+required_companion = [
+    "SummonCreature",
+    "MoveFollow(player",
+    "SetCanFly(true)",
+    "SetDisableGravity(true)",
+    "CastSpell(player, SpellBookShield, false)",
+    "CastSpell(player, SpellBookHeal, false)",
+]
+for needle in required_companion:
+    if needle not in runtime:
+        raise SystemExit(f"native companion runtime missing: {needle}")
 
 on_damage = runtime.split("void OnDamage", 1)[1].split("class Players", 1)[0]
 if "PQuery(" in on_damage or "DirectPExecute(" in on_damage:
     raise SystemExit("OnDamage hot path must not perform synchronous DB queries")
-if "player->ModifyHealth" in on_damage:
-    raise SystemExit("heal must not modify health inside the damage hook; queue it for the world update")
+if "ModifyHealth" in on_damage:
+    raise SystemExit("native companion runtime must not heal directly inside OnDamage")
+if "damage -=" in on_damage or "barrier" in on_damage.lower():
+    raise SystemExit("native companion runtime must not implement a hidden C++ absorb in OnDamage")
 
-print("Encyclopedia SQL/ObjectMgr/runtime-v2 safety lint passed")
+print("Encyclopedia SQL/ObjectMgr/native-companion safety lint passed")
