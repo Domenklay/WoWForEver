@@ -4,9 +4,9 @@ import re
 
 root = Path(__file__).resolve().parents[1]
 talents = (root / "server/ForeverEncyclopediaTalents.cpp").read_text()
-runtime = (root / "server/ForeverEncyclopediaRuntimeV4.cpp").read_text()
+runtime = (root / "server/ForeverEncyclopediaRuntimeV5.cpp").read_text()
 
-for source_name, source in (("talents", talents), ("runtime-v4", runtime)):
+for source_name, source in (("talents", talents), ("runtime-v5", runtime)):
     bad_patterns = [
         r"SELECT\s+talent_key\s*,\s*rank\b",
         r"\(account_id\s*,\s*talent_key\s*,\s*rank\b",
@@ -42,12 +42,11 @@ if "KnowledgeManaBonus(knowledgeTotal)" not in runtime:
 if "RegenBasisPoints(rank)" not in runtime:
     raise SystemExit("runtime must use the capped percentage mana regen policy")
 
-required_staging = [
+required_runtime = [
     "SafeCompanionEntry = 1933",
     "CompanionFollowDistance = 1.0f",
     "bool companionEnabled = false",
     "bool castsEnabled = false",
-    "if (!state.companionEnabled",
     'cmd == "companion"',
     'cmd == "casts"',
     'cmd == "test"',
@@ -57,18 +56,29 @@ required_staging = [
     "SetDisableGravity(true)",
     "SetHover(true)",
     "sSpellMgr->GetSpellInfo(spellId, difficulty)",
-    "ResolveShieldSpell(player)",
-    "ResolveHealSpell(player)",
-    "CastSpell(player, spellId, false)",
+    "SPELL_AURA_SCHOOL_ABSORB",
+    "CastSpellExtraArgs args(CompanionCastFlags())",
+    "void OnHeal(Unit* healer, Unit* receiver, uint32& gain) override",
+    "state->mana -= allowed; // strict 1 mana == 1 actually healed HP",
+    "state.mana -= amount; // strict 1 mana == 1 absorb HP",
+    "absorb->ChangeAmount(SpellEffectValue(amount))",
 ]
-for needle in required_staging:
+for needle in required_runtime:
     if needle not in runtime:
-        raise SystemExit(f"staged companion runtime missing: {needle}")
+        raise SystemExit(f"runtime v5 missing required safety/balance rule: {needle}")
+
+for forbidden in (
+    "ShieldManaCost(",
+    "HealManaCost(",
+    "ApplyConservation(",
+):
+    if forbidden in runtime:
+        raise SystemExit(f"runtime v5 must not discount 1:1 shield/heal mana costs: {forbidden}")
 
 if "SetDisplayId(" in runtime or "GetFirstVisibleModel()" in runtime:
-    raise SystemExit("v4 diagnostic runtime must not substitute unverified display models")
+    raise SystemExit("v5 diagnostic runtime must not substitute unverified display models")
 
-on_damage = runtime.split("void OnDamage", 1)[1].split("class Players", 1)[0]
+on_damage = runtime.split("void OnDamage", 1)[1].split("void OnHeal", 1)[0]
 if "PQuery(" in on_damage or "DirectPExecute(" in on_damage:
     raise SystemExit("OnDamage hot path must not perform synchronous DB queries")
 if "ModifyHealth" in on_damage:
@@ -80,4 +90,4 @@ status_block = runtime.split('if (cmd.empty() || cmd == "status")', 1)[1].split(
 if "EnsureCompanion" in status_block:
     raise SystemExit("status/login path must not auto-spawn the diagnostic companion")
 
-print("Encyclopedia SQL/ObjectMgr/staged-companion safety lint passed")
+print("Encyclopedia SQL/ObjectMgr/native-spell 1:1 mana lint passed")
