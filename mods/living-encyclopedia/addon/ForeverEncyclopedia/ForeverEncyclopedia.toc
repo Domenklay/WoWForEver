@@ -2,7 +2,7 @@
 ## Title: Forever Encyclopedia
 ## Notes: Живая энциклопедия WoW Forever: V2.1, расширенный бестиарий, таланты, облики и физический спутник с нативными кастами
 ## Author: WoWForEver project
-## Version: 0.9.4-v2.1-bestiary-data
+## Version: 0.9.5-v2.1-bestiary-cleanup
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopediaTalentData.lua
 ForeverEncyclopediaTalentOverrides.lua
