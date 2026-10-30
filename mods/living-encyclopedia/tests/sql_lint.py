@@ -4,9 +4,9 @@ import re
 
 root = Path(__file__).resolve().parents[1]
 talents = (root / "server/ForeverEncyclopediaTalents.cpp").read_text()
-runtime = (root / "server/ForeverEncyclopediaRuntime.cpp").read_text()
+runtime = (root / "server/ForeverEncyclopediaRuntimeV2.cpp").read_text()
 
-for source_name, source in (("talents", talents), ("runtime", runtime)):
+for source_name, source in (("talents", talents), ("runtime-v2", runtime)):
     bad_patterns = [
         r"SELECT\s+talent_key\s*,\s*rank\b",
         r"\(account_id\s*,\s*talent_key\s*,\s*rank\b",
@@ -37,13 +37,19 @@ if "WorldDatabase.PQuery" in creature_block or "FROM creature_template" in creat
 
 if "WorldDatabase" in runtime:
     raise SystemExit("combat runtime must not query WorldDatabase")
-if "knowledgeTotal / 10" not in runtime:
+if "KnowledgeManaBonus(knowledgeTotal)" not in runtime:
     raise SystemExit("runtime must grant +1 max mana per 10 total knowledge")
-if "rank * 20" not in runtime or "std::min<uint32>(100" not in runtime:
-    raise SystemExit("runtime regen must be 0.2% per rank with a hard 1% cap")
+if "RegenBasisPoints(rank)" not in runtime:
+    raise SystemExit("runtime must use the capped percentage mana regen policy")
+if "pendingHealAt" not in runtime or 'SendEvent(player, "HEAL"' not in runtime:
+    raise SystemExit("healing must resolve after the triggering damage and emit feedback")
+if 'SendEvent(player, "SHIELD"' not in runtime or 'SendEvent(player, "ABSORB"' not in runtime:
+    raise SystemExit("shield runtime must emit creation and absorption feedback")
 
 on_damage = runtime.split("void OnDamage", 1)[1].split("class Players", 1)[0]
 if "PQuery(" in on_damage or "DirectPExecute(" in on_damage:
     raise SystemExit("OnDamage hot path must not perform synchronous DB queries")
+if "player->ModifyHealth" in on_damage:
+    raise SystemExit("heal must not modify health inside the damage hook; queue it for the world update")
 
-print("Encyclopedia SQL/ObjectMgr/runtime safety lint passed")
+print("Encyclopedia SQL/ObjectMgr/runtime-v2 safety lint passed")
