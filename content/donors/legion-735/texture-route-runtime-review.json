@@ -14,7 +14,8 @@
   "green_texture_cause_proven": false,
   "next_experiment": "Add only the original alternate ROOT profile to the private ID, preserving existing TVFS aliases and resource payloads",
   "owned_native_fixture_install_readback_and_rollback_passed": true,
-  "actual_client_root_variant_install_pending": true,
+  "actual_client_root_variant_install_pending": false,
+  "runtime_review": "root-variant-runtime-review.json",
   "client_modified_by_review": false,
   "server_modified": false
 }
