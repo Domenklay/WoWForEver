@@ -1,5 +1,6 @@
 mod api;
 mod config;
+mod packages;
 // macOS: only the entropy is used (see macos.rs); the rest is kept for its tests
 #[cfg_attr(target_os = "macos", allow(dead_code))]
 mod dpapi;
@@ -168,6 +169,57 @@ async fn repair(state: State<'_, AppState>) -> Result<system::Checks, String> {
     .map_err(|e| e.to_string())?
 }
 
+fn package_error(e: packages::Error) -> String {
+    let key=match e.code {
+        "unready"=>"pkg_unready", "client"=>"pkg_client", "changed"=>"pkg_changed",
+        "busy"=>"pkg_busy", "recovery"=>"pkg_recovery", "empty"=>"pkg_empty",
+        "io"=>"pkg_io", _=>"pkg_invalid",
+    };
+    format!("{} ({})",t(key),e.detail)
+}
+struct PackageGuard<'a>(&'a AtomicBool);
+impl Drop for PackageGuard<'_> { fn drop(&mut self) { self.0.store(false,Ordering::SeqCst); } }
+fn package_guard(state: &AppState) -> Result<PackageGuard<'_>,String> {
+    if state.playing.swap(true,Ordering::SeqCst) { return Err(t("pkg_busy").into()) }
+    let guard=PackageGuard(&state.playing);
+    #[cfg(not(target_os="macos"))]
+    if patcher::find_client().is_some() { return Err(t("pkg_close_game").into()) }
+    #[cfg(target_os="macos")]
+    { return Err(t("pkg_platform").into()); }
+    #[allow(unreachable_code)] Ok(guard)
+}
+#[tauri::command]
+fn content_catalog() -> serde_json::Value {
+    serde_json::from_str(include_str!("../../../content/packages/catalog.json")).expect("embedded content catalog")
+}
+#[tauri::command]
+fn content_status(game_dir: String) -> Result<packages::Status,String> {
+    packages::status(std::path::Path::new(&game_dir)).map_err(package_error)
+}
+#[tauri::command]
+async fn inspect_content(game_dir: String,package_dir: String) -> Result<packages::Preview,String> {
+    tokio::task::spawn_blocking(move|| {
+        let game=std::path::Path::new(&game_dir);
+        let version=config::installed_version(game).ok_or_else(||t("pkg_client").to_string())?;
+        packages::inspect(std::path::Path::new(&package_dir),game,&version).map_err(package_error)
+    }).await.map_err(|e|e.to_string())?
+}
+#[tauri::command]
+async fn install_content(state:State<'_,AppState>,game_dir:String,package_dir:String) -> Result<packages::Status,String> {
+    let _guard=package_guard(&state)?;
+    tokio::task::spawn_blocking(move|| {
+        let game=std::path::Path::new(&game_dir);
+        let version=config::installed_version(game).ok_or_else(||t("pkg_client").to_string())?;
+        packages::install(std::path::Path::new(&package_dir),game,&version).map_err(package_error)
+    }).await.map_err(|e|e.to_string())?
+}
+#[tauri::command]
+async fn rollback_content(state:State<'_,AppState>,game_dir:String) -> Result<packages::Status,String> {
+    let _guard=package_guard(&state)?;
+    tokio::task::spawn_blocking(move||packages::rollback(std::path::Path::new(&game_dir)).map_err(package_error))
+        .await.map_err(|e|e.to_string())?
+}
+
 #[tauri::command]
 async fn play(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     if state.playing.swap(true, Ordering::SeqCst) {
@@ -184,6 +236,13 @@ async fn play(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> 
 async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
     if !settings.game_found() {
         return Err(t("game_not_found").into());
+    }
+    let game = std::path::Path::new(&settings.game_dir);
+    if game.parent().is_some_and(|root| root.join(".forever-content").exists()) {
+        let status = packages::status(game).map_err(package_error)?;
+        if status.recovery_needed {
+            return Err(t("pkg_recovery").into());
+        }
     }
     let session = Session::load().ok_or(t("login_first"))?;
     emit(app, "step", t("step_connecting"));
@@ -311,7 +370,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState { settings: Mutex::new(Settings::load()), playing: AtomicBool::new(false) })
         .invoke_handler(tauri::generate_handler![
-            get_state, save_settings, set_language, detect_locale, login, logout, server_status, news, checks, repair, play
+            get_state, save_settings, set_language, detect_locale, login, logout, server_status, news, checks, repair, play,
+            content_catalog, content_status, inspect_content, install_content, rollback_content
         ])
         .run(tauri::generate_context!())
         .expect("error while running Forever Launcher");

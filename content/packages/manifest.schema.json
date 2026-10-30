@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Forever exact-state client location package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "id", "name", "version", "client_version", "status", "client_render_verified", "server_ready", "base_files", "files"],
+  "properties": {
+    "format": {"const": "wowforever-zone-package-v1"},
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,80}$"},
+    "name": {"type": "string", "minLength": 1, "maxLength": 200},
+    "version": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,80}$"},
+    "client_version": {"type": "string"},
+    "status": {"enum": ["experimental", "verified"]},
+    "client_render_verified": {"type": "boolean"},
+    "server_ready": {"type": "boolean"},
+    "base_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "files": {
+      "type": "array", "maxItems": 1024,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["path", "before", "after"],
+        "properties": {
+          "path": {"type": "string"},
+          "before": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+          "after": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    }
+  }
+}

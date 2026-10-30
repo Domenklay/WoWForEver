@@ -280,6 +280,7 @@ xattr -cr "/Applications/Forever Launcher.app"
 - [Экспериментальные мультиклассы: установка сервера и игрового аддона](mods/forever-subclass/README.ru.md).
 - [Целевая модель мультикласса в стиле Ascension Freepick и план переноса](docs/ASCENSION-FREEPICK.ru.md).
 - [Исследование доноров Ascension и пробная конвертация рельефа Запределья](docs/zones/ASCENSION-DONORS.ru.md).
+- [Пакеты локаций: установка клиентской части через лаунчер и откат](content/packages/README.ru.md).
 - [План переноса контента из 3.3.5 и новых дополнений](docs/CUSTOMIZATION.ru.md).
 - [Инструкции для AI-ассистентов](AGENTS.md).
 

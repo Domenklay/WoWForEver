@@ -6,6 +6,9 @@ const $ = (id) => document.getElementById(id);
 let state = null;      // snapshot from get_state
 let draft = null;      // settings being edited in the drawer
 let toastTimer = 0;
+let contentBusy = false;
+let contentSelection = null;
+let contentState = null;
 
 function toast(text) {
   const t = $('toast');
@@ -57,9 +60,10 @@ async function refresh() {
 
 function updatePlayButton() {
   const play = $('play');
-  play.disabled = state.playing || !state.gameFound;
+  play.disabled = contentBusy || state.playing || !state.gameFound;
   play.classList.toggle('running', state.playing);
   play.textContent = state.playing ? t('inGame') : t('play');
+  updateContentActions();
   if (!state.gameFound && !state.playing) setStep(t('chooseGameDir'), 'err');
 }
 
@@ -246,19 +250,92 @@ function closeSettings() {
   $('scrim').hidden = true;
 }
 
+function updateContentActions() {
+  const busy = contentBusy || !!state?.playing;
+  const gameDir = $('s-game-dir').value.trim();
+  $('content-choose').disabled = busy || !gameDir;
+  $('content-install').disabled = busy || !contentSelection?.preview.ready || contentSelection.gameDir !== gameDir;
+  $('content-rollback').disabled = busy || !contentState?.installed;
+}
+function resetContent() {
+  contentSelection = null; contentState = null;
+  $('content-preview').textContent = '';
+  $('content-installed').textContent = '';
+  $('content-backup').textContent = '';
+  updateContentActions();
+}
+function showContentStatus(status) {
+  contentState = status;
+  $('content-installed').textContent = status.recoveryNeeded ? t('contentRecovery') : status.installed ? t('contentInstalled', { name: status.installed }) : t('contentNone');
+  $('content-backup').textContent = status.backup ? t('contentBackup', { path: status.backup }) : '';
+  updateContentActions();
+}
+async function refreshContent() {
+  const gameDir = $('s-game-dir').value.trim();
+  try {
+    const catalog = await invoke('content_catalog');
+    $('content-catalog').textContent = catalog.filter(p => p.status === 'experimental').map(p => t('contentExperimental', { name: p.name })).join(' · ');
+    if (gameDir) {
+      const status = await invoke('content_status', { gameDir });
+      if ($('s-game-dir').value.trim() === gameDir) showContentStatus(status);
+    }
+  } catch (e) { $('content-installed').textContent = String(e); }
+  updateContentActions();
+}
+function contentWorking(value) {
+  contentBusy = value;
+  $('s-game-dir').disabled = value; $('pick-game').disabled = value;
+  $('save-settings').disabled = value;
+  updateContentActions(); updatePlayButton();
+}
+$('content-choose').addEventListener('click', async () => {
+  try {
+    const packageDir = await window.__TAURI__.dialog.open({ directory: true, title: t('contentChoose') });
+    if (!packageDir) return;
+    const gameDir = $('s-game-dir').value.trim();
+    contentWorking(true); $('content-preview').textContent = t('working');
+    const preview = await invoke('inspect_content', { gameDir, packageDir });
+    contentSelection = { gameDir, packageDir, preview };
+    const reasons = { unverified: 'contentUnverified', server: 'contentServer', client: 'contentClient', changed: 'contentChanged' };
+    $('content-preview').textContent = preview.ready ? t('contentReady', preview) : `${preview.name} ${preview.version}: ${t(reasons[preview.reason] || 'contentUnverified')}`;
+  } catch (e) { contentSelection = null; $('content-preview').textContent = String(e); }
+  finally { contentWorking(false); }
+});
+$('content-install').addEventListener('click', async () => {
+  if (!contentSelection?.preview.ready || contentSelection.gameDir !== $('s-game-dir').value.trim()) return;
+  const selected = contentSelection;
+  contentWorking(true);
+  try {
+    showContentStatus(await invoke('install_content', { gameDir: selected.gameDir, packageDir: selected.packageDir }));
+    contentSelection = null; $('content-preview').textContent = t('contentSuccess'); toast(t('contentSuccess'));
+  } catch (e) { toast(String(e)); await refreshContent(); }
+  finally { contentWorking(false); await refresh(); }
+});
+$('content-rollback').addEventListener('click', async () => {
+  contentWorking(true);
+  try {
+    showContentStatus(await invoke('rollback_content', { gameDir: $('s-game-dir').value.trim() }));
+    contentSelection = null; $('content-preview').textContent = t('contentRestored'); toast(t('contentRestored'));
+  } catch (e) { toast(String(e)); await refreshContent(); }
+  finally { contentWorking(false); await refresh(); }
+});
+$('s-game-dir').addEventListener('input', () => { resetContent(); });
+$('s-game-dir').addEventListener('change', refreshContent);
+
 async function pick(input, title) {
   const dir = await window.__TAURI__.dialog.open({ directory: true, title, defaultPath: input.value || undefined });
   if (dir) {
     input.value = dir;
     if (input.id === 's-game-dir') {
+      resetContent(); refreshContent();
       const loc = await invoke('detect_locale', { gameDir: dir });
       if (loc) $('s-locale').value = loc;
     }
   }
 }
 
-$('open-settings').addEventListener('click', openSettings);
-$('play-settings').addEventListener('click', openSettings);
+$('open-settings').addEventListener('click', () => { openSettings(); resetContent(); refreshContent(); });
+$('play-settings').addEventListener('click', () => { openSettings(); resetContent(); refreshContent(); });
 $('close-settings').addEventListener('click', closeSettings);
 $('cancel-settings').addEventListener('click', closeSettings);
 $('scrim').addEventListener('click', closeSettings);
