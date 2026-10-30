@@ -39,6 +39,7 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(set(z.namelist()),{'operation.json','result.json','summary.json','logs/Client.log','logs/Tact.log'})
             summary=json.loads(z.read('summary.json'))
             self.assertTrue(summary['active_is_tvfs_entry_canary']);self.assertTrue(summary['build_matches_operation'])
+            self.assertFalse(summary['active_is_tvfs_layout_canary'])
             self.assertEqual(summary['newest_archive_number_in_tact_log'],52)
             self.assertEqual(summary['capture_stage'],'after_user_test')
         self.assertEqual(before,{p.relative_to(self.client):p.read_bytes() for p in self.client.rglob('*') if p.is_file()})

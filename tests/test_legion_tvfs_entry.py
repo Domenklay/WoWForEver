@@ -50,6 +50,25 @@ class TvfsEntryTests(unittest.TestCase):
         for name,value in before['leaves'].items():self.assertEqual(after['leaves'][name],value)
         self.assertEqual(after['leaves'][rows[0]['added']],before['leaves'][rows[0]['original']])
 
+    def test_layout_repack_preserves_opaque_tables_and_native_physical_order(self):
+        store,obj,child,root=fixture_directory()
+        opaque=bytearray(child['content']);cft_offset=struct.unpack_from('>I',opaque,28)[0]
+        opaque[cft_offset+34]=2
+        mirrored,rows=canary.mirror_child(opaque)
+        before=lib.tvfs.parse_tvfs(mirrored,raw_paths=True)
+        candidate=lib.tvfs.repack_tvfs_like(mirrored,opaque)
+        after=lib.tvfs.parse_tvfs(candidate,raw_paths=True)
+        self.assertEqual(before['tables'],after['tables']);self.assertEqual(before['leaves'],after['leaves'])
+        fields=(12,20,28,38)
+        native_order=sorted(fields,key=lambda i:struct.unpack_from('>I',opaque,i)[0])
+        actual_order=sorted(fields,key=lambda i:struct.unpack_from('>I',candidate,i)[0])
+        self.assertEqual(actual_order,native_order)
+        self.assertEqual(struct.unpack_from('>I',candidate,12)[0],46)
+        self.assertLess(len(candidate),len(mirrored))
+        self.assertEqual(lib.tvfs.repack_tvfs_like(candidate,opaque),candidate)
+        with self.assertRaisesRegex(ValueError,'trailing unknown'):
+            lib.tvfs.repack_tvfs_like(mirrored,bytes(opaque)+b'extra')
+
     def test_mirrors_native_spans_inside_child_and_removes_only_flat_canary(self):
         store,obj,child,root=fixture_directory();plan=canary.plan(store,lambda _:None)
         new_root=lib.tvfs.parse_tvfs(plan['candidate'])['leaves']
@@ -114,6 +133,25 @@ class TvfsEntryTests(unittest.TestCase):
         self.assertNotIn(fake,new_root)
         self.assertEqual(new_child[f'{new_id:08X}'+f.rows[1]['ckey'].upper()],new_child[f'{old_id:08X}'+f.rows[1]['ckey'].upper()])
         for name,data in archives.items():self.assertEqual((client/'Data/data'/name).read_bytes(),data)
+        entry_folder,entry_journal=install.operation(client)
+        entry_metadata=install.container.metadata(client/'Data/data');entry_info=(client/'.build.info').read_bytes()
+        with patch.object(install,'verify',side_effect=ValueError('layout readback failure')):
+            with self.assertRaisesRegex(ValueError,'layout readback failure'):
+                canary.apply(client,os.environ['CASC_SANDBOX_CHECKER'],progress=lambda _:None,old_id=old_id,new_id=new_id,layout_only=True)
+        self.assertEqual(install.operation(client)[0],entry_folder)
+        self.assertEqual((client/'.build.info').read_bytes(),entry_info)
+        self.assertEqual(install.container.metadata(client/'Data/data'),entry_metadata)
+        layout_result=canary.apply(client,os.environ['CASC_SANDBOX_CHECKER'],progress=lambda _:None,old_id=old_id,new_id=new_id,layout_only=True)
+        self.assertTrue(layout_result['tvfs_layout_only'])
+        layout_store=lib.Store(client,synthetic_only=False)
+        layout_child=lib.tvfs.parse_tvfs(canary.configured(layout_store,'vfs-4'),raw_paths=True)
+        self.assertEqual(layout_child['leaves'],lib.tvfs.parse_tvfs(canary.configured(current,'vfs-3'),raw_paths=True)['leaves'])
+        with self.assertRaisesRegex(ValueError,'without a layout experiment'):
+            canary.apply(client,os.environ['CASC_SANDBOX_CHECKER'],progress=lambda _:None,old_id=old_id,new_id=new_id,layout_only=True)
+        canary.rollback(client)
+        self.assertEqual(install.operation(client)[0],entry_folder)
+        self.assertEqual((client/'.build.info').read_bytes(),entry_info)
+        self.assertEqual(install.container.metadata(client/'Data/data'),entry_metadata)
         canary.rollback(client)
         self.assertEqual(install.operation(client)[0],folder)
         self.assertEqual((client/'.build.info').read_bytes(),info)

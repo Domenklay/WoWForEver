@@ -97,10 +97,46 @@ def plan(store,progress=print,old_id=OLD_ID,new_id=NEW_ID):
     return dict(original=original,candidate=candidate,children=children,replacements=replacements,removed=removed)
 
 
-def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID):
+
+def plan_layout(store,parent,progress=print):
+    original=configured(store,'vfs-root');parsed=storelib.tvfs.parse_tvfs(original)
+    leaves=copy.deepcopy(parsed['leaves']);est=parsed['tables']['est'];children=[];replacements={}
+    rows=parent.get('tvfs_canary_directories',[])
+    if not rows or len({r['directory'] for r in rows})!=len(rows):
+        raise ValueError('Expected unique native texture directories from the active canary')
+    for row in rows:
+        name=row['directory'];current_key=row['build_config_key'];template_key=row['source_config_key']
+        if current_key not in store.values or template_key not in store.values:
+            raise ValueError('Missing current/native TVFS build-config reference')
+        current=configured(store,current_key);template=configured(store,template_key)
+        spans=leaves.get(name,[]);ck,ek=store.values[current_key].split()[:2]
+        if (len(spans)!=1 or spans[0]['ckey']!=ck or spans[0]['ekey_prefix']!=ek[:18] or
+                spans[0]['offset']!=0 or spans[0]['bytes']!=len(current)):
+            raise ValueError('Active TVFS child differs from the journal')
+        candidate=storelib.tvfs.repack_tvfs_like(current,template)
+        progress('Repacking native TVFS layout for '+name+' (payloads unchanged)...')
+        obj=install.canary.lab.asset(candidate)
+        if not any(c['ekey']==obj['ekey'] for c in children):children.append(obj)
+        est,leaves[name]=add_span(est,obj)
+        replacements[name]=dict(obj=obj,source_config_key=current_key,template_config_key=template_key,
+                                old_value=store.values[current_key],directory=name,mirrored=row['mirrored'])
+    if all(configured(store,r['source_config_key'])==r['obj']['content'] for r in replacements.values()):
+        raise ValueError('TVFS children already match packed native layout; nothing changed')
+    candidate=storelib.encode_tvfs(leaves,est,parsed['max_depth'])
+    return dict(original=original,candidate=candidate,children=children,replacements=replacements,removed=[])
+
+
+def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=False):
     client,_=install.canary.copy_identity(client);parent_folder,parent=install.operation(client)
-    if parent['phase']!='verified' or not parent.get('root_types_repaired') or parent.get('tvfs_entry_canary'):
-        raise ValueError('Expected a verified type-repaired resource layer without this canary')
+    if parent['phase']!='verified' or not parent.get('root_types_repaired'):
+        raise ValueError('Expected a verified type-repaired resource layer')
+    if layout_only:
+        if not parent.get('tvfs_entry_canary') or parent.get('tvfs_layout_canary'):
+            raise ValueError('Expected the active entry canary without a layout experiment')
+        if parent.get('tvfs_canary_original_id')!=old_id or parent.get('tvfs_canary_new_id')!=new_id:
+            raise ValueError('Active texture canary IDs differ')
+    elif parent.get('tvfs_entry_canary'):
+        raise ValueError('Entry canary already active; use repack-layout for the layout experiment')
     expected={int(fid):row for fid,row in parent['expected_after'].items()}
     if new_id not in expected:raise ValueError('Canary texture is absent from the installed package')
     original=(client/'.build.info').read_bytes()
@@ -112,7 +148,7 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID):
             list(struct.unpack_from('<16I',meta['shmem'],0x110))!=[store.buckets[i]['version'] for i in range(16)] or
             store.values.get('vfs-1')!=store.values.get('vfs-root')):
         raise ValueError('Client metadata is inconsistent; close game and launcher')
-    prepared_plan=plan(store,progress,old_id,new_id)
+    prepared_plan=plan_layout(store,parent,progress) if layout_only else plan(store,progress,old_id,new_id)
     old_root_ref=storelib.tvfs.parse_tvfs(prepared_plan['original'])['leaves']['.root']
     def change_vfs(data):
         if storelib.tvfs.parse_tvfs(data)['leaves']['.root']!=old_root_ref:
@@ -157,6 +193,7 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID):
     journal=copy.deepcopy(parent)
     journal.update(phase='prepared',tvfs_entry_canary=True,tvfs_canary_original_id=old_id,tvfs_canary_new_id=new_id,
         root_policy='typed ROOT; one texture mirrored in native TVFS children; other flat routes unverified',
+        tvfs_layout_canary=layout_only,
         tvfs_canary_directories=report_rows,before_info_sha256=install.canary.sha(original),
         after_info_sha256=install.canary.sha(configuration['build_info']),before={n:install.canary.sha(b) for n,b in meta.items()},
         added={n:dict(bytes=len(b),sha256=install.canary.sha(b)) for n,b in payloads.items()},
@@ -164,6 +201,8 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID):
         configuration=dict(path=configuration['path'],created=created,sha256=install.canary.sha(configuration['body'])),
         original_segments=sorted(prologues),resource_ancestors=list(parent.get('resource_ancestors',[]))+[parent_folder.name],
         wow_client_runtime_verified=False)
+    if layout_only:
+        journal['tvfs_layout_templates']={name:row['template_config_key'] for name,row in prepared_plan['replacements'].items()}
     install.canary.checkpoint(folder/'operation.json',journal)
     install.canary.checkpoint(client/install.OPS/'active.json',dict(operation=token))
     progress('TVFS canary backup: '+str(folder))
@@ -189,9 +228,9 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID):
         raise
     result=dict(format='wowforever-native-tvfs-entry-canary-v1',operation=token,original_id=old_id,new_id=new_id,
         directories=report_rows,native_verified_ids=len(actual),root_unchanged=True,server_modified=False,
-        game_asset_payloads_unchanged=True,in_game_texture_render_verified=False)
+        game_asset_payloads_unchanged=True,in_game_texture_render_verified=False,tvfs_layout_only=layout_only)
     install.canary.checkpoint(folder/'result.json',result)
-    progress('NATIVE TVFS ENTRY CANARY INSTALLED; repeat the texture comparison before teleporting.')
+    progress(('NATIVE TVFS LAYOUT CANARY INSTALLED' if layout_only else 'NATIVE TVFS ENTRY CANARY INSTALLED')+'; repeat the texture comparison before teleporting.')
     progress('Report: '+str(folder/'result.json'))
     return result
 
@@ -201,20 +240,20 @@ def rollback(client):
     if not journal.get('tvfs_entry_canary'):raise ValueError('No active TVFS entry canary')
     install.rollback(client)
     install.canary.checkpoint(client/install.OPS/'active.json',dict(operation=journal['resource_ancestors'][-1]))
-    print('TVFS ENTRY CANARY ROLLED BACK; type repair and resource payloads retained')
+    print('TVFS LAYOUT CANARY ROLLED BACK; previous entry canary retained' if journal.get('tvfs_layout_canary') else 'TVFS ENTRY CANARY ROLLED BACK; type repair and resource payloads retained')
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['apply','rollback']);parser.add_argument('client',type=Path)
+    parser.add_argument('action',choices=['apply','repack-layout','rollback']);parser.add_argument('client',type=Path)
     parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'))
     parser.add_argument('--report-dir',type=Path);args=parser.parse_args()
     try:
         token=hashlib.sha256(str(args.client.resolve()).casefold().encode()).hexdigest()
         with (Path(tempfile.gettempdir())/('wowforever-casc-edit-'+token+'.lock')).open('a') as lock:
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            if args.action=='apply':
-                apply(args.client,args.checker)
+            if args.action in {'apply','repack-layout'}:
+                apply(args.client,args.checker,layout_only=args.action=='repack-layout')
                 from legion_reports import auto_collect
                 auto_collect(args.client,args.report_dir)
             else:rollback(args.client)

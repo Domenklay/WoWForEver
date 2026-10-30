@@ -1,0 +1,20 @@
+{
+  "format": "wowforever-dalaran-tvfs-layout-offline-review-v1",
+  "reviewed_on": "2026-10-30",
+  "native_reference_table_order": [
+    "path",
+    "est",
+    "cft",
+    "vfs"
+  ],
+  "before_path_offset": 37324,
+  "after_path_offset": 46,
+  "all_logical_tables_identical": true,
+  "native_tvfs_reader_outputs_identical": true,
+  "native_tvfs_leaves": 583,
+  "native_output_sha256": "b43dfc2a5084f7123aa17551d7ab273fc39a838dd98a42241e8f1be54739d4ca",
+  "native_tvfs_reader_validates_game_engine": false,
+  "wowb_texture_render_verified": false,
+  "real_client_installation_pending": true,
+  "client_or_server_modified": false
+}

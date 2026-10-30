@@ -102,6 +102,7 @@ def collect(client,output=None,stage='after_user_test'):
                  newest_archive_number_in_tact_log=tact_max,
                  operation_added_archives=[name for name in journal.get('added',{}) if re.fullmatch(r'data\.\d{3}',name)],
                  logs=entries,live_game_processes=game_processes(),client_modified=False,server_modified=False)
+    summary['active_is_tvfs_layout_canary']=bool(journal.get('tvfs_layout_canary'))
     summary['process_identity']=process_identity(client,summary['live_game_processes'])
     summary['build_info_mtime_utc']=datetime.fromtimestamp(build_mtime,timezone.utc).isoformat()
     summary['fresh_client_log_present']=any(e['name']=='Client.log' and e['not_older_than_build_info'] for e in entries)

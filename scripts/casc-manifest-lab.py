@@ -155,6 +155,37 @@ def alias_tvfs_paths(data,aliases):
     return result
 
 
+
+def repack_tvfs_like(data, template):
+    """Pack unchanged table bytes in the native template's physical order.
+
+    This is a layout experiment, not proof that an opaque patched CFT has no
+    additional relocation rules. Referenced payloads and table-relative offsets
+    are unchanged; actual engine acceptance still requires a game test.
+    """
+    parsed=parse_tvfs(data,raw_paths=True)
+    reference=parse_tvfs(template,raw_paths=True)
+    if data[:12]!=template[:12]:raise ValueError('TVFS header profiles differ')
+    fields={'path':12,'vfs':20,'cft':28,'est':38}
+    ordered=sorted(fields,key=lambda key:struct.unpack_from('>I',template,fields[key])[0])
+    end=46
+    for key in ordered:
+        offset,size=struct.unpack_from('>II',template,fields[key])
+        if offset!=end:raise ValueError('Native template contains unknown padding/extra data')
+        end+=size
+    if end!=len(template):raise ValueError('Native template has trailing unknown bytes')
+    header=bytearray(data[:46]);body=bytearray()
+    for key in ordered:
+        table=parsed['tables'][key]
+        struct.pack_into('>II',header,fields[key],46+len(body),len(table))
+        body+=table
+    result=bytes(header)+bytes(body)
+    check=parse_tvfs(result,raw_paths=True)
+    if check['leaves']!=parsed['leaves'] or check['tables']!=parsed['tables']:
+        raise ValueError('TVFS layout packing changed logical tables')
+    return result
+
+
 def append_lab_leaf(data, name, payload):
     """Append a standalone top-level file in a COPY. Not a client patch builder."""
     parsed = parse_tvfs(data)
