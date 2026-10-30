@@ -1,0 +1,24 @@
+{
+  "format": "wowforever-dalaran-live-copy-review-v1",
+  "reviewed_on": "2026-10-30",
+  "source_report": "Dalaran-TVFS-texture-20261030-124801-y0ge29ig.zip",
+  "operation": "c1b5a4c38e7d4558ba439dc98eec31bb",
+  "build_matches_operation": true,
+  "active_is_tvfs_entry_canary": true,
+  "matching_test_copy_running": true,
+  "other_copy_running": false,
+  "log_bytes": {
+    "Client.log": 0,
+    "Tact.log": 0,
+    "General.log": 0,
+    "Hotfix.log": 2115525,
+    "Connection.log": 0,
+    "Model.log": 0,
+    "gx.log": 2647
+  },
+  "newest_archive_number_in_tact_log": null,
+  "game_resource_loading_confirmed": false,
+  "next_step": "Copy installed AddOns independently with backup; continue native texture test after code-set alignment",
+  "client_modified_by_review": false,
+  "server_modified": false
+}
