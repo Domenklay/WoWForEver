@@ -20,6 +20,7 @@
 #include "WorldSession.h"
 #include "Util.h"
 #include "AscensionCatalog.h"
+#include "CustomAbilityRules.h"
 #include <array>
 #include <chrono>
 #include <map>
@@ -104,7 +105,7 @@ static State& Get(Player* p)
     if(inserted)
     {
         if(auto rows=CharacterDatabase.PQuery("SELECT entry_id FROM forever_advancement_spells WHERE guid={}",guid))
-            do { s.learned.insert(rows->Fetch()[0].GetUInt32()); } while(rows->NextRow());
+            do { s.learned.insert(ForeverAdvancementCustom::Canonical(rows->Fetch()[0].GetUInt32())); } while(rows->NextRow());
         if(auto rows=CharacterDatabase.PQuery("SELECT entry_id,rank_value FROM forever_advancement_talents WHERE guid={}",guid))
             do { auto f=rows->Fetch();s.talents[f[0].GetUInt32()]=f[1].GetUInt32(); } while(rows->NextRow());
         if(auto rows=CharacterDatabase.PQuery("SELECT power_type,current_value FROM forever_advancement_resources WHERE guid={}",guid))
@@ -325,14 +326,23 @@ static bool CompatibleTalent(SpellInfo const* info)
 }
 static bool CanCast(Player* p,State const& s,Definition const& d)
 {
+    if(ForeverAdvancementCustom::Find(d.entry)) return false;
     if(d.owner!=s.active||d.owner==p->GetClass()||!s.learned.count(d.entry)||d.level>ClassLevel(p,s,d.owner)||!p->IsAlive()) return false;
     auto info=sSpellMgr->GetSpellInfo(d.spell,DIFFICULTY_NONE);if(!info||!CompatibleCosts(info)) return false;
     for(auto power:PowersList) if(Available(p,s,power)<Cost(p,info,power)) return false;
     return true;
 }
+static uint32 CustomMagicCount(Player* p,State const& s)
+{
+    return ForeverAdvancementCustom::MagicCount(p->GetClass(),s.learned,[](uint32 entry)
+    {
+        auto it=Catalog.find(entry);
+        return it==Catalog.end()||it->second.empty()?0u:it->second.front().owner;
+    });
+}
 static void Snapshot(Player* p,State& s,bool includeCatalog=false)
 {
-    Send(p,"PROTOCOL 2");
+    Send(p,"PROTOCOL 3");
     Send(p,Trinity::StringFormat("STATE {} {} {} {}",p->GetClass(),p->GetLevel(),Used(s),Limit));
     Send(p,Trinity::StringFormat("ACTIVE {}",s.active));
     for(uint32 owner:{1u,2u,3u,4u,5u,7u,8u,9u,11u}) if(owner!=p->GetClass())
@@ -346,6 +356,9 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
     double regen=std::max(0.0,double(p->GetStat(STAT_SPIRIT)))*0.2;
     Send(p,Trinity::StringFormat("REGEN {} {}",regen,regen*0.3));
     if(includeCatalog) Send(p,"CATALOG");
+    for(auto const& rule:ForeverAdvancementCustom::Rules)
+        Send(p,Trinity::StringFormat("CUSTOM {} {} {} {} {} {}",rule.entry,rule.spell,rule.requiredMagicClasses,
+            CustomMagicCount(p,s),rule.implemented?1:0,s.learned.count(rule.entry)?1:0));
     if(includeCatalog) for(auto const& [id,definitions]:Catalog)
     {
         auto const* d=BestFor(p,s,id);if(!d) d=&definitions.front();
@@ -386,8 +399,16 @@ static void Request(Player* p,std::string const& payload)
     std::istringstream input(payload);std::string command,extra;uint32 arg=0;input>>command;
     bool argument=command=="learn"||command=="unlearn"||command=="cast"||command=="talent"||command=="untalent"||command=="activate";
     if((argument&&!(input>>arg))||(input>>extra)) { Error(p,"invalid_request");return; }
+    if(command=="learn"||command=="unlearn"||command=="cast") arg=ForeverAdvancementCustom::Canonical(arg);
     if(command=="status") { Snapshot(p,s,true);return; }
     if(command=="poll") { Snapshot(p,s);return; }
+    if(command=="learn"||command=="cast")
+        if(auto rule=ForeverAdvancementCustom::Find(arg))
+        {
+            if(!ForeverAdvancementCustom::RequirementsMet(*rule,CustomMagicCount(p,s))) Error(p,"custom_class_requirements");
+            else Error(p,"custom_requires_port");
+            return;
+        }
     if(command=="cast")
     {
         auto d=BestFor(p,s,arg);if(!d||!CanCast(p,s,*d)) { Error(p,"unavailable_or_power");return; }
@@ -422,7 +443,16 @@ static void Request(Player* p,std::string const& payload)
         if(Used(s)>=Limit) { Error(p,"ability_limit");return; }
         s.learned.insert(arg);
     }
-    else if(command=="unlearn") s.learned.erase(arg);
+    else if(command=="unlearn")
+    {
+        auto candidate=s;candidate.learned.erase(arg);
+        for(auto entry:s.learned) if(entry!=arg)
+            if(auto rule=ForeverAdvancementCustom::Find(entry);rule&&
+                ForeverAdvancementCustom::RequirementsMet(*rule,CustomMagicCount(p,s))&&
+                !ForeverAdvancementCustom::RequirementsMet(*rule,CustomMagicCount(p,candidate)))
+            { Error(p,"refund_custom_first");return; }
+        s.learned=std::move(candidate.learned);
+    }
     else { Error(p,"invalid_request");return; }
     SyncBookSchools(p,s);SyncSpellbook(p,s);Save(p,s);Snapshot(p,s);
 }
@@ -678,6 +708,7 @@ public:
         std::array<uint32,5> rejected={};
         for(auto const& row:AscensionSourceEntries)
         {
+            if(ForeverAdvancementCustom::Find(row.id)) continue;
             auto info=NativeClassSpell(row.spell,row.owner);bool native=info!=nullptr;
             if(!info) info=ResolveSpell(row.spell,row.owner,row.rank,row.names,names);
             if(!info&&examples.size()<12&&!examples.count(row.id))
@@ -733,6 +764,7 @@ public:
         TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: accepted={}; rejected_effects={}; missing_spells={}",traitTalents,traitRejected,traitMissing);
         TC_LOG_INFO("scripts","ForeverAdvancement named trait ranks: {} accepted by exact localized name and class tree",namedTraits);
         TC_LOG_INFO("scripts","ForeverAdvancement talent metadata: {} native class/rank records accepted",nativeTalents);
+        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: {} canonical abilities; protocol=3; version=1.11.0",ForeverAdvancementCustom::Rules.size());
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} compatible Ascension abilities; {} passive talents; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }
 };

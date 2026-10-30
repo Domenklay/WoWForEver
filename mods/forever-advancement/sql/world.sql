@@ -1,5 +1,5 @@
 START TRANSACTION;
-DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement');
+DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement','spell_forever_custom_mana_shield','aura_forever_custom_mana_shield');
 INSERT INTO spell_script_names (spell_id,ScriptName) VALUES
 (10,'spell_forever_advancement'),
 (53,'spell_forever_advancement'),
@@ -1656,7 +1656,6 @@ INSERT INTO spell_script_names (spell_id,ScriptName) VALUES
 (92175,'spell_forever_advancement'),
 (92176,'spell_forever_advancement'),
 (92177,'spell_forever_advancement'),
-(701463,'spell_forever_advancement'),
 (701494,'spell_forever_advancement'),
 (701500,'spell_forever_advancement'),
 (701510,'spell_forever_advancement'),

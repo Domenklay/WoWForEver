@@ -19,16 +19,25 @@ local errors={select_subclass="Сначала активируйте нужны�
  unavailable_or_power="Способность недоступна или не хватает ресурса.",incompatible_or_level="Способность недоступна для изучения на этом уровне.",
  ability_limit="Достигнут предел дополнительных способностей.",select_target="Выберите цель.",already_learned="Способность уже изучена.",
  talent_unavailable="Этот ранг таланта пока недоступен.",talent_requirements="Не хватает очков или не выполнены требования предыдущих рядов."}
+errors.custom_class_requirements="Нужны два разных магических класса: основной и классы купленных обычных способностей."
+errors.custom_requires_port="Эффекты Mana-forged Barrier ещё не перенесены в Forever. Покупка и применение недоступны."
+errors.refund_custom_first="Сначала верните зависимую кастомную способность."
+local customRules=ForeverAscensionCustomRules or {}
+local function customRule(row) return row and customRules[row.ID] end
+local function canonical(id) return customRules[id] and customRules[id].entry or id end
 local byClass,byId={},{ }
+local customRows={}
 for id in pairs(classes) do byClass[id]={} end
 for _,entry in ipairs(ForeverAscensionCatalog or {}) do
  byId[entry.ID]=entry
- for id,info in pairs(classes) do if entry.Class==info[1] then table.insert(byClass[id],entry);break end end
+ if not customRule(entry) then
+  for id,info in pairs(classes) do if entry.Class==info[1] then table.insert(byClass[id],entry);break end end
+ elseif canonical(entry.ID)==entry.ID then table.insert(customRows,entry) end
 end
 local state,pending,compatible=nil,nil,{}
 local protocol=0
 local window,summary,message,search,previous,nextPage,pageText,selectedText,talentPoints,emptyAbilities,showAllButton
-local activateButton,progressText
+local activateButton,progressText,customButton,talentHeading,customHelp
 local talentScroll,talentCanvas
 local classButtons,tabButtons,abilityNodes,talentNodes,connectors={},{},{},{},{}
 local powerBars=ForeverAscensionResourceBars or {}
@@ -52,6 +61,7 @@ local function button(parent,text,width,fn)
  local b=CreateFrame("Button",nil,parent,"UIPanelButtonTemplate");b:SetSize(width,24);b:SetText(text);b:SetScript("OnClick",fn);return b
 end
 local function spellName(row)
+ if customRule(row) then return row.Name end
  local d=compatible[row.ID]
  local known=state and state.known and state.known[row.ID]
  if known and C_Spell and C_Spell.GetSpellName then local text=C_Spell.GetSpellName(known);if text then return text end end
@@ -73,7 +83,7 @@ local function icon(row)
  end
  return row.Icon and ("Interface\\Icons\\"..row.Icon) or 134400
 end
-local function name(id) return classes[id] and classes[id][2] or "не выбран" end
+local function name(id) return id==0 and "Кастомное" or classes[id] and classes[id][2] or "не выбран" end
 local function isTalent(row) return row.Type=="Talent" or row.Type=="TalentAbility" end
 local function availableRow(row)
  local flags=row.Flags or 0
@@ -90,6 +100,16 @@ end
 local refresh
 local function tooltip(self)
  local row=self.entry;if not row or not GameTooltip then return end
+ if customRule(row) then
+  local rule=customRule(row);local status=state and state.custom[row.ID]
+  GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(row.Name,1,0.82,0.25)
+  GameTooltip:AddLine("Кастомное | источник: маг | spellID "..rule.spell,0.75,0.7,0.6,true)
+  GameTooltip:AddLine("Разные магические классы: "..(status and status.count or "?").." / "..rule.required_magic_classes,1,0.82,0.3,true)
+  GameTooltip:AddLine("Учитываются основной класс и классы купленных обычных способностей. Паладин также считается магическим классом.",0.8,0.8,0.8,true)
+  GameTooltip:AddLine(status and errors.custom_requires_port or "Обновите сервер для проверки кастомных требований.",0.9,0.5,0.35,true)
+  if state and state.learned[row.ID] then GameTooltip:AddLine("ПКМ — вернуть сохранённую покупку.",0.5,0.9,0.5,true) end
+  GameTooltip:Show();return
+ end
  local d=compatible[row.ID]
  local rank=state and state.talents[row.ID] or 0
  local tipSpell=(state and state.known and state.known[row.ID]) or (d and (d.spell or row.Spells[math.max(1,rank)]))
@@ -142,11 +162,20 @@ local function makeNode(parent,talent)
   b:RegisterForDrag("LeftButton")
   b:SetScript("OnDragStart",function(self)
    local row=self.entry;local d=row and compatible[row.ID]
+   if customRule(row) then return end
    if d and state and ((state.learned[row.ID] and state.active==d.owner) or state.known[row.ID]) and ForeverAscensionPickupSpell then ForeverAscensionPickupSpell(state.known[row.ID] or d.spell) end
   end)
  end
  b:SetScript("OnClick",function(self,mouse)
   local row=self.entry;if not row or not state then return end
+  if customRule(row) then
+   local status=state.custom[row.ID]
+   if mouse=="RightButton" and state.learned[row.ID] then send("unlearn "..row.ID)
+   elseif not status or protocol<3 then message:SetText("Обновите сервер для проверки кастомных требований.")
+   elseif status.count<customRule(row).required_magic_classes then message:SetText(errors.custom_class_requirements)
+   else message:SetText(errors.custom_requires_port) end
+   return
+  end
   local d=compatible[row.ID]
   if not d then message:SetText("Пока не подключено: "..spellName(row)..". Выберите «Только доступные».");return end
   if state.known[row.ID] and not state.learned[row.ID] then message:SetText("Это заклинание уже известно. Перетащите иконку или примените его из штатной книги.");return end
@@ -165,7 +194,7 @@ local function makeNode(parent,talent)
 end
 local function visible()
  local canonical={}
- for _,row in ipairs(byClass[selectedClass] or {}) do
+ for _,row in ipairs(selectedClass==0 and customRows or byClass[selectedClass] or {}) do
   if availableRow(row) and (row.Type=="Ability" or isTalent(row)) then
    local key=row.Type..":"..row.Tab..":"..tostring(row.Name or row.Spells[1] or row.ID)
    local previousRow=canonical[key]
@@ -178,7 +207,7 @@ local function visible()
   local matches=not selectedTab or row.Tab==selectedTab
   if matches and (filter=="" or string.find(fold(spellName(row)),filter,1,true)) then
    if isTalent(row) then table.insert(talents,row)
-   elseif showAll or compatible[row.ID] then table.insert(abilities,row) end
+   elseif customRule(row) or showAll or compatible[row.ID] then table.insert(abilities,row) end
   end
  end
  local function sort(a,b) local x,y=a.RequiredLevel or 1,b.RequiredLevel or 1;return x==y and a.ID<b.ID or x<y end
@@ -192,7 +221,10 @@ local function renderAbilities(rows)
    n.icon:SetTexture(icon(row));n.name:SetText(spellName(row));local d=compatible[row.ID]
    local learned=state and state.learned[row.ID]
    local known=state and state.known[row.ID]
-   if not d then n.note:SetText("Не подключено")
+   if customRule(row) then
+    local status=state and state.custom[row.ID]
+    n.note:SetText(status and ("Классы "..status.count.."/"..customRule(row).required_magic_classes.." | Требуется перенос") or "Требуется обновление сервера")
+   elseif not d then n.note:SetText("Не подключено")
    elseif known and not learned then n.note:SetText("Известно персонажу")
    elseif state and d.owner==state.primary then n.note:SetText("Основной класс: у наставника")
    elseif state and d.level>classLevel(d.owner) then n.note:SetText("Уровень "..d.level)
@@ -248,6 +280,10 @@ local function updatePowers()
 end
 refresh=function()
  if not window then return end
+ local custom=selectedClass==0
+ customButton:SetEnabled(not custom);activateButton:SetShown(not custom)
+ talentScroll:SetShown(not custom);talentPoints:SetShown(not custom);customHelp:SetShown(custom)
+ talentHeading:SetText(custom and "Кастомные способности" or "Таланты")
  if state then
   summary:SetText("Основной класс: "..name(state.primary).."  |  Уровень "..state.level.."  |  Умения "..state.used.."/"..state.limit)
   local progress=state.classes and state.classes[selectedClass]
@@ -257,13 +293,13 @@ refresh=function()
   talentPoints:SetText("TE активного: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
  else summary:SetText("Ожидаем состояние персонажа...");talentPoints:SetText("TE мультикласса: —") end
  local tabs,seen={},{ }
- for _,row in ipairs(byClass[selectedClass] or {}) do if availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
+ for _,row in ipairs(custom and {} or byClass[selectedClass] or {}) do if availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
  table.sort(tabs)
  if not selectedTab or not seen[selectedTab] then selectedTab=tabs[1] end
  for i,b in ipairs(tabButtons) do local tab=tabs[i];b.tab=tab;if tab then b:SetText(schools[tab] or tab);b:SetEnabled(tab~=selectedTab);b:Show() else b:Hide() end end
  for id,b in pairs(classButtons) do
   b.glow:SetShown(id==selectedClass)
-  local count=0;if state then for learned in pairs(state.learned) do local row=byId[learned];if row and row.Class==classes[id][1] then count=count+1 end end end
+  local count=0;if state then for learned in pairs(state.learned) do local row=byId[learned];if row and not customRule(row) and row.Class==classes[id][1] then count=count+1 end end end
   b.count:SetText(count>0 and tostring(count) or "")
  end
  selectedText:SetText(name(selectedClass).."  |  "..tostring(schools[selectedTab] or selectedTab or ""))
@@ -274,6 +310,7 @@ refresh=function()
  emptyAbilities:SetText(showAll and "Здесь пока нет записей." or ("В этой школе нет совместимых умений.\nНа сервере найдено: "..count..".\n«Все умения» показывает также записи без аналога."))
  pageText:SetText(page.." / "..pages);previous:SetEnabled(page>1);nextPage:SetEnabled(page<pages)
  showAllButton:SetText(showAll and "Только доступные" or "Все умения")
+ showAllButton:SetShown(not custom)
  if state and protocol<2 then message:SetText("Для талантов и нового каталога обновите сервер до версии 1.1.") end
  updatePowers()
 end
@@ -296,6 +333,8 @@ local function build()
  window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
  window:SetScript("OnDragStart",window.StartMoving);window:SetScript("OnDragStop",window.StopMovingOrSizing)
  if UISpecialFrames then table.insert(UISpecialFrames,"ForeverAscensionWindow") end
+ customButton=button(window,"Кастомное",116,function() selectedClass=0;selectedTab=nil;page=1;talentScroll:SetVerticalScroll(0);refresh() end)
+ customButton:SetPoint("TOPLEFT",17,-49)
  for i,id in ipairs(order) do
   local b=CreateFrame("Button",nil,window);b:SetSize(116,54);b:SetPoint("TOPLEFT",17,-89-(i-1)*59)
   b.icon=b:CreateTexture(nil,"ARTWORK");b.icon:SetSize(38,38);b.icon:SetPoint("LEFT",4,0)
@@ -324,7 +363,9 @@ local function build()
  for i=1,ABILITIES_PER_PAGE do local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",0,-(i-1)*54);abilityNodes[i]=n end
  emptyAbilities=label(abilityCanvas,"","GameFontHighlightSmall");emptyAbilities:SetPoint("CENTER",0,0);emptyAbilities:SetWidth(240);emptyAbilities:SetTextColor(0.6,0.7,0.82);emptyAbilities:SetShadowOffset(0,0);emptyAbilities:SetJustifyH("CENTER");emptyAbilities:SetWordWrap(true)
  local right=panel(window,436,-138,565,498)
- local title=label(right,"Таланты","GameFontNormalLarge");title:SetPoint("TOPLEFT",25,-14)
+ talentHeading=label(right,"Таланты","GameFontNormalLarge");talentHeading:SetPoint("TOPLEFT",25,-14)
+ customHelp=label(right,"Для Mana-forged Barrier нужны два разных магических класса.\n\nМагические классы: паладин, жрец, шаман, маг, чернокнижник, друид.\n\nУчитываются основной класс и классы купленных обычных способностей. Открытый каталог, уровень подкласса и кастомная покупка сами класс не добавляют.\n\nЭто отдельный барьер Ascension 701463. Его эффекты ещё требуют переноса в Forever; обычный щит маны 1463 его не заменяет. Пока барьер нельзя купить или применить.","GameFontHighlight")
+ customHelp:SetPoint("TOPLEFT",25,-60);customHelp:SetWidth(510);customHelp:SetJustifyH("LEFT");customHelp:SetWordWrap(true);customHelp:Hide()
  talentPoints=label(right,"","GameFontNormal");talentPoints:SetPoint("TOPRIGHT",-25,-16)
  talentScroll=CreateFrame("ScrollFrame","ForeverAscensionTalentScroll",right);talentScroll:SetPoint("TOPLEFT",10,-44);talentScroll:SetPoint("BOTTOMRIGHT",-10,8)
  talentCanvas=CreateFrame("Frame",nil,talentScroll);talentCanvas:SetSize(545,446);talentScroll:SetScrollChild(talentCanvas);talentScroll:EnableMouseWheel(true)
@@ -338,7 +379,7 @@ local function build()
   if not state then send("status");return end
   local candidates={}
   for id,d in pairs(compatible) do
-   if d.kind=="ability" and d.owner~=state.primary and d.level<=classLevel(d.owner) and not state.learned[id] and byId[id] then table.insert(candidates,id) end
+   if d.kind=="ability" and not customRule(byId[id]) and d.owner~=state.primary and d.level<=classLevel(d.owner) and not state.learned[id] and byId[id] then table.insert(candidates,id) end
   end
   table.sort(candidates)
   local row=byId[candidates[1]]
@@ -363,10 +404,11 @@ local function parse(text)
  local words={};for w in tostring(text):gmatch("%S+") do table.insert(words,w) end;local kind=words[1]
  if kind=="PROTOCOL" then protocol=tonumber(words[2]) or 0;return end
  if kind=="ERROR" then if message then message:SetText(errors[words[2]] or text:sub(7)) end;return end
- if kind=="STATE" then pending={primary=tonumber(words[2]),level=tonumber(words[3]),used=tonumber(words[4]),limit=tonumber(words[5]),active=0,classes={},powers={},regen={},learned={},known={},talents={},effects={},talentFree=0,talentSpent=0,talentTotal=0}
+ if kind=="STATE" then pending={primary=tonumber(words[2]),level=tonumber(words[3]),used=tonumber(words[4]),limit=tonumber(words[5]),active=0,classes={},powers={},regen={},learned={},known={},talents={},effects={},custom={},talentFree=0,talentSpent=0,talentTotal=0}
  elseif kind=="ACTIVE" and pending then pending.active=tonumber(words[2]) or 0
  elseif kind=="CLASS" and pending then pending.classes[tonumber(words[2])]={level=tonumber(words[3]),xp=tonumber(words[4]),next=tonumber(words[5])}
  elseif kind=="CATALOG" and pending then compatible={}
+ elseif kind=="CUSTOM" and pending then pending.custom[canonical(tonumber(words[2]))]={count=tonumber(words[5]) or 0,implemented=words[6]=="1"}
  elseif kind=="POWER" and pending then pending.powers[tonumber(words[2])]={current=tonumber(words[3]),maximum=tonumber(words[4])}
  elseif kind=="REGEN" and pending then pending.regen={normal=tonumber(words[2]),combat=tonumber(words[3])}
  elseif kind=="ENTRY" and pending then compatible[tonumber(words[2])]={kind="ability",spell=tonumber(words[3]),level=tonumber(words[4]),owner=tonumber(words[6])}
@@ -377,7 +419,7 @@ local function parse(text)
  elseif kind=="TEFFECT" and pending then
   local id=tonumber(words[2]);pending.effects[id]=pending.effects[id] or {};pending.effects[id][tonumber(words[3])]=tonumber(words[4])
  elseif kind=="KNOWN" and pending then pending.known[tonumber(words[2])]=tonumber(words[3])
- elseif kind=="LEARNED" and pending then pending.learned[tonumber(words[2])]=true
+ elseif kind=="LEARNED" and pending then pending.learned[canonical(tonumber(words[2]))]=true
  elseif kind=="END" and pending then state=pending;pending=nil;waiting=false;refresh() end
 end
 local events=CreateFrame("Frame")

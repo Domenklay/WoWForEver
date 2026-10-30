@@ -23,6 +23,7 @@ for line in lines:
     if line.startswith('ADVANCEMENT_ENABLED='):
         if not found:out.append('ADVANCEMENT_ENABLED='+sys.argv[1]);found=True
     elif line.startswith('SUBCLASS_ENABLED='):out.append('SUBCLASS_ENABLED=0')
+    elif line.startswith('SUBCLASS_FREEPICK='):out.append('SUBCLASS_FREEPICK=0')
     else:out.append(line)
 if not found:out.append('ADVANCEMENT_ENABLED='+sys.argv[1])
 p.write_text('\n'.join(out)+'\n')
@@ -72,7 +73,7 @@ if [ "$action" = rollback ]; then
     docker image inspect "$(cat "$backup/old-image.txt")" >/dev/null
     trap 'docker compose up -d --no-deps worldserver bnetserver web || true' ERR
     docker compose stop web bnetserver worldserver
-    printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement');" | mysql_world
+    printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement','spell_forever_custom_mana_shield','aura_forever_custom_mana_shield');" | mysql_world
     mysql_world < "$backup/world-bindings.sql"
     remove_native_power_hotfix
     if [ -f "$backup/native-power.sql" ]; then mysql_hotfixes < "$backup/native-power.sql"; fi
@@ -95,7 +96,7 @@ for name in ('ForeverSubclass','ForeverAscension'):
     if (p/'Interface/AddOns'/name).is_symlink():raise SystemExit('Symlinked AddOn folder is not supported')
 PY
 label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.advancement"}}' forever-trinitycore:latest)
-if [ "$label" = '1.10.0' ]; then :
+if [ "$label" = '1.11.0' ]; then :
 else echo 'Built image is stale or missing native-power-slot support. Run: bash scripts/advancement-mod.sh build';exit 1;fi
 running=$(docker compose ps --status running --services)
 for service in mysql worldserver bnetserver web; do
@@ -126,7 +127,7 @@ restore_on_error() {
         docker compose logs --no-color --timestamps --tail=3000 worldserver > "$backup/failed-worldserver.log" 2>&1 || true
         docker compose ps -a > "$backup/failed-services.txt" 2>&1 || true
         if [ -f "$backup/world-bindings.sql" ]; then
-            printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement');" | mysql_world || true
+            printf '%s\n' "DELETE FROM spell_script_names WHERE ScriptName IN ('spell_forever_subclass','spell_forever_advancement','spell_forever_custom_mana_shield','aura_forever_custom_mana_shield');" | mysql_world || true
             mysql_world < "$backup/world-bindings.sql" || true
         fi
         if [ "$native_power_changed" = 1 ]; then
@@ -152,7 +153,7 @@ docker compose exec -T mysql sh -c '
 ' | gzip > "$backup/databases.sql.gz"
 gzip -t "$backup/databases.sql.gz"
 docker compose exec -T mysql sh -c '
- MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --no-create-info --skip-add-locks --skip-disable-keys --compact --no-tablespaces --set-gtid-purged=OFF --where="ScriptName IN ('\''spell_forever_subclass'\'','\''spell_forever_advancement'\'')" world spell_script_names
+ MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --no-create-info --skip-add-locks --skip-disable-keys --compact --no-tablespaces --set-gtid-purged=OFF --where="ScriptName IN ('\''spell_forever_subclass'\'','\''spell_forever_advancement'\'','\''spell_forever_custom_mana_shield'\'','\''aura_forever_custom_mana_shield'\'')" world spell_script_names
 ' > "$backup/world-bindings.sql.tmp"
 mv "$backup/world-bindings.sql.tmp" "$backup/world-bindings.sql"
 docker compose exec -T mysql sh -c '
@@ -175,7 +176,10 @@ container=$(docker compose ps -q worldserver)
 started=$(docker inspect --format '{{.State.StartedAt}}' "$container")
 for ((attempt=0;attempt<90;attempt++)); do
     logs=$(docker compose logs --since "$started" --tail=1200 worldserver)
-    if grep -q 'ForeverAdvancement ready:' <<< "$logs" && grep -q 'worldserver-daemon.*ready' <<< "$logs"; then
+    if grep -q 'ForeverAdvancement ready:' <<< "$logs" && grep -q 'worldserver-daemon.*ready' <<< "$logs" && ! grep -q 'ForeverAdvancement custom rules: 1 canonical abilities; protocol=3; version=1.11.0' <<< "$logs"; then
+        echo 'Running advancement module has no current custom rules; rolling back.' >&2;exit 1
+    fi
+    if grep -q 'ForeverAdvancement ready:' <<< "$logs" && grep -q 'worldserver-daemon.*ready' <<< "$logs" && grep -q 'ForeverAdvancement custom rules: 1 canonical abilities; protocol=3; version=1.11.0' <<< "$logs"; then
         finished=1
         echo "ForeverAdvancement installed. Backup: $backup"
         echo 'Enable ForeverAscension in the game AddOns list, log in, and type /ascension.'

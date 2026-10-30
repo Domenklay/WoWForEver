@@ -1,6 +1,6 @@
 {
   "entries": 23709,
-  "native_candidates": 1856,
+  "native_candidates": 1855,
   "catalog_sha256": "bc121f89f0d31fa6f76457dba5d43c3bad3cdf7a98b64a7c24aa816358b9ef77",
   "source": "User supplied Content2.zip",
   "archive_sha256": "ec9b9ebba21986add13bec4bfc473fdaac3c8ecc305a2395aa9a536ce6e73fbe",
@@ -21,5 +21,15 @@
     "all_stats_reference": "reference/AllStats.xml",
     "loaded_directly": false
   },
-  "compatibility": "Exact multilingual spell identity checks plus runtime whitelist for ability costs and scalar passive talents"
+  "compatibility": "Exact multilingual spell identity checks plus runtime whitelist for ability costs and scalar passive talents",
+  "custom_overlay": {
+    "registry": "catalog/CustomAbilities.json",
+    "canonical_entry": 1300,
+    "aliases": [
+      34782
+    ],
+    "source_spell": 701463,
+    "implemented": false,
+    "original_catalog_unchanged": true
+  }
 }

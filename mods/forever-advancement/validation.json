@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-30",
+  "branch": "feat/forever-ascension",
+  "addon_version": "1.11.0",
+  "server_protocol": 3,
+  "core_commit": "91d49b230f89c3ab4719f5b2b2d1e70ed36613c4",
+  "custom_barrier": {
+    "entry": 1300,
+    "alias": 34782,
+    "source_spell": 701463,
+    "native_mana_shield_1463_is_separate": true,
+    "duplicate_card_removed": true,
+    "required_magic_classes": 2,
+    "paladin_included": true,
+    "effects_implemented": false,
+    "purchase_and_cast_blocked": true
+  },
+  "python_tests": {
+    "run": 234,
+    "passed": 208,
+    "skipped": 26,
+    "failed": 0,
+    "errors": 0,
+    "skip_groups": {
+      "Native CascLib checker required": 19,
+      "Native tag-mask checker required": 1,
+      "Real CascLib checker required": 1,
+      "Compile tools/legion-casc-probe/probe.cpp with real CascLib first": 1,
+      "Compile tools/legion-casc-probe/check-storage.cpp with real CascLib first": 1,
+      "native DB2 loader checker not configured": 1,
+      "Native checker required": 2
+    }
+  },
+  "native_compiler": {
+    "compiler": "GCC 13.3 / C++20 / Ubuntu 24.04",
+    "cached_pch_used": false,
+    "adapter_syntax_exit_code": 0,
+    "core_syntax_checks": [
+      {
+        "file": "Player.cpp",
+        "exit_code": 0
+      },
+      {
+        "file": "DB2Stores.cpp",
+        "exit_code": 0
+      },
+      {
+        "file": "HotfixHandler.cpp",
+        "exit_code": 0
+      },
+      {
+        "file": "ChatHandler.cpp",
+        "exit_code": 0
+      }
+    ],
+    "full_link_of_this_branch_verified": false
+  },
+  "mysql": {
+    "mysql": "8.0.46",
+    "repeated_schema_and_bindings": true,
+    "foreign_scripts_preserved": true,
+    "obsolete_scripts_removed": true,
+    "all_four_script_names_restored_by_backup": true,
+    "unported_barrier_has_no_binding": true,
+    "purchases_resources_talents_levels_xp_and_active_class_preserved": true
+  },
+  "compose_config_valid": true,
+  "shell_syntax_valid": true,
+  "installed_on_user_machine": false,
+  "live_client_verified": false,
+  "limits": "This update fixes the correct advancement catalogue, deduplication, server requirements and upgrade checks. Mana-forged Barrier effects and dependencies remain unported; no native Mana Shield substitution is enabled. Tests used native headers, controlled UI/server fixtures and isolated MySQL. No production Docker-image launch or real-client gameplay was performed."
+}

@@ -30,7 +30,7 @@ class AdvancementTests(unittest.TestCase):
             self.assertEqual(result['entries'],23709)
             root_row=next(line for line in (root/'server/AscensionCatalog.h').read_text().splitlines() if line.startswith('{25,11,339,'))
             self.assertIn(json.dumps('Гнев деревьев',ensure_ascii=True),root_row)
-            for name in ['addon/ForeverAscension/Catalog.lua','server/AscensionCatalog.h','sql/world.sql']:
+            for name in ['addon/ForeverAscension/Catalog.lua','server/AscensionCatalog.h','sql/world.sql','addon/ForeverAscension/CustomRules.lua','server/AscensionCustomCatalog.h']:
                 self.assertEqual((root/name).read_bytes(),(MODULE/name).read_bytes())
             data=json.loads((root/'catalog/CharacterAdvancementData.json').read_text())
             data.append(data[0]);(root/'catalog/CharacterAdvancementData.json').write_text(json.dumps(data))
@@ -74,6 +74,21 @@ class AdvancementTests(unittest.TestCase):
             self.assertFalse((client/'Interface/AddOns/ForeverAscension').exists())
             (client/'Interface/AddOns/ForeverSubclass').symlink_to(root,target_is_directory=True)
             with self.assertRaises(ValueError):installer.install(client,root/'second')
+
+    def test_repeated_addon_install_keeps_one_current_folder_and_preserves_edits_in_backup(self):
+        installer=load('install-advancement-addon.py')
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);client=root/'client';client.mkdir();(client/'WowB.exe').touch()
+            target=installer.install(client,root/'first')
+            (target/'user.lua').write_text('local edits')
+            installer.install(client,root/'second')
+            self.assertEqual([p.name for p in target.parent.iterdir()],['ForeverAscension'])
+            self.assertFalse((target/'user.lua').exists())
+            self.assertEqual((root/'second/ForeverAscension/user.lua').read_text(),'local edits')
+            self.assertIn('## Version: 1.11.0',(target/'ForeverAscension.toc').read_text())
+            installer.restore(root/'second')
+            self.assertEqual((target/'user.lua').read_text(),'local edits')
+            self.assertFalse((target.parent/'ForeverSubclass').exists())
 
     def test_injection_adds_native_class_schools_without_automatic_learning(self):
         injector=load('inject-advancement.py')
@@ -167,6 +182,7 @@ function methods:SetTexCoord(...) self.texcoords={...} end
 function methods:SetShadowOffset(x,y) self.shadow={x,y} end
 function methods:Show() self.shown=true end
 function methods:Hide() self.shown=false end
+function methods:SetShown(value) self.shown=value end
 function methods:IsShown() return self.shown~=false end
 function methods:SetEnabled(value) self.enabled=value end
 function methods:SetText(text) self.text=text end
@@ -223,6 +239,7 @@ class AdvancementUITests(unittest.TestCase):
         try:
             lib.luaL_openlibs(state)
             for chunk in [MOCK,(MODULE/'addon/ForeverAscension/Catalog.lua').read_text(),
+                          (MODULE/'addon/ForeverAscension/CustomRules.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/Portrait.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/CharacterStats.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/Integration.lua').read_text(),

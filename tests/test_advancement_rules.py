@@ -571,7 +571,7 @@ auto sSpellMgr=&spellMgr;
 std::map<uint32,std::vector<Definition>> Catalog;
 std::map<uint32,std::vector<TalentDefinition>> TalentCatalog;
 uint32 TalentCap=71;
-'''+UTF8_UTIL_STUB+functions+r'''
+'''+UTF8_UTIL_STUB+'\n#include \"'+str(SOURCE.parent/'CustomAbilityRules.h')+'\"\n'+functions+r'''
 int main() {
  Player p;State s;s.classes[8].level=40;s.classes[5].level=40;Refresh(&p,s);
  p.level=60;assert(TalentBudget(&p,s)==31);p.level=20;
@@ -587,6 +587,8 @@ int main() {
  auto mage=Best(10,20);auto priest=Best(20,20);
  assert(mage->spell==116 && Best(10,30)->spell==205 && !Best(10,1));
  assert(CanCast(&p,s,*mage) && !CanCast(&p,s,*priest));
+ Definition custom{1300,8,116,1};s.learned.insert(1300);
+ assert(!CanCast(&p,s,custom));s.learned.erase(1300);
  s.active=5;assert(CanCast(&p,s,*priest)&&!CanCast(&p,s,*mage));
  s.active=0;assert(!CanCast(&p,s,*priest)&&!CanCast(&p,s,*mage));
  Refresh(&p,s);assert(Available(&p,s,POWER_MANA)==550&&Available(&p,s,POWER_ENERGY)==100&&Available(&p,s,POWER_RAGE)==25);

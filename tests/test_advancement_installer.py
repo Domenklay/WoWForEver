@@ -15,13 +15,13 @@ with open(os.environ['FAKE_DOCKER_LOG'],'a') as f:
  if args[:3]==['compose','exec','-T'] and 'mysqldump' not in text:
   f.write(sys.stdin.read()+'\n')
 if args[:2]==['image','inspect']:
- print('1.10.0')
+ print(os.environ.get('FAKE_IMAGE_VERSION','1.11.0'))
 elif args[:2]==['inspect','--format']:
  print('2026-10-28T00:00:00Z')
 elif args[:2]==['compose','ps']:
  print('mysql\nworldserver\nbnetserver\nweb' if '--services' in args else 'fixture-container')
 elif args[:2]==['compose','logs']:
- print('worldserver-daemon fixture ready\nForeverAdvancement ready: 2 compatible Ascension abilities; 8 slots')
+ print('worldserver-daemon fixture ready\nForeverAdvancement ready: 2 compatible Ascension abilities; 8 slots\nForeverAdvancement custom rules: 1 canonical abilities; protocol=3; version=1.11.0')
 elif 'mysqldump' in text:
  if os.environ.get('FAKE_FAILURE')=='backup' and '--databases' in text:sys.exit(1)
  print('-- fixture SQL dump')
@@ -32,7 +32,7 @@ elif args[:2]==['compose','up'] and os.environ.get('FAKE_FAILURE')=='startup':
 
 
 class AdvancementInstallerTests(unittest.TestCase):
-    def run_install(self,root,failure='',action='install'):
+    def run_install(self,root,failure='',action='install',image_version='1.11.0'):
         scripts=root/'scripts';scripts.mkdir()
         for name in ['advancement-mod.sh','install-advancement-addon.py','subclass-log-config.py']:
             shutil.copy2(ROOT/'scripts'/name,scripts/name)
@@ -44,7 +44,7 @@ class AdvancementInstallerTests(unittest.TestCase):
         (root/'.env').write_text('SUBCLASS_ENABLED=1\nUNRELATED=preserved\n')
         fake=root/'bin';fake.mkdir();(fake/'docker').write_text(FAKE_DOCKER);(fake/'docker').chmod(0o755)
         (fake/'git').write_text('#!/bin/sh\necho fixture-source-commit\n');(fake/'git').chmod(0o755)
-        env=os.environ.copy();env.update(PATH=str(fake)+os.pathsep+env['PATH'],FAKE_DOCKER_LOG=str(root/'docker.log'),FAKE_FAILURE=failure)
+        env=os.environ.copy();env.update(PATH=str(fake)+os.pathsep+env['PATH'],FAKE_DOCKER_LOG=str(root/'docker.log'),FAKE_FAILURE=failure,FAKE_IMAGE_VERSION=image_version)
         result=subprocess.run(['bash',str(scripts/'advancement-mod.sh'),action,str(client)],env=env,capture_output=True,text=True,timeout=20)
         return result,client,(root/'docker.log').read_text() if (root/'docker.log').exists() else ''
 
@@ -60,6 +60,16 @@ class AdvancementInstallerTests(unittest.TestCase):
             self.assertEqual((backup/'addon/ForeverSubclass/user.lua').read_text(),'old user UI')
             self.assertLess(log.index('mysqldump'),log.index('CREATE TABLE IF NOT EXISTS'))
             self.assertNotIn('DROP TABLE',log)
+            self.assertIn('spell_forever_custom_mana_shield',log)
+            self.assertIn('aura_forever_custom_mana_shield',log)
+
+    def test_old_image_is_rejected_before_stopping_services_or_replacing_addons(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result,client,log=self.run_install(Path(temp),image_version='1.9.0')
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('Built image is stale',result.stdout)
+            self.assertNotIn('compose stop',log)
+            self.assertTrue((client/'Interface/AddOns/ForeverSubclass/user.lua').is_file())
 
     def test_addon_only_update_and_rollback_never_invoke_docker(self):
         with tempfile.TemporaryDirectory() as temp:
