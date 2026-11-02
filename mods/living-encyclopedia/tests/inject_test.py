@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory() as td:
 
     loader_text = loader.read_text()
     chat_text = chat.read_text()
-    for name in ("forever_encyclopedia", "forever_encyclopedia_talents", "forever_encyclopedia_runtime"):
+    for name in ("forever_encyclopedia", "forever_encyclopedia_talents", "forever_encyclopedia_runtime", "forever_encyclopedia_abilities"):
         assert loader_text.count(f"void AddSC_{name}();") == 1
         assert loader_text.count(f"    AddSC_{name}();") == 1
     for prefix in ("FEC1", "FET1", "FEB1"):
@@ -40,5 +40,6 @@ with tempfile.TemporaryDirectory() as td:
     assert (custom / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").is_file()
     assert (custom / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").is_file()
     assert (custom / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").is_file()
+    assert (custom / "ForeverEncyclopedia/ForeverEncyclopediaAbilities.cpp").is_file()
     assert (custom / "ForeverEncyclopedia/TalentRules.h").is_file()
 print("Encyclopedia injector test passed")
