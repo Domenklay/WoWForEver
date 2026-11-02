@@ -50,9 +50,12 @@ def patch_dockerfile():
         pos = exactly_once(text, marker, 'Dockerfile build-stage boundary')
         text = text[:pos] + SCALING_BUILD_BLOCK + text[pos:]
 
-    label_pattern = r'LABEL org\.wowforever\.scaling="[^"]+"'
-    replacement = f'LABEL org.wowforever.scaling="{SCALING_VERSION}"'
-    text, count = re.subn(label_pattern, replacement, text)
+    # The scaling label may be standalone or share a LABEL instruction with
+    # another module (for example org.wowforever.subclass). Replace only the
+    # key/value token so both layouts upgrade cleanly.
+    label_pattern = r'org\.wowforever\.scaling="[^"]+"'
+    label_value = f'org.wowforever.scaling="{SCALING_VERSION}"'
+    text, count = re.subn(label_pattern, label_value, text)
     if count > 1:
         raise SystemExit(f'Dockerfile scaling label: expected at most one label, found {count}')
     if count == 0:
@@ -62,7 +65,7 @@ def patch_dockerfile():
         if not m:
             raise SystemExit('Dockerfile runtime boundary: FROM line not found after runtime marker')
         insert = start + m.end()
-        text = text[:insert] + replacement + '\n' + text[insert:]
+        text = text[:insert] + f'LABEL {label_value}\n' + text[insert:]
 
     path.write_text(text)
 
