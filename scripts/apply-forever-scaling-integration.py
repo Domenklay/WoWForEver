@@ -9,7 +9,8 @@ from pathlib import Path
 import re
 
 
-SCALING_BUILD_BLOCK = '''# Forever Scaling uses the pinned core's per-target creature stat path and a UnitScript damage guard.
+SCALING_VERSION = '0.2.0'
+SCALING_BUILD_BLOCK = '''# Forever Scaling uses the pinned core's target/viewer-dependent creature stat path and a UnitScript damage guard.
 # It is compiled into the image but disabled at runtime until FOREVER_SCALING_ENABLED=1.
 COPY mod-forever-scaling /forever-scaling-module
 COPY scripts/inject-forever-scaling.py /tmp/inject-forever-scaling.py
@@ -49,14 +50,19 @@ def patch_dockerfile():
         pos = exactly_once(text, marker, 'Dockerfile build-stage boundary')
         text = text[:pos] + SCALING_BUILD_BLOCK + text[pos:]
 
-    if 'org.wowforever.scaling=' not in text:
+    label_pattern = r'LABEL org\.wowforever\.scaling="[^"]+"'
+    replacement = f'LABEL org.wowforever.scaling="{SCALING_VERSION}"'
+    text, count = re.subn(label_pattern, replacement, text)
+    if count > 1:
+        raise SystemExit(f'Dockerfile scaling label: expected at most one label, found {count}')
+    if count == 0:
         runtime_marker = '############################ runtime ############################\n'
         start = exactly_once(text, runtime_marker, 'Dockerfile runtime boundary') + len(runtime_marker)
         m = re.match(r'FROM[^\n]*\n', text[start:])
         if not m:
             raise SystemExit('Dockerfile runtime boundary: FROM line not found after runtime marker')
         insert = start + m.end()
-        text = text[:insert] + 'LABEL org.wowforever.scaling="0.1.0"\n' + text[insert:]
+        text = text[:insert] + replacement + '\n' + text[insert:]
 
     path.write_text(text)
 
@@ -133,7 +139,7 @@ def verify():
     required = {
         'Dockerfile injector COPY': 'COPY scripts/inject-forever-scaling.py /tmp/inject-forever-scaling.py',
         'Dockerfile injector RUN': 'RUN python3 /tmp/inject-forever-scaling.py /src/TrinityCore --module /forever-scaling-module',
-        'Dockerfile scaling label': 'org.wowforever.scaling="0.1.0"',
+        'Dockerfile scaling label': f'org.wowforever.scaling="{SCALING_VERSION}"',
         'Compose runtime enable': 'FOREVER_SCALING_ENABLED:',
         'Compose damage guard': 'FOREVER_SCALING_DAMAGE_GUARD:',
     }
@@ -151,4 +157,4 @@ if __name__ == '__main__':
     patch_dockerfile()
     patch_compose()
     verify()
-    print('ForeverScaling Docker integration applied and verified')
+    print(f'ForeverScaling {SCALING_VERSION} Docker integration applied and verified')
