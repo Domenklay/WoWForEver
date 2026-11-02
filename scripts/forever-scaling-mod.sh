@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 action=${1:-status}
-version=0.1.0
+version=0.2.0
 
 set_env() {
     local key=$1 value=$2
