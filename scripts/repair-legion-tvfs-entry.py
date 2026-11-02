@@ -3,7 +3,9 @@
 
 Mirror the original texture's RU virtual entries INSIDE their native child
 manifests. Entry/layout tests preserve ROOT; root-variant adds its missing native
-alternate profile. Confirm in-game before expanding this experiment to a zone.
+alternate profile. Native-control redirects an EXISTING native texture ID to
+another native BLP, independently of new-ID registration. Confirm in-game before
+expanding this experiment to a zone.
 """
 import argparse
 import copy
@@ -20,12 +22,67 @@ import tempfile
 import uuid
 
 from casc_texture_variants import mirror_alternate
+from casc_native_texture_control import binding_pairs, redirect_root, redirect_child
 
 spec=importlib.util.spec_from_file_location('entry_install',Path(__file__).with_name('install-legion-resources.py'))
 install=importlib.util.module_from_spec(spec);spec.loader.exec_module(install)
 storelib=install.canary.storelib
 OLD_ID=123086
 NEW_ID=15728640
+
+
+def plan_native_control(store, old_id, donor_id=None, progress=print):
+    """Plan only; choose a locally readable neighbouring BLP with equal profiles."""
+    root_audit=install.load('audit-legion-root-types.py')
+    encoding=root_audit.Encoding(configured(store,'encoding'))
+    root=root_audit.read_content(store,encoding,store.values['root'].split()[0])
+    candidates=[donor_id] if donor_id is not None else list(range(old_id+1,old_id+129))
+    candidates=[i for i in candidates if i!=old_id and 0<i<0xf00000]
+    observed=root_audit.profiles(root,set(candidates)|{old_id})
+    donor=None;failures=[]
+    target_profiles=observed.get(old_id,[])
+    def signature(rows):return sorted((r['locale'],tuple(r['raw_flags'])) for r in rows)
+    for candidate in candidates:
+        if not target_profiles or signature(observed.get(candidate,[]))!=signature(target_profiles):
+            continue
+        ordinary=[r for r in observed[candidate] if r['raw_flags'][0]==0]
+        if len(ordinary)!=1:continue
+        try:
+            body=root_audit.read_content(store,encoding,ordinary[0]['ckey'])
+            if body[:4] not in (b'BLP1',b'BLP2'):
+                raise ValueError('Donor is not a BLP texture')
+            # Match profiles and exclude identical content before selecting.
+            binding_pairs(root,old_id,candidate)
+        except (ValueError,OSError,KeyError) as error:
+            failures.append(str(candidate)+': '+str(error));continue
+        donor=candidate;break
+    if donor is None:
+        raise ValueError('No compatible locally readable native BLP donor found; no files changed. '+
+                         '; '.join(failures[:3]))
+    changed,pairs=redirect_root(root,old_id,donor)
+    original=configured(store,'vfs-root');top=storelib.tvfs.parse_tvfs(original)
+    registry={}
+    for key,value in store.values.items():
+        if re.fullmatch(r'vfs-\d+',key):
+            ck,ek=value.split()[:2];registry.setdefault((ck,ek[:18]),[]).append((key,ek))
+    children=[];replacements={};covered=set()
+    for name,spans in top['leaves'].items():
+        if not re.fullmatch(r'[0-9A-Fa-f]{16}',name) or not int(name[:8],16)&0x2000:continue
+        if len(spans)!=1 or spans[0]['offset']!=0:raise ValueError('Unsupported native directory span')
+        span=spans[0];matches=registry.get((span['ckey'],span['ekey_prefix']),[])
+        if not matches or len({ek for _,ek in matches})!=1:raise ValueError('Native directory is not registered consistently')
+        key,ek=matches[0];data=store.read(bytes.fromhex(ek),bytes.fromhex(span['ckey']))
+        if len(data)!=span['bytes']:raise ValueError('Native child size mismatch')
+        candidate,rows=redirect_child(storelib.tvfs,data,old_id,donor,pairs)
+        if candidate is None:continue
+        obj=install.canary.lab.asset(candidate);children.append(obj)
+        replacements[name]=dict(obj=obj,source_config_key=key,directory=name,mirrored=rows)
+        covered.update(r['original_ckey'] for r in rows)
+    if covered!={p['original']['ckey'] for p in pairs}:
+        raise ValueError('Not every native target variant has a verified donor route in RU TVFS')
+    progress(f'Compatible native texture control: {old_id} -> {donor}; no new FileDataID')
+    return dict(original=original,children=children,replacements=replacements,removed=[],
+                redirected_root=changed,root_pairs=pairs,donor_id=donor)
 
 
 def configured(store,name):
@@ -128,12 +185,20 @@ def plan_layout(store,parent,progress=print):
     return dict(original=original,candidate=candidate,children=children,replacements=replacements,removed=[])
 
 
-def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=False,root_variant=False):
+def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=False,root_variant=False,
+          native_control=False,donor_id=None,dry_run=False):
+    if native_control and (layout_only or root_variant):raise ValueError('Choose one experiment at a time')
+    if dry_run and not native_control:raise ValueError('Dry-run is only available for native-control')
     if layout_only and root_variant:raise ValueError('Choose one experiment at a time')
     client,_=install.canary.copy_identity(client);parent_folder,parent=install.operation(client)
     if parent['phase']!='verified' or not parent.get('root_types_repaired'):
         raise ValueError('Expected a verified type-repaired resource layer')
-    if root_variant:
+    if parent.get('native_texture_control'):
+        raise ValueError('Native texture control already active; rollback that control before another experiment')
+    if native_control:
+        if parent.get('tvfs_canary_original_id')!=old_id:
+            raise ValueError('Expected the recorded native texture experiment')
+    elif root_variant:
         if (not parent.get('tvfs_entry_canary') or not parent.get('tvfs_layout_canary')
                 or parent.get('tvfs_root_variant_canary')):
             raise ValueError('Expected the verified layout experiment without a ROOT variant experiment')
@@ -159,12 +224,38 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=
             list(struct.unpack_from('<16I',meta['shmem'],0x110))!=[store.buckets[i]['version'] for i in range(16)] or
             store.values.get('vfs-1')!=store.values.get('vfs-root')):
         raise ValueError('Client metadata is inconsistent; close game and launcher')
-    if root_variant:
+    if native_control:
+        prepared_plan=plan_native_control(store,old_id,donor_id,progress)
+        donor_id=prepared_plan['donor_id']
+        probe=install.scan(checker,client,[old_id,donor_id],parent['locale'],progress)
+        for fid,side in [(old_id,'original'),(donor_id,'replacement')]:
+            row=probe.get(fid,{})
+            allowed={p[side]['ckey'] for p in prepared_plan['root_pairs']}
+            if row.get('status')!='READ_OK' or row.get('ckey') not in allowed:
+                raise ValueError('Native texture control could not read a matching profile: '+str(fid))
+        if probe[old_id]['sha256']==probe[donor_id]['sha256']:
+            raise ValueError('Native texture contents are identical')
+        if dry_run:
+            if (client/'.build.info').read_bytes()!=original or install.container.metadata(client/'Data/data')!=meta:
+                raise ValueError('Client changed during planning; close game and launcher')
+            return dict(format='wowforever-native-texture-control-plan-v1',operation=parent_folder.name,
+                target_id=old_id,donor_id=donor_id,root_pairs=prepared_plan['root_pairs'],
+                native_before={str(fid):probe[fid] for fid in (old_id,donor_id)},
+                client_modified=False,server_modified=False,in_game_texture_render_verified=False)
+        before.update(probe)
+        expected[donor_id]={key:probe[donor_id][key] for key in ('bytes','sha256','ckey','tag_mask')}
+        expected[donor_id]['bytes']=int(expected[donor_id]['bytes'])
+        expected[old_id]=copy.deepcopy(expected[donor_id])
+    elif root_variant:
         prepared_plan=dict(original=configured(store,'vfs-root'),children=[],replacements={},removed=[])
     else:
         prepared_plan=plan_layout(store,parent,progress) if layout_only else plan(store,progress,old_id,new_id)
     old_root_ref=storelib.tvfs.parse_tvfs(prepared_plan['original'])['leaves']['.root']
     def change_root(root):
+        if native_control:
+            changed,pairs=redirect_root(root,old_id,donor_id)
+            if changed!=prepared_plan['redirected_root']:raise ValueError('ROOT changed during control planning')
+            return changed
         if not root_variant:return root
         changed,added=mirror_alternate(root,old_id,new_id)
         # Both native variants must already have identical old/new TVFS rows.
@@ -192,6 +283,12 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=
         progress('Adding the missing native ROOT variant for one private texture; payloads unchanged...')
         return changed
     def change_vfs(data):
+        if native_control:
+            parsed=storelib.tvfs.parse_tvfs(data);leaves=copy.deepcopy(parsed['leaves']);est=parsed['tables']['est']
+            for name,row in prepared_plan['replacements'].items():
+                est,leaves[name]=add_span(est,row['obj'])
+            prepared_plan['candidate']=storelib.encode_tvfs(leaves,est)
+            return prepared_plan['candidate']
         if root_variant:
             old=storelib.tvfs.parse_tvfs(prepared_plan['original'])['leaves']
             new=storelib.tvfs.parse_tvfs(data)['leaves']
@@ -253,6 +350,15 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=
         configuration=dict(path=configuration['path'],created=created,sha256=install.canary.sha(configuration['body'])),
         original_segments=sorted(prologues),resource_ancestors=list(parent.get('resource_ancestors',[]))+[parent_folder.name],
         wow_client_runtime_verified=False)
+    if native_control:
+        # Preserve prior canary descriptors so the old layer is recoverable.
+        for key in ('tvfs_entry_canary','tvfs_canary_original_id','tvfs_canary_new_id',
+                    'tvfs_layout_canary','tvfs_canary_directories'):
+            if key in parent:journal[key]=copy.deepcopy(parent[key])
+        journal.update(native_texture_control=True,native_texture_control_target=old_id,
+            native_texture_control_donor=donor_id,native_texture_control_pairs=prepared_plan['root_pairs'],
+            expected_after={str(fid):row for fid,row in expected.items()},
+            root_policy='Existing native ID redirected to compatible native BLP; no new IDs or game payloads')
     if layout_only:
         journal['tvfs_layout_templates']={name:row['template_config_key'] for name,row in prepared_plan['replacements'].items()}
     if root_variant:
@@ -290,36 +396,65 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=
         directories=report_rows,native_verified_ids=len(actual),root_unchanged=not root_variant,server_modified=False,
         game_asset_payloads_unchanged=True,in_game_texture_render_verified=False,tvfs_layout_only=layout_only,
         root_variant_only=root_variant)
+    if native_control:
+        result.update(native_texture_control=True,target_id=old_id,donor_id=donor_id,root_unchanged=False,
+                      new_file_data_ids=0,root_pairs=prepared_plan['root_pairs'])
     if root_variant:
         result.update(root_variant_added=prepared_plan['root_variant_added'],alternate_residency_not_guaranteed=True)
     install.canary.checkpoint(folder/'result.json',result)
-    label='NATIVE ROOT VARIANT CANARY INSTALLED' if root_variant else 'NATIVE TVFS LAYOUT CANARY INSTALLED' if layout_only else 'NATIVE TVFS ENTRY CANARY INSTALLED'
+    label='NATIVE TEXTURE CONTROL INSTALLED' if native_control else 'NATIVE ROOT VARIANT CANARY INSTALLED' if root_variant else 'NATIVE TVFS LAYOUT CANARY INSTALLED' if layout_only else 'NATIVE TVFS ENTRY CANARY INSTALLED'
     progress(label+'; repeat the texture comparison before teleporting.')
     progress('Report: '+str(folder/'result.json'))
     return result
 
 
-def rollback(client):
+def rollback(client,native_control_only=False):
     client,_=install.canary.copy_identity(client);folder,journal=install.operation(client)
+    if native_control_only and not journal.get('native_texture_control'):
+        raise ValueError('No active native texture control; nothing changed')
     if not journal.get('tvfs_entry_canary'):raise ValueError('No active TVFS entry canary')
     install.rollback(client)
     install.canary.checkpoint(client/install.OPS/'active.json',dict(operation=journal['resource_ancestors'][-1]))
-    print('ROOT VARIANT CANARY ROLLED BACK; previous layout canary retained' if journal.get('tvfs_root_variant_canary') else 'TVFS LAYOUT CANARY ROLLED BACK; previous entry canary retained' if journal.get('tvfs_layout_canary') else 'TVFS ENTRY CANARY ROLLED BACK; type repair and resource payloads retained')
+    print('NATIVE TEXTURE CONTROL ROLLED BACK; previous experiment retained' if journal.get('native_texture_control') else 'ROOT VARIANT CANARY ROLLED BACK; previous layout canary retained' if journal.get('tvfs_root_variant_canary') else 'TVFS LAYOUT CANARY ROLLED BACK; previous entry canary retained' if journal.get('tvfs_layout_canary') else 'TVFS ENTRY CANARY ROLLED BACK; type repair and resource payloads retained')
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['apply','repack-layout','root-variant','rollback']);parser.add_argument('client',type=Path)
+    parser.add_argument('action',choices=['apply','repack-layout','root-variant','rollback',
+        'native-control-check','native-control-apply','native-control-rollback']);parser.add_argument('client',type=Path)
+    parser.add_argument('--donor-id',type=int,help='Existing compatible native BLP ID; check auto-selects if omitted')
     parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'))
     parser.add_argument('--report-dir',type=Path);args=parser.parse_args()
     try:
         token=hashlib.sha256(str(args.client.resolve()).casefold().encode()).hexdigest()
         with (Path(tempfile.gettempdir())/('wowforever-casc-edit-'+token+'.lock')).open('a') as lock:
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            if args.action in {'apply','repack-layout','root-variant'}:
+            if args.action in {'native-control-check','native-control-apply'}:
+                if args.action=='native-control-apply' and args.donor_id is None:
+                    raise ValueError('Run native-control-check first, then supply its --donor-id after the visual baseline')
+                result=apply(args.client,args.checker,native_control=True,donor_id=args.donor_id,
+                    dry_run=args.action=='native-control-check')
+                if args.action=='native-control-check':
+                    from datetime import datetime,timezone
+                    from legion_reports import default_root
+                    report_dir=args.report_dir or default_root(args.client)
+                    report_dir=report_dir.resolve()
+                    if report_dir.is_relative_to(args.client.resolve()) or report_dir.is_relative_to(Path(__file__).resolve().parents[1]):
+                        raise ValueError('Choose a report directory outside the client and repository')
+                    report_dir.mkdir(parents=True,exist_ok=True)
+                    report=report_dir/('Dalaran-native-control-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:8]+'.json')
+                    with report.open('x') as stream:json.dump(result,stream,indent=2)
+                    print('READ-ONLY CONTROL PLAN: '+str(report))
+                    print('Target ID:',result['target_id'],'Donor ID:',result['donor_id'])
+                    print('In game: /run WFCdonor='+str(result['donor_id']))
+                    print('Show both native IDs in game BEFORE installing; both must render and look different.')
+                else:
+                    from legion_reports import auto_collect
+                    auto_collect(args.client,args.report_dir)
+            elif args.action in {'apply','repack-layout','root-variant'}:
                 apply(args.client,args.checker,layout_only=args.action=='repack-layout',root_variant=args.action=='root-variant')
                 from legion_reports import auto_collect
                 auto_collect(args.client,args.report_dir)
-            else:rollback(args.client)
+            else:rollback(args.client,native_control_only=args.action=='native-control-rollback')
     except (ValueError,OSError,KeyError,TypeError,struct.error) as error:
         parser.exit(1,'TVFS entry canary stopped: '+str(error)+'\n')
