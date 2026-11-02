@@ -1,36 +1,67 @@
-# WoW Forever Scaling v0.1.0
+# WoW Forever Scaling v0.2.0
 
-Status: integration candidate for the pinned TrinityCore Forever revision `91d49b230f89c3ab4719f5b2b2d1e70ed36613c4`. Policy tests pass. A full TrinityCore Docker compile is still required on the server before calling the module build-verified.
+Status: personal virtual-scaling integration candidate for the pinned TrinityCore Forever revision `91d49b230f89c3ab4719f5b2b2d1e70ed36613c4`. Policy tests pass; the server Docker build is the authoritative compile test for the pinned fork.
 
 ## Scope
 
-The module is compiled into `worldserver` but is disabled until `FOREVER_SCALING_ENABLED=1`. It changes no creature database rows and writes no persistent scaled level to `creature_template` or spawn data.
+The module is compiled into `worldserver` but is disabled until `FOREVER_SCALING_ENABLED=1`. It changes no creature database rows and never persists a scaled level to `creature_template` or spawn data.
 
 It applies to hostile NPCs in the outdoor world, dungeons and raids. Battlegrounds/arenas and player-controlled creatures are excluded.
 
-## Level policy
+## Personal virtual scaling
 
-For player level `P`, the default allowed window is `P-9 .. P+10`, clamped to valid positive levels and the configured creature ceiling.
+v0.2 no longer calls `Creature::SetLevel()` to scale an encounter. The creature keeps one physical/original server level while TrinityCore's target-dependent APIs calculate a different virtual level and stat profile for every player.
 
-Default baselines:
+Example for one original level-6 creature:
 
-- normal: `P`
-- elite: `P+5`
-- rare elite: `P+7`
-- boss/world boss: `P+8`
+- player level 11 sees/fights level 6;
+- player level 20 sees/fights level 11;
+- player level 60 sees/fights level 51.
 
-The integration hooks the pinned core's existing per-target creature level, health, damage and armor multiplier path. Default creature ceiling is 70 so a level-60 player can encounter creatures up to 70. This must be confirmed against client behaviour during the first live test.
+Those players may be in the same group and attack the same creature simultaneously. One player's virtual level does not overwrite another player's view.
+
+The progression rule is intentionally only a lower floor:
+
+`virtualLevel = max(originalCreatureLevel, playerLevel - 9)`
+
+with the result capped by `FOREVER_SCALING_CREATURE_MAX_LEVEL` (default 70). Existing higher-level enemies are not downscaled.
+
+## How shared combat works
+
+The integration extends the pinned core's existing per-target hooks:
+
+- `Creature::GetLevelForTarget(player)` - personal virtual level;
+- `Creature::GetDamageMultiplierForTarget(player)` - creature outgoing damage against that player;
+- `Creature::GetArmorMultiplierForTarget(player)` - effective armor against that attacker;
+- `Creature::GetHealthMultiplierForTarget(player)` - normalizes incoming damage against the shared physical health pool.
+
+The Classic update-field serializer is also patched for fixed-level ForeverScaling creatures. Each client receives viewer-specific `Level`, `EffectiveLevel`, `Health` and `MaxHealth`. The absolute HP numbers can therefore differ between two players while both clients still see the same health percentage and one shared creature/death state.
+
+XP already follows TrinityCore's `GetLevelForTarget(player)` path, so XP/gray-level decisions are evaluated against each member's virtual creature level rather than whichever group member attacked first.
 
 ## Damage guard
 
 `UnitScript::OnDamage` caps NPC-to-player damage events to a percentage of the victim's maximum HP:
 
-- normal: 20%
-- elite: 30%
-- rare elite: 40%
-- boss: 45%
+- normal: 20%;
+- elite: 30%;
+- rare elite: 40%;
+- boss: 45%.
 
-Player-controlled attackers and battleground/arena combat are excluded. This v0.1.0 guard is per damage event; rolling-window handling for intentional rapid multi-hit/DoT mechanics and explicit scripted lethal-mechanic exceptions remain follow-up work after live combat logs are available.
+Player-controlled attackers and battleground/arena combat are excluded. The guard is still per damage event; a rolling window for deliberate rapid multi-hit/DoT mechanics and explicit scripted lethal-mechanic exceptions remain follow-up work.
+
+## Foundation for scalable dungeons
+
+v0.2 deliberately separates personal scaling from encounter-wide scaling. The next dungeon layer can therefore add an instance/encounter profile without replacing this work:
+
+- party-size health multiplier shared by the encounter;
+- party-size damage/mechanic tuning;
+- dungeon minimum/maximum virtual level rules;
+- scalable item level/loot context per eligible player;
+- boss/elite-specific coefficients and difficulty tiers;
+- encounter snapshot/lock so group-size changes cannot be exploited mid-fight.
+
+Personal player level remains target/viewer-dependent; party-size/difficulty values belong to the shared encounter profile.
 
 ## Install
 
@@ -45,11 +76,9 @@ The installer:
 1. runs policy/static checks;
 2. preserves the currently running `worldserver` image and `.env`;
 3. builds the new image inside Docker while the old server keeps running;
-4. verifies image label `org.wowforever.scaling=0.1.0`;
+4. verifies image label `org.wowforever.scaling=0.2.0`;
 5. enables scaling and recreates only `worldserver` after a successful build;
 6. prints the exact rollback command and backup directory.
-
-No host C++ compiler is required.
 
 Useful commands:
 
@@ -59,6 +88,15 @@ bash scripts/forever-scaling-mod.sh disable
 bash scripts/forever-scaling-mod.sh rollback backups/scaling-YYYYMMDD-HHMMSS
 ```
 
-## First live acceptance test
+## v0.2 live acceptance test
 
-Use a level-60 character and verify a normal hostile creature, an elite and a boss. Check visible level, max HP, outgoing/incoming damage and whether any spell or scripted mechanic bypasses the expected scaling. Also test a low-level character and a friendly NPC to confirm only hostile NPCs are affected.
+Use two characters with a large level difference against the same low-level hostile creature. For example, with an original level-6 creature:
+
+- level-20 player should receive level 11;
+- level-60 player should receive level 51;
+- both should see the same health percentage but different absolute max HP;
+- damage dealt by each player should be normalized against their personal virtual-health multiplier;
+- creature damage/armor checks should use the relevant player's virtual level;
+- killing the creature should award XP according to each player's personal `GetLevelForTarget` result.
+
+Also verify that friendly NPCs, PvP and player-controlled creatures remain unchanged.
