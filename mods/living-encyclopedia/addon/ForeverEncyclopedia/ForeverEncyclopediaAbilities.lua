@@ -61,23 +61,32 @@ local function clientSpellInfo(id)
     return "Заклинание #" .. tostring(id), nil, 0
 end
 
+local function childVisible(child)
+    if not child then return false end
+    if child.IsVisible then return child:IsVisible() end
+    if child.IsShown then return child:IsShown() end
+    return true
+end
+
 local function findSelectedEntry(frame)
     if not frame or not frame.GetChildren then return nil end
 
     local children = { frame:GetChildren() }
     for _, child in ipairs(children) do
-        if child and child._selected and child.GetRegions then
-            local regions = { child:GetRegions() }
-            for _, region in ipairs(regions) do
-                if region and region.GetObjectType and region:GetObjectType() == "FontString" and region.GetText then
-                    local text = region:GetText()
-                    local entry = text and nameToEntry[text]
-                    if entry then return entry end
+        if childVisible(child) then
+            if child._selected and child.GetRegions then
+                local regions = { child:GetRegions() }
+                for _, region in ipairs(regions) do
+                    if region and region.GetObjectType and region:GetObjectType() == "FontString" and region.GetText then
+                        local text = region:GetText()
+                        local entry = text and nameToEntry[text]
+                        if entry then return entry end
+                    end
                 end
             end
+            local nested = findSelectedEntry(child)
+            if nested then return nested end
         end
-        local nested = findSelectedEntry(child)
-        if nested then return nested end
     end
     return nil
 end
@@ -164,15 +173,16 @@ local function refreshUI()
     end
 
     scrubInternalClass(main)
-    selectedEntry = findSelectedEntry(main) or selectedEntry
+    local visibleSelected = findSelectedEntry(main)
+    if visibleSelected then selectedEntry = visibleSelected end
     local button = ensureButton()
-    local record = selectedEntry and creatures[selectedEntry]
+    local record = visibleSelected and creatures[visibleSelected]
     if not button or not record or (record.level or 0) < 4 then
         if button then button:Hide() end
         return
     end
 
-    button.entry = selectedEntry
+    button.entry = visibleSelected
     if not record.complete then
         button.text:SetText("Способности: анализ…")
     elseif not record.abilities or #record.abilities == 0 then
