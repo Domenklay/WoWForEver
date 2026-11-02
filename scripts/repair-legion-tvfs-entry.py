@@ -31,6 +31,49 @@ OLD_ID=123086
 NEW_ID=15728640
 
 
+def probe_native_control(client,checker,donor_id,progress=print,old_id=OLD_ID):
+    """Read only two native IDs, retaining failed rows and independent hashes."""
+    if donor_id is None or donor_id==old_id or not 0<donor_id<0xf00000:
+        raise ValueError('Supply the existing donor ID with --donor-id')
+    client,_=install.canary.copy_identity(client);folder,parent=install.operation(client)
+    info=(client/'.build.info').read_bytes();meta=install.container.metadata(client/'Data/data')
+    if parent['phase']!='verified' or install.canary.sha(info)!=parent['after_info_sha256']:
+        raise ValueError('Verified operation does not match this client')
+    store=storelib.Store(client,synthetic_only=False)
+    audit=install.load('audit-legion-root-types.py')
+    encoding=audit.Encoding(configured(store,'encoding'))
+    root=audit.read_content(store,encoding,store.values['root'].split()[0])
+    found=audit.profiles(root,{old_id,donor_id});payloads=[]
+    for ckey in sorted({p['ckey'] for rows in found.values() for p in rows}):
+        try:
+            body=audit.read_content(store,encoding,ckey)
+            payloads.append(dict(ckey=ckey,status='READ_OK',bytes=len(body),
+                                 sha256=install.canary.sha(body),content_md5=hashlib.md5(body).hexdigest()))
+        except (ValueError,OSError,KeyError) as error:
+            payloads.append(dict(ckey=ckey,status='NOT_READABLE_BY_LOCAL_AUDITOR',error=str(error)))
+    progress('Reading only the two native texture IDs; no full package rescan...')
+    rows=install.scan(checker,client,[old_id,donor_id],parent['locale'],progress)
+    if (client/'.build.info').read_bytes()!=info or install.container.metadata(client/'Data/data')!=meta:
+        raise ValueError('Client changed during probe; close game and launcher')
+    return dict(format='wowforever-native-texture-control-probe-v1',operation=folder.name,
+        target_id=old_id,donor_id=donor_id,locale=parent['locale'],
+        root_profiles={str(fid):found.get(fid,[]) for fid in (old_id,donor_id)},
+        local_payloads=payloads,native_rows={str(fid):rows.get(fid,{}) for fid in (old_id,donor_id)},
+        client_modified=False,server_modified=False)
+
+
+def save_control_report(client,result,report_dir=None):
+    from datetime import datetime,timezone
+    from legion_reports import default_root
+    report_dir=(report_dir or default_root(client)).resolve()
+    if report_dir.is_relative_to(client.resolve()) or report_dir.is_relative_to(Path(__file__).resolve().parents[1]):
+        raise ValueError('Choose a report directory outside the client and repository')
+    report_dir.mkdir(parents=True,exist_ok=True)
+    report=report_dir/('Dalaran-native-control-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:8]+'.json')
+    with report.open('x') as stream:json.dump(result,stream,indent=2)
+    return report
+
+
 def plan_native_control(store, old_id, donor_id=None, progress=print):
     """Plan only; choose a locally readable neighbouring BLP with equal profiles."""
     root_audit=install.load('audit-legion-root-types.py')
@@ -232,7 +275,9 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=
             row=probe.get(fid,{})
             allowed={p[side]['ckey'] for p in prepared_plan['root_pairs']}
             if row.get('status')!='READ_OK' or row.get('ckey') not in allowed:
-                raise ValueError('Native texture control could not read a matching profile: '+str(fid))
+                detail=dict(file_id=fid,native_result=row,expected_root_ckeys=sorted(allowed))
+                raise ValueError('Native texture control could not read a matching profile: '+
+                    json.dumps(detail,sort_keys=True)+'; no control installed. Run native-control-probe with --donor-id '+str(donor_id))
         if probe[old_id]['sha256']==probe[donor_id]['sha256']:
             raise ValueError('Native texture contents are identical')
         if dry_run:
@@ -421,7 +466,7 @@ def rollback(client,native_control_only=False):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=['apply','repack-layout','root-variant','rollback',
-        'native-control-check','native-control-apply','native-control-rollback']);parser.add_argument('client',type=Path)
+        'native-control-check','native-control-probe','native-control-apply','native-control-rollback']);parser.add_argument('client',type=Path)
     parser.add_argument('--donor-id',type=int,help='Existing compatible native BLP ID; check auto-selects if omitted')
     parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'))
     parser.add_argument('--report-dir',type=Path);args=parser.parse_args()
@@ -429,21 +474,18 @@ if __name__=='__main__':
         token=hashlib.sha256(str(args.client.resolve()).casefold().encode()).hexdigest()
         with (Path(tempfile.gettempdir())/('wowforever-casc-edit-'+token+'.lock')).open('a') as lock:
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            if args.action in {'native-control-check','native-control-apply'}:
+            if args.action=='native-control-probe':
+                result=probe_native_control(args.client,args.checker,args.donor_id)
+                report=save_control_report(args.client,result,args.report_dir)
+                print(json.dumps(result,indent=2))
+                print('READ-ONLY TWO-ID PROBE: '+str(report))
+            elif args.action in {'native-control-check','native-control-apply'}:
                 if args.action=='native-control-apply' and args.donor_id is None:
                     raise ValueError('Run native-control-check first, then supply its --donor-id after the visual baseline')
                 result=apply(args.client,args.checker,native_control=True,donor_id=args.donor_id,
                     dry_run=args.action=='native-control-check')
                 if args.action=='native-control-check':
-                    from datetime import datetime,timezone
-                    from legion_reports import default_root
-                    report_dir=args.report_dir or default_root(args.client)
-                    report_dir=report_dir.resolve()
-                    if report_dir.is_relative_to(args.client.resolve()) or report_dir.is_relative_to(Path(__file__).resolve().parents[1]):
-                        raise ValueError('Choose a report directory outside the client and repository')
-                    report_dir.mkdir(parents=True,exist_ok=True)
-                    report=report_dir/('Dalaran-native-control-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:8]+'.json')
-                    with report.open('x') as stream:json.dump(result,stream,indent=2)
+                    report=save_control_report(args.client,result,args.report_dir)
                     print('READ-ONLY CONTROL PLAN: '+str(report))
                     print('Target ID:',result['target_id'],'Donor ID:',result['donor_id'])
                     print('In game: /run WFCdonor='+str(result['donor_id']))

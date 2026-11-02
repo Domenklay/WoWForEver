@@ -169,3 +169,31 @@ class NativeTextureTransactionTests(unittest.TestCase):
         self.assertEqual(self.snapshot(),before)
         with self.assertRaisesRegex(ValueError,'No active native texture control'):
             entry.rollback(self.client,native_control_only=True)
+
+    def test_probe_keeps_failed_native_rows_and_reads_only_two_ids_without_writes(self):
+        before=self.snapshot()
+        def failed(checker,client,ids,locale,progress):
+            self.assertEqual(set(ids),{TARGET,DONOR})
+            rows=self.scan(checker,client,ids,locale,progress)
+            rows[TARGET]=dict(file_id=str(TARGET),status='OPEN_FAILED',bytes='0',sha256='-',ckey='-',tag_mask='-',error='2')
+            return rows
+        with patch.object(entry.install,'scan',side_effect=failed) as scan:
+            result=entry.probe_native_control(self.client,'reader',DONOR,old_id=TARGET,progress=lambda _:None)
+        self.assertEqual(scan.call_count,1)
+        self.assertEqual(result['native_rows'][str(TARGET)]['status'],'OPEN_FAILED')
+        self.assertEqual(len(result['local_payloads']),2)
+        self.assertTrue(all(p['content_md5']==p['ckey'] for p in result['local_payloads']))
+        self.assertFalse(result['client_modified']);self.assertEqual(self.snapshot(),before)
+
+    def test_rejected_control_reports_actual_native_result_and_expected_keys(self):
+        before=self.snapshot()
+        def missing_key(checker,client,ids,locale,progress):
+            rows=self.scan(checker,client,ids,locale,progress)
+            if isinstance(ids,list):rows[TARGET]['ckey']='0'*32
+            return rows
+        with patch.object(entry.install,'scan',side_effect=missing_key):
+            with self.assertRaisesRegex(ValueError,'native_result.*READ_OK') as error:
+                entry.apply(self.client,'reader',old_id=TARGET,new_id=DONOR,native_control=True,dry_run=True,progress=lambda _:None)
+        self.assertIn('expected_root_ckeys',str(error.exception))
+        self.assertIn('native-control-probe',str(error.exception))
+        self.assertEqual(self.snapshot(),before)
