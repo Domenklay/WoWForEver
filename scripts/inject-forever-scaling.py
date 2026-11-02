@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Inject Forever Scaling into the pinned TrinityCore Forever source tree."""
+"""Inject Forever Scaling into the pinned TrinityCore Forever source tree.
+
+v0.2 uses TrinityCore's target-dependent level/stat path instead of mutating the
+physical Creature level.  This allows the same creature to be scaled differently
+for different players at the same time.
+"""
 import argparse
 import re
 import shutil
@@ -54,22 +59,12 @@ def patch_creature(core):
     source = replace_once(
         source,
         '#include <sstream>\n',
-        '#include <algorithm>\n#include <cstdlib>\n#include <cstring>\n#include <sstream>\n#include <unordered_map>\n',
+        '#include <algorithm>\n#include <cstdlib>\n#include <cstring>\n#include <sstream>\n',
         'Creature.cpp standard include anchor',
     )
 
     helper = r'''namespace ForeverScalingCore
 {
-enum class Rank { Normal, Elite, RareElite, Boss };
-
-struct EncounterState
-{
-    uint8 originalLevel = 1;
-    uint8 scaledLevel = 1;
-};
-
-static std::unordered_map<uint64, EncounterState> Encounters;
-
 static bool EnvBool(char const* name, bool fallback)
 {
     char const* raw = std::getenv(name);
@@ -89,17 +84,6 @@ static int EnvInt(char const* name, int fallback, int low, int high)
     if (!end || *end != '\0')
         return fallback;
     return std::clamp<int>(static_cast<int>(value), low, high);
-}
-
-static Rank RankOf(Creature const* creature)
-{
-    if (creature->IsDungeonBoss() || creature->isWorldBoss())
-        return Rank::Boss;
-    if (creature->HasClassification(CreatureClassifications::RareElite))
-        return Rank::RareElite;
-    if (creature->IsElite())
-        return Rank::Elite;
-    return Rank::Normal;
 }
 
 static bool EnabledFor(Creature const* creature, WorldObject const* target)
@@ -125,101 +109,13 @@ static uint8 LevelFor(Creature const* creature, Player const* player)
     int minOffset = EnvInt("FOREVER_SCALING_MIN_OFFSET", -9, -100, 100);
     int creatureMax = EnvInt("FOREVER_SCALING_CREATURE_MAX_LEVEL", 70, 1, 255);
 
-    // Forever progression rule: never pull a normal old-world creature all the
-    // way to the player's level. Raise it only when it is below the minimum-XP
-    // floor. Example: player 20 + creature 6 => 11; player 11 + creature 6 => 6.
-    // Existing higher-level enemies are never downscaled here.
+    // Forever progression rule: preserve the creature's original level unless it
+    // fell below the minimum-XP floor for this particular player.
+    // Examples: player 11 + creature 6 => 6; player 20 + creature 6 => 11;
+    // player 60 + creature 6 => 51.  The physical Creature level is never changed.
     int minimumXpLevel = std::max(1, playerLevel + minOffset);
     int raisedLevel = std::min(creatureMax, minimumXpLevel);
     return uint8(std::clamp(std::max(originalLevel, raisedLevel), 1, 255));
-}
-
-static uint64 EncounterKey(Creature const* creature)
-{
-    return uint64(creature->GetGUID().GetCounter());
-}
-
-static uint8 LockedLevel(Creature const* creature)
-{
-    auto itr = Encounters.find(EncounterKey(creature));
-    return itr == Encounters.end() ? 0 : itr->second.scaledLevel;
-}
-
-static void RescalePreservingHealth(Creature* creature, uint8 level)
-{
-    uint64 oldMax = creature->GetMaxHealth();
-    uint64 oldHealth = creature->GetHealth();
-    bool alive = creature->IsAlive();
-
-    creature->SetLevel(level);
-    creature->UpdateLevelDependantStats();
-
-    if (!alive || !oldMax)
-        return;
-
-    uint64 newMax = creature->GetMaxHealth();
-    uint64 newHealth = oldHealth >= oldMax ? newMax : (newMax * oldHealth / oldMax);
-    creature->SetHealth(std::max<uint64>(1, std::min<uint64>(newHealth, newMax)));
-}
-
-static Player* EncounterPlayer(Creature* creature)
-{
-    Unit* victim = creature->GetVictim();
-    if (!victim)
-        return nullptr;
-    return victim->GetCharmerOrOwnerPlayerOrPlayerItself();
-}
-
-static void UpdateEncounter(Creature* creature)
-{
-    uint64 key = EncounterKey(creature);
-    auto itr = Encounters.find(key);
-
-    if (!EnvBool("FOREVER_SCALING_ENABLED", false))
-    {
-        if (itr != Encounters.end() && creature->IsAlive())
-            RescalePreservingHealth(creature, itr->second.originalLevel);
-        Encounters.erase(key);
-        return;
-    }
-
-    if (!creature->IsAlive())
-    {
-        Encounters.erase(key);
-        return;
-    }
-
-    if (creature->IsEngaged())
-    {
-        if (itr != Encounters.end())
-            return;
-
-        Player* player = EncounterPlayer(creature);
-        if (!player || !EnabledFor(creature, player))
-            return;
-
-        EncounterState state;
-        state.originalLevel = creature->GetLevel();
-        state.scaledLevel = LevelFor(creature, player);
-        Encounters.emplace(key, state);
-        if (state.scaledLevel != state.originalLevel)
-            RescalePreservingHealth(creature, state.scaledLevel);
-        return;
-    }
-
-    if (itr != Encounters.end())
-    {
-        uint8 originalLevel = itr->second.originalLevel;
-        uint8 scaledLevel = itr->second.scaledLevel;
-        Encounters.erase(itr);
-        if (scaledLevel != originalLevel)
-            RescalePreservingHealth(creature, originalLevel);
-    }
-}
-
-static void ForgetEncounter(Creature const* creature)
-{
-    Encounters.erase(EncounterKey(creature));
 }
 } // namespace ForeverScalingCore
 
@@ -231,22 +127,105 @@ static void ForgetEncounter(Creature const* creature)
         'Creature.cpp first implementation anchor',
     )
 
+    # Enable TrinityCore's existing target-dependent virtual health/damage/armor
+    # ratios for fixed-level classic creatures covered by ForeverScaling.
     for function in ('GetHealthMultiplierForTarget', 'GetDamageMultiplierForTarget', 'GetArmorMultiplierForTarget'):
         old = f'''float Creature::{function}(WorldObject const* target) const\n{{\n    if (!HasScalableLevels())\n        return 1.0f;\n\n    uint8 levelForTarget = GetLevelForTarget(target);'''
         new = f'''float Creature::{function}(WorldObject const* target) const\n{{\n    if (!HasScalableLevels() && !ForeverScalingCore::EnabledFor(this, target))\n        return 1.0f;\n\n    uint8 levelForTarget = GetLevelForTarget(target);'''
         source = replace_once(source, old, new, f'Creature::{function} scaling gate')
 
+    # The virtual level is computed independently for every viewing/attacking player.
     level_anchor = '''uint8 Creature::GetLevelForTarget(WorldObject const* target) const\n{\n'''
-    level_replacement = level_anchor + '''    if (uint8 lockedLevel = ForeverScalingCore::LockedLevel(this))\n        return lockedLevel;\n\n    if (ForeverScalingCore::EnabledFor(this, target))\n        return ForeverScalingCore::LevelFor(this, target->ToPlayer());\n\n'''
+    level_replacement = level_anchor + '''    if (ForeverScalingCore::EnabledFor(this, target))\n        return ForeverScalingCore::LevelFor(this, target->ToPlayer());\n\n'''
     source = replace_once(source, level_anchor, level_replacement, 'Creature::GetLevelForTarget entry')
 
-    update_anchor = '''    GetThreatManager().Update(diff);\n\n    switch (m_deathState)'''
-    update_replacement = '''    GetThreatManager().Update(diff);\n\n    // Lock one visible/stat level for the whole encounter. This avoids target-switch\n    // oscillation and makes classic fixed-level creatures visibly scale in combat.\n    ForeverScalingCore::UpdateEncounter(this);\n\n    switch (m_deathState)'''
-    source = replace_once(source, update_anchor, update_replacement, 'Creature::Update encounter scaling anchor')
+    path.write_text(source)
 
-    remove_anchor = '''void Creature::RemoveFromWorld()\n{\n    if (IsInWorld())\n    {'''
-    remove_replacement = '''void Creature::RemoveFromWorld()\n{\n    ForeverScalingCore::ForgetEncounter(this);\n    if (IsInWorld())\n    {'''
-    source = replace_once(source, remove_anchor, remove_replacement, 'Creature::RemoveFromWorld scaling cleanup anchor')
+
+def patch_update_fields(core):
+    """Make classic fixed-level creature level/health viewer-dependent on the wire.
+
+    TrinityCore already normalizes combat through GetHealthMultiplierForTarget,
+    GetDamageMultiplierForTarget and GetArmorMultiplierForTarget.  Classic fixed
+    creatures, however, normally serialize one raw Level/Health/MaxHealth value to
+    every client.  For ForeverScaling creatures we serialize the virtual values for
+    the receiving player so two group members can see the same shared creature at
+    different effective levels and absolute HP while preserving the same HP percent.
+    """
+    path = core / 'src/server/game/Entities/Object/Updates/UpdateFields.cpp'
+    source = path.read_text()
+
+    source = replace_once(
+        source,
+        '#include "ClassicOpcodes.h"\n',
+        '#include "ClassicOpcodes.h"\n#include "Creature.h"\n',
+        'UpdateFields.cpp ClassicOpcodes include',
+    )
+
+    helper = r'''static Creature const* ForeverScalingViewerCreature(Unit const* owner, Player const* receiver)
+{
+    if (!owner || !receiver)
+        return nullptr;
+
+    Creature const* creature = owner->ToCreature();
+    if (!creature || creature->HasScalableLevels() || creature->IsControlledByPlayer())
+        return nullptr;
+
+    // GetLevelForTarget/GetHealthMultiplierForTarget contain the authoritative
+    // ForeverScaling enabled/hostility/BG checks. Friendly or excluded creatures
+    // therefore naturally resolve to their raw level and multiplier 1.0.
+    return creature;
+}
+
+static int32 ForeverScalingViewerLevel(int32 rawLevel, Player const* receiver, Unit const* owner)
+{
+    if (Creature const* creature = ForeverScalingViewerCreature(owner, receiver))
+        return int32(creature->GetLevelForTarget(receiver));
+    return rawLevel;
+}
+
+static int64 ForeverScalingViewerHealth(int64 rawHealth, Player const* receiver, Unit const* owner)
+{
+    if (rawHealth <= 0)
+        return rawHealth;
+
+    if (Creature const* creature = ForeverScalingViewerCreature(owner, receiver))
+    {
+        double multiplier = creature->GetHealthMultiplierForTarget(receiver);
+        if (multiplier > 0.0 && multiplier != 1.0)
+            return int64(double(rawHealth) * multiplier + 0.5);
+    }
+
+    return rawHealth;
+}
+
+'''
+    source = replace_once(
+        source,
+        'void UnitData::WriteCreate(EnumFlag<UpdateFieldFlag> fieldVisibilityFlags, ByteBuffer& data, Player const* receiver, Unit const* owner) const\n{',
+        helper + 'void UnitData::WriteCreate(EnumFlag<UpdateFieldFlag> fieldVisibilityFlags, ByteBuffer& data, Player const* receiver, Unit const* owner) const\n{',
+        'UpdateFields.cpp UnitData::WriteCreate anchor',
+    )
+
+    source = replace_once(
+        source,
+        '''    data << uint32(OverrideDisplayPowerID);\n    data << int64(Health);\n    for (uint32 i = 0; i < 10; ++i)''',
+        '''    data << uint32(OverrideDisplayPowerID);\n    data << ForeverScalingViewerHealth(int64(Health), receiver, owner);\n    for (uint32 i = 0; i < 10; ++i)''',
+        'UpdateFields.cpp create health',
+    )
+    source = replace_once(
+        source,
+        '''    data << int64(MaxHealth);\n    data << int32(Level);\n    data << int32(EffectiveLevel);''',
+        '''    data << ForeverScalingViewerHealth(int64(MaxHealth), receiver, owner);\n    data << ForeverScalingViewerLevel(int32(Level), receiver, owner);\n    data << ForeverScalingViewerLevel(int32(EffectiveLevel), receiver, owner);''',
+        'UpdateFields.cpp create max health/level',
+    )
+
+    source = replace_once(
+        source,
+        '''        if (changesMask[38])\n        {\n            data << int64(Health);\n        }\n        if (changesMask[39])\n        {\n            data << int64(MaxHealth);\n        }\n        if (changesMask[40])\n        {\n            data << int32(Level);\n        }\n        if (changesMask[41])\n        {\n            data << int32(EffectiveLevel);\n        }''',
+        '''        if (changesMask[38])\n        {\n            data << ForeverScalingViewerHealth(int64(Health), receiver, owner);\n        }\n        if (changesMask[39])\n        {\n            data << ForeverScalingViewerHealth(int64(MaxHealth), receiver, owner);\n        }\n        if (changesMask[40])\n        {\n            data << ForeverScalingViewerLevel(int32(Level), receiver, owner);\n        }\n        if (changesMask[41])\n        {\n            data << ForeverScalingViewerLevel(int32(EffectiveLevel), receiver, owner);\n        }''',
+        'UpdateFields.cpp update health/level',
+    )
 
     path.write_text(source)
 
@@ -256,6 +235,7 @@ def inject(core, module):
     module = Path(module).resolve()
     patch_loader(core, module)
     patch_creature(core)
+    patch_update_fields(core)
 
 
 if __name__ == '__main__':
