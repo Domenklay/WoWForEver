@@ -86,6 +86,7 @@ def inject(core: Path, module: Path) -> None:
     text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia();", "    AddSC_forever_encyclopedia();")
     text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia_talents();", "    AddSC_forever_encyclopedia_talents();")
     text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia_runtime();", "    AddSC_forever_encyclopedia_runtime();")
+    text = ensure_loader_registration(text, "void AddSC_forever_encyclopedia_abilities();", "    AddSC_forever_encyclopedia_abilities();")
 
     target = loader.parent / "ForeverEncyclopedia"
     target.mkdir(exist_ok=True)
@@ -93,6 +94,7 @@ def inject(core: Path, module: Path) -> None:
         ("ForeverEncyclopedia.cpp", "ForeverEncyclopedia.cpp"),
         ("ForeverEncyclopediaTalents.cpp", "ForeverEncyclopediaTalents.cpp"),
         ("ForeverEncyclopediaRuntimeV5.cpp", "ForeverEncyclopediaRuntime.cpp"),
+        ("ForeverEncyclopediaAbilities.cpp", "ForeverEncyclopediaAbilities.cpp"),
         ("TalentRules.h", "TalentRules.h"),
     )
     for source_name, target_name in copies:
@@ -129,6 +131,7 @@ def self_test() -> None:
         server.joinpath("ForeverEncyclopedia.cpp").write_text("// main test\n")
         server.joinpath("ForeverEncyclopediaTalents.cpp").write_text("// talent test\n")
         server.joinpath("ForeverEncyclopediaRuntimeV5.cpp").write_text("// runtime v5 test\n")
+        server.joinpath("ForeverEncyclopediaAbilities.cpp").write_text("// abilities test\n")
         server.joinpath("TalentRules.h").write_text("// rules test\n")
 
         inject(core, module)
@@ -136,7 +139,7 @@ def self_test() -> None:
 
         loader_text = loader.read_text()
         chat_text = chat.read_text()
-        for name in ("forever_encyclopedia", "forever_encyclopedia_talents", "forever_encyclopedia_runtime"):
+        for name in ("forever_encyclopedia", "forever_encyclopedia_talents", "forever_encyclopedia_runtime", "forever_encyclopedia_abilities"):
             assert loader_text.count(f"void AddSC_{name}();") == 1
             assert loader_text.count(f"    AddSC_{name}();") == 1
         for prefix in PREFIXES:
@@ -145,6 +148,7 @@ def self_test() -> None:
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").read_text() == "// main test\n"
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").read_text() == "// talent test\n"
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").read_text() == "// runtime v5 test\n"
+        assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaAbilities.cpp").read_text() == "// abilities test\n"
         assert (loader.parent / "ForeverEncyclopedia/TalentRules.h").read_text() == "// rules test\n"
     print("ForeverEncyclopedia injector self-test passed")
 
