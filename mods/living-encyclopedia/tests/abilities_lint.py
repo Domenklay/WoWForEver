@@ -13,16 +13,25 @@ required_server = [
     "spell->RecoveryTime",
     "spell->CategoryRecoveryTime",
     "identify_abilities",
+    '#include "SmartScriptMgr.h"',
+    "sSmartScriptMgr->GetScript",
+    "SMART_SCRIPT_TYPE_CREATURE",
+    "SMART_ACTION_CAST",
+    "SMART_ACTION_SELF_CAST",
+    "SMART_ACTION_CROSS_CAST",
+    "SMART_ACTION_INVOKER_CAST",
+    "holder.action.cast.spell",
+    "holder.action.crossCast.spell",
     '"BSTART|{}|{}"',
-    '"BSPELL|{}|{}|{}|{}|{}|{}|{}"',
+    '"BSPELL|{}|{}|{}|{}|{}|{}|{}|{}"',
     '"BEND|{}"',
 ]
 for needle in required_server:
     if needle not in server:
         raise SystemExit(f"abilities server missing required rule: {needle}")
 
-if "WorldDatabase" in server or "FROM creature_template" in server:
-    raise SystemExit("knowledge level 4 abilities must use loaded CreatureTemplate/SpellMgr, not ad-hoc world SQL")
+if "WorldDatabase" in server or "FROM creature_template" in server or "FROM smart_scripts" in server:
+    raise SystemExit("knowledge level 4 abilities must use loaded CreatureTemplate/SpellMgr/SmartAIMgr, not ad-hoc world SQL")
 
 required_client = [
     '"inspect " .. tostring(entry)',
@@ -32,10 +41,12 @@ required_client = [
     "GetSpellInfo",
     "Способности существа",
     "Способности: ",
+    "SmartAI",
+    "source = tonumber(source) or 0",
     'text:find("^Класс:")',
 ]
 for needle in required_client:
     if needle not in client:
         raise SystemExit(f"abilities client missing required rule: {needle}")
 
-print("Encyclopedia knowledge level 4 abilities lint passed")
+print("Encyclopedia knowledge level 4 template + SmartAI abilities lint passed")
