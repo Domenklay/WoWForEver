@@ -197,3 +197,33 @@ class NativeTextureTransactionTests(unittest.TestCase):
         self.assertIn('expected_root_ckeys',str(error.exception))
         self.assertIn('native-control-probe',str(error.exception))
         self.assertEqual(self.snapshot(),before)
+
+    def test_find_uses_only_verified_native_blps_and_does_not_modify_the_copy(self):
+        before=self.snapshot()
+        result=entry.find_native_control(self.client,'reader',progress=lambda _:None)
+        self.assertEqual(result['status'],'PAIR_READY_FOR_VISUAL_BASELINE')
+        self.assertEqual({result['target_id'],result['donor_id']},{TARGET,DONOR})
+        self.assertEqual(result['candidate_count'],2)
+        self.assertFalse(result['client_modified']);self.assertEqual(self.snapshot(),before)
+        self.assertTrue(all(len(line)<=255 for line in result['baseline_lua']))
+
+    def test_find_retains_rejected_native_rows_instead_of_bypassing_the_id_check(self):
+        before=self.snapshot()
+        def failed(checker,client,ids,locale,progress):
+            rows=self.scan(checker,client,ids,locale,progress)
+            rows[TARGET]=dict(file_id=str(TARGET),status='SIZE_FAILED',bytes='0',sha256='-',ckey='e'*32,tag_mask='-',error='1007')
+            return rows
+        with patch.object(entry.install,'scan',side_effect=failed):
+            result=entry.find_native_control(self.client,'reader',progress=lambda _:None)
+        self.assertEqual(result['status'],'NO_COMPATIBLE_PAIR')
+        self.assertEqual(result['native_readable_count'],1)
+        self.assertEqual(result['rejected_native_rows'][str(TARGET)]['error'],'1007')
+        self.assertEqual(self.snapshot(),before)
+
+    def test_selected_target_can_differ_from_the_old_private_texture_control(self):
+        before=self.snapshot()
+        result=entry.apply(self.client,'reader',old_id=DONOR,new_id=DONOR,native_control=True,
+                           donor_id=TARGET,dry_run=True,progress=lambda _:None)
+        self.assertEqual(result['target_id'],DONOR)
+        self.assertEqual(result['donor_id'],TARGET)
+        self.assertEqual(self.snapshot(),before)

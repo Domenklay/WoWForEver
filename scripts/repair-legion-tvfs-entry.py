@@ -74,11 +74,11 @@ def save_control_report(client,result,report_dir=None):
     return report
 
 
-def plan_native_control(store, old_id, donor_id=None, progress=print):
+def plan_native_control(store, old_id, donor_id=None, progress=print,root_cache=None,encoding_cache=None):
     """Plan only; choose a locally readable neighbouring BLP with equal profiles."""
     root_audit=install.load('audit-legion-root-types.py')
-    encoding=root_audit.Encoding(configured(store,'encoding'))
-    root=root_audit.read_content(store,encoding,store.values['root'].split()[0])
+    encoding=encoding_cache if encoding_cache is not None else root_audit.Encoding(configured(store,'encoding'))
+    root=root_cache if root_cache is not None else root_audit.read_content(store,encoding,store.values['root'].split()[0])
     candidates=[donor_id] if donor_id is not None else list(range(old_id+1,old_id+129))
     candidates=[i for i in candidates if i!=old_id and 0<i<0xf00000]
     observed=root_audit.profiles(root,set(candidates)|{old_id})
@@ -126,6 +126,85 @@ def plan_native_control(store, old_id, donor_id=None, progress=print):
     progress(f'Compatible native texture control: {old_id} -> {donor}; no new FileDataID')
     return dict(original=original,children=children,replacements=replacements,removed=[],
                 redirected_root=changed,root_pairs=pairs,donor_id=donor)
+
+
+def find_native_control(client,checker,progress=print):
+    """Find a control among previously verified NATIVE resources, then rescan it.
+
+    Unlike the neighbouring-ID guess, candidates must already have a successful
+    fingerprint in the active operation. Never substitute a CKey read for the
+    required successful native FileDataID read.
+    """
+    client,_=install.canary.copy_identity(client);folder,parent=install.operation(client)
+    info=(client/'.build.info').read_bytes();meta=install.container.metadata(client/'Data/data')
+    if (parent['phase']!='verified' or not parent.get('root_types_repaired') or
+            parent.get('native_texture_control') or install.canary.sha(info)!=parent['after_info_sha256']):
+        raise ValueError('Expected the verified pre-control client layer')
+    expected={int(fid):r for fid,r in parent['expected_after'].items() if 0<int(fid)<0xf00000
+              and 0<int(r.get('bytes',0))<=256*1024}
+    if not expected:raise ValueError('No small previously verified native resources found')
+    audit=install.load('audit-legion-root-types.py');store=storelib.Store(client,synthetic_only=False)
+    encoding=audit.Encoding(configured(store,'encoding'))
+    root=audit.read_content(store,encoding,store.values['root'].split()[0])
+    observed=audit.profiles(root,set(expected));candidates=[]
+    for fid in sorted(expected,key=lambda i:(int(expected[i]['bytes']),i)):
+        rows=observed.get(fid,[]);want=expected[fid];key=want.get('ckey')
+        if not rows or len([r for r in rows if r['raw_flags'][0]==0])!=1:continue
+        if any(r['raw_flags'][2]!=4 or not r['raw_flags'][1]&0x02000000 for r in rows):continue
+        if key not in {r['ckey'] for r in rows}:continue
+        try:body=audit.read_content(store,encoding,key)
+        except (OSError,ValueError,KeyError):continue
+        if (body[:4] not in (b'BLP1',b'BLP2') or len(body)!=int(want['bytes']) or
+                install.canary.sha(body)!=want['sha256']):continue
+        candidates.append(fid)
+        if len(candidates)>=64:break
+    if len(candidates)<2:
+        raise ValueError('Fewer than two eligible native BLP textures; client unchanged')
+    progress('Rechecking '+str(len(candidates))+' known native BLP candidates by FileDataID...')
+    actual=install.scan(checker,client,candidates,parent['locale'],progress)
+    readable=[];rejected={}
+    for fid in candidates:
+        try:install.check_rows(actual,{fid:expected[fid]})
+        except ValueError:
+            rejected[str(fid)]=actual.get(fid,{});continue
+        readable.append(fid)
+    failures=[];selected=None;attempts=0
+    for index,target in enumerate(readable):
+        for donor in readable[index+1:]:
+            # Filter cached metadata before rescanning the large ROOT.
+            left={(p['locale'],tuple(p['raw_flags'])):p['ckey'] for p in observed[target]}
+            right={(p['locale'],tuple(p['raw_flags'])):p['ckey'] for p in observed[donor]}
+            if (len(left)!=len(observed[target]) or len(right)!=len(observed[donor]) or
+                    left.keys()!=right.keys() or any(left[k]==right[k] for k in left)):
+                continue
+            attempts+=1
+            try:binding_pairs(root,target,donor)
+            except ValueError as error:
+                failures.append(dict(target_id=target,donor_id=donor,error=str(error)))
+                if attempts>=16:break
+                continue
+            try:
+                plan=plan_native_control(store,target,donor,progress,root_cache=root,encoding_cache=encoding)
+            except ValueError as error:
+                failures.append(dict(target_id=target,donor_id=donor,error=str(error)))
+            else:
+                selected=(target,donor,plan);break
+            if attempts>=16:break
+        if selected is not None or attempts>=16:break
+    if (client/'.build.info').read_bytes()!=info or install.container.metadata(client/'Data/data')!=meta:
+        raise ValueError('Client changed during selection; close game and launcher')
+    common=dict(format='wowforever-native-texture-control-selection-v1',operation=folder.name,
+        candidate_count=len(candidates),native_readable_count=len(readable),
+        rejected_native_rows=rejected,route_rejections=failures,client_modified=False,server_modified=False)
+    if selected is None:
+        return dict(common,status='NO_COMPATIBLE_PAIR',next_step='Inspect this report; no control installed')
+    target,donor,plan=selected
+    lua=[f'/run WFCtarget={target};WFCdonor={donor}',
+         '/run if WFC then WFC:Hide() end;WFC=CreateFrame("Frame",nil,UIParent);WFC:SetSize(660,240);WFC:SetPoint("CENTER")',
+         '/run for i,id in ipairs({WFCtarget,WFCdonor,15728640}) do local t=WFC:CreateTexture();t:SetSize(200,200);t:SetPoint("LEFT",(i-1)*220,0);t:SetTexture(id) end']
+    return dict(common,status='PAIR_READY_FOR_VISUAL_BASELINE',target_id=target,donor_id=donor,
+        root_pairs=plan['root_pairs'],native_before={str(fid):actual[fid] for fid in (target,donor)},
+        baseline_lua=lua,next_step='Show both original textures before any installation; both must render differently')
 
 
 def configured(store,name):
@@ -239,7 +318,7 @@ def apply(client,checker,progress=print,old_id=OLD_ID,new_id=NEW_ID,layout_only=
     if parent.get('native_texture_control'):
         raise ValueError('Native texture control already active; rollback that control before another experiment')
     if native_control:
-        if parent.get('tvfs_canary_original_id')!=old_id:
+        if not parent.get('tvfs_entry_canary'):
             raise ValueError('Expected the recorded native texture experiment')
     elif root_variant:
         if (not parent.get('tvfs_entry_canary') or not parent.get('tvfs_layout_canary')
@@ -466,7 +545,8 @@ def rollback(client,native_control_only=False):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=['apply','repack-layout','root-variant','rollback',
-        'native-control-check','native-control-probe','native-control-apply','native-control-rollback']);parser.add_argument('client',type=Path)
+        'native-control-find','native-control-check','native-control-probe','native-control-apply','native-control-rollback']);parser.add_argument('client',type=Path)
+    parser.add_argument('--target-id',type=int,default=OLD_ID,help='Existing native texture to redirect; use the selected target ID')
     parser.add_argument('--donor-id',type=int,help='Existing compatible native BLP ID; check auto-selects if omitted')
     parser.add_argument('--checker',type=Path,default=Path(__file__).with_name('check-client-casc.sh'))
     parser.add_argument('--report-dir',type=Path);args=parser.parse_args()
@@ -474,15 +554,20 @@ if __name__=='__main__':
         token=hashlib.sha256(str(args.client.resolve()).casefold().encode()).hexdigest()
         with (Path(tempfile.gettempdir())/('wowforever-casc-edit-'+token+'.lock')).open('a') as lock:
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            if args.action=='native-control-probe':
-                result=probe_native_control(args.client,args.checker,args.donor_id)
+            if args.action=='native-control-find':
+                result=find_native_control(args.client,args.checker)
+                report=save_control_report(args.client,result,args.report_dir)
+                print(json.dumps(result,indent=2))
+                print('READ-ONLY NATIVE PAIR SELECTION: '+str(report))
+            elif args.action=='native-control-probe':
+                result=probe_native_control(args.client,args.checker,args.donor_id,old_id=args.target_id)
                 report=save_control_report(args.client,result,args.report_dir)
                 print(json.dumps(result,indent=2))
                 print('READ-ONLY TWO-ID PROBE: '+str(report))
             elif args.action in {'native-control-check','native-control-apply'}:
                 if args.action=='native-control-apply' and args.donor_id is None:
                     raise ValueError('Run native-control-check first, then supply its --donor-id after the visual baseline')
-                result=apply(args.client,args.checker,native_control=True,donor_id=args.donor_id,
+                result=apply(args.client,args.checker,native_control=True,donor_id=args.donor_id,old_id=args.target_id,
                     dry_run=args.action=='native-control-check')
                 if args.action=='native-control-check':
                     report=save_control_report(args.client,result,args.report_dir)
