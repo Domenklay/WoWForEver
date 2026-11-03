@@ -52,10 +52,45 @@ PY
     docker compose config -q
 }
 
+image_label() {
+    docker image inspect --format '{{index .Config.Labels "org.wowforever.dungeonfinder"}}' forever-trinitycore:latest 2>/dev/null || true
+}
+
+image_ready() {
+    test "$(image_label)" = "$version"
+}
+
 check_label() {
     local label
-    label=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.dungeonfinder"}}' forever-trinitycore:latest 2>/dev/null || true)
+    label=$(image_label)
     test "$label" = "$version" || { echo "Expected dungeon-finder image label $version, got: ${label:-missing}" >&2; exit 1; }
+}
+
+build_or_reuse_image() {
+    if image_ready; then
+        echo "ForeverDungeonFinder $version image already exists; skipping Docker rebuild."
+        return 0
+    fi
+
+    local rc=0
+    set +e
+    docker compose build worldserver
+    rc=$?
+    set -e
+
+    if [ "$rc" -eq 0 ]; then
+        check_label
+        return 0
+    fi
+
+    echo "Docker build returned exit code $rc; checking whether export completed before the Docker API error..." >&2
+    if image_ready; then
+        echo "Docker export reported an error, but forever-trinitycore:latest is complete and has dungeon-finder label $version; continuing."
+        return 0
+    fi
+
+    echo "Docker did not leave a usable ForeverDungeonFinder image." >&2
+    return "$rc"
 }
 
 restore_source_files() {
@@ -107,7 +142,7 @@ case "$action" in
     status)
         require_env
         echo "FOREVER_DUNGEON_FINDER_ENABLED=$(grep -m1 '^FOREVER_DUNGEON_FINDER_ENABLED=' .env | cut -d= -f2- || echo 0)"
-        echo "IMAGE_DUNGEON_FINDER_LABEL=$(docker image inspect --format '{{index .Config.Labels "org.wowforever.dungeonfinder"}}' forever-trinitycore:latest 2>/dev/null || echo missing)"
+        echo "IMAGE_DUNGEON_FINDER_LABEL=$(image_label)"
         docker compose ps worldserver
         docker compose logs --tail=160 worldserver | grep -E 'ForeverDungeonFinder|worldserver-daemon.*ready' || true
         ;;
@@ -116,9 +151,9 @@ case "$action" in
         require_env
         python3 scripts/apply-forever-dungeon-finder-integration.py
         preflight
-        docker compose build worldserver
+        build_or_reuse_image
         check_label
-        echo 'ForeverDungeonFinder image built. Runtime feature has not been enabled or restarted.'
+        echo 'ForeverDungeonFinder image is ready. Runtime feature has not been enabled or restarted.'
         ;;
 
     disable)
@@ -175,12 +210,18 @@ case "$action" in
             fi
             if [ "$image_preserved" = 1 ]; then
                 old_image=$(cat "$backup/old-image.txt")
-                docker tag "$old_image" forever-trinitycore:latest || true
+                if docker image inspect "$old_image" >/dev/null 2>&1; then
+                    if ! docker tag "$old_image" forever-trinitycore:latest; then
+                        echo "WARNING: Docker API did not allow restoring the latest image tag. The running old worldserver container was not recreated." >&2
+                    fi
+                else
+                    echo "WARNING: preserved rollback image is temporarily unavailable from the Docker API. The running old worldserver container was not recreated." >&2
+                fi
             fi
             if [ "$activated" = 1 ]; then
                 docker compose up -d --no-deps --force-recreate worldserver || true
             fi
-            echo "Dungeon finder installation failed. Previous state restored from $backup" >&2
+            echo "Dungeon finder installation failed. Source/config/addon rollback attempted from $backup" >&2
             exit "$code"
         }
         trap restore_on_error EXIT
@@ -194,8 +235,9 @@ case "$action" in
             --backup "$backup"
         image_preserved=1
 
-        # Building changes only the image tag; the existing worldserver stays live.
-        docker compose build worldserver
+        # The existing worldserver stays live. If an earlier export already left
+        # a correctly labelled image, avoid recompiling it.
+        build_or_reuse_image
         check_label
 
         set_env FOREVER_DUNGEON_FINDER_ENABLED 1
