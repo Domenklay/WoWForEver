@@ -2,7 +2,7 @@ local ADDON = "ForeverEncyclopedia"
 local REQUEST, RESPONSE = "FEB1", "FBR1"
 local TALENT_RESPONSE = "FTR1"
 local SERVER_TARGET = "SERVER"
-local VERSION = "0.9.7"
+local VERSION = "0.9.8"
 
 local dock, manaBar, manaText
 local abilityButtons = {}
@@ -66,7 +66,6 @@ local function place()
     if d.x and d.y then
         dock:SetPoint("CENTER", UIParent, "CENTER", d.x, d.y)
     else
-        -- Default: along the very bottom edge, left of the main action bars.
         dock:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 18, 18)
     end
 end
