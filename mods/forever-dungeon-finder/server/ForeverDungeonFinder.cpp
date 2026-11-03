@@ -7,7 +7,6 @@
 #include "WorldSession.h"
 #include "Log.h"
 
-#include <algorithm>
 #include <charconv>
 #include <cstdlib>
 #include <cstring>
@@ -38,7 +37,7 @@ static bool Enabled()
 static void Notify(Player* player, char const* message)
 {
     if (player && player->GetSession())
-        player->GetSession()->SendNotification("{}", message);
+        player->GetSession()->SendNotification("%s", message);
 }
 
 static bool ParseMapId(std::string_view text, uint32& mapId)
@@ -62,7 +61,7 @@ static bool ParseMapId(std::string_view text, uint32& mapId)
 static bool IsDungeonMap(uint32 mapId)
 {
     MapEntry const* mapEntry = sMapStore.LookupEntry(mapId);
-    return mapEntry && mapEntry->IsDungeon() && !mapEntry->IsRaid();
+    return mapEntry && mapEntry->IsNonRaidDungeon();
 }
 
 static bool PlayerReady(Player* player)
@@ -100,8 +99,8 @@ static bool CollectParty(Player* leader, std::vector<Player*>& players)
         return false;
     }
 
-    // Teleport leader first so the normal group instance binding is established
-    // before the remaining members resolve the destination map.
+    // Teleport the leader first so TrinityCore establishes the ordinary group
+    // instance binding before the remaining members resolve the destination.
     players.push_back(leader);
     for (GroupReference const& reference : group->GetMembers())
     {
@@ -174,6 +173,18 @@ static bool EnterDungeon(Player* requester, uint32 mapId)
     return true;
 }
 
+static void HandleAddonRequest(Player* player, std::string const& prefix, std::string const& text)
+{
+    if (!player || prefix != AddonPrefix)
+        return;
+
+    uint32 mapId = 0;
+    if (!ParseMapId(text, mapId))
+        return;
+
+    EnterDungeon(player, mapId);
+}
+
 class DirectEntryPlayerScript final : public PlayerScript
 {
 public:
@@ -182,16 +193,21 @@ public:
     void OnAddonMessageSent(Player* player, uint32 /*type*/, std::string const& prefix,
         std::string const& text, Player* receiver) override
     {
-        // The addon whispers the request to its own player. Requiring self-targeting
-        // prevents another player from using addon whispers to trigger somebody else's entry.
-        if (!player || receiver != player || prefix != AddonPrefix)
+        // Solo requests are sent as a self whisper. Do not accept a targeted
+        // request aimed at another character.
+        if (receiver != player)
             return;
+        HandleAddonRequest(player, prefix, text);
+    }
 
-        uint32 mapId = 0;
-        if (!ParseMapId(text, mapId))
+    void OnAddonMessageSent(Player* player, uint32 /*type*/, std::string const& prefix,
+        std::string const& text, Group* group) override
+    {
+        // Group requests are sent through PARTY so the sender is naturally the
+        // current group member. EnterDungeon still requires the sender to be leader.
+        if (!group || player->GetGroup() != group)
             return;
-
-        EnterDungeon(player, mapId);
+        HandleAddonRequest(player, prefix, text);
     }
 };
 } // namespace ForeverDungeonFinder
