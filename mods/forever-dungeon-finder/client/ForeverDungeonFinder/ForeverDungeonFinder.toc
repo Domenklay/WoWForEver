@@ -1,8 +1,7 @@
-## Interface: 11507
+## Interface: 16001
 ## Title: Forever Dungeon Finder
 ## Notes: Direct solo/current-party dungeon entry for WoW Forever
 ## Author: WoW Forever
 ## Version: 0.1.0
-## SavedVariables: ForeverDungeonFinderDB
 
 Core.lua
