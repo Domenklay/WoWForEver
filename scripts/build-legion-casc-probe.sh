@@ -26,9 +26,11 @@ COPY tools/legion-casc-probe/probe.cpp /tmp/legion-casc-probe.cpp
 # The main TrinityCore build directory is a BuildKit cache mount. Its artifacts
 # are intentionally not persisted into the build image, so rebuild only CascLib
 # in a small ordinary /tmp build tree before linking the standalone probe.
+# CascLib is added to TrinityCore's build graph only when TOOLS=1; we still build
+# only the `casc` target below, so map/vmap tools and worldserver are not rebuilt.
 RUN cmake -S /src/TrinityCore -B /tmp/legion-casc-build \\
         -DCMAKE_BUILD_TYPE=Release \\
-        -DTOOLS=0 \\
+        -DTOOLS=1 \\
         -DWITH_WARNINGS=0 \\
     && cmake --build /tmp/legion-casc-build --target casc -j2 \\
     && test -f /tmp/legion-casc-build/dep/CascLib/libcasc.a \\
