@@ -1,4 +1,3 @@
-local ADDON_NAME = ...
 local PREFIX = "FDF"
 
 local DUNGEONS = {
@@ -10,7 +9,7 @@ local DUNGEONS = {
     { map = 34,  name = "Тюрьма", range = "22–30", zone = "Штормград", desc = "Подземная тюрьма Штормграда." },
     { map = 90,  name = "Гномреган", range = "29–38", zone = "Дун Морог", desc = "Павшая технологическая столица гномов." },
     { map = 47,  name = "Лабиринты Иглошкурых", range = "29–38", zone = "Степи", desc = "Колючий лабиринт племени Иглошкурых." },
-    { map = 189, name = "Монастырь Алого ордена", range = "26–45", zone = "Тирисфальские леса", desc = "Комплекс Алого ордена. На первом этапе используется общий вход карты." },
+    { map = 189, name = "Монастырь Алого ордена", range = "26–45", zone = "Тирисфальские леса", desc = "Комплекс Алого ордена. Пока используется общий вход карты; отдельные крылья добавим следующим слоем." },
     { map = 129, name = "Курганы Иглошкурых", range = "37–46", zone = "Степи", desc = "Некрополь Иглошкурых, захваченный Плетью." },
     { map = 70,  name = "Ульдаман", range = "41–51", zone = "Бесплодные земли", desc = "Древнее хранилище титанов." },
     { map = 209, name = "Зул'Фаррак", range = "44–54", zone = "Танарис", desc = "Город песчаных троллей среди пустыни." },
@@ -23,9 +22,8 @@ local DUNGEONS = {
     { map = 329, name = "Стратхольм", range = "58–60", zone = "Восточные Чумные земли", desc = "Павший город, разделённый между Алым орденом и Плетью." },
 }
 
-local filtered = {}
-local selected
-local offset = 0
+local filtered, rows = {}, {}
+local selected, offset = nil, 0
 local ROWS = 12
 
 local function registerPrefix()
@@ -44,21 +42,20 @@ local function sendAddon(text, channel, target)
     end
 end
 
-local function partyCount()
-    if IsInRaid and IsInRaid() then
-        return GetNumGroupMembers and GetNumGroupMembers() or 0, true
-    end
-    if IsInGroup and IsInGroup() then
-        return GetNumGroupMembers and GetNumGroupMembers() or 0, false
-    end
-    return 1, false
+local function inGroup()
+    return IsInGroup and IsInGroup()
 end
 
-local function isLeader()
-    if not IsInGroup or not IsInGroup() then
-        return true
+local function partyState()
+    if IsInRaid and IsInRaid() then
+        return GetNumGroupMembers and GetNumGroupMembers() or 0, true, false
     end
-    return UnitIsGroupLeader and UnitIsGroupLeader("player")
+    if inGroup() then
+        local count = GetNumGroupMembers and GetNumGroupMembers() or 0
+        local leader = UnitIsGroupLeader and UnitIsGroupLeader("player") or false
+        return count, false, leader
+    end
+    return 1, false, true
 end
 
 local frame = CreateFrame("Frame", "ForeverDungeonFinderFrame", UIParent)
@@ -124,15 +121,14 @@ listCaption:SetPoint("TOPLEFT", 24, -116)
 listCaption:SetText("ДОСТУПНЫЕ ПОДЗЕМЕЛЬЯ")
 listCaption:SetTextColor(0.48, 0.62, 0.78)
 
-local rows = {}
 for i = 1, ROWS do
     local row = CreateFrame("Button", nil, frame)
+    row.index = i
     row:SetSize(252, 30)
     row:SetPoint("TOPLEFT", 20, -137 - ((i - 1) * 31))
 
     row.bg = row:CreateTexture(nil, "BACKGROUND")
     row.bg:SetAllPoints()
-    row.bg:SetColorTexture(0.055, 0.070, 0.090, i % 2 == 0 and 0.75 or 0.48)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.name:SetPoint("LEFT", 9, 2)
@@ -148,11 +144,10 @@ for i = 1, ROWS do
         self.bg:SetColorTexture(0.11, 0.18, 0.26, 0.95)
     end)
     row:SetScript("OnLeave", function(self)
-        local active = self.data and selected == self.data
-        if active then
+        if self.data and selected == self.data then
             self.bg:SetColorTexture(0.10, 0.24, 0.36, 0.95)
         else
-            self.bg:SetColorTexture(0.055, 0.070, 0.090, i % 2 == 0 and 0.75 or 0.48)
+            self.bg:SetColorTexture(0.055, 0.070, 0.090, self.index % 2 == 0 and 0.75 or 0.48)
         end
     end)
     rows[i] = row
@@ -168,11 +163,10 @@ down:SetSize(30, 22)
 down:SetPoint("LEFT", up, "RIGHT", 4, 0)
 down:SetText("▼")
 
-local detailTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+local detailTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 detailTitle:SetPoint("TOPLEFT", 320, -91)
 detailTitle:SetPoint("RIGHT", -28, 0)
 detailTitle:SetJustifyH("LEFT")
-detailTitle:SetText("Выберите подземелье")
 detailTitle:SetTextColor(0.92, 0.96, 1.00)
 
 local detailZone = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -196,10 +190,10 @@ levelValue:SetTextColor(0.84, 0.90, 0.96)
 
 local scaling = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 scaling:SetPoint("TOPLEFT", 320, -205)
-scaling:SetText("Уровень врагов масштабируется персонально под каждого игрока.")
-scaling:SetTextColor(0.48, 0.76, 0.94)
 scaling:SetWidth(420)
 scaling:SetJustifyH("LEFT")
+scaling:SetText("Уровень врагов масштабируется персонально под каждого игрока.")
+scaling:SetTextColor(0.48, 0.76, 0.94)
 
 local desc = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 desc:SetPoint("TOPLEFT", 320, -246)
@@ -209,81 +203,82 @@ desc:SetJustifyV("TOP")
 desc:SetTextColor(0.72, 0.76, 0.80)
 
 local groupPanel = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
-groupPanel:SetPoint("BOTTOMLEFT", 315, 86)
-groupPanel:SetPoint("BOTTOMRIGHT", -25, 86)
-groupPanel:SetHeight(82)
+groupPanel:SetPoint("BOTTOMLEFT", 315, 100)
+groupPanel:SetPoint("BOTTOMRIGHT", -25, 100)
+groupPanel:SetHeight(72)
 groupPanel:SetColorTexture(0.050, 0.065, 0.085, 0.95)
 
 local groupTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-groupTitle:SetPoint("TOPLEFT", groupPanel, "TOPLEFT", 14, -12)
+groupTitle:SetPoint("TOPLEFT", groupPanel, "TOPLEFT", 14, -11)
 groupTitle:SetText("ТЕКУЩИЙ СОСТАВ")
 groupTitle:SetTextColor(0.48, 0.62, 0.78)
 
 local groupInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-groupInfo:SetPoint("TOPLEFT", groupTitle, "BOTTOMLEFT", 0, -9)
+groupInfo:SetPoint("TOPLEFT", groupTitle, "BOTTOMLEFT", 0, -8)
 groupInfo:SetPoint("RIGHT", groupPanel, "RIGHT", -14, 0)
 groupInfo:SetJustifyH("LEFT")
 groupInfo:SetTextColor(0.84, 0.87, 0.90)
 
-local enter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-enter:SetSize(210, 38)
-enter:SetPoint("BOTTOMRIGHT", -25, 28)
-enter:SetText("Войти сейчас")
+local soloEnter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+soloEnter:SetSize(174, 38)
+soloEnter:SetPoint("BOTTOMLEFT", 320, 34)
+soloEnter:SetText("Войти соло")
+
+local groupEnter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+groupEnter:SetSize(220, 38)
+groupEnter:SetPoint("LEFT", soloEnter, "RIGHT", 12, 0)
+groupEnter:SetText("Войти группой")
 
 local note = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-note:SetPoint("RIGHT", enter, "LEFT", -14, 0)
-note:SetPoint("LEFT", 320, 0)
-note:SetJustifyH("RIGHT")
-note:SetText("Без очереди и подбора игроков")
+note:SetPoint("BOTTOMLEFT", 320, 19)
+note:SetText("Без очереди, ролей и подбора случайных игроков")
 note:SetTextColor(0.45, 0.50, 0.56)
 
+local function setButtonEnabled(button, enabled)
+    if enabled then button:Enable() else button:Disable() end
+end
+
 local function refreshGroup()
-    local count, raid = partyCount()
+    local count, raid, leader = partyState()
+    setButtonEnabled(soloEnter, selected ~= nil)
+
     if raid then
-        groupInfo:SetText("Рейдовая группа не поддерживается для прямого входа.")
-        enter:Disable()
-        enter:SetText("Недоступно для рейда")
-        return
+        groupInfo:SetText("Рейдовая группа: групповой прямой вход недоступен. Соло остаётся доступно.")
+        groupEnter:SetText("Недоступно для рейда")
+        groupEnter:Disable()
+    elseif count <= 1 then
+        groupInfo:SetText("Вы сейчас без группы. Можно войти в подземелье соло.")
+        groupEnter:SetText("Нет текущей группы")
+        groupEnter:Disable()
+    elseif not leader then
+        groupInfo:SetText(string.format("Группа: %d игроков. Групповой вход запускает только лидер.", count))
+        groupEnter:SetText("Ожидание лидера")
+        groupEnter:Disable()
+    else
+        groupInfo:SetText(string.format("Группа: %d игроков. Лидер перенесёт весь текущий состав в один экземпляр.", count))
+        groupEnter:SetText(string.format("Войти группой (%d)", count))
+        setButtonEnabled(groupEnter, selected ~= nil)
     end
-
-    if count <= 1 then
-        groupInfo:SetText("Соло • будет создан ваш экземпляр подземелья")
-        enter:SetEnabled(selected ~= nil)
-        enter:SetText("Войти соло")
-        return
-    end
-
-    if not isLeader() then
-        groupInfo:SetText(string.format("Группа: %d игроков • вход запускает только лидер", count))
-        enter:Disable()
-        enter:SetText("Ожидание лидера")
-        return
-    end
-
-    groupInfo:SetText(string.format("Группа: %d игроков • вся текущая группа войдёт вместе", count))
-    enter:SetEnabled(selected ~= nil)
-    enter:SetText(string.format("Войти группой (%d)", count))
 end
 
 local function refreshDetails()
-    if not selected then
-        detailTitle:SetText("Выберите подземелье")
-        detailZone:SetText("")
-        levelValue:SetText("—")
-        desc:SetText("Выберите подземелье слева. Поиск группы не запускается — вход происходит сразу для вас или вашей текущей группы.")
-    else
+    if selected then
         detailTitle:SetText(selected.name)
         detailZone:SetText(selected.zone)
         levelValue:SetText(selected.range)
         desc:SetText(selected.desc)
+    else
+        detailTitle:SetText("Выберите подземелье")
+        detailZone:SetText("")
+        levelValue:SetText("—")
+        desc:SetText("Выберите подземелье слева. Поиск группы не запускается — вы сами выбираете соло или текущую группу.")
     end
     refreshGroup()
 end
 
 local function refreshRows()
     local maxOffset = math.max(0, #filtered - ROWS)
-    if offset > maxOffset then offset = maxOffset end
-    if offset < 0 then offset = 0 end
+    offset = math.max(0, math.min(offset, maxOffset))
 
     for i, row in ipairs(rows) do
         local data = filtered[offset + i]
@@ -307,16 +302,17 @@ local function refreshRows()
         end
     end
 
-    up:SetEnabled(offset > 0)
-    down:SetEnabled(offset < maxOffset)
+    setButtonEnabled(up, offset > 0)
+    setButtonEnabled(down, offset < maxOffset)
 end
 
 local function applyFilter()
     wipe(filtered)
-    local query = string.lower(search:GetText() or "")
+    local query = search:GetText() or ""
+    local queryLower = string.lower(query)
     for _, dungeon in ipairs(DUNGEONS) do
-        local haystack = string.lower(dungeon.name .. " " .. dungeon.zone)
-        if query == "" or string.find(haystack, query, 1, true) then
+        local haystack = dungeon.name .. " " .. dungeon.zone
+        if query == "" or string.find(haystack, query, 1, true) or string.find(string.lower(haystack), queryLower, 1, true) then
             table.insert(filtered, dungeon)
         end
     end
@@ -325,20 +321,14 @@ local function applyFilter()
 end
 
 search:SetScript("OnTextChanged", function(self)
-    searchHint:SetShown((self:GetText() or "") == "")
+    if (self:GetText() or "") == "" then searchHint:Show() else searchHint:Hide() end
     applyFilter()
 end)
 search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 
-up:SetScript("OnClick", function()
-    offset = math.max(0, offset - 1)
-    refreshRows()
-end)
-down:SetScript("OnClick", function()
-    offset = math.min(math.max(0, #filtered - ROWS), offset + 1)
-    refreshRows()
-end)
+up:SetScript("OnClick", function() offset = math.max(0, offset - 1); refreshRows() end)
+down:SetScript("OnClick", function() offset = math.min(math.max(0, #filtered - ROWS), offset + 1); refreshRows() end)
 
 frame:EnableMouseWheel(true)
 frame:SetScript("OnMouseWheel", function(_, delta)
@@ -350,28 +340,22 @@ frame:SetScript("OnMouseWheel", function(_, delta)
     refreshRows()
 end)
 
-enter:SetScript("OnClick", function()
+soloEnter:SetScript("OnClick", function()
     if not selected then return end
-
-    if IsInRaid and IsInRaid() then
-        return
-    end
-
-    local payload = "ENTER:" .. tostring(selected.map)
-    if IsInGroup and IsInGroup() then
-        if not isLeader() then return end
-        sendAddon(payload, "PARTY")
-    else
-        local playerName = UnitName("player")
-        if playerName then
-            sendAddon(payload, "WHISPER", playerName)
-        end
+    local playerName = UnitName("player")
+    if playerName then
+        sendAddon("SOLO:" .. tostring(selected.map), "WHISPER", playerName)
     end
 end)
 
-frame:SetScript("OnShow", function()
-    refreshGroup()
+groupEnter:SetScript("OnClick", function()
+    if not selected then return end
+    local count, raid, leader = partyState()
+    if count <= 1 or raid or not leader then return end
+    sendAddon("GROUP:" .. tostring(selected.map), "PARTY")
 end)
+
+frame:SetScript("OnShow", function() refreshDetails() end)
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
@@ -411,9 +395,7 @@ miniIcon:SetPoint("CENTER", 0, 1)
 miniIcon:SetTexture("Interface\\Icons\\INV_Misc_Map_01")
 miniIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-minimap:SetScript("OnClick", function()
-    SlashCmdList.FOREVERDUNGEONFINDER()
-end)
+minimap:SetScript("OnClick", function() SlashCmdList.FOREVERDUNGEONFINDER() end)
 minimap:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine("Поиск подземелий", 0.90, 0.95, 1.00)
@@ -422,9 +404,7 @@ minimap:SetScript("OnEnter", function(self)
 end)
 minimap:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-for _, dungeon in ipairs(DUNGEONS) do
-    table.insert(filtered, dungeon)
-end
+for _, dungeon in ipairs(DUNGEONS) do table.insert(filtered, dungeon) end
 selected = filtered[1]
 refreshRows()
 refreshDetails()
