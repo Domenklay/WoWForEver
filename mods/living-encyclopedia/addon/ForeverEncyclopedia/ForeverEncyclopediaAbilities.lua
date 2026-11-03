@@ -42,6 +42,12 @@ local function schoolName(mask)
     return #names > 0 and table.concat(names, "/") or "Неизвестная школа"
 end
 
+local function sourceName(source)
+    source = tonumber(source) or 0
+    if source == 1 then return "SmartAI" end
+    return "шаблон NPC"
+end
+
 local function clientSpellInfo(id)
     id = tonumber(id)
     if not id then return nil, nil, 0 end
@@ -136,8 +142,8 @@ local function ensureButton()
         if not record.complete then
             GameTooltip:AddLine("Архив ещё анализирует запись.", 0.75, 0.75, 0.75, true)
         elseif not record.abilities or #record.abilities == 0 then
-            GameTooltip:AddLine("В шаблоне существа не найдено активных заклинаний.", 0.75, 0.75, 0.75, true)
-            GameTooltip:AddLine("Способности из SmartAI/C++-скриптов будут подключены следующим слоем.", 0.58, 0.58, 0.58, true)
+            GameTooltip:AddLine("В шаблоне NPC и SmartAI активных заклинаний не найдено.", 0.75, 0.75, 0.75, true)
+            GameTooltip:AddLine("Способности, зашитые напрямую в C++-скрипты, пока не индексируются.", 0.58, 0.58, 0.58, true)
         else
             for _, ability in ipairs(record.abilities) do
                 local name, icon, castTime = clientSpellInfo(ability.id)
@@ -155,6 +161,7 @@ local function ensureButton()
 
                 local cd = math.max(tonumber(ability.recovery) or 0, tonumber(ability.categoryRecovery) or 0)
                 if cd > 0 then details = details .. string.format(" • КД %.1fс", cd / 1000) end
+                details = details .. " • " .. sourceName(ability.source)
                 GameTooltip:AddLine(details, 0.72, 0.72, 0.72, true)
             end
         end
@@ -186,7 +193,7 @@ local function refreshUI()
     if not record.complete then
         button.text:SetText("Способности: анализ…")
     elseif not record.abilities or #record.abilities == 0 then
-        button.text:SetText("Способности: штатных не найдено")
+        button.text:SetText("Способности: не найдены")
     else
         button.text:SetText("Способности: " .. tostring(#record.abilities) .. "  •  наведите для подробностей")
     end
@@ -224,7 +231,7 @@ local function parseRuntime(msg)
         creatures[entry].expected = tonumber(count) or 0
         creatures[entry].complete = false
     elseif msg:sub(1, 7) == "BSPELL|" then
-        local _, entry, spellId, school, recovery, categoryRecovery, channeled, positive = strsplit("|", msg)
+        local _, entry, spellId, school, recovery, categoryRecovery, channeled, positive, source = strsplit("|", msg)
         entry = tonumber(entry)
         if not entry then return end
         creatures[entry] = creatures[entry] or { abilities = {} }
@@ -236,6 +243,7 @@ local function parseRuntime(msg)
             categoryRecovery = tonumber(categoryRecovery) or 0,
             channeled = tonumber(channeled) == 1,
             positive = tonumber(positive) == 1,
+            source = tonumber(source) or 0,
         }
     elseif msg:sub(1, 5) == "BEND|" then
         local _, entry = strsplit("|", msg)
