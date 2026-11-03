@@ -20,6 +20,8 @@ namespace ForeverEncyclopediaAbilities
 {
 constexpr char RequestPrefix[] = "FEB1";
 constexpr char ResponsePrefix[] = "FBR1";
+constexpr uint8 MaxSmartDepth = 4;
+constexpr uint32 MaxRandomRangeLists = 32;
 
 enum AbilitySource : uint8
 {
@@ -115,15 +117,54 @@ static uint32 SmartActionSpell(SmartScriptHolder const& holder)
     }
 }
 
+static void ScanSmartList(Player* player, int32 entry, SmartScriptType type, uint8 depth,
+    std::vector<AbilityRow>& abilities, std::unordered_set<uint32>& seenSpells,
+    std::unordered_set<uint32>& visitedLists)
+{
+    if (depth > MaxSmartDepth)
+        return;
+
+    SmartAIEventList script = sSmartScriptMgr->GetScript(entry, type);
+    for (SmartScriptHolder const& holder : script)
+    {
+        if (uint32 spellId = SmartActionSpell(holder))
+            AddAbility(player, spellId, SOURCE_SMARTAI, abilities, seenSpells);
+
+        if (holder.GetActionType() == SMART_ACTION_CALL_TIMED_ACTIONLIST)
+        {
+            uint32 listId = holder.action.timedActionList.id;
+            if (listId && visitedLists.insert(listId).second)
+                ScanSmartList(player, int32(listId), SMART_SCRIPT_TYPE_TIMED_ACTIONLIST, depth + 1,
+                    abilities, seenSpells, visitedLists);
+        }
+        else if (holder.GetActionType() == SMART_ACTION_CALL_RANDOM_TIMED_ACTIONLIST)
+        {
+            for (uint32 listId : holder.action.randTimedActionList.actionLists)
+                if (listId && visitedLists.insert(listId).second)
+                    ScanSmartList(player, int32(listId), SMART_SCRIPT_TYPE_TIMED_ACTIONLIST, depth + 1,
+                        abilities, seenSpells, visitedLists);
+        }
+        else if (holder.GetActionType() == SMART_ACTION_CALL_RANDOM_RANGE_TIMED_ACTIONLIST)
+        {
+            uint32 first = holder.action.randTimedActionList.actionLists[0];
+            uint32 last = holder.action.randTimedActionList.actionLists[1];
+            if (first && last >= first && last - first < MaxRandomRangeLists)
+                for (uint32 listId = first; listId <= last; ++listId)
+                    if (visitedLists.insert(listId).second)
+                        ScanSmartList(player, int32(listId), SMART_SCRIPT_TYPE_TIMED_ACTIONLIST, depth + 1,
+                            abilities, seenSpells, visitedLists);
+        }
+    }
+}
+
 static void AddSmartAIAbilities(Player* player, uint32 entry,
-    std::vector<AbilityRow>& abilities, std::unordered_set<uint32>& seen)
+    std::vector<AbilityRow>& abilities, std::unordered_set<uint32>& seenSpells)
 {
     // SmartAIMgr has already loaded and validated smart_scripts during world startup.
-    // Reading its in-memory event list avoids runtime world DB queries and schema coupling.
-    SmartAIEventList script = sSmartScriptMgr->GetScript(int32(entry), SMART_SCRIPT_TYPE_CREATURE);
-    for (SmartScriptHolder const& holder : script)
-        if (uint32 spellId = SmartActionSpell(holder))
-            AddAbility(player, spellId, SOURCE_SMARTAI, abilities, seen);
+    // Read the in-memory scripts, including referenced timed action lists, without world DB queries.
+    std::unordered_set<uint32> visitedLists;
+    ScanSmartList(player, int32(entry), SMART_SCRIPT_TYPE_CREATURE, 0,
+        abilities, seenSpells, visitedLists);
 }
 
 static void Inspect(Player* player, uint32 entry)
@@ -140,12 +181,12 @@ static void Inspect(Player* player, uint32 entry)
     }
 
     std::vector<AbilityRow> abilities;
-    std::unordered_set<uint32> seen;
+    std::unordered_set<uint32> seenSpells;
 
     for (uint32 spellId : creature->spells)
-        AddAbility(player, spellId, SOURCE_TEMPLATE, abilities, seen);
+        AddAbility(player, spellId, SOURCE_TEMPLATE, abilities, seenSpells);
 
-    AddSmartAIAbilities(player, entry, abilities, seen);
+    AddSmartAIAbilities(player, entry, abilities, seenSpells);
 
     Send(player, Trinity::StringFormat("BSTART|{}|{}", entry, abilities.size()));
     for (AbilityRow const& row : abilities)
