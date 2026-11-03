@@ -77,16 +77,21 @@ restore_addon() {
     fi
 }
 
+validate_client() {
+    local client=$1
+    test -d "$client" || { echo "WoW client path not found: $client" >&2; exit 1; }
+    test -d "$client/Interface" || mkdir -p "$client/Interface"
+    mkdir -p "$client/Interface/AddOns"
+    test -w "$client/Interface/AddOns" || { echo "Client AddOns directory is not writable: $client/Interface/AddOns" >&2; exit 1; }
+}
+
 install_addon() {
     local backup=$1 client=$2
     local source_dir="mods/forever-dungeon-finder/client/ForeverDungeonFinder"
     local addons_dir="$client/Interface/AddOns"
     local addon_dir="$addons_dir/ForeverDungeonFinder"
 
-    test -d "$client" || { echo "WoW client path not found: $client" >&2; exit 1; }
-    mkdir -p "$addons_dir"
     printf '%s\n' "$client" > "$backup/client-path.txt"
-
     if test -d "$addon_dir"; then
         cp -a "$addon_dir" "$backup/addon.before"
     fi
@@ -143,6 +148,8 @@ case "$action" in
         command -v python3 >/dev/null
 
         client=${2:-${WOW_CLIENT_PATH:-/mnt/e/_classic_beta_}}
+        validate_client "$client"
+
         container=$(docker compose ps -q worldserver)
         test -n "$container" || { echo 'worldserver must already be running before installation.' >&2; exit 1; }
 
@@ -187,13 +194,13 @@ case "$action" in
             --backup "$backup"
         image_preserved=1
 
-        # The old container remains live while the new image is compiled.
+        # Building changes only the image tag; the existing worldserver stays live.
         docker compose build worldserver
         check_label
 
         set_env FOREVER_DUNGEON_FINDER_ENABLED 1
-        install_addon "$backup" "$client"
         addon_touched=1
+        install_addon "$backup" "$client"
 
         activated=1
         docker compose up -d --no-deps --force-recreate worldserver
