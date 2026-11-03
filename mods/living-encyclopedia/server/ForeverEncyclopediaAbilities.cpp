@@ -8,6 +8,7 @@
 #include "CreatureData.h"
 #include "SpellMgr.h"
 #include "SpellInfo.h"
+#include "SmartScriptMgr.h"
 #include "Map.h"
 #include <algorithm>
 #include <sstream>
@@ -20,6 +21,12 @@ namespace ForeverEncyclopediaAbilities
 constexpr char RequestPrefix[] = "FEB1";
 constexpr char ResponsePrefix[] = "FBR1";
 
+enum AbilitySource : uint8
+{
+    SOURCE_TEMPLATE = 0,
+    SOURCE_SMARTAI = 1
+};
+
 struct AbilityRow
 {
     uint32 id = 0;
@@ -28,6 +35,7 @@ struct AbilityRow
     uint32 categoryRecovery = 0;
     bool channeled = false;
     bool positive = false;
+    uint8 source = SOURCE_TEMPLATE;
 };
 
 static uint32 Account(Player* player)
@@ -71,6 +79,53 @@ static SpellInfo const* ResolveSpell(Player* player, uint32 spellId)
     return sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
 }
 
+static void AddAbility(Player* player, uint32 spellId, uint8 source,
+    std::vector<AbilityRow>& abilities, std::unordered_set<uint32>& seen)
+{
+    if (!spellId || !seen.insert(spellId).second)
+        return;
+
+    SpellInfo const* spell = ResolveSpell(player, spellId);
+    if (!spell || spell->IsPassive())
+        return;
+
+    AbilityRow row;
+    row.id = spellId;
+    row.schoolMask = spell->SchoolMask;
+    row.recovery = spell->RecoveryTime;
+    row.categoryRecovery = spell->CategoryRecoveryTime;
+    row.channeled = spell->IsChanneled();
+    row.positive = spell->IsPositive();
+    row.source = source;
+    abilities.push_back(row);
+}
+
+static uint32 SmartActionSpell(SmartScriptHolder const& holder)
+{
+    switch (holder.GetActionType())
+    {
+        case SMART_ACTION_CAST:
+        case SMART_ACTION_SELF_CAST:
+        case SMART_ACTION_INVOKER_CAST:
+            return holder.action.cast.spell;
+        case SMART_ACTION_CROSS_CAST:
+            return holder.action.crossCast.spell;
+        default:
+            return 0;
+    }
+}
+
+static void AddSmartAIAbilities(Player* player, uint32 entry,
+    std::vector<AbilityRow>& abilities, std::unordered_set<uint32>& seen)
+{
+    // SmartAIMgr has already loaded and validated smart_scripts during world startup.
+    // Reading its in-memory event list avoids runtime world DB queries and schema coupling.
+    SmartAIEventList script = sSmartScriptMgr->GetScript(int32(entry), SMART_SCRIPT_TYPE_CREATURE);
+    for (SmartScriptHolder const& holder : script)
+        if (uint32 spellId = SmartActionSpell(holder))
+            AddAbility(player, spellId, SOURCE_SMARTAI, abilities, seen);
+}
+
 static void Inspect(Player* player, uint32 entry)
 {
     if (!player || !entry || !HasAbilityKnowledge(player))
@@ -86,29 +141,17 @@ static void Inspect(Player* player, uint32 entry)
 
     std::vector<AbilityRow> abilities;
     std::unordered_set<uint32> seen;
+
     for (uint32 spellId : creature->spells)
-    {
-        if (!spellId || !seen.insert(spellId).second)
-            continue;
+        AddAbility(player, spellId, SOURCE_TEMPLATE, abilities, seen);
 
-        SpellInfo const* spell = ResolveSpell(player, spellId);
-        if (!spell || spell->IsPassive())
-            continue;
-
-        AbilityRow row;
-        row.id = spellId;
-        row.schoolMask = spell->SchoolMask;
-        row.recovery = spell->RecoveryTime;
-        row.categoryRecovery = spell->CategoryRecoveryTime;
-        row.channeled = spell->IsChanneled();
-        row.positive = spell->IsPositive();
-        abilities.push_back(row);
-    }
+    AddSmartAIAbilities(player, entry, abilities, seen);
 
     Send(player, Trinity::StringFormat("BSTART|{}|{}", entry, abilities.size()));
     for (AbilityRow const& row : abilities)
-        Send(player, Trinity::StringFormat("BSPELL|{}|{}|{}|{}|{}|{}|{}", entry, row.id,
-            row.schoolMask, row.recovery, row.categoryRecovery, row.channeled ? 1 : 0, row.positive ? 1 : 0));
+        Send(player, Trinity::StringFormat("BSPELL|{}|{}|{}|{}|{}|{}|{}|{}", entry, row.id,
+            row.schoolMask, row.recovery, row.categoryRecovery, row.channeled ? 1 : 0,
+            row.positive ? 1 : 0, uint32(row.source)));
     Send(player, Trinity::StringFormat("BEND|{}", entry));
 }
 
