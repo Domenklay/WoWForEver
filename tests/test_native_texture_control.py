@@ -1,12 +1,14 @@
 """Existing-ID control: exact metadata changes, owned storage and rollback.
 
-The transaction test uses a Python storage reader in place of CascLib. It does
-not establish acceptance by WowB.exe or native CascLib; no game files are used.
+Most transaction tests use a Python storage reader. The optional native test
+uses CASC_SANDBOX_CHECKER for actual CascLib readback. No game files are used,
+and acceptance by WowB.exe remains unverified.
 """
 import copy
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import struct
 import sys
@@ -226,4 +228,17 @@ class NativeTextureTransactionTests(unittest.TestCase):
                            donor_id=TARGET,dry_run=True,progress=lambda _:None)
         self.assertEqual(result['target_id'],DONOR)
         self.assertEqual(result['donor_id'],TARGET)
+        self.assertEqual(self.snapshot(),before)
+
+    @unittest.skipUnless(os.environ.get('CASC_SANDBOX_CHECKER'),'Native CascLib checker required')
+    def test_native_casclib_control_readback_and_exact_rollback(self):
+        self.scanner.stop()
+        checker=os.environ['CASC_SANDBOX_CHECKER'];before=self.snapshot()
+        result=entry.apply(self.client,checker,old_id=TARGET,new_id=DONOR,native_control=True,
+                           donor_id=DONOR,progress=lambda _:None)
+        self.assertTrue(result['native_texture_control'])
+        rows=entry.install.verify(self.client,checker,progress=lambda _:None)
+        self.assertEqual(rows[TARGET]['status'],'READ_OK')
+        self.assertEqual(rows[TARGET]['sha256'],rows[DONOR]['sha256'])
+        entry.rollback(self.client,native_control_only=True)
         self.assertEqual(self.snapshot(),before)
