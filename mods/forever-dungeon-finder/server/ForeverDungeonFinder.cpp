@@ -16,7 +16,14 @@
 namespace ForeverDungeonFinder
 {
 static constexpr std::string_view AddonPrefix = "FDF";
-static constexpr std::string_view EnterPrefix = "ENTER:";
+static constexpr std::string_view SoloPrefix = "SOLO:";
+static constexpr std::string_view GroupPrefix = "GROUP:";
+
+enum class EntryMode
+{
+    Solo,
+    Group
+};
 
 static bool EnvBool(char const* name, bool fallback)
 {
@@ -40,12 +47,21 @@ static void Notify(Player* player, char const* message)
         player->GetSession()->SendNotification("%s", message);
 }
 
-static bool ParseMapId(std::string_view text, uint32& mapId)
+static bool ParseRequest(std::string_view text, EntryMode& mode, uint32& mapId)
 {
-    if (!text.starts_with(EnterPrefix))
+    if (text.starts_with(SoloPrefix))
+    {
+        mode = EntryMode::Solo;
+        text.remove_prefix(SoloPrefix.size());
+    }
+    else if (text.starts_with(GroupPrefix))
+    {
+        mode = EntryMode::Group;
+        text.remove_prefix(GroupPrefix.size());
+    }
+    else
         return false;
 
-    text.remove_prefix(EnterPrefix.size());
     if (text.empty())
         return false;
 
@@ -78,13 +94,13 @@ static bool PlayerReady(Player* player)
     return true;
 }
 
-static bool CollectParty(Player* leader, std::vector<Player*>& players)
+static bool CollectGroup(Player* leader, std::vector<Player*>& players)
 {
     Group* group = leader->GetGroup();
     if (!group)
     {
-        players.push_back(leader);
-        return true;
+        Notify(leader, "Forever: вы не состоите в группе.");
+        return false;
     }
 
     if (group->isRaidGroup())
@@ -113,7 +129,7 @@ static bool CollectParty(Player* leader, std::vector<Player*>& players)
     return true;
 }
 
-static bool EnterDungeon(Player* requester, uint32 mapId)
+static bool EnterDungeon(Player* requester, uint32 mapId, EntryMode mode)
 {
     if (!Enabled())
     {
@@ -136,7 +152,9 @@ static bool EnterDungeon(Player* requester, uint32 mapId)
     }
 
     std::vector<Player*> players;
-    if (!CollectParty(requester, players))
+    if (mode == EntryMode::Solo)
+        players.push_back(requester);
+    else if (!CollectGroup(requester, players))
         return false;
 
     if (players.empty() || players.size() > MAX_GROUP_SIZE)
@@ -149,7 +167,7 @@ static bool EnterDungeon(Player* requester, uint32 mapId)
     {
         if (!PlayerReady(player))
         {
-            Notify(requester, "Forever: все участники должны быть живы, вне боя и не находиться на транспорте.");
+            Notify(requester, "Forever: участники входа должны быть живы, вне боя и не находиться на транспорте.");
             return false;
         }
     }
@@ -168,21 +186,15 @@ static bool EnterDungeon(Player* requester, uint32 mapId)
         }
     }
 
-    TC_LOG_INFO("forever.dungeonfinder", "Direct dungeon entry: leader={} map={} players={}",
-        requester->GetName(), mapId, players.size());
+    TC_LOG_INFO("forever.dungeonfinder", "Direct dungeon entry: requester={} map={} mode={} players={}",
+        requester->GetName(), mapId, mode == EntryMode::Solo ? "solo" : "group", players.size());
     return true;
 }
 
-static void HandleAddonRequest(Player* player, std::string const& prefix, std::string const& text)
+static bool ParseAddonRequest(Player* player, std::string const& prefix, std::string const& text,
+    EntryMode& mode, uint32& mapId)
 {
-    if (!player || prefix != AddonPrefix)
-        return;
-
-    uint32 mapId = 0;
-    if (!ParseMapId(text, mapId))
-        return;
-
-    EnterDungeon(player, mapId);
+    return player && prefix == AddonPrefix && ParseRequest(text, mode, mapId);
 }
 
 class DirectEntryPlayerScript final : public PlayerScript
@@ -193,21 +205,33 @@ public:
     void OnAddonMessageSent(Player* player, uint32 /*type*/, std::string const& prefix,
         std::string const& text, Player* receiver) override
     {
-        // Solo requests are sent as a self whisper. Do not accept a targeted
-        // request aimed at another character.
+        // Solo requests are self-whispers. A targeted request may never move a
+        // different character, even if another addon sends the FDF prefix.
         if (receiver != player)
             return;
-        HandleAddonRequest(player, prefix, text);
+
+        EntryMode mode = EntryMode::Solo;
+        uint32 mapId = 0;
+        if (!ParseAddonRequest(player, prefix, text, mode, mapId) || mode != EntryMode::Solo)
+            return;
+
+        EnterDungeon(player, mapId, mode);
     }
 
     void OnAddonMessageSent(Player* player, uint32 /*type*/, std::string const& prefix,
         std::string const& text, Group* group) override
     {
-        // Group requests are sent through PARTY so the sender is naturally the
-        // current group member. EnterDungeon still requires the sender to be leader.
+        // Group entry is sent through PARTY and still requires the sender to be
+        // the current group's leader inside CollectGroup().
         if (!group || player->GetGroup() != group)
             return;
-        HandleAddonRequest(player, prefix, text);
+
+        EntryMode mode = EntryMode::Group;
+        uint32 mapId = 0;
+        if (!ParseAddonRequest(player, prefix, text, mode, mapId) || mode != EntryMode::Group)
+            return;
+
+        EnterDungeon(player, mapId, mode);
     }
 };
 } // namespace ForeverDungeonFinder
