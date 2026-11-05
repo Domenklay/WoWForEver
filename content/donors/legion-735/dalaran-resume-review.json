@@ -1,0 +1,19 @@
+{
+  "format": "wowforever-dalaran-resume-review-v1",
+  "reviewed_on": "2026-10-30",
+  "work_resumed_by_user": true,
+  "last_reviewed_operation": "c1b5a4c38e7d4558ba439dc98eec31bb",
+  "last_report": "Dalaran-TVFS-texture-20261028-130501-nj2pxuvu.zip",
+  "capture_stage": "immediately_after_install_before_game_test",
+  "build_matched_operation_at_collection": true,
+  "latest_archive_in_collected_tact_log": 51,
+  "operation_added_archive": "data.052",
+  "live_processes_in_report": [],
+  "logs_predate_last_install": true,
+  "user_reported_private_texture_rendered": false,
+  "actual_game_use_of_last_layer_confirmed": false,
+  "next_step": "Read-only fresh report while test-copy WowB.exe is running; verify build identity, executable path and log freshness before selecting a new metadata experiment",
+  "client_modified": false,
+  "server_modified": false,
+  "zone_load_verified": false
+}

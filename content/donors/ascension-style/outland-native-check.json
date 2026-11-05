@@ -1,0 +1,43 @@
+{
+  "format": "wowforever-outland-native-gridmap-check-v1",
+  "checked_on": "2026-10-29",
+  "core_revision": "91d49b230f89c3ab4719f5b2b2d1e70ed36613c4",
+  "map_id_from_donor_filename": 530,
+  "grid_x_from_donor_filename": 33,
+  "grid_y_from_donor_filename": 24,
+  "source_sha256": "d6664c5ba1a1cb2acd80a75e517526bb67a8f2754c41f9278598ae3f0497e2f6",
+  "candidate_sha256": "cb8af589cf57b2ee7d34379e4d80a5815105aefc54c3be642feb3cf70b4ed181",
+  "gridmap_source_unmodified": true,
+  "cases": {
+    "converted": {
+      "exit_code": 0,
+      "original_v9_rejected": true,
+      "candidate_loaded": true,
+      "height_samples": 121,
+      "valid_heights": 121,
+      "minimum_height": 15.21775436,
+      "maximum_height": 258.5776367,
+      "client_or_vmap_validated": false
+    },
+    "version_only": {
+      "exit_code": 1,
+      "original_v9_rejected": true,
+      "candidate_loaded": false,
+      "height_samples": 121,
+      "valid_heights": 0,
+      "client_or_vmap_validated": false
+    },
+    "truncated": {
+      "exit_code": 1,
+      "original_v9_rejected": true,
+      "candidate_loaded": false,
+      "height_samples": 121,
+      "valid_heights": 0,
+      "client_or_vmap_validated": false
+    }
+  },
+  "client_or_vmap_validated": false,
+  "installable": false,
+  "user_server_modified": false,
+  "whole_zone_coverage_confirmed": false
+}

@@ -1,0 +1,49 @@
+{
+  "source": "https://github.com/wowdev/wow-listfile/releases/latest/download/verified-listfile.csv",
+  "bytes_scanned": 73601637,
+  "sha256": "e5f4be13ede508044a6f09b65e313b1788935673c41d26dc3b8ae96c04e667c3",
+  "entries": [
+    {
+      "file_id": 775971,
+      "path": "world/maps/azeroth/azeroth.wdt"
+    },
+    {
+      "file_id": 782779,
+      "path": "world/maps/kalimdor/kalimdor.wdt"
+    },
+    {
+      "file_id": 828395,
+      "path": "world/maps/expansion01/expansion01.wdt"
+    },
+    {
+      "file_id": 828853,
+      "path": "world/maps/expansion01/expansion01_24_33.adt"
+    },
+    {
+      "file_id": 828914,
+      "path": "world/maps/expansion01/expansion01_24_33_obj1.adt"
+    },
+    {
+      "file_id": 829190,
+      "path": "world/maps/expansion01/expansion01_24_33_tex0.adt"
+    },
+    {
+      "file_id": 829655,
+      "path": "world/maps/expansion01/expansion01_24_33_obj0.adt"
+    }
+  ],
+  "format": "wowforever-outland-fileid-probe-v1",
+  "reviewed_on": "2026-10-30",
+  "controls_confirmed_against_uploaded_forever_map_db2": [
+    775971,
+    782779
+  ],
+  "user_report": {
+    "map_530_runtime": "No maps found!",
+    "geometry_matching_files_found": false,
+    "casc_storage_opened": true,
+    "all_name_requests_failed_including_azeroth_control": true,
+    "client_assets_absence_proven": false
+  },
+  "client_fileid_reads_pending": true
+}

@@ -91,7 +91,8 @@ python3 - "$client" <<'PY'
 from pathlib import Path
 import sys
 p=Path(sys.argv[1])
-if not (p/'WowB.exe').is_file():raise SystemExit('Client folder must contain WowB.exe')
+if not any((p/name).is_file() for name in ('Wow.exe','WowB.exe')):
+    raise SystemExit('Client folder must contain Wow.exe or WowB.exe')
 for name in ('ForeverSubclass','ForeverAscension'):
     if (p/'Interface/AddOns'/name).is_symlink():raise SystemExit('Symlinked AddOn folder is not supported')
 PY

@@ -1,0 +1,10 @@
+[
+  {
+    "id": "legion-dalaran",
+    "name": "Dalaran (Legion)",
+    "status": "experimental",
+    "clientVersion": "1.60.1.70532",
+    "mapIds": [1220],
+    "blocker": "rendering_unverified"
+  }
+]

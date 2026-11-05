@@ -113,6 +113,20 @@
         <label><span data-i18n="language">Launcher language</span><select id="s-language"></select></label>
       </fieldset>
 
+      <fieldset id="content-packages">
+        <legend data-i18n="contentTitle">Location packages</legend>
+        <p class="small" data-i18n="contentHint">Install a package prepared for the selected client. Close the game first.</p>
+        <p class="small" id="content-catalog"></p>
+        <p id="content-preview" aria-live="polite"></p>
+        <p class="small" id="content-installed" aria-live="polite"></p>
+        <p class="small content-backup" id="content-backup"></p>
+        <div class="row package-actions">
+          <button class="btn small" id="content-choose" data-i18n="contentChoose">Choose package</button>
+          <button class="btn primary small" id="content-install" data-i18n="contentInstall" disabled>Install</button>
+          <button class="btn small" id="content-rollback" data-i18n="contentRollback" disabled>Roll back</button>
+        </div>
+      </fieldset>
+
       <fieldset id="linux-settings" hidden>
         <legend>Linux</legend>
         <label>Proton / Wine<select id="s-runner"></select></label>

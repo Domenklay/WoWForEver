@@ -14,7 +14,8 @@ SOURCE=Path(__file__).parents[1]/'mods/forever-advancement/addon/ForeverAscensio
 
 def addons_root(client):
     client=Path(client).resolve(strict=True)
-    if not (client/'WowB.exe').is_file():raise ValueError('Expected client folder containing WowB.exe')
+    if not any((client/name).is_file() for name in ('Wow.exe','WowB.exe')):
+        raise ValueError('Expected client folder containing Wow.exe or WowB.exe')
     interface=client/'Interface';addons=interface/'AddOns'
     if interface.is_symlink() or addons.is_symlink():raise ValueError('Symlinked Interface/AddOns is not supported')
     for name in NAMES:

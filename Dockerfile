@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ARG TC_REPO=https://github.com/advocaite/TrinityCore.git
 ARG TC_REF=forever
-ARG TC_COMMIT=91d49b230f89c3ab4719f5b2b2d1e70ed36613c4
+ARG TC_COMMIT=b6ae12c227ef00bfe24fdaf16fba28acc61a5b7f
 RUN git clone --branch "${TC_REF}" --single-branch --depth 1 "${TC_REPO}" /src/TrinityCore
 RUN if [ -n "${TC_COMMIT}" ]; then \
       git -C /src/TrinityCore fetch --depth 1 origin "${TC_COMMIT}" \
@@ -93,7 +93,9 @@ RUN curl -fL --retry 3 -o tdb.7z "${TDB_URL}" \
     && ls -la /tdb
 
 ############################ runtime ############################
-FROM ubuntu:${UBUNTU_VERSION}
+FROM ubuntu:${UBUNTU_VERSION} AS server-refresh
+ARG TC_COMMIT=b6ae12c227ef00bfe24fdaf16fba28acc61a5b7f
+LABEL org.wowforever.core="${TC_COMMIT}"
 LABEL org.wowforever.advancement="1.11.0"
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -108,8 +110,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=build /opt/trinitycore /opt/trinitycore
 # The updater looks for sql/ under the source directory baked in at build time
 COPY --from=build /src/TrinityCore/sql /src/TrinityCore/sql
-# worldserver's auto-setup imports TDB_full_*.sql from its working directory
-COPY --from=tdb /tdb/ /opt/trinitycore/bin/
 COPY docker/entrypoint.sh docker/extract.sh /usr/local/bin/
 COPY mods/forever-advancement/provenance.json /opt/trinitycore/share/forever-advancement/provenance.json
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/extract.sh \
@@ -119,3 +119,8 @@ ENV LD_LIBRARY_PATH=/opt/trinitycore/lib
 WORKDIR /opt/trinitycore/bin
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["worldserver"]
+
+# Default full installation also bundles TDB. The server-refresh target imports
+# a verified clone of an existing database and deliberately needs no blank TDB.
+FROM server-refresh AS runtime
+COPY --from=tdb /tdb/ /opt/trinitycore/bin/

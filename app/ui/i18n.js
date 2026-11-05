@@ -299,6 +299,83 @@ const TEXTS = {
   },
 };
 
+Object.assign(TEXTS.fr, {
+  "contentTitle": "Paquets de zones",
+  "contentHint": "Installez un paquet préparé pour le client choisi. Fermez le jeu avant.",
+  "contentChoose": "Choisir un paquet",
+  "contentInstall": "Installer",
+  "contentRollback": "Restaurer",
+  "contentExperimental": "{name} — expérimental, installation indisponible",
+  "contentReady": "{name} {version} — prêt à installer",
+  "contentUnverified": "Le chargement de cette zone dans le jeu n’est pas encore confirmé.",
+  "contentServer": "La préparation du serveur n’est pas confirmée.",
+  "contentClient": "Ce paquet vise une autre version du client.",
+  "contentChanged": "Les fichiers ont changé. Obtenez un paquet préparé pour ce client.",
+  "contentInstalled": "Installé : {name}",
+  "contentNone": "Aucun paquet installé.",
+  "contentBackup": "Sauvegarde : {path}",
+  "contentRecovery": "Une installation interrompue doit être restaurée.",
+  "contentSuccess": "Paquet installé.",
+  "contentRestored": "Paquet restauré."
+});
+Object.assign(TEXTS.en, {
+  "contentTitle": "Location packages",
+  "contentHint": "Install a package prepared for the selected client. Close the game first.",
+  "contentChoose": "Choose package",
+  "contentInstall": "Install",
+  "contentRollback": "Roll back",
+  "contentExperimental": "{name} — experimental, installation unavailable",
+  "contentReady": "{name} {version} — ready to install",
+  "contentUnverified": "This zone has not been confirmed working in the game yet.",
+  "contentServer": "Server preparation has not been confirmed.",
+  "contentClient": "This package targets a different client version.",
+  "contentChanged": "Files have changed. Obtain a package prepared for this client.",
+  "contentInstalled": "Installed: {name}",
+  "contentNone": "No installed packages.",
+  "contentBackup": "Backup: {path}",
+  "contentRecovery": "An interrupted installation needs rollback.",
+  "contentSuccess": "Package installed.",
+  "contentRestored": "Package rolled back."
+});
+Object.assign(TEXTS.es, {
+  "contentTitle": "Paquetes de zonas",
+  "contentHint": "Instala un paquete preparado para el cliente seleccionado. Cierra el juego primero.",
+  "contentChoose": "Elegir paquete",
+  "contentInstall": "Instalar",
+  "contentRollback": "Restaurar",
+  "contentExperimental": "{name} — experimental, instalación no disponible",
+  "contentReady": "{name} {version} — listo para instalar",
+  "contentUnverified": "Todavía no se ha confirmado que esta zona funcione en el juego.",
+  "contentServer": "La preparación del servidor no está confirmada.",
+  "contentClient": "Este paquete es para otra versión del cliente.",
+  "contentChanged": "Los archivos cambiaron. Obtén un paquete preparado para este cliente.",
+  "contentInstalled": "Instalado: {name}",
+  "contentNone": "No hay paquetes instalados.",
+  "contentBackup": "Copia de seguridad: {path}",
+  "contentRecovery": "Una instalación interrumpida necesita restauración.",
+  "contentSuccess": "Paquete instalado.",
+  "contentRestored": "Paquete restaurado."
+});
+Object.assign(TEXTS.pt, {
+  "contentTitle": "Pacotes de áreas",
+  "contentHint": "Instale um pacote preparado para o cliente selecionado. Feche o jogo primeiro.",
+  "contentChoose": "Escolher pacote",
+  "contentInstall": "Instalar",
+  "contentRollback": "Restaurar",
+  "contentExperimental": "{name} — experimental, instalação indisponível",
+  "contentReady": "{name} {version} — pronto para instalar",
+  "contentUnverified": "Esta área ainda não teve seu funcionamento confirmado no jogo.",
+  "contentServer": "A preparação do servidor não está confirmada.",
+  "contentClient": "Este pacote é para outra versão do cliente.",
+  "contentChanged": "Os arquivos mudaram. Obtenha um pacote preparado para este cliente.",
+  "contentInstalled": "Instalado: {name}",
+  "contentNone": "Nenhum pacote instalado.",
+  "contentBackup": "Backup: {path}",
+  "contentRecovery": "Uma instalação interrompida precisa ser restaurada.",
+  "contentSuccess": "Pacote instalado.",
+  "contentRestored": "Pacote restaurado."
+});
+
 let lang = 'en';
 
 /// fr, en, es or pt from a setting ('' = system language) or a browser language tag.

@@ -1,5 +1,16 @@
 # WoWForEver
 
+Для новой тестовой копии **1.60.1.70658** подготовлен
+[изолированный переход на актуальное ядро Forever с нашим модом](docs/SERVER-REFRESH.ru.md).
+Он сохраняет прежний сервер и запускает обновление на копии четырёх баз.
+Полная сборка и вход этим клиентом на ПК пользователя ещё требуют проверки.
+
+**Рабочий аддон ForeverAscension находится в ветке
+[`feat/forever-ascension`](https://github.com/Domenklay/WoWForEver/tree/feat/forever-ascension).**
+Его установка и обновление описаны в
+[инструкции ForeverAdvancement](https://github.com/Domenklay/WoWForEver/blob/feat/forever-ascension/mods/forever-advancement/README.ru.md).
+Старый ForeverSubclass в `main` не является обновлением этого аддона.
+
 Сервер **World of Warcraft Forever Beta** на основе
 [ветки forever проекта TrinityCore](https://github.com/advocaite/TrinityCore/tree/forever).
 В комплект входят Docker-конфигурация, MySQL, сервер авторизации, игровой сервер,
@@ -12,6 +23,9 @@
 пользователь подтвердил вход в мир, бой и выполнение нескольких квестов. Полная совместимость не подтверждена. Настройка `CLIENT_BUILD=70532` только
 меняет записи версии в базе; она не исправляет различия протокола и игровых данных.
 На компьютере пользователя сервер собран и запущен; в логах остаются ошибки отдельных пакетов клиента 70532.
+
+Подготовлен [переход на новую установку в `E:\WoW_Forever\_forever_` и лаунчер 2.0.5](docs/zones/NEW-CLIENT-MIGRATION.ru.md).
+Фактическая сборка новой версии и её совместимость с сервером пока не подтверждены.
 
 ![Игра](docs/screenshots/game.jpg)
 
@@ -273,6 +287,8 @@ xattr -cr "/Applications/Forever Launcher.app"
 - [Контрольный импорт нового FileDataID в отдельную копию клиента](docs/zones/CASC-CANARY.ru.md).
 - [Forever Ascension: новый аддон, обновление и откат](mods/forever-advancement/README.ru.md).
 - [Целевая модель мультикласса в стиле Ascension Freepick](docs/ASCENSION-FREEPICK.ru.md).
+- [Исследование доноров Ascension и пробная конвертация рельефа Запределья](docs/zones/ASCENSION-DONORS.ru.md).
+- [Пакеты локаций: установка клиентской части через лаунчер и откат](content/packages/README.ru.md).
 - [План переноса контента из 3.3.5 и новых дополнений](docs/CUSTOMIZATION.ru.md).
 - [Инструкции для AI-ассистентов](AGENTS.md).
 

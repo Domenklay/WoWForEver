@@ -1,0 +1,9 @@
+{
+  "core_revision": "91d49b230f89c3ab4719f5b2b2d1e70ed36613c4",
+  "files": {
+    "src/server/game/Maps/GridMap.cpp": "739f47724eb835c56a99fd37e9ab082e240bf83b11eab956c7b0da557264e628",
+    "src/server/game/Maps/GridMap.h": "c4de0aba42bff68989b965eae248dd78ad731a4f4ad3176fb15af5535c4d2f4f",
+    "src/common/Collision/Maps/MapDefines.h": "ccec6043d3291315170ce0671f328e4a49a8c225fc5201fc48b9c653fea6d288",
+    "src/common/Collision/Maps/MapDefines.cpp": "6ff9973f66b21dc838f51b3861af51d66f48b1c1dd2b575252ad6053bea9073a"
+  }
+}

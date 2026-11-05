@@ -1,0 +1,124 @@
+{
+  "format": "wowforever-ascension-map-donor-review-v1",
+  "reviewed_on": "2026-10-28",
+  "official_ascension_content_verified": false,
+  "full_ascension_clone_with_maps_verified": false,
+  "sources": [
+    {
+      "repository": "https://github.com/AstoriaCore/Astoria-ClasslessSystem",
+      "revision": "9eb3ec311e50f73d1694b88d708790f437ff2a87",
+      "result": "3.3.5a classless Lua/AIO/UI/SQL; complete map donor not verified"
+    },
+    {
+      "repository": "https://github.com/DustinHendrickson/mod-classless-wildcard",
+      "revision": "97172c4fdfae51213a0f170d60167c500b53fb33",
+      "result": "AzerothCore classless module; full Ascension zones not verified"
+    },
+    {
+      "repository": "https://github.com/Proj-Ascension/Server",
+      "revision": "ec8ae4591165c187155528d5c580f1d65309e2c9",
+      "result": "Root README describes backend API/website, not a WoW map/server source donor"
+    },
+    {
+      "repository": "https://github.com/StygianTheBest/StygianCore",
+      "revision": "cb5702801efd9e238b29a9b37e747e484979d35d",
+      "result": "AzerothCore 3.3.5a solo/LAN repack, not verified Ascension clone"
+    },
+    {
+      "repository": "https://github.com/bizzancom/wow-server-data",
+      "revision": "6dae1d4890dd198ba22c305b82d1463ac7654356",
+      "release": "v1.0.0",
+      "result": "Actual server geometry sample extracted; not Ascension-specific content"
+    },
+    {
+      "repository": "https://github.com/wowgaming/client-data",
+      "revision": "d8d0e1d0f3de404b67ac88164f780eeb4b9eee1c",
+      "result": "Release ZIP exists; bounded Range request rejected with HTTP 501; normal GET prefix read only; full contents not audited"
+    }
+  ],
+  "extraction": {
+    "source_repository": "bizzancom/wow-server-data",
+    "release": "v1.0.0",
+    "first_members": [
+      "dbc",
+      "dbc/TransportRotation.dbc",
+      "dbc/SpellFocusObject.dbc",
+      "dbc/FootstepTerrainLookup.dbc",
+      "dbc/Cfg_Categories.dbc",
+      "dbc/EmotesTextData.dbc",
+      "dbc/WorldStateUI.dbc",
+      "dbc/ItemPetFood.dbc",
+      "dbc/SoundAmbience.dbc",
+      "dbc/ItemSet.dbc",
+      "dbc/SpellShapeshiftForm.dbc",
+      "dbc/CreatureSoundData.dbc",
+      "dbc/Spell.dbc",
+      "dbc/ZoneMusic.dbc",
+      "dbc/CharHairTextures.dbc",
+      "dbc/SpellVisualKitAreaModel.dbc",
+      "dbc/gtRegenHPPerSpt.dbc",
+      "dbc/SpellMissile.dbc"
+    ],
+    "members_inspected": 253,
+    "samples": [
+      {
+        "entry": "maps/6093041.map",
+        "file": "baseline-sample.map",
+        "bytes": 117506,
+        "sha256": "bff41db86d2ef1ba9db7c6fcf23aaf578b02a0b5faa8e5f4cd411710ca8afe78",
+        "magic_hex": "4d4150530900000034300000",
+        "version_ascii": "\t\u0000\u0000\u0000",
+        "version_u32": 9,
+        "compatible_with_forever_header": false
+      },
+      {
+        "entry": "maps/5303324.map",
+        "file": "tbc-sample.map",
+        "bytes": 67178,
+        "sha256": "d6664c5ba1a1cb2acd80a75e517526bb67a8f2754c41f9278598ae3f0497e2f6",
+        "magic_hex": "4d4150530900000034300000",
+        "version_ascii": "\t\u0000\u0000\u0000",
+        "version_u32": 9,
+        "compatible_with_forever_header": false
+      }
+    ],
+    "complete_archive_verified": false,
+    "compressed_bytes_read": 10004480
+  },
+  "conversion": {
+    "source_build": 12340,
+    "area_bytes": 520,
+    "height_bytes": 66102,
+    "source_holes_bytes": 512,
+    "candidate_holes_bytes": 2048,
+    "area_and_height_bytes_unchanged": true,
+    "native_gridmap_load_verified": false,
+    "format": "wowforever-335-terrain-candidate-v1",
+    "map_id": 530,
+    "grid_x": 33,
+    "grid_y": 24,
+    "file": "maps/0530_33_24.map",
+    "source_sha256": "d6664c5ba1a1cb2acd80a75e517526bb67a8f2754c41f9278598ae3f0497e2f6",
+    "candidate_sha256": "cb8af589cf57b2ee7d34379e4d80a5815105aefc54c3be642feb3cf70b4ed181",
+    "map_id_and_coordinates_independently_verified": false,
+    "installable": false,
+    "deployed": false,
+    "blockers": [
+      "Native GridMap load/height probe not run",
+      "Client map record and WDT/assets not verified",
+      "VMAP collision geometry missing",
+      "Area IDs require Forever table comparison",
+      "Only one terrain tile; complete map coverage not established"
+    ]
+  },
+  "forever_core_revision": "91d49b230f89c3ab4719f5b2b2d1e70ed36613c4",
+  "forever_format_evidence": [
+    "src/common/Collision/Maps/MapDefines.cpp: MapVersionMagic = 10",
+    "src/server/game/Maps/GridMap.cpp: loadHolesData reads 16*16*8 bytes",
+    "src/tools/map_extractor/System.cpp: TransformToHighRes"
+  ],
+  "game_assets_committed": false,
+  "client_modified": false,
+  "server_modified": false,
+  "previous_dalaran_casc_installation_resumed": false
+}

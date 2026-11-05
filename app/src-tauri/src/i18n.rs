@@ -43,6 +43,16 @@ type Texts = [&'static str; 4];
 
 #[rustfmt::skip]
 const MESSAGES: &[(&str, Texts)] = &[
+    ("pkg_unready", ["Ce paquet n’est pas prêt pour l’installation.", "This package is not ready for installation.", "Este paquete aún no está listo para instalar.", "Este pacote ainda não está pronto para instalar."]),
+    ("pkg_client", ["Le paquet ne correspond pas au client choisi.", "The package does not match the selected client.", "El paquete no coincide con el cliente seleccionado.", "O pacote não corresponde ao cliente selecionado."]),
+    ("pkg_changed", ["Les fichiers du client ont changé. Le paquet ou la restauration doit être préparé à nouveau.", "Client files have changed. The package or rollback needs to be prepared again.", "Los archivos del cliente cambiaron. Hay que preparar de nuevo el paquete o la restauración.", "Os arquivos do cliente mudaram. É necessário preparar novamente o pacote ou a restauração."]),
+    ("pkg_busy", ["Une opération ou le jeu est déjà en cours.", "A package operation or the game is already running.", "Ya hay una operación o el juego en ejecución.", "Já existe uma operação ou o jogo em execução."]),
+    ("pkg_recovery", ["Restaurez d’abord le paquet interrompu.", "Roll back the interrupted package first.", "Primero restaura el paquete interrumpido.", "Restaure primeiro o pacote interrompido."]),
+    ("pkg_empty", ["Aucun paquet à restaurer.", "No installed package to roll back.", "No hay ningún paquete que restaurar.", "Não há pacote instalado para restaurar."]),
+    ("pkg_io", ["Impossible de lire ou écrire les fichiers du paquet.", "Could not read or write package files.", "No se pudieron leer o escribir los archivos del paquete.", "Não foi possível ler ou gravar os arquivos do pacote."]),
+    ("pkg_invalid", ["Paquet invalide ou fichiers non conformes.", "Invalid package or file integrity check failed.", "Paquete inválido o verificación de archivos fallida.", "Pacote inválido ou falha na verificação dos arquivos."]),
+    ("pkg_close_game", ["Fermez toutes les copies du jeu avant de modifier un paquet.", "Close all game clients before changing a package.", "Cierra todos los clientes del juego antes de cambiar un paquete.", "Feche todos os clientes do jogo antes de alterar um pacote."]),
+    ("pkg_platform", ["L’installation de paquets est actuellement disponible sur Windows et Linux.", "Package installation is currently available on Windows and Linux.", "La instalación de paquetes está disponible actualmente en Windows y Linux.", "A instalação de pacotes está disponível atualmente no Windows e Linux."]),
     // launch steps
     ("step_connecting", ["Connexion au serveur…", "Connecting to the server…", "Conectando con el servidor…", "Conectando ao servidor…"]),
     ("step_preparing", ["Préparation du jeu…", "Preparing the game…", "Preparando el juego…", "Preparando o jogo…"]),

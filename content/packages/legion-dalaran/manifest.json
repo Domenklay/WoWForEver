@@ -1,0 +1,12 @@
+{
+  "format": "wowforever-zone-package-v1",
+  "id": "legion-dalaran",
+  "name": "Dalaran (Legion)",
+  "version": "0.1.0",
+  "client_version": "1.60.1.70532",
+  "status": "experimental",
+  "client_render_verified": false,
+  "server_ready": false,
+  "base_files": {},
+  "files": []
+}

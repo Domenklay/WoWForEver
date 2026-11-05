@@ -41,7 +41,7 @@ services:
       context: .
       args:
         TC_REF: ${TC_REF:-forever}
-        TC_COMMIT: ${TC_COMMIT:-91d49b230f89c3ab4719f5b2b2d1e70ed36613c4}
+        TC_COMMIT: ${TC_COMMIT:-b6ae12c227ef00bfe24fdaf16fba28acc61a5b7f}
         BUILD_JOBS: ${BUILD_JOBS:-4}
     image: forever-trinitycore:latest
     command: ["worldserver"]
@@ -143,7 +143,7 @@ services:
       target: legion-casc-probe
       args:
         TC_REF: ${TC_REF:-forever}
-        TC_COMMIT: ${TC_COMMIT:-91d49b230f89c3ab4719f5b2b2d1e70ed36613c4}
+        TC_COMMIT: ${TC_COMMIT:-b6ae12c227ef00bfe24fdaf16fba28acc61a5b7f}
         BUILD_JOBS: ${BUILD_JOBS:-4}
     image: forever-legion-casc-probe:local
     network_mode: none
