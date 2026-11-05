@@ -34,6 +34,7 @@ try {
     Write-Host 'Collecting synthetic startup report.'
     & $collector -ClientRoot (Join-Path $target '_forever_') -ReferenceRoot $source -OutputPath $reportPath -Verbose
     $raw = [IO.File]::ReadAllText($reportPath); $report = $raw | ConvertFrom-Json
+    Assert ($raw.Length -lt 64000 -and !$raw.Contains('PSProvider') -and !$raw.Contains('PSDrive')) 'PowerShell provider graphs must not be serialized'
     Assert ($report.comparisonAvailable) 'Both storage folders should be compared'
     Assert (!$report.clientModified -and !$report.referenceModified) 'Collector must declare read-only scope'
     Assert (($report.extraStorageFiles | Sort-Object) -join ',' -eq '0000000326.idx,RepairMarker.psv') 'Extra index/marker not identified'

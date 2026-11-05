@@ -75,8 +75,11 @@ function Get-LogExcerpt([string]$Path) {
     $item = Get-Item -LiteralPath $Path
     return [ordered]@{
         path = $Path; status = 'read'; modifiedUtc = $item.LastWriteTimeUtc.ToString('o')
-        bytes = $item.Length; head = @(Get-Content -LiteralPath $Path -Encoding UTF8 -TotalCount 40)
-        tail = @(Get-Content -LiteralPath $Path -Encoding UTF8 -Tail 200)
+        # Windows PowerShell 5.1 attaches provider/drive objects to Get-Content
+        # strings. Copy the characters so ConvertTo-Json never expands that graph.
+        bytes = $item.Length
+        head = @(Get-Content -LiteralPath $Path -Encoding UTF8 -TotalCount 40 | ForEach-Object { [string]::new($_.ToCharArray()) })
+        tail = @(Get-Content -LiteralPath $Path -Encoding UTF8 -Tail 200 | ForEach-Object { [string]::new($_.ToCharArray()) })
     }
 }
 
@@ -108,7 +111,7 @@ $configs = @()
 foreach ($name in @('Config.wtf', 'ForeverLauncher.wtf')) {
     $path = Join-Path $target ('_forever_\WTF\' + $name)
     if ((Test-Path -LiteralPath $path -PathType Leaf) -and !(Test-LinkedPath $path)) {
-        $configs += [ordered]@{ name = $name; lines = @(Get-Content -LiteralPath $path -Encoding UTF8 | Where-Object { $_ -match '^\s*SET\s+(portal|textLocale|audioLocale|gxApi|dataPath|lastClientBuild|lastClientVersion)\s' }) }
+        $configs += [ordered]@{ name = $name; lines = @(Get-Content -LiteralPath $path -Encoding UTF8 | Where-Object { $_ -match '^\s*SET\s+(portal|textLocale|audioLocale|gxApi|dataPath|lastClientBuild|lastClientVersion)\s' } | ForEach-Object { [string]::new($_.ToCharArray()) }) }
     }
 }
 $report = [ordered]@{
@@ -121,7 +124,8 @@ $report = [ordered]@{
 }
 $parent = Split-Path -Parent $output
 [IO.Directory]::CreateDirectory($parent) | Out-Null
-$json = $report | ConvertTo-Json -Depth 12
+Write-Verbose 'Serializing startup report.'
+$json = $report | ConvertTo-Json -Depth 8
 [IO.File]::WriteAllText($output, $json, [Text.UTF8Encoding]::new($false))
 Write-Host "Report saved: $output"
 Write-Host "Storage comparison available: $($report.comparisonAvailable); extra storage files: $($extras.Count)"
