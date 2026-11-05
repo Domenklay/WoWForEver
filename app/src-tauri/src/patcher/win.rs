@@ -113,6 +113,12 @@ impl Memory for ProcessMemory {
     fn pid(&self) -> u32 {
         self.pid
     }
+
+    fn exit_code(&self) -> Option<u32> {
+        let mut code = 0;
+        unsafe { GetExitCodeProcess(self.handle, &mut code).ok()?; }
+        (code != STILL_ACTIVE.0 as u32).then_some(code)
+    }
 }
 
 /// The running WowB.exe using the most memory.

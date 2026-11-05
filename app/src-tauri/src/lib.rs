@@ -237,6 +237,11 @@ fn cancel_client_work(state: State<AppState>) {
 }
 
 #[tauri::command]
+fn inspect_client_locations(game_dir:String,reference_dir:String)->Result<client::Locations,client::Error> {
+    client::locations(&game_dir,&reference_dir)
+}
+
+#[tauri::command]
 async fn client_work(app: AppHandle, state: State<'_, AppState>, request: client::Request) -> Result<client::Report, client::Error> {
     if state.playing.swap(true, Ordering::SeqCst) { return Err(client::Error { code:"busy", detail:String::new() }); }
     let _guard=PackageGuard(&state.playing);
@@ -342,6 +347,7 @@ async fn launch(app: &AppHandle, settings: Settings) -> Result<(), String> {
     emit(app, "step", t("step_launching"));
     let patcher = patcher::Patcher::new(&settings.server.public_key, settings.server.region_group)?;
     let selected_exe = settings.exe();
+    emit(app, "log", tf("launch_executable", &[&selected_exe.display()]));
     let mut child = game::spawn(&settings)?;
     let app = app.clone();
     std::thread::spawn(move || {
@@ -354,7 +360,7 @@ async fn launch(app: &AppHandle, settings: Settings) -> Result<(), String> {
         match first {
             Some(mem) => {
                 emit(&app, "running", t("running"));
-                patcher.watch(
+                let ended = patcher.watch(
                     Box::new(mem),
                     |cur| {
                         let other = patcher::find_client_for(&selected_exe)?;
@@ -367,6 +373,9 @@ async fn launch(app: &AppHandle, settings: Settings) -> Result<(), String> {
                         patcher::Event::Closed => {}
                     },
                 );
+                let code = ended.exit_code.map(|c|format!("0x{c:08X} ({c})")).unwrap_or_else(||t("exit_unknown").into());
+                emit(&app, "log", tf("client_exit", &[&ended.pid,&code]));
+                if !ended.ready { emit(&app, "log", t("closed_before_ready")); }
                 emit(&app, "closed", t("closed"));
             }
             None => emit(&app, "error", t("not_started")),
@@ -414,7 +423,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_state, save_settings, set_language, detect_locale, login, logout, server_status, news, checks, repair, play,
             content_catalog, content_status, inspect_content, install_content, rollback_content
-            , client_work, cancel_client_work
+            , client_work, cancel_client_work, inspect_client_locations
         ])
         .run(tauri::generate_context!())
         .expect("error while running Forever Launcher");

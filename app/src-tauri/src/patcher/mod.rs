@@ -48,6 +48,7 @@ pub trait Memory {
     fn write(&self, addr: u64, data: &[u8]) -> bool;
     fn alive(&self) -> bool;
     fn pid(&self) -> u32;
+    fn exit_code(&self) -> Option<u32> { None }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -63,6 +64,8 @@ pub enum Event {
     Ready,
     Closed,
 }
+
+pub struct WatchExit { pub pid: u32, pub exit_code: Option<u32>, pub ready: bool }
 
 pub struct Patcher {
     keys: Vec<[u8; 32]>,
@@ -153,18 +156,21 @@ impl Patcher {
     /// Watches the client until it closes. `switch` may return a better process (Linux: the Wine launcher process
     /// is found before the real game process).
     pub fn watch(&self, mut mem: Box<dyn Memory>, mut switch: impl FnMut(&dyn Memory) -> Option<Box<dyn Memory>>,
-                 mut emit: impl FnMut(Event)) {
+                 mut emit: impl FnMut(Event)) -> WatchExit {
         let mut store: Option<u64> = None;
         let mut last_switch = Instant::now();
         let mut said_waiting = false;
+        let mut ready = false;
         loop {
             if !mem.alive() {
                 if let Some(other) = switch(mem.as_ref()) {
                     mem = other;
+                    store = None;
+                    said_waiting = false;
                     continue;
                 }
                 emit(Event::Closed);
-                return;
+                return WatchExit { pid: mem.pid(), exit_code: mem.exit_code(), ready };
             }
             if let Some(array) = store {
                 match self.state(mem.as_ref(), array) {
@@ -173,6 +179,7 @@ impl Patcher {
                         Ok(()) => {
                             emit(Event::Log(t("key_restored").into()));
                             emit(Event::Ready);
+                            ready = true;
                         }
                         Err(e) => {
                             emit(Event::Log(tf("key_write_error", &[&e])));
@@ -191,6 +198,8 @@ impl Patcher {
                 if let Some(other) = switch(mem.as_ref()) {
                     emit(Event::Log(tf("game_process", &[&other.pid()])));
                     mem = other;
+                    store = None;
+                    said_waiting = false;
                 }
             }
             let stores = self.find_stores(mem.as_ref());
@@ -201,6 +210,7 @@ impl Patcher {
                         Ok(()) => {
                             emit(Event::Log(tf("key_written", &[&self.group])));
                             emit(Event::Ready);
+                            ready = true;
                             store = Some(*array);
                         }
                         Err(e) => emit(Event::Log(tf("key_write_retry", &[&e]))),

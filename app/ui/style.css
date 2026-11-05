@@ -10,3 +10,5 @@ label{display:grid;gap:6px;font-size:11px;font-weight:500;color:#9fb1b4}input[ty
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 
 .quick-action b{font-size:0;width:8px;height:8px;position:relative}.quick-action b::before{content:"";position:absolute;inset:0;border-top:1px solid #7b9a8c;border-right:1px solid #7b9a8c}.quick-action b::after{content:"";position:absolute;width:10px;height:1px;background:#7b9a8c;transform:rotate(-45deg);top:4px;left:-1px}
+
+.layout-hint{font:10px/1.7 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);margin:0}.layout-hint:empty{display:none}html[lang=ru] .hero h1{font-size:53px}html[lang=ru] .hero-copy{max-width:410px}html[lang=ru] .quick-action{font-size:9px}html[lang=ru] .workspace-label{letter-spacing:.04em}

@@ -22,7 +22,7 @@ tool as a completed Windows deployment or assume the old audited build key.
 | `Dockerfile`, `docker/` | Builds TrinityCore from the forever branch, applies `docker/patches/*.patch`, writes the configs at start (`docker/entrypoint.sh`). |
 | `docker-compose.yml` | mysql, worldserver, bnetserver, web (website), extractor (profile `tools`). `docker-compose.traefik.yml` publishes the website through Traefik. |
 | `web/` | Website (FastAPI + Jinja): account sign-up through worldserver SOAP, status, launcher downloads, 4 languages (`web/app/i18n.py`). |
-| `app/` | Launcher (Tauri 2: Rust in `app/src-tauri/src`, UI in `app/ui`), 4 languages (`i18n.rs`, `ui/i18n.js`). |
+| `app/` | Launcher (Tauri 2: Rust in `app/src-tauri/src`, UI in `app/ui`), 5 languages (`i18n.rs`, `ui/i18n.js`). |
 | `scripts/` | `gen-certs.sh` (CA + server certificate), `upload-dokploy.sh`, `pkt-dump.py` (packet log reader). |
 | `docs/` | `DOKPLOY.md` (deployment), `MACOS.md` (how the macOS launcher works). |
 | `mods/forever-advancement/` | Server adapter and ForeverAscension AddOn using the supplied Ascension Content catalogue. Setup/rollback: `README.ru.md`. The obsolete subclass engine is no longer compiled; its old progress is retained for rollback. |
@@ -60,7 +60,7 @@ Then `LAUNCHER_REPO=<owner>/<repo>` in the server's `.env` so the website offers
   half-filled `world` database).
 - If the build stops at "applying /patches/...", the forever branch probably merged that fix: check upstream and
   delete the patch rather than forcing it.
-- Keep the 4 languages in sync when changing texts (FR, EN, ES, PT); `cargo test --lib` checks the Rust messages.
+- Keep the 5 launcher languages in sync when changing texts (RU, FR, EN, ES, PT); the website retains its 4 languages; `cargo test --lib` checks the Rust messages.
 
 ## Checks
 

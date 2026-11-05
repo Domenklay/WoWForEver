@@ -1,4 +1,4 @@
-//! Messages shown to the player (steps, errors, journal) in French, English, Spanish and Portuguese (Latin America).
+//! Player messages in Russian, French, English, Spanish and Portuguese (Latin America).
 //! The UI sends the language it uses (`set_language`); English is the fallback.
 
 use std::fmt::Display;
@@ -6,12 +6,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static LANG: AtomicUsize = AtomicUsize::new(1);
 
-/// fr, en, es, pt (anything else: en).
+/// fr, en, es, pt, ru (anything else: en).
 pub fn set(lang: &str) {
     let i = match lang.get(..2).unwrap_or("").to_ascii_lowercase().as_str() {
         "fr" => 0,
         "es" => 2,
         "pt" => 3,
+        "ru" => 4,
         _ => 1,
     };
     LANG.store(i, Ordering::Relaxed);
@@ -19,8 +20,20 @@ pub fn set(lang: &str) {
 
 /// The message in the current language.
 pub fn t(key: &str) -> &'static str {
-    let texts = MESSAGES.iter().find(|(k, _)| *k == key).map(|(_, v)| v).unwrap_or(&[""; 4]);
-    texts[LANG.load(Ordering::Relaxed)]
+    let texts = MESSAGES
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| v)
+        .unwrap_or(&[""; 4]);
+    let language = LANG.load(Ordering::Relaxed);
+    if language == 4 {
+        return RUSSIAN
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, v)| *v)
+            .unwrap_or(texts[1]);
+    }
+    texts[language]
 }
 
 /// The message with each `{}` replaced by the next argument.
@@ -61,7 +74,7 @@ const MESSAGES: &[(&str, Texts)] = &[
     ("step_connecting", ["Connexion au serveur…", "Connecting to the server…", "Conectando con el servidor…", "Conectando ao servidor…"]),
     ("step_preparing", ["Préparation du jeu…", "Preparing the game…", "Preparando el juego…", "Preparando o jogo…"]),
     ("step_launching", ["Lancement de World of Warcraft…", "Starting World of Warcraft…", "Iniciando World of Warcraft…", "Iniciando World of Warcraft…"]),
-    ("running", ["Jeu lancé : connectez-vous au royaume", "Game started: log in to the realm", "Juego iniciado: entra al reino", "Jogo iniciado: entre no reino"]),
+    ("running", ["Processus du jeu détecté : préparation de la connexion…", "Game process found: preparing the connection…", "Proceso del juego encontrado: preparando la conexión…", "Processo do jogo encontrado: preparando a conexão…"]),
     ("ready", ["Clé du serveur prête : vous pouvez vous connecter au jeu.", "Server key ready: you can sign in to the game.", "Clave del servidor lista: puedes iniciar sesión en el juego.", "Chave do servidor pronta: você pode entrar no jogo."]),
     ("closed", ["Le jeu est fermé", "The game is closed", "El juego se cerró", "O jogo foi fechado"]),
     ("not_started", ["Jeu introuvable après 3 minutes dans le dossier choisi.", "No game process from the selected folder found within 3 minutes.", "No se encontró el proceso del juego de la carpeta elegida en 3 minutos.", "Nenhum processo do jogo da pasta escolhida foi encontrado em 3 minutos."]),
@@ -135,6 +148,105 @@ const MESSAGES: &[(&str, Texts)] = &[
     ("key_write_retry", ["écriture de la clé : {}, nouvel essai", "writing the key: {}, retrying", "escribiendo la clave: {}, reintentando", "gravando a chave: {}, tentando de novo"]),
     ("waiting_realm", ["en attente de l'entrée dans le royaume…", "waiting for the realm login…", "esperando la entrada al reino…", "aguardando a entrada no reino…"]),
     ("many_key_stores", ["{} magasins de clés à la fois : attente", "{} key stores at once: waiting", "{} almacenes de claves a la vez: esperando", "{} repositórios de chaves ao mesmo tempo: aguardando"]),
+    ("launch_executable", ["Exécutable du jeu : {}", "Game executable: {}", "Ejecutable del juego: {}", "Executável do jogo: {}"]),
+    ("client_exit", ["Processus du jeu PID {} terminé ; code {}", "Game process PID {} ended; exit code {}", "El proceso del juego PID {} terminó; código {}", "O processo do jogo PID {} encerrou; código {}"]),
+    ("exit_unknown", ["inconnu", "unknown", "desconocido", "desconhecido"]),
+    ("closed_before_ready", ["Le client s’est fermé avant la préparation de la clé serveur. Consultez ses journaux pour en connaître la raison.", "The client exited before its server key was ready. Its game logs are needed to determine why.", "El cliente se cerró antes de preparar la clave. Sus registros son necesarios para conocer la causa.", "O cliente fechou antes de preparar a chave. Os logs do jogo são necessários para identificar a causa."]),
+];
+
+#[rustfmt::skip]
+const RUSSIAN: &[(&str,&str)] = &[
+    ("bad_server_address", "Некорректный адрес или порты сервера."),
+    ("ca_invalid", "Выберите публичный CA-сертификат PEM, а не приватный ключ."),
+    ("ca_missing", "Выберите публичный CA-сертификат в параметрах сервера."),
+    ("ca_read", "Чтение публичного сертификата: {}"),
+    ("pkg_unready", "Пакет не готов к установке."),
+    ("pkg_client", "Пакет не соответствует выбранному клиенту."),
+    ("pkg_changed", "Файлы клиента изменились. Пакет или откат нужно подготовить заново."),
+    ("pkg_busy", "Игра или другая операция уже выполняется."),
+    ("pkg_recovery", "Сначала откатите прерванную установку пакета."),
+    ("pkg_empty", "Установленного пакета для отката нет."),
+    ("pkg_io", "Не удалось прочитать или записать файлы пакета."),
+    ("pkg_invalid", "Пакет некорректен или не прошёл проверку хешей."),
+    ("pkg_close_game", "Закройте все копии игры перед изменением пакета."),
+    ("pkg_platform", "Установка пакетов доступна на Windows и Linux."),
+    ("step_connecting", "Подключаемся к серверу…"),
+    ("step_preparing", "Подготавливаем игру…"),
+    ("step_launching", "Запускаем World of Warcraft…"),
+    ("running", "Процесс игры найден; подготавливаем подключение…"),
+    ("ready", "Ключ сервера готов — можно входить в игру."),
+    ("closed", "Игра закрыта"),
+    ("not_started", "За три минуты не найден процесс игры из выбранной папки."),
+    ("mac_copying", "Создаём копию клиента Forever — первый запуск или обновление…"),
+    ("mac_signing", "Подписываем копию клиента…"),
+    ("already_running", "игра уже запущена"),
+    ("game_not_found", "Клиент не найден: выберите _forever_ (Wow.exe), _classic_beta_ (WowB.exe) или корень установки."),
+    ("login_first", "сначала войдите в аккаунт"),
+    ("session_expired", "сессия истекла — войдите заново"),
+    ("session_save", "сохранение сессии: {}"),
+    ("launch_failed", "запуск {}: {}"),
+    ("wtf_folder", "папка WTF: {}"),
+    ("registry", "реестр: {}"),
+    ("mac_failed", "ошибка {}: {}"),
+    ("mac_not_started", "не удалось запустить игру (open: {})"),
+    ("mac_module", "модуль Forever не загрузился в игру"),
+    ("mac_key", "не удалось получить ключ билета"),
+    ("mac_encrypt", "не удалось зашифровать билет ({})"),
+    ("mac_user", "неизвестное имя пользователя"),
+    ("address_not_found", "не найден адрес сервера ({})"),
+    ("unexpected_answer", "неожиданный ответ сервера"),
+    ("authenticator", "аккаунт использует аутентификатор, который пока не поддерживается лаунчером"),
+    ("bad_login", "неверная почта или пароль"),
+    ("remember_refused", "сервер отказал в автоматическом входе (HTTP {})"),
+    ("banned", "аккаунт заблокирован"),
+    ("server_error", "ошибка сервера (HTTP {})"),
+    ("unreachable", "сервер недоступен"),
+    ("network_error", "ошибка сети: {}"),
+    ("no_news", "новостей нет (HTTP {})"),
+    ("unexpected_site", "неожиданный ответ сайта"),
+    ("wine_system", "Системный Wine"),
+    ("no_resolve", "не удалось определить адрес {}"),
+    ("hosts_wrong", "{} → {} (ожидается {})"),
+    ("hosts_missing", "{} отсутствует в файле hosts"),
+    ("cert_store_unreadable", "не удалось прочитать хранилище сертификатов"),
+    ("cert_ok_windows", "Windows доверяет сертификату сервера"),
+    ("cert_missing", "сертификат сервера не установлен"),
+    ("cert_ok_macos", "macOS доверяет сертификату сервера"),
+    ("cert_not_trusted", "сертификат сервера не является доверенным"),
+    ("cert_ok_prefix", "сертификат установлен в префиксе Wine"),
+    ("prefix_missing", "префикс Wine ещё не создан"),
+    ("cert_not_in_prefix", "сертификата нет в префиксе Wine"),
+    ("bad_portal", "Укажите DNS-имя сертификата без IP и номера порта."),
+    ("admin_refused", "доступ администратора не предоставлен"),
+    ("install_wait", "не удалось дождаться завершения установки"),
+    ("install_failed", "установка завершилась с ошибкой (код {})"),
+    ("hosts_prompt", "Forever Multi: добавляем адрес сервера в файл hosts."),
+    ("hosts_refused", "нет доступа к изменению файла hosts"),
+    ("hosts_write_failed", "не удалось записать файл hosts: {}"),
+    ("hosts_write_failed_pkexec", "не удалось записать файл hosts через pkexec"),
+    ("cert_trust_failed", "не удалось установить доверие к сертификату: {}"),
+    ("prefix_error", "префикс {}: {}"),
+    ("wine_not_found", "Wine не найден"),
+    ("umu_not_found", "umu-run не найден — требуется пакет umu-launcher"),
+    ("proton_not_found", "Proton не найден: {}"),
+    ("command_failed", "ошибка {}: {}"),
+    ("bad_public_key", "некорректный публичный ключ сервера"),
+    ("bad_region_group", "некорректная группа региона — допустимы 2–12, кроме 9"),
+    ("write_refused", "запись запрещена"),
+    ("verify_failed", "проверка не пройдена"),
+    ("memory_changed", "память изменилась во время записи"),
+    ("key_restored", "ключ сервера восстановлен"),
+    ("key_write_error", "запись ключа: {}"),
+    ("key_store_freed", "хранилище ключей освобождено — повторный поиск при подключении"),
+    ("game_process", "процесс игры: PID {}"),
+    ("key_written", "ключ сервера записан — группа {}"),
+    ("key_write_retry", "запись ключа: {}; повторяем"),
+    ("waiting_realm", "ожидаем подготовку подключения к игровому миру…"),
+    ("many_key_stores", "одновременно найдено хранилищ ключей: {}; ожидаем"),
+    ("launch_executable", "Исполняемый файл игры: {}"),
+    ("client_exit", "Процесс игры PID {} завершился; код выхода {}"),
+    ("exit_unknown", "неизвестен"),
+    ("closed_before_ready", "Клиент завершился до готовности ключа сервера. Причину закрытия нужно искать в журналах игры."),
 ];
 
 #[cfg(test)]
@@ -142,9 +254,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_message_has_four_texts_with_the_same_placeholders() {
+    fn every_message_has_five_translations_with_the_same_placeholders() {
         for (key, texts) in MESSAGES {
             let n = texts[0].matches("{}").count();
+            let russian = RUSSIAN.iter().find(|(k, _)| k == key).expect(key).1;
+            assert!(!russian.is_empty());
+            assert_eq!(russian.matches("{}").count(), n, "{key}: {russian}");
             for text in texts {
                 assert!(!text.is_empty(), "{key}");
                 assert_eq!(text.matches("{}").count(), n, "{key}: {text}");
@@ -158,6 +273,9 @@ mod tests {
         assert_eq!(tf("server_error", &[&503]), "error del servidor (HTTP 503)");
         set("pt-BR");
         assert_eq!(t("banned"), "conta banida");
+        set("ru-RU");
+        assert_eq!(t("banned"), "аккаунт заблокирован");
+        assert_eq!(tf("server_error", &[&503]), "ошибка сервера (HTTP 503)");
         set("de");
         assert_eq!(t("banned"), "account banned");
         set("fr");

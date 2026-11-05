@@ -112,12 +112,56 @@ pub struct Report {
     pub files: usize,
     pub verified: usize,
     pub different: usize,
+    pub resource_different: usize,
+    pub storage_different: usize,
+    pub remaining: usize,
     pub repaired: usize,
     pub bytes: u64,
     pub differences: Vec<String>,
     pub report_path: String,
     pub backup: Option<String>,
+    pub target_root: String,
+    pub reference_root: Option<String>,
     pub scope: &'static str,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Locations {
+    pub target_root: String,
+    pub target_data: String,
+    pub reference_root: Option<String>,
+    pub reference_data: Option<String>,
+}
+
+fn display_path(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else {
+        value.trim_start_matches(r"\\?\").into()
+    }
+}
+pub fn locations(game_dir: &str, reference_dir: &str) -> Result<Locations> {
+    let target = root(game_dir, false)?;
+    let reference = if reference_dir.trim().is_empty() {
+        None
+    } else {
+        Some(root(reference_dir, false)?)
+    };
+    Ok(Locations {
+        target_root: display_path(&target),
+        target_data: display_path(&target.join("Data")),
+        reference_root: reference.as_deref().map(display_path),
+        reference_data: reference.as_ref().map(|p| display_path(&p.join("Data"))),
+    })
+}
+/// These files describe local CASC bookkeeping. A byte difference is not proof
+/// of corruption; they remain in strict baseline verification and repair.
+fn storage_metadata(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.strip_prefix("data/data/").is_some_and(|name| {
+        !name.contains('/') && (name == "shmem" || name.ends_with(".idx") || name.ends_with(".lru"))
+    })
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct Change {
@@ -324,6 +368,15 @@ fn inventory(
     cancel: &AtomicBool,
     emit: &impl Fn(Progress),
 ) -> Result<Vec<Entry>> {
+    emit(Progress {
+        phase: "scan",
+        path: display_path(root),
+        files_done: 0,
+        files_total: 0,
+        bytes_done: 0,
+        bytes_total: 0,
+        bytes_per_second: 0,
+    });
     fn walk(base: &Path, rel: &str, out: &mut Vec<String>, cancel: &AtomicBool) -> Result<()> {
         check_cancel(cancel)?;
         let path = safe(base, rel)?;
@@ -362,8 +415,8 @@ fn inventory(
             path: path.clone(),
             files_done: i,
             files_total: count,
-            bytes_done: 0,
-            bytes_total: 0,
+            bytes_done: done,
+            bytes_total: total,
             bytes_per_second: 0,
         });
         let (bytes, sha256) = fingerprint(&safe(root, &path)?, cancel, |n| {
@@ -749,11 +802,16 @@ pub async fn run(
             files: 0,
             verified: 0,
             different: 0,
+            resource_different: 0,
+            storage_different: 0,
+            remaining: 0,
             repaired: 0,
             bytes: 0,
             differences: Vec::new(),
             report_path: path.to_string_lossy().into_owned(),
             backup: None,
+            target_root: display_path(&target),
+            reference_root: None,
             scope: "Interrupted operation rolled back; run Verify to compare the restored baseline",
         };
         json(&path, &report)?;
@@ -774,6 +832,10 @@ pub async fn run(
             return Err(err("overlap", ""));
         }
         let p = read_profile(&source)?;
+        // Report an incompatible source before spending minutes hashing it.
+        if safe(&target, ".build.info")?.is_file() && read_profile(&target)? != p {
+            return Err(err("version", p.version));
+        }
         let files = inventory(&source, &p, cancel, &emit)?;
         (
             Manifest {
@@ -968,7 +1030,11 @@ pub async fn run(
     fs::create_dir_all(&report_folder)?;
     let report_path = report_folder.join(format!("client-{:016x}.json", rand::random::<u64>()));
     let repaired = if modifying { changes.len() } else { 0 };
-    let report=Report{action:req.action,source_kind,profile:m.profile,files:count,verified:count-changes.len()+repaired,different:changes.len(),repaired,bytes:total,differences:changes.iter().take(200).map(|c|c.entry.path.clone()).collect(),report_path:report_path.to_string_lossy().into_owned(),backup,scope:"exact installation files against selected baseline; extra files are preserved; not CASC object validation or server compatibility"};
+    let storage_different = changes
+        .iter()
+        .filter(|c| storage_metadata(&c.entry.path))
+        .count();
+    let report=Report{action:req.action,source_kind,profile:m.profile,files:count,verified:count-changes.len()+repaired,different:changes.len(),resource_different:changes.len()-storage_different,storage_different,remaining:changes.len()-repaired,repaired,bytes:total,differences:changes.iter().take(200).map(|c|c.entry.path.clone()).collect(),report_path:report_path.to_string_lossy().into_owned(),backup,target_root:display_path(&target),reference_root:reference.as_deref().map(display_path),scope:"exact installation files against selected baseline; extra files are preserved; not CASC object validation or server compatibility"};
     json(&report_path, &report)?;
     emit(Progress {
         phase: "done",
@@ -1049,6 +1115,66 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.dir);
         }
+    }
+    #[test]
+    fn resolves_game_subfolder_to_shared_data_without_hashing_or_changing_files() {
+        let f = Fixture::new();
+        let root = locations(f.target.to_str().unwrap(), f.source.to_str().unwrap()).unwrap();
+        let game = locations(
+            f.target.join("_forever_").to_str().unwrap(),
+            f.source.join("_forever_").to_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(root.target_root, game.target_root);
+        assert_eq!(
+            root.target_data,
+            display_path(&f.target.canonicalize().unwrap().join("Data"))
+        );
+        assert_eq!(root.reference_root, game.reference_root);
+        assert_eq!(root.reference_data, game.reference_data);
+        assert!(!f.target.join(".forever-multi").exists());
+        assert!(!f.state.exists());
+    }
+    #[tokio::test]
+    async fn storage_differences_remain_strictly_checked_and_repaired_but_reported_separately() {
+        let f = Fixture::new();
+        for name in ["0000000325.idx", "cache.lru", "shmem"] {
+            fs::write(
+                f.source.join("Data/data").join(name),
+                b"original bookkeeping",
+            )
+            .unwrap();
+            fs::write(
+                f.target.join("Data/data").join(name),
+                b"updated bookkeeping",
+            )
+            .unwrap();
+        }
+        fs::write(f.target.join("Data/data/data.000"), b"broken payload").unwrap();
+        let before = f.run("verify").await.unwrap();
+        assert_eq!(
+            (
+                before.different,
+                before.resource_different,
+                before.storage_different,
+                before.remaining
+            ),
+            (4, 1, 3, 4)
+        );
+        let repaired = f.run("repair").await.unwrap();
+        assert_eq!(
+            (repaired.different, repaired.repaired, repaired.remaining),
+            (4, 4, 0)
+        );
+        assert_eq!(
+            (repaired.resource_different, repaired.storage_different),
+            (1, 3)
+        );
+        assert_eq!(f.run("verify").await.unwrap().different, 0);
+        // An index-like name outside the local bookkeeping directory is still a resource difference.
+        assert!(!storage_metadata("Data/config/example.idx"));
+        assert!(!storage_metadata("Data/data/nested/example.idx"));
+        assert!(!storage_metadata("Data/data/data.000"));
     }
     #[tokio::test]
     async fn hashes_detect_equal_length_corruption_and_verification_leaves_client_untouched() {

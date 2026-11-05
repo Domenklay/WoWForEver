@@ -9,6 +9,8 @@ let toastTimer = 0;
 let contentBusy = false;
 let workshopBusy = false;
 let workshopReport = null;
+let layoutTimer = 0;
+let layoutRequest = 0;
 let contentSelection = null;
 let contentState = null;
 
@@ -69,6 +71,7 @@ function updatePlayButton() {
   play.classList.toggle('running', state.playing);
   play.textContent = workshopBusy ? t('working') : state.playing ? t('inGame') : t('play');
   updateContentActions();
+  updateWorkshopActions();
   if (!state.gameFound && !state.playing) setStep(t('chooseGameDir'), 'err');
 }
 
@@ -159,7 +162,7 @@ $('signup-link').addEventListener('click', (ev) => {
 
 // ------------------------------------------------------------------------------------------------ play
 $('play').addEventListener('click', async () => {
-  $('log').textContent = '';
+  log(t('launchSession'));
   state.playing = true;
   updatePlayButton();
   setStep(t('preparing'));
@@ -446,6 +449,7 @@ function page(name) {
   $('nav-home').classList.toggle('selected', name === 'home');
   $('nav-workshop').classList.toggle('selected', name === 'workshop');
   $('page-name').textContent = t(name === 'home' ? 'wHome' : 'wLibrary');
+  updateWorkshopActions();
 }
 function workshopSource() {
   return { referenceDir: $('w-reference').value.trim(), manifestSource: $('w-manifest').value.trim() };
@@ -462,6 +466,26 @@ function sourceState() {
   const kind = s.manifestSource ? 'wSourceManifest' : s.referenceDir ? 'wSourceReference' : 'wSourceNone';
   $('w-source-state').textContent = t(kind);
   $('w-source-state').dataset.ready = String(!!(s.manifestSource || s.referenceDir));
+  clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(refreshWorkshopLayout, 200);
+}
+async function refreshWorkshopLayout() {
+  const ticket = ++layoutRequest;
+  const gameDir = $('w-target').value.trim(), referenceDir = $('w-reference').value.trim();
+  if (!gameDir) { $('w-layout').textContent = ''; return; }
+  try {
+    const value = await invoke('inspect_client_locations', { gameDir, referenceDir });
+    if (!value || ticket !== layoutRequest || gameDir !== $('w-target').value.trim() || referenceDir !== $('w-reference').value.trim()) return;
+    $('w-layout').textContent = [t('wResolvedTarget', { path: value.targetRoot }), value.referenceRoot ? t('wResolvedSource', { path: value.referenceRoot }) : '', t('wLayoutHint')].filter(Boolean).join('\n');
+  } catch {
+    if (ticket === layoutRequest) $('w-layout').textContent = t('wLayoutPending');
+  }
+}
+function updateWorkshopActions() {
+  const busy = workshopBusy || contentBusy || !!state?.playing;
+  for (const id of ['w-download','w-verify','w-repair','w-recover']) $(id).disabled = busy;
+  $('w-blocked').hidden = !(state?.playing || (contentBusy && !workshopBusy));
+  $('w-blocked').textContent = t(state?.playing ? 'wErr_running' : 'wErr_busy');
 }
 function bytes(n) {
   if (!n) return '0 B';
@@ -476,8 +500,9 @@ function workshopWorking(value) {
   $('w-status-panel').dataset.busy = String(value);
 }
 async function runWorkshop(action) {
-  if (workshopBusy || contentBusy || state.playing) return;
   page('workshop');
+  if (workshopBusy || contentBusy) { toast(t('wErr_busy')); return; }
+  if (state.playing) { toast(t('wErr_running')); return; }
   const source = workshopSource();
   if (action !== 'recover' && !source.manifestSource && !source.referenceDir) {
     $('w-status-title').textContent = t('wChooseSource');
@@ -495,13 +520,15 @@ async function runWorkshop(action) {
   try {
     const report = await invoke('client_work', { request: { action, gameDir, source } });
     workshopReport = report;
-    $('w-status-title').textContent = t(report.action === 'recover' ? 'wRecovered' : report.different && action === 'verify' ? 'wDifferences' : 'wComplete');
-    $('w-status').textContent = t('wResult', { checked: report.files, different: report.different, restored: report.repaired });
+    const storageOnly = report.storageDifferent > 0 && report.resourceDifferent === 0;
+    $('w-status-title').textContent = t(report.action === 'recover' ? 'wRecovered' : report.repaired > 0 ? 'wRestoredTitle' : report.different ? (storageOnly ? 'wStorageOnly' : 'wDifferences') : 'wMatches');
+    $('w-status').textContent = t(report.repaired > 0 ? 'wRepairResult' : 'wVerifyResult', { checked: report.files, different: report.different, restored: report.repaired, remaining: report.remaining ?? Math.max(0, report.different - report.repaired), resources: report.resourceDifferent ?? report.different, storage: report.storageDifferent || 0 });
+    if (report.storageDifferent > 0) $('w-status').textContent += ' ' + t('wStorageHint');
     $('w-progress').value = 100;
     $('w-count').textContent = `${report.verified} / ${report.files}`;
     $('w-speed').textContent = bytes(report.bytes);
     $('w-current').textContent = report.profile.version ? `${report.profile.product} · ${report.profile.version}` : '';
-    const lines = [t(report.sourceKind === 'reference' ? 'wScopeReference' : 'wScopeManifest'), report.backup ? t('wBackup', { path: report.backup }) : '', ...(report.differences || [])];
+    const lines = [report.targetRoot ? t('wResolvedTarget', { path: report.targetRoot }) : '', report.referenceRoot ? t('wResolvedSource', { path: report.referenceRoot }) : '', t(report.sourceKind === 'reference' ? 'wScopeReference' : 'wScopeManifest'), report.backup ? t('wBackup', { path: report.backup }) : '', ...(report.differences || [])];
     $('w-report-text').textContent = lines.filter(Boolean).join('\n');
     $('w-report').hidden = false; $('w-copy-report').hidden = false;
     log(t('wReportSaved', { path: report.reportPath }));
@@ -528,9 +555,9 @@ async function runWorkshop(action) {
   }
 }
 listen('client-progress', ({ payload: p }) => {
-  const key = { reference: 'wPhaseReference', verify: 'wPhaseVerify', copy: 'wPhaseCopy', download: 'wPhaseDownload', commit: 'wPhaseCommit', done: 'wComplete' }[p.phase];
+  const key = { scan: 'wPhaseScan', reference: 'wPhaseReference', verify: 'wPhaseVerify', copy: 'wPhaseCopy', download: 'wPhaseDownload', commit: 'wPhaseCommit', done: 'wComplete' }[p.phase];
   $('w-status-title').textContent = t(key || 'wPreparing');
-  $('w-status').textContent = t(p.phase === 'commit' ? 'wCommitting' : p.phase === 'reference' ? 'wReadingReference' : 'wComparing');
+  $('w-status').textContent = t(p.phase === 'commit' ? 'wCommitting' : p.phase === 'scan' ? 'wScanning' : p.phase === 'reference' ? 'wReadingReference' : 'wComparing');
   $('w-current').textContent = p.path || '';
   $('w-count').textContent = `${p.filesDone} / ${p.filesTotal}`;
   $('w-speed').textContent = p.bytesPerSecond ? `${bytes(p.bytesPerSecond)} / s` : '';

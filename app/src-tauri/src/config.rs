@@ -84,7 +84,7 @@ pub struct Settings {
     pub game_dir: String,
     /// textLocale / audioLocale, e.g. frFR.
     pub locale: String,
-    /// Launcher language: fr, en, es, pt, or empty for the system language.
+    /// Launcher language: ru, fr, en, es, pt, or empty for the system language.
     pub language: String,
     pub linux: LinuxSettings,
     pub workshop: crate::client::Settings,
