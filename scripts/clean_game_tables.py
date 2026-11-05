@@ -117,12 +117,15 @@ def open_store(client):
     spec = importlib.util.spec_from_file_location('clean_readonly_store', Path(__file__).with_name('update-casc-sandbox.py'))
     storelib = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(storelib)
-    return storelib.Store(client, synthetic_only=False, product='wowf')
+    return storelib.Store(client, synthetic_only=False, product='wowf', allow_duplicate_locations=True)
 
 
 def recover(client, expected_build_key, progress=print):
     progress('Reading current wowf ROOT and FileDataID 1582086; client storage is read-only...', flush=True)
     store = open_store(client)
+    if store.alternate_entries:
+        progress('Duplicate IDX locations: ' + str(len(store.alternate_entries))
+                 + ' EKey prefixes; every read checks the full content hashes.', flush=True)
     if store.build_key != expected_build_key:
         raise ValueError('Client build key changed since the clean extraction')
     ckey, ekey = store.values['encoding'].split()[:2]

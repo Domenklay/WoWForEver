@@ -6,6 +6,7 @@ import base64
 from pathlib import Path
 import sys
 import subprocess
+import struct
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -48,6 +49,75 @@ class CleanGameTableTests(unittest.TestCase):
             self.assertEqual(report['selected_profile']['ckey'], hashlib.md5(BODY).hexdigest())
             self.assertEqual(report['rows'], 2)
             download.assert_not_called()
+            self.assertEqual(snapshot(source), before)
+
+    def test_duplicate_placeholders_including_encoding_and_root_do_not_block_readonly_recovery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / 'client'; info = self.make_source(source)
+            original = storelib.Store(source, synthetic_only=False, product='wowf')
+            for number, bucket in original.buckets.items():
+                records = list(bucket['records'])
+                records.extend(entry[:9] + bytes(5) + struct.pack('<I', 30) for entry in bucket['records'])
+                path = source / 'Data/data' / f'{number:02x}00000001.idx'
+                path.write_bytes(storelib.write_index(number, records, bucket['bits'], bucket['segment']))
+            before = snapshot(source)
+            # Existing experimental mutation paths retain strict conflict handling.
+            with self.assertRaisesRegex(ValueError, 'Conflicting local EKey prefixes'):
+                storelib.Store(source, synthetic_only=False, product='wowf')
+            readonly = tables.open_store(source)
+            self.assertGreater(len(readonly.alternate_entries), 1)
+            ckey, ekey = readonly.values['encoding'].split()[:2]
+            readonly.read(bytes.fromhex(ekey), bytes.fromhex(ckey))
+            with patch.object(tables, 'download_matching_copy') as download:
+                body, report = tables.recover(source, info['build_key'], silent)
+            self.assertEqual(body, BODY)
+            self.assertEqual(report['source'], 'current-client-local-encoding')
+            self.assertEqual(snapshot(source), before)
+            download.assert_not_called()
+
+    def test_duplicate_prefix_with_wrong_full_ekey_is_rejected_before_valid_location_is_used(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / 'client'; info = self.make_source(source)
+            original = storelib.Store(source, synthetic_only=False, product='wowf')
+            good = lab.asset(BODY)
+            wrong = lab.asset(b'x' * len(BODY))
+            data_path = source / 'Data/data/data.000'
+            raw = bytearray(data_path.read_bytes())
+            correct = lab.storage_record(good, len(raw))
+            alternative = good['ekey'][:9] + len(raw).to_bytes(5, 'big') + struct.pack('<I', len(correct))
+            # The synthetic table is the first record. Replace it with a valid
+            # BLTE for a different full EKey, while retaining the old IDX prefix.
+            bad_first = lab.storage_record(wrong, 0)
+            self.assertEqual(len(bad_first), len(correct))
+            raw[:len(bad_first)] = bad_first
+            raw.extend(correct)
+            data_path.write_bytes(raw)
+            number = lab.bucket(good['ekey'])
+            bucket = original.buckets[number]
+            index = source / 'Data/data' / f'{number:02x}00000001.idx'
+            index.write_bytes(storelib.write_index(number, bucket['records'] + [alternative], bucket['bits'], bucket['segment']))
+            before = snapshot(source)
+            with patch.object(tables, 'download_matching_copy') as download:
+                body, _ = tables.recover(source, info['build_key'], silent)
+            self.assertEqual(body, BODY)
+            self.assertEqual(snapshot(source), before)
+            download.assert_not_called()
+
+    def test_all_invalid_duplicate_locations_fail_without_accepting_any_payload(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / 'client'; self.make_source(source)
+            original = storelib.Store(source, synthetic_only=False, product='wowf')
+            key = lab.asset(BODY)['ekey']
+            entry = original.entries[key[:9]]
+            number = lab.bucket(key); bucket = original.buckets[number]
+            records = [row for row in bucket['records'] if row != entry]
+            records.extend([key[:9] + bytes(5) + struct.pack('<I', 30),
+                            key[:9] + (1).to_bytes(5, 'big') + struct.pack('<I', 30)])
+            path = source / 'Data/data' / f'{number:02x}00000001.idx'
+            path.write_bytes(storelib.write_index(number, records, bucket['bits'], bucket['segment']))
+            before = snapshot(source)
+            with self.assertRaisesRegex(ValueError, 'No verified local location for EKey'):
+                tables.open_store(source).read(key, hashlib.md5(BODY).digest())
             self.assertEqual(snapshot(source), before)
 
     def offline_store(self, source):

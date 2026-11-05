@@ -130,7 +130,7 @@ def decode_blte(blob,expected_ekey,expected_ckey=None):
 
 
 class Store:
-    def __init__(self,path,synthetic_only=True,product=None):
+    def __init__(self,path,synthetic_only=True,product=None,allow_duplicate_locations=False):
         self.path=Path(path).resolve(strict=True)
         marker={}
         if synthetic_only:
@@ -159,7 +159,7 @@ class Store:
         if md5(config).hex()!=self.build_key:raise ValueError("Build config hash mismatch")
         self.config=config.decode()
         self.values=dict(line.split(" = ",1) for line in self.config.splitlines() if " = " in line)
-        self.buckets={};self.entries={};self.bits=None
+        self.buckets={};self.entries={};self.alternate_entries={};self.bits=None
         paths={}
         for p in (self.path/"Data/data").glob("*.idx"):
             match=re.fullmatch(r"([0-9a-f]{2})([0-9a-f]{8})\.idx",p.name)
@@ -177,12 +177,30 @@ class Store:
             self.buckets[number]=dict(version=version,**parsed)
             for entry in parsed["records"]:
                 if entry[:9] in self.entries and self.entries[entry[:9]]!=entry:
-                    raise ValueError("Conflicting local EKey prefixes")
-                self.entries[entry[:9]]=entry
+                    # Installed clients can retain several physical locations for
+                    # a truncated EKey. The read-only recovery opts into trying
+                    # each location, with full BLTE/EKey/CKey validation below.
+                    # Mutation/experimental tools keep their strict default.
+                    if not allow_duplicate_locations:
+                        raise ValueError("Conflicting local EKey prefixes")
+                    alternatives=self.alternate_entries.setdefault(entry[:9],[self.entries[entry[:9]]])
+                    if entry not in alternatives:alternatives.append(entry)
+                elif entry[:9] not in self.entries:
+                    self.entries[entry[:9]]=entry
 
     def read(self,ekey,ckey=None):
         entry=self.entries.get(ekey[:9])
         if entry is None:raise ValueError("Metadata not resident in local IDX")
+        alternatives=self.alternate_entries.get(ekey[:9])
+        if alternatives is None:return self._read_location(entry,ekey,ckey)
+        failures=[]
+        for candidate in alternatives:
+            try:return self._read_location(candidate,ekey,ckey)
+            except (OSError,ValueError) as error:failures.append(str(error))
+        raise ValueError("No verified local location for EKey "+ekey.hex()+
+                         " ("+str(len(alternatives))+" candidates): "+"; ".join(failures[:3]))
+
+    def _read_location(self,entry,ekey,ckey):
         position=int.from_bytes(entry[9:14],"big")
         segment,offset=position>>self.bits,position&((1<<self.bits)-1)
         size=struct.unpack_from("<I",entry,14)[0]
