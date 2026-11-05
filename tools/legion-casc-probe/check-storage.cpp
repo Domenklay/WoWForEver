@@ -24,7 +24,14 @@ int main(int argc,char** argv) {
     }
     std::fprintf(stderr,"locale_mask=%x\n",locale);
     CASC_OPEN_STORAGE_ARGS args{};
-    args.Size=sizeof(args);args.szLocalPath=argv[1];args.szCodeName="wow_classic_beta";
+    args.Size=sizeof(args);args.szLocalPath=argv[1];
+    // Launcher 2.x uses a separate release product; keep beta as the default.
+    char const* product=std::getenv("CASC_CHECK_PRODUCT");
+    std::string_view name=(product&&*product)?std::string_view(product):std::string_view("wow_classic_beta");
+    if(name!="wow_classic_beta" && name!="wowf") {
+        std::fprintf(stderr,"CASC_CHECK_PRODUCT must be wow_classic_beta or wowf\n");return 2;
+    }
+    args.szCodeName=(product&&*product)?product:"wow_classic_beta";
     args.dwLocaleMask=locale;
     args.PfnProgressCallback=Progress;
     HANDLE storage=nullptr;
