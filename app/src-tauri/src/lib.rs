@@ -1,6 +1,7 @@
 mod api;
 mod config;
 mod packages;
+mod client;
 // macOS: only the entropy is used (see macos.rs); the rest is kept for its tests
 #[cfg_attr(target_os = "macos", allow(dead_code))]
 mod dpapi;
@@ -31,6 +32,7 @@ pub use system::admin_setup;
 struct AppState {
     settings: Mutex<Settings>,
     playing: AtomicBool,
+    client_cancel: std::sync::Arc<AtomicBool>,
 }
 
 #[derive(Serialize)]
@@ -230,6 +232,33 @@ async fn rollback_content(state:State<'_,AppState>,game_dir:String) -> Result<pa
 }
 
 #[tauri::command]
+fn cancel_client_work(state: State<AppState>) {
+    state.client_cancel.store(true, Ordering::SeqCst);
+}
+
+#[tauri::command]
+async fn client_work(app: AppHandle, state: State<'_, AppState>, request: client::Request) -> Result<client::Report, client::Error> {
+    if state.playing.swap(true, Ordering::SeqCst) { return Err(client::Error { code:"busy", detail:String::new() }); }
+    let _guard=PackageGuard(&state.playing);
+    #[cfg(not(target_os="macos"))]
+    if patcher::find_client().is_some() { return Err(client::Error { code:"running", detail:String::new() }); }
+    state.client_cancel.store(false, Ordering::SeqCst);
+    let cancel=state.client_cancel.clone();
+    let runtime=tokio::runtime::Handle::current();
+    tokio::task::spawn_blocking(move || {
+        // Hashing can produce hundreds of chunks per second; keep the webview responsive.
+        let throttle=std::sync::Mutex::new((std::time::Instant::now()-std::time::Duration::from_secs(1),""));
+        runtime.block_on(client::run(request,config::config_dir().join("workshop"),&cancel,move|p|{
+            let mut clock=throttle.lock().unwrap();
+            if clock.1!=p.phase || clock.0.elapsed()>=std::time::Duration::from_millis(120) || p.phase=="done" {
+                clock.0=std::time::Instant::now();clock.1=p.phase;let _=app.emit("client-progress",p);
+            }
+        }))
+    })
+        .await.map_err(|e|client::Error { code:"io", detail:e.to_string() })?
+}
+
+#[tauri::command]
 async fn play(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     if state.playing.swap(true, Ordering::SeqCst) {
         return Err(t("already_running").into());
@@ -381,10 +410,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(AppState { settings: Mutex::new(Settings::load()), playing: AtomicBool::new(false) })
+        .manage(AppState { settings: Mutex::new(Settings::load()), playing: AtomicBool::new(false), client_cancel: std::sync::Arc::new(AtomicBool::new(false)) })
         .invoke_handler(tauri::generate_handler![
             get_state, save_settings, set_language, detect_locale, login, logout, server_status, news, checks, repair, play,
             content_catalog, content_status, inspect_content, install_content, rollback_content
+            , client_work, cancel_client_work
         ])
         .run(tauri::generate_context!())
         .expect("error while running Forever Launcher");

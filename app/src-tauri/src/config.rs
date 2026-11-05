@@ -87,6 +87,7 @@ pub struct Settings {
     /// Launcher language: fr, en, es, pt, or empty for the system language.
     pub language: String,
     pub linux: LinuxSettings,
+    pub workshop: crate::client::Settings,
 }
 
 /// Login kept between launches: the 30-day launcher token of the bnetserver, never the password.

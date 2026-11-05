@@ -7,6 +7,8 @@ let state = null;      // snapshot from get_state
 let draft = null;      // settings being edited in the drawer
 let toastTimer = 0;
 let contentBusy = false;
+let workshopBusy = false;
+let workshopReport = null;
 let contentSelection = null;
 let contentState = null;
 
@@ -42,6 +44,7 @@ function setLanguage(setting) {
 
 async function refresh() {
   state = await invoke('get_state');
+  state.settings.workshop ||= { referenceDir: '', manifestSource: '' };
   setLanguage(state.settings.language);
   $('realm-field').textContent = t('realm', { name: state.settings.server.name || 'Forever' });
   $('version').textContent = `v${state.version} · ${{ windows: 'Windows', macos: 'macOS', linux: 'Linux' }[state.platform]}`;
@@ -57,13 +60,14 @@ async function refresh() {
     $('avatar').textContent = state.email[0].toUpperCase();
   }
   updatePlayButton();
+  fillWorkshop();
 }
 
 function updatePlayButton() {
   const play = $('play');
   play.disabled = contentBusy || state.playing || !state.gameFound;
   play.classList.toggle('running', state.playing);
-  play.textContent = state.playing ? t('inGame') : t('play');
+  play.textContent = workshopBusy ? t('working') : state.playing ? t('inGame') : t('play');
   updateContentActions();
   if (!state.gameFound && !state.playing) setStep(t('chooseGameDir'), 'err');
 }
@@ -368,6 +372,7 @@ $('save-settings').addEventListener('click', async () => {
   draft.server.portal = $('s-portal').value.trim();
   draft.server.bnetPort = Number($('s-bnet-port').value);
   draft.server.caFile = $('s-ca-file').value.trim();
+  draft.workshop = workshopSource();
   try {
     await invoke('save_settings', { settings: draft });
     closeSettings();
@@ -434,9 +439,131 @@ async function refreshNews() {
   }));
 }
 
+// ------------------------------------------------------------------------------------------------ client workshop
+function page(name) {
+  $('home-page').hidden = name !== 'home';
+  $('workshop-page').hidden = name !== 'workshop';
+  $('nav-home').classList.toggle('selected', name === 'home');
+  $('nav-workshop').classList.toggle('selected', name === 'workshop');
+  $('page-name').textContent = t(name === 'home' ? 'wHome' : 'wLibrary');
+}
+function workshopSource() {
+  return { referenceDir: $('w-reference').value.trim(), manifestSource: $('w-manifest').value.trim() };
+}
+function fillWorkshop() {
+  if (workshopBusy) return;
+  $('w-target').value = state.settings.gameDir || '';
+  $('w-reference').value = state.settings.workshop?.referenceDir || '';
+  $('w-manifest').value = state.settings.workshop?.manifestSource || '';
+  sourceState();
+}
+function sourceState() {
+  const s = workshopSource();
+  const kind = s.manifestSource ? 'wSourceManifest' : s.referenceDir ? 'wSourceReference' : 'wSourceNone';
+  $('w-source-state').textContent = t(kind);
+  $('w-source-state').dataset.ready = String(!!(s.manifestSource || s.referenceDir));
+}
+function bytes(n) {
+  if (!n) return '0 B';
+  const unit = Math.min(4, Math.floor(Math.log(n) / Math.log(1024)));
+  return `${(n / 1024 ** unit).toFixed(unit ? 1 : 0)} ${['B', 'KiB', 'MiB', 'GiB', 'TiB'][unit]}`;
+}
+function workshopWorking(value) {
+  workshopBusy = value;
+  contentWorking(value);
+  for (const id of ['w-target','w-reference','w-manifest','w-pick-target','w-pick-reference','w-pick-manifest','w-download','w-verify','w-repair','w-recover']) $(id).disabled = value;
+  $('w-cancel').disabled = !value;
+  $('w-status-panel').dataset.busy = String(value);
+}
+async function runWorkshop(action) {
+  if (workshopBusy || contentBusy || state.playing) return;
+  page('workshop');
+  const source = workshopSource();
+  if (action !== 'recover' && !source.manifestSource && !source.referenceDir) {
+    $('w-status-title').textContent = t('wChooseSource');
+    $('w-status').textContent = t('wSourceNone');
+    $('w-reference').focus?.(); return;
+  }
+  if (!$('w-target').value.trim()) { $('w-status').textContent = t('wErr_folder'); $('w-target').focus?.(); return; }
+  const gameDir = $('w-target').value.trim();
+  workshopWorking(true);
+  $('w-report').hidden = true; $('w-copy-report').hidden = true; $('w-recover').hidden = true;
+  $('w-status-panel').dataset.error = 'false';
+  $('w-status-title').textContent = t('wPreparing');
+  $('w-status').textContent = t('wPreparingHint');
+  $('w-progress').removeAttribute?.('value');
+  try {
+    const report = await invoke('client_work', { request: { action, gameDir, source } });
+    workshopReport = report;
+    $('w-status-title').textContent = t(report.action === 'recover' ? 'wRecovered' : report.different && action === 'verify' ? 'wDifferences' : 'wComplete');
+    $('w-status').textContent = t('wResult', { checked: report.files, different: report.different, restored: report.repaired });
+    $('w-progress').value = 100;
+    $('w-count').textContent = `${report.verified} / ${report.files}`;
+    $('w-speed').textContent = bytes(report.bytes);
+    $('w-current').textContent = report.profile.version ? `${report.profile.product} · ${report.profile.version}` : '';
+    const lines = [t(report.sourceKind === 'reference' ? 'wScopeReference' : 'wScopeManifest'), report.backup ? t('wBackup', { path: report.backup }) : '', ...(report.differences || [])];
+    $('w-report-text').textContent = lines.filter(Boolean).join('\n');
+    $('w-report').hidden = false; $('w-copy-report').hidden = false;
+    log(t('wReportSaved', { path: report.reportPath }));
+    const settings = structuredClone(state.settings); settings.workshop = source;
+    if (action !== 'verify' && action !== 'recover') settings.gameDir = gameDir;
+    await invoke('save_settings', { settings });
+  } catch (e) {
+    const code = e && typeof e === 'object' ? e.code : '';
+    const message = code && TEXTS.en[`wErr_${code}`] ? t(`wErr_${code}`) : String(e?.detail || e);
+    $('w-status-title').textContent = t(code === 'cancelled' ? 'wPaused' : 'wStopped');
+    $('w-status').textContent = message;
+    $('w-status-panel').dataset.error = String(code !== 'cancelled');
+    $('w-recover').hidden = code !== 'recovery';
+    if (e?.detail && code !== 'cancelled') { $('w-current').textContent = e.detail; }
+    log(message);
+    if (code === 'cancelled') $('w-download').querySelector('[data-i18n]').textContent = t('wResume');
+  } finally {
+    workshopWorking(false);
+    const target = $('w-target').value, reference = $('w-reference').value, manifest = $('w-manifest').value;
+    await refresh();
+    // An unsaved source must survive a failed/paused operation so Resume uses the same staging files.
+    $('w-target').value = target; $('w-reference').value = reference; $('w-manifest').value = manifest;
+    sourceState();
+  }
+}
+listen('client-progress', ({ payload: p }) => {
+  const key = { reference: 'wPhaseReference', verify: 'wPhaseVerify', copy: 'wPhaseCopy', download: 'wPhaseDownload', commit: 'wPhaseCommit', done: 'wComplete' }[p.phase];
+  $('w-status-title').textContent = t(key || 'wPreparing');
+  $('w-status').textContent = t(p.phase === 'commit' ? 'wCommitting' : p.phase === 'reference' ? 'wReadingReference' : 'wComparing');
+  $('w-current').textContent = p.path || '';
+  $('w-count').textContent = `${p.filesDone} / ${p.filesTotal}`;
+  $('w-speed').textContent = p.bytesPerSecond ? `${bytes(p.bytesPerSecond)} / s` : '';
+  if (p.bytesTotal) $('w-progress').value = Math.min(100, p.bytesDone / p.bytesTotal * 100);
+  else if (p.filesTotal) $('w-progress').value = p.filesDone / p.filesTotal * 100;
+  else $('w-progress').removeAttribute?.('value');
+  $('w-cancel').disabled = !workshopBusy || p.phase === 'commit' || p.phase === 'done';
+});
+$('nav-home').addEventListener('click', () => page('home'));
+$('brand-home').addEventListener('click', e => { e.preventDefault(); page('home'); });
+$('nav-workshop').addEventListener('click', () => page('workshop'));
+$('nav-downloads').addEventListener('click', () => page('workshop'));
+$('nav-journal').addEventListener('click', () => { $('log-box').hidden = !$('log-box').hidden; });
+for (const [id, action] of [['quick-download','download'],['quick-verify','verify'],['quick-repair','repair'],['w-download','download'],['w-verify','verify'],['w-repair','repair'],['w-recover','recover']]) $(id).addEventListener('click', () => runWorkshop(action));
+for (const name of ['target','reference','manifest']) {
+  $(`w-${name}`).addEventListener('input', sourceState);
+  $(`w-pick-${name}`).addEventListener('click', async () => {
+    const value = await window.__TAURI__.dialog.open({ directory: name !== 'manifest', multiple: false, title: t(name === 'target' ? 'wTarget' : name === 'reference' ? 'wReference' : 'wManifest'), ...(name === 'manifest' ? { filters: [{ name: 'JSON', extensions: ['json'] }] } : {}) });
+    if (value) $(`w-${name}`).value = value;
+    sourceState();
+  });
+}
+$('w-cancel').addEventListener('click', async () => { await invoke('cancel_client_work'); $('w-cancel').disabled = true; $('w-status').textContent = t('wPausing'); });
+$('w-copy-report').addEventListener('click', async () => {
+  if (!workshopReport) return;
+  try { await navigator.clipboard.writeText(workshopReport.reportPath); toast(t('wCopied')); }
+  catch { $('w-current').textContent = workshopReport.reportPath; }
+});
+
 // ------------------------------------------------------------------------------------------------ background
 function rotateBackground() {
   const slides = [...document.querySelectorAll('.backdrop .bg')];
+  if (!slides.length) return;
   let current = Math.floor(Math.random() * slides.length);
   slides[current].classList.add('on');
   setInterval(() => {

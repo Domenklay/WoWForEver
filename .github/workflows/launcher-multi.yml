@@ -51,7 +51,7 @@ jobs:
             Set-Content dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: WoW-Forever-Multi-Windows-1.1.0
+          name: WoW-Forever-Multi-Windows-1.2.0
           path: dist/*
           if-no-files-found: error
           retention-days: 14
