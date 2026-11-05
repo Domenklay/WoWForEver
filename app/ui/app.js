@@ -346,7 +346,7 @@ $('pick-game').addEventListener('click', () => pick($('s-game-dir'), t('pickGame
 $('pick-prefix').addEventListener('click', () => pick($('s-prefix'), t('pickPrefix')));
 $('pick-ca').addEventListener('click', async () => {
   const file = await window.__TAURI__.dialog.open({ directory: false, multiple: false, title: t('caFile'),
-    filters: [{ name: t('caFile'), extensions: ['crt', 'pem', 'cer'] }] });
+    filters: [{ name: t('caFile'), extensions: ['crt', 'pem'] }] });
   if (file) $('s-ca-file').value = file;
 });
 $('s-game-dir').addEventListener('input', gameDirState);

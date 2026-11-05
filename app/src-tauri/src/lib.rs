@@ -22,6 +22,9 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 
+#[cfg(not(target_os = "macos"))]
+const MIN_CLIENT_PAGES: u64 = 50 * 1024 * 1024 / 4096;
+
 #[cfg(windows)]
 pub use system::admin_setup;
 
@@ -326,7 +329,7 @@ async fn launch(app: &AppHandle, settings: Settings) -> Result<(), String> {
                     Box::new(mem),
                     |cur| {
                         let other = patcher::find_client_for(&selected_exe)?;
-                        let better = !cur.alive() || other.rss() > (current_rss(cur) * 2).max(50 * 1024);
+                        let better = !cur.alive() || other.rss() > (current_rss(cur) * 2).max(MIN_CLIENT_PAGES);
                         (other_pid(&other) != cur.pid() && better).then(|| Box::new(other) as Box<dyn patcher::Memory>)
                     },
                     |ev| match ev {
@@ -361,12 +364,12 @@ fn current_rss(m: &dyn patcher::Memory) -> u64 {
 fn wait_for_client(child_pid: u32, selected_exe: &std::path::Path) -> Option<patcher::ProcessMemory> {
     #[cfg(windows)]
     if let Some(m) = patcher::ProcessMemory::open(child_pid) {
-        if m.matches_exe(selected_exe) { return Some(m); }
+        if m.matches_exe(selected_exe) && m.rss() >= MIN_CLIENT_PAGES { return Some(m); }
     }
     let _ = child_pid;
     for _ in 0..180 {
         if let Some(m) = patcher::find_client_for(selected_exe) {
-            return Some(m);
+            if m.rss() >= MIN_CLIENT_PAGES { return Some(m); }
         }
         std::thread::sleep(Duration::from_secs(1));
     }

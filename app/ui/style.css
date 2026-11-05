@@ -135,7 +135,7 @@ h2 { margin: 0 0 4px; font-size: 22px; font-weight: 700; }
 .card #signup { margin: 16px 0 0; text-align: center; }
 .form { display: grid; gap: 14px; margin-top: 20px; }
 label { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
-input[type="text"], input[type="email"], input[type="password"], input[type="url"], select {
+input[type="text"], input[type="email"], input[type="password"], input[type="url"], input[type="number"], select {
   font: 14px var(--font); color: var(--text);
   background: rgba(0, 0, 0, 0.4); border: 1px solid var(--line-2); border-radius: 4px;
   padding: 10px 12px; width: 100%; min-width: 0;

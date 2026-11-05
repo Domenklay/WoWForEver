@@ -54,6 +54,28 @@ mod tests {
         let settings = Settings { game_dir: "missing-client/_forever_".into(), ..Default::default() };
         assert_eq!(launch_args(&settings), vec!["-config", WTF_NAME]);
     }
+
+    #[test]
+    fn launch_config_uses_hostname_and_port_and_keeps_original_settings() {
+        let dir = std::env::temp_dir().join(format!("multi-launch-config-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(dir.join("WTF")).unwrap();
+        let original = "SET portal \"127.0.0.1:1119\"\n  SET Portal \"EU.actual.battle.net\"\nSET gxApi \"D3D11\"\n";
+        let base = dir.join("WTF/Config.wtf");
+        std::fs::write(&base, original).unwrap();
+        let mut settings = Settings { game_dir: dir.to_string_lossy().into_owned(), locale: "ruRU".into(), ..Default::default() };
+        settings.server.portal = "trinity.actual.battle.net".into();
+        settings.server.bnet_port = 1129;
+        write_wtf(&settings).unwrap();
+        let launch = std::fs::read_to_string(dir.join("WTF").join(WTF_NAME)).unwrap();
+        assert_eq!(launch.matches("SET portal ").count(), 1);
+        assert!(launch.contains("SET portal \"trinity.actual.battle.net:1129\""));
+        assert!(launch.contains("SET gxApi \"D3D11\""));
+        assert!(launch.contains("SET textLocale \"ruRU\""));
+        assert!(!launch.contains("EU.actual.battle.net"));
+        assert_eq!(std::fs::read_to_string(&base).unwrap(), original);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }
 
 /// Stores the login ticket where the client reads it with -launcherlogin.

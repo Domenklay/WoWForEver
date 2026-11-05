@@ -262,6 +262,16 @@ mod tests {
         let server = Server { ca_file: path.to_string_lossy().into_owned(), ..Default::default() };
         assert!(server_ca_pem(&server).is_err());
     }
+
+    #[test]
+    fn selected_public_ca_overrides_the_embedded_certificate() {
+        let f = Fixture::new(); let path = f.0.join("public-ca.pem");
+        let pem = include_str!("../testdata/public-ca.pem");
+        std::fs::write(&path, pem).unwrap();
+        let server = Server { ca_file: path.to_string_lossy().into_owned(), ..Default::default() };
+        assert_eq!(server_ca_pem(&server).unwrap(), pem);
+        assert!(server.validate().is_ok());
+    }
 }
 
 impl Server {
