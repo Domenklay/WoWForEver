@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Forever Multi full installation-file manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "profile", "files"],
+  "properties": {
+    "format": {"const": "forever-multi-client-v1"},
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["product", "version", "buildKey"],
+      "properties": {
+        "product": {"enum": ["wowf", "wow_classic_beta"]},
+        "version": {"type": "string", "minLength": 1},
+        "buildKey": {"type": "string", "pattern": "^[0-9a-fA-F]{32}$"}
+      }
+    },
+    "files": {
+      "type": "array", "minItems": 4, "maxItems": 200000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "bytes", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "description": "Installation-relative forward-slash path. Runtime rejects traversal, links, Windows aliases and user-data directories."},
+          "bytes": {"type": "integer", "minimum": 0, "maximum": 1099511627776},
+          "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "url": {"type": ["string", "null"], "description": "Full HTTPS URL required for download/repair of this file; loopback HTTP is supported for tests."}
+        }
+      }
+    }
+  }
+}

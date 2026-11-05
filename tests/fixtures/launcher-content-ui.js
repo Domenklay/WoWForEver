@@ -25,6 +25,12 @@ async function invoke(cmd,args){
   if(cmd==='inspect_content')return selected;
   if(cmd==='install_content')return {installed:'Owned zone 1',recoveryNeeded:false,backup:'E:/backup'};
   if(cmd==='rollback_content')return {installed:null,recoveryNeeded:false,backup:null};
+  if(cmd==='client_work') {
+    if(args.request.source.manifestSource==='bad.json')throw {code:'manifest',detail:'unsupported format'};
+    return {action:args.request.action,sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:4,verified:4,different:0,repaired:0,bytes:400,differences:[],reportPath:'E:/reports/client.json'};
+  }
+  if(cmd==='save_settings'){Object.assign(state.settings,args.settings);return;}
+
 }
 const context=vm.createContext({console,structuredClone,Date,Math,navigator:{languages:['en']},
   setTimeout(){return 1;},clearTimeout(){},setInterval(){},
@@ -59,5 +65,22 @@ vm.runInContext(fs.readFileSync(path.join(root,'app/ui/app.js'),'utf8'),context)
   assert.equal(get('content-choose').disabled,true);
   // Every locale contains a real translation for each content label.
   vm.runInContext(`for(const key of Object.keys(TEXTS.en).filter(k=>k.startsWith('content')))for(const locale of Object.keys(TEXTS))if(!TEXTS[locale][key])throw Error(locale+':'+key)`,context);
-  console.log('Content UI: experimental gate, install, rollback and client selection passed');
+  vm.runInContext('state.playing=false;page("workshop");',context);
+  get('w-target').value='E:/copy/_forever_';get('w-reference').value='';get('w-manifest').value='';
+  const before=calls.filter(c=>c.cmd==='client_work').length;
+  await get('w-verify').handlers.click();
+  assert.equal(calls.filter(c=>c.cmd==='client_work').length,before,'unconfigured source must not pretend to verify');
+  assert.match(get('w-status').textContent,/Choose your original/);
+  get('w-reference').value='E:/original';
+  await get('w-verify').handlers.click();
+  const work=calls.find(c=>c.cmd==='client_work');
+  assert.equal(work.args.request.gameDir,'E:/copy/_forever_');assert.equal(work.args.request.source.referenceDir,'E:/original');
+  assert.equal(get('w-status-title').textContent,'All set.');assert.equal(get('w-copy-report').hidden,false);assert.equal(get('w-progress').value,100);
+  get('w-manifest').value='bad.json';
+  await get('w-download').handlers.click();
+  assert.equal(get('w-status-title').textContent,'Operation stopped.');assert.match(get('w-status').textContent,/Unsupported or incomplete/);
+  assert.equal(get('w-manifest').value,'bad.json','failed source survives refresh');
+  assert.equal(get('w-download').disabled,false);
+  vm.runInContext(`for(const key of Object.keys(TEXTS.en).filter(k=>k.startsWith('w')))for(const locale of Object.keys(TEXTS))if(!TEXTS[locale][key])throw Error(locale+':'+key)`,context);
+  console.log('Launcher UI: package gates, workshop sources, verify reports, manifest failure and four languages passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});

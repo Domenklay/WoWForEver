@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Test client workshop and content UI
+        run: node tests/fixtures/launcher-content-ui.js .
       - name: Test launcher and Windows process selection
         working-directory: app/src-tauri
         run: cargo test --locked --lib
@@ -45,7 +47,12 @@ jobs:
           if ($env:FOREVER_CA_CERT) {
             [System.IO.File]::WriteAllText("$pwd/dist/forever_root_ca.crt", $env:FOREVER_CA_CERT)
           }
-          Copy-Item app/README-MULTI.ru.md dist/README.ru.md
+          $readme = [System.IO.File]::ReadAllText("$pwd/app/README-MULTI.ru.md")
+          $readme = $readme.Replace("../docs/CLIENT-WORKSHOP.ru.md", "CLIENT-WORKSHOP.ru.md").Replace("../docs/screenshots/", "https://raw.githubusercontent.com/Domenklay/WoWForEver/codex/launcher-forever-multi-20261105/docs/screenshots/")
+          [System.IO.File]::WriteAllText("$pwd/dist/README.ru.md", $readme)
+          $guide = [System.IO.File]::ReadAllText("$pwd/docs/CLIENT-WORKSHOP.ru.md").Replace("../content/client-manifest.schema.json", "client-manifest.schema.json")
+          [System.IO.File]::WriteAllText("$pwd/dist/CLIENT-WORKSHOP.ru.md", $guide)
+          Copy-Item content/client-manifest.schema.json dist/client-manifest.schema.json
           Get-ChildItem dist -Filter *.exe | Get-FileHash -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash)  $([System.IO.Path]::GetFileName($_.Path))" } |
             Set-Content dist/SHA256SUMS.txt
