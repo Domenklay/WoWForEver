@@ -27,6 +27,7 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
 fi
 docker run --rm --network none --read-only --cap-drop ALL \
     --env "CASC_CHECK_LOCALE=${CASC_CHECK_LOCALE:-all}" \
+    --env "CASC_CHECK_PRODUCT=${CASC_CHECK_PRODUCT:-wow_classic_beta}" \
     --security-opt no-new-privileges --user "$(id -u):$(id -g)" \
     --tmpfs /tmp:rw,exec,nosuid,nodev,size=256m \
     --mount "type=bind,src=$client,dst=/wow,readonly" \
