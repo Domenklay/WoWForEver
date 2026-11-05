@@ -130,7 +130,7 @@ def decode_blte(blob,expected_ekey,expected_ckey=None):
 
 
 class Store:
-    def __init__(self,path,synthetic_only=True):
+    def __init__(self,path,synthetic_only=True,product=None):
         self.path=Path(path).resolve(strict=True)
         marker={}
         if synthetic_only:
@@ -147,8 +147,9 @@ class Store:
         if any(row and len(row)!=len(self.headers) for row in self.csv[1:]):
             raise ValueError("Malformed .build.info row")
         names={v.split("!")[0]:i for i,v in enumerate(self.headers)}
+        selected_product=lab.PRODUCT if product is None else product
         matches=[i for i,r in enumerate(self.csv[1:],1) if r and
-                 r[names["Active"]]=="1" and r[names["Product"]]==lab.PRODUCT]
+                 r[names["Active"]]=="1" and r[names["Product"]]==selected_product]
         if len(matches)!=1:raise ValueError("Expected one active lab product")
         self.row=matches[0];self.build_column=names["Build Key"]
         self.build_key=self.csv[self.row][self.build_column]

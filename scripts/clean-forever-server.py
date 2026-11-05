@@ -20,6 +20,8 @@ import subprocess
 import sys
 import time
 
+from clean_game_tables import missing_tables, recover as recover_game_table
+
 ROOT = Path(__file__).resolve().parents[1]
 CORE = 'b4e7b940593f6402a822d4fbcdf31331d16f73b6'
 PROJECT = 'forever-clean'
@@ -275,6 +277,48 @@ def storage_stamp(root):
     return [(p.name, p.stat().st_size, p.stat().st_mtime_ns) for p in sorted(folder.iterdir())]
 
 
+def ensure_game_tables(state):
+    """Repair only an authenticated missing table, preserving completed imports."""
+    output = Path(state['root']) / 'data'
+    missing = missing_tables(output)
+    if not missing:
+        return
+    if missing != ['ArtifactKnowledgeMultiplier.txt']:
+        raise RuntimeError('Missing required GameTables: ' + ', '.join(missing)
+                           + '. Keep the extraction and inspect the client; no dummy tables were generated.')
+    expected = dict(core=CORE, exe_sha256=state['client']['exe_sha256'], build_key=state['client']['build_key'])
+    if json.loads((output / '.clean-extraction.json').read_text()) != expected:
+        raise ValueError('GameTable repair requires this clean installation extraction checkpoint')
+    if output.is_symlink() or (output / 'gt').is_symlink():
+        raise ValueError('Linked clean data directories are unsupported')
+    item = container(state, 'worldserver')
+    if item and item['State']['Running']:
+        raise RuntimeError('Stop the clean worldserver before repairing its extracted GameTable')
+    source = Path(state['client']['source'])
+    before_info = (source / '.build.info').read_bytes()
+    before = storage_stamp(source)
+    body, report = recover_game_table(source, state['client']['build_key'])
+    if before_info != (source / '.build.info').read_bytes() or before != storage_stamp(source):
+        raise RuntimeError('Client storage changed during GameTable repair; close games/downloaders and retry')
+    target = output / 'gt/ArtifactKnowledgeMultiplier.txt'
+    if target.is_symlink() or (target.exists() and target.stat().st_size):
+        raise ValueError('GameTable destination changed; existing nonempty data is preserved')
+    report.update(format='wowforever-clean-game-table-repair-v1', file_data_id=1582086,
+                  build_key=state['client']['build_key'], core=CORE, bytes=len(body),
+                  sha256=hashlib.sha256(body).hexdigest(), content_md5=hashlib.md5(body).hexdigest(),
+                  client_modified=False, databases_modified=False, server_binaries_modified=False)
+    # Write metadata before publishing the validated bytes. A retry can safely
+    # repeat this step after an interruption; no database import is restarted.
+    write_private(output / '.clean-game-table-repair.json', report)
+    pending = target.with_suffix('.txt.partial')
+    with pending.open('wb') as stream:
+        stream.write(body)
+        stream.flush()
+        os.fsync(stream.fileno())
+    pending.replace(target)
+    print('RESTORED GameTable: ArtifactKnowledgeMultiplier.txt; current ROOT content hash verified; source=' + report['source'], flush=True)
+
+
 def stop_previous(state):
     items = []
     for project in OLD_PROJECTS:
@@ -399,6 +443,7 @@ def install(args):
         # Extractor is no longer run after this phase; retain its old path as provenance only.
         state['phase'] = 'extracted'; save(state)
     if state['phase'] == 'extracted':
+        ensure_game_tables(state)
         compose(state, 'up', '-d', '--wait', 'mysql')
         state['phase'] = 'importing'; save(state)
         compose(state, '--profile', 'setup', 'up', '-d', 'initialize')
@@ -409,6 +454,7 @@ def install(args):
         prepare_realm(state)
         state['phase'] = 'initialized'; save(state)
     if state['phase'] == 'initialized':
+        ensure_game_tables(state)
         compose(state, 'up', '-d', '--no-build', 'worldserver')
         wait_world(state, args.timeout)
         state['phase'] = 'staged'; save(state)

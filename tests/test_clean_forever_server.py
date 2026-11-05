@@ -4,11 +4,14 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import clean_game_tables as tables
 
 
 def module(name, path):
@@ -110,6 +113,49 @@ class CleanServerTests(unittest.TestCase):
             self.assertIn(str(ROOT / 'scripts/clean-forever-server.py'), (root / 'server.sh').read_text())
             self.assertEqual((root / 'server.sh').stat().st_mode & 0o777, 0o700)
 
+    def test_initialized_checkpoint_repairs_only_missing_table_without_reimport_or_extraction(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); s = state(root)
+            s['phase'] = 'initialized'; s['client']['exe_build'] = 70658
+            original = Path(s['client']['source']); client(original)
+            output = root / 'data'; (output / 'gt').mkdir(parents=True)
+            for name in tables.REQUIRED:
+                if name != tables.NAME:
+                    (output / 'gt' / name).write_bytes(b'preserve existing extracted table')
+            clean.write_private(output / '.clean-extraction.json',
+                                dict(core=clean.CORE, exe_sha256='fixture', build_key='a' * 32))
+            clean.save(s)
+            body = b'Level\tMultiplier\r\n0\t1\r\n1\t1.25\r\n'
+            before = {str(p.relative_to(original)): p.read_bytes() for p in original.rglob('*') if p.is_file()}
+            commands = []
+            def compose(saved, *command, **kwargs):
+                commands.append(command)
+                if 'worldserver' in command:
+                    self.assertEqual((output / 'gt' / tables.NAME).read_bytes(), body)
+                return ''
+            with patch.object(clean, 'container', return_value={'State': {'Running': False}}), \
+                    patch.object(clean, 'recover_game_table', return_value=(body, {'source': 'current-client-local-encoding'})), \
+                    patch.object(clean, 'compose', side_effect=compose), patch.object(clean, 'run') as run, \
+                    patch.object(clean, 'wait_world'), patch.object(clean, 'stop_previous'), patch('builtins.print'):
+                clean.install(SimpleNamespace(root=root, timeout=1))
+            run.assert_not_called()
+            self.assertFalse(any('initialize' in command or 'extractor' in command for command in commands))
+            self.assertEqual(clean.load_state(root / 'state.json')['phase'], 'ready')
+            self.assertEqual(before, {str(p.relative_to(original)): p.read_bytes() for p in original.rglob('*') if p.is_file()})
+            self.assertEqual((output / 'gt/xp.txt').read_bytes(), b'preserve existing extracted table')
+            report = json.loads((output / '.clean-game-table-repair.json').read_text())
+            self.assertFalse(report['client_modified'])
+            self.assertFalse(report['databases_modified'])
+
+    def test_other_missing_tables_stop_before_recovery_or_world_start(self):
+        with tempfile.TemporaryDirectory() as temp:
+            s = state(Path(temp))
+            with patch.object(clean, 'recover_game_table') as recover, patch.object(clean, 'compose') as compose:
+                with self.assertRaisesRegex(RuntimeError, 'Missing required GameTables'):
+                    clean.ensure_game_tables(s)
+            recover.assert_not_called()
+            compose.assert_not_called()
+
     def exercise_install(self, directory, failure=None):
         events = []
         root = directory / 'clean'
@@ -135,6 +181,8 @@ class CleanServerTests(unittest.TestCase):
                 for name in ('dbc', 'gt', 'cameras', 'maps', 'vmaps'):
                     (output / name).mkdir()
                 (output / 'vmaps/GameObjectModels.dtree').write_bytes(b'synthetic owned model fixture')
+                for name in tables.REQUIRED:
+                    (output / 'gt' / name).write_bytes(b'synthetic owned table fixture')
             if 'initialize' in command:
                 events.append('initialize-start')
             return ''
