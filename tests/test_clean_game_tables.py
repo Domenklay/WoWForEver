@@ -1,8 +1,11 @@
 import hashlib
 import importlib.util
 import io
+import json
+import base64
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -109,6 +112,21 @@ class CleanGameTableTests(unittest.TestCase):
                     b'Level\tMultiplier\n0\t1\n1\t-1'):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 tables.validate_table(bad)
+
+    def test_container_writer_rejects_changed_payload_and_preserves_existing_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            message = dict(body=base64.b64encode(BODY).decode(), sha256='0' * 64)
+            args = [sys.executable, '-c', tables.TABLE_WRITER, temp]
+            wrong = subprocess.run(args, input=json.dumps(message), text=True, capture_output=True)
+            self.assertNotEqual(wrong.returncode, 0)
+            self.assertEqual(list(root.iterdir()), [])
+            message['sha256'] = hashlib.sha256(BODY).hexdigest()
+            target = root / tables.NAME
+            target.write_bytes(b'existing extracted file')
+            existing = subprocess.run(args, input=json.dumps(message), text=True, capture_output=True)
+            self.assertNotEqual(existing.returncode, 0)
+            self.assertEqual(target.read_bytes(), b'existing extracted file')
 
 
 if __name__ == '__main__':

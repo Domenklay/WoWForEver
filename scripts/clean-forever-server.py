@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-from clean_game_tables import missing_tables, recover as recover_game_table
+from clean_game_tables import TABLE_WRITER, missing_tables, recover as recover_game_table
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = 'b4e7b940593f6402a822d4fbcdf31331d16f73b6'
@@ -39,6 +39,8 @@ def run(command, *, capture=False, data=None):
         # Resolved Compose files/configs contain private credentials. Never echo them.
         if 'run' in command and 'extractor' in command:
             raise RuntimeError('Extraction failed; see extractor output above (the temporary container was removed)')
+        if TABLE_WRITER in command:
+            raise RuntimeError('Could not publish verified GameTable: ' + (result.stderr or '').strip()[-1000:])
         raise RuntimeError('Command failed: ' + ' '.join(command[:3]) + '; use the status command for service logs')
     return result.stdout or ''
 
@@ -310,12 +312,17 @@ def ensure_game_tables(state):
     # Write metadata before publishing the validated bytes. A retry can safely
     # repeat this step after an interruption; no database import is restarted.
     write_private(output / '.clean-game-table-repair.json', report)
-    pending = target.with_suffix('.txt.partial')
-    with pending.open('wb') as stream:
-        stream.write(body)
-        stream.flush()
-        os.fsync(stream.fileno())
-    pending.replace(target)
+    # Existing extractor outputs are owned by root. Publish through a narrowly
+    # mounted container instead of changing their permissions or requiring sudo.
+    table_dir = str(target.parent)
+    if ',' in table_dir:
+        raise ValueError('A comma in the generated GameTable directory is unsupported')
+    run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--interactive',
+         '--mount', 'type=bind,source=' + table_dir + ',target=/output',
+         '--entrypoint', 'python3', state['image'], '-c', TABLE_WRITER, '/output'],
+        data=json.dumps(dict(body=base64.b64encode(body).decode('ascii'), sha256=report['sha256'])))
+    if sha_file(target) != report['sha256']:
+        raise RuntimeError('Published GameTable checksum mismatch')
     print('RESTORED GameTable: ArtifactKnowledgeMultiplier.txt; current ROOT content hash verified; source=' + report['source'], flush=True)
 
 

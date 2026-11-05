@@ -133,12 +133,23 @@ class CleanServerTests(unittest.TestCase):
                 if 'worldserver' in command:
                     self.assertEqual((output / 'gt' / tables.NAME).read_bytes(), body)
                 return ''
+            def publish(command, **kwargs):
+                self.assertEqual(command[:3], ['docker', 'run', '--rm'])
+                self.assertIn('--read-only', command)
+                self.assertIn('none', command)
+                self.assertEqual(command.count('--mount'), 1)
+                self.assertIn('type=bind,source=' + str(output / 'gt') + ',target=/output', command)
+                self.assertEqual(command[command.index('--entrypoint') + 1], 'python3')
+                writer = subprocess.run([sys.executable, '-c', tables.TABLE_WRITER, str(output / 'gt')],
+                                        input=kwargs['data'], text=True, capture_output=True)
+                self.assertEqual(writer.returncode, 0, writer.stderr)
+                return ''
             with patch.object(clean, 'container', return_value={'State': {'Running': False}}), \
                     patch.object(clean, 'recover_game_table', return_value=(body, {'source': 'current-client-local-encoding'})), \
-                    patch.object(clean, 'compose', side_effect=compose), patch.object(clean, 'run') as run, \
+                    patch.object(clean, 'compose', side_effect=compose), patch.object(clean, 'run', side_effect=publish) as run, \
                     patch.object(clean, 'wait_world'), patch.object(clean, 'stop_previous'), patch('builtins.print'):
                 clean.install(SimpleNamespace(root=root, timeout=1))
-            run.assert_not_called()
+            run.assert_called_once()
             self.assertFalse(any('initialize' in command or 'extractor' in command for command in commands))
             self.assertEqual(clean.load_state(root / 'state.json')['phase'], 'ready')
             self.assertEqual(before, {str(p.relative_to(original)): p.read_bytes() for p in original.rglob('*') if p.is_file()})

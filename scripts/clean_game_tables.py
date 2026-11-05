@@ -27,6 +27,28 @@ MATCHING_COPY = {
 }
 MAX_TABLE = 1024 * 1024
 
+# Used inside the already-built image: only the generated gt directory is mounted.
+# The process has no network, database, certificate or client mounts.
+TABLE_WRITER = r'''
+import base64, hashlib, json, os, pathlib, sys
+message = json.load(sys.stdin)
+body = base64.b64decode(message['body'], validate=True)
+if not 0 < len(body) <= 1024 * 1024 or hashlib.sha256(body).hexdigest() != message['sha256']:
+    raise SystemExit('GameTable writer payload checksum mismatch')
+directory = pathlib.Path(sys.argv[1])
+target = directory / 'ArtifactKnowledgeMultiplier.txt'
+pending = directory / '.ArtifactKnowledgeMultiplier.txt.verified-partial'
+if target.is_symlink() or (target.exists() and target.stat().st_size):
+    raise SystemExit('Existing nonempty GameTable is preserved')
+if pending.is_symlink():
+    raise SystemExit('Linked GameTable temporary file is unsupported')
+with pending.open('wb') as stream:
+    stream.write(body)
+    stream.flush()
+    os.fsync(stream.fileno())
+pending.replace(target)
+'''
+
 
 def validate_table(body):
     if not 0 < len(body) <= MAX_TABLE:
