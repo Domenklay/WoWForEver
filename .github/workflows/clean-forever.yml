@@ -1,0 +1,36 @@
+name: Clean Forever baseline checks
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/clean-forever-20261105]
+    paths: [docker/clean/**, scripts/clean-forever-server.py, tools/clean-server/**, tests/test_clean_forever_server.py, tests/fixtures/clean-client.ps1, .github/workflows/clean-forever.yml]
+permissions:
+  contents: read
+concurrency:
+  group: clean-forever-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify lifecycle, isolated databases and native protocol selection
+        run: python3 -m unittest discover -s tests -p test_clean_forever_server.py -v
+      - name: Check shell and Python entrypoints
+        run: |
+          bash -n docker/clean/extract.sh docker/clean/mysql-init.sh
+          python3 -m py_compile docker/clean/entrypoint.py scripts/clean-forever-server.py
+      - name: Verify pinned upstream database release and extraction
+        run: docker build --progress=plain --target database -f docker/clean/Dockerfile -t forever-clean-tdb:check .
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify reversible client preparation with Windows PowerShell 5.1
+        shell: powershell
+        run: ./tests/fixtures/clean-client.ps1

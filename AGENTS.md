@@ -1,5 +1,16 @@
 # Instructions for AI coding assistants
 
+The user requested a clean server reset on 2026-11-05 after confirming that the
+actual test Wow.exe FileVersion is 1.60.1.70658. Follow docs/CLEAN-FOREVER-SERVER.ru.md.
+The clean setup pins pristine upstream forever b4e7b940593f6402a822d4fbcdf31331d16f73b6,
+uses fresh databases/extracted data and realm build 70658, and excludes our gameplay
+patches, overrides and advancement injection. The new upstream's 70790 opcode
+translations must not be enabled for this confirmed 70658 EXE. The user authorized
+removing the old server/databases; clean-forever-server.py purge-old scopes removal to the
+old Compose projects only after the new server is ready. Client sources, TLS
+identity and add-on source code remain preserved. Never claim cloud tests deployed
+the clean server to the user's Windows/WSL machine.
+
 This repository runs a private server for the **World of Warcraft Forever** beta, client build **1.60.1.70450**,
 based on the [`forever` branch of TrinityCore](https://github.com/advocaite/TrinityCore/tree/forever). Read
 `README.md` first; this file adds what an assistant needs to help someone set it up.
