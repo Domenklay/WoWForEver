@@ -57,6 +57,15 @@ class ServerRefreshTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 refresh.isolated_model(original, {'mysql': 'mysql', 'web': 'web'}, 'next', refresh.PROJECT)
 
+    def test_compose_password_and_healthcheck_escapes_are_preserved(self):
+        original = model()
+        original['services']['mysql']['environment'] = {'MYSQL_ROOT_PASSWORD': 'literal$$VALUE$${OTHER}$$$$'}
+        original['services']['mysql']['healthcheck'] = {'test': ['CMD-SHELL', 'echo "$$MYSQL_ROOT_PASSWORD"']}
+        result = refresh.isolated_model(original, {'mysql': 'mysql', 'web': 'web'}, 'next', refresh.PROJECT)
+        mysql = result['services']['mysql']
+        self.assertEqual(mysql['environment']['MYSQL_ROOT_PASSWORD'], 'literal$$VALUE$${OTHER}$$$$')
+        self.assertEqual(mysql['healthcheck'], original['services']['mysql']['healthcheck'])
+
     def exercise(self, temp, failure=None):
         directory = Path(temp)
         client = directory / 'client'
@@ -161,6 +170,25 @@ class ServerRefreshTests(unittest.TestCase):
         with patch.object(refresh, 'run', return_value=logs), \
                 patch.object(refresh, 'db_sql', return_value='COUNT(*)\n4\n'):
             refresh.preflight({'worldserver': {'Id': 'old-world'}, 'mysql': {'Id': 'old-mysql'}})
+
+    def test_ready_server_does_not_need_revision_banner_in_the_log_tail(self):
+        info = {'RestartCount': 0, 'State': {'Status': 'running'}, 'Config': {'Labels': {
+            'org.wowforever.core': refresh.CORE, 'org.wowforever.advancement': '1.11.0'}}}
+        logs = 'ForeverAdvancement ready: catalogue\nversion=1.11.0\nworldserver-daemon ready\n'
+        state = {'project': refresh.PROJECT, 'compose': '/private/compose.json'}
+        with patch.object(refresh, 'inspect', return_value=info), \
+                patch.object(refresh, 'run', side_effect=['container', logs]), \
+                patch.object(refresh.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as network:
+            refresh.wait_world(state, 1)
+            self.assertIn('bnetserver', network.call_args.args[0][-1])
+            self.assertIn('8085', network.call_args.args[0][-1])
+
+    def test_wrong_running_image_is_rejected_even_if_ready_log_exists(self):
+        state = {'project': refresh.PROJECT, 'compose': '/private/compose.json'}
+        with patch.object(refresh, 'run', return_value='container'), \
+                patch.object(refresh, 'inspect', return_value={'Config': {'Labels': {}}}):
+            with self.assertRaisesRegex(RuntimeError, 'expected core and mod image'):
+                refresh.wait_world(state, 1)
 
 
 if __name__ == '__main__':

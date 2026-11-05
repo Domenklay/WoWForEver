@@ -101,6 +101,8 @@ def isolated_model(original, images, image, project):
     # This revision natively knows 70658. Do not delete its build_info/auth-key rows using CLIENT_BUILD.
     world.update(CLIENT_BUILD='', ADVANCEMENT_ENABLED='1', SUBCLASS_ENABLED='0', SUBCLASS_FREEPICK='0')
     model['services']['web'].setdefault('environment', {})['GAME_VERSION'] = '1.60.1.70658'
+    # `config --format json` already escapes literal dollars for reuse as a
+    # Compose file. Preserve those escapes, including passwords and healthchecks.
     return model
 
 
@@ -204,12 +206,15 @@ def wait_world(state, timeout):
     last_notice = 0
     while time.monotonic() < deadline:
         info = inspect(container)
+        labels = info['Config'].get('Labels', {})
+        if labels.get('org.wowforever.core') != CORE or labels.get('org.wowforever.advancement') != '1.11.0':
+            raise RuntimeError('Worldserver container is not using the expected core and mod image')
         if info['RestartCount'] > 0 or info['State']['Status'] in ('dead', 'exited'):
             raise RuntimeError('New worldserver exited or restarted; inspect its retained logs')
         logs = run(['docker', 'logs', '--tail=3000', container], capture=True)
         if re.search(r'worldserver-daemon.*ready', logs) and 'ForeverAdvancement ready:' in logs:
-            if 'version=1.11.0' not in logs or CORE[:12] not in logs:
-                raise RuntimeError('Worldserver did not confirm the expected core and mod version')
+            if 'version=1.11.0' not in logs:
+                raise RuntimeError('Worldserver did not confirm the expected mod version')
             # Allow web and bnetserver to finish starting after world readiness.
             # The website uses worldserver:8085 for its Offline/Online badge.
             probe = subprocess.run(command + ['exec', '-T', 'web', 'python', '-c',
