@@ -12,9 +12,9 @@ mod win;
 
 #[cfg(not(windows))]
 #[cfg_attr(target_os = "macos", allow(unused_imports))]
-pub use lin::{find_client, ProcessMemory};
+pub use lin::{find_client, find_client_for, ProcessMemory};
 #[cfg(windows)]
-pub use win::{find_client, ProcessMemory};
+pub use win::{find_client, find_client_for, ProcessMemory};
 
 use crate::i18n::{t, tf};
 use memchr::memmem;

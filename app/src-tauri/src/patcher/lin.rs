@@ -4,6 +4,7 @@
 use super::Memory;
 use std::fs::File;
 use std::os::unix::fs::FileExt;
+use std::path::Path;
 
 pub struct ProcessMemory {
     pid: u32,
@@ -70,7 +71,7 @@ impl Memory for ProcessMemory {
     }
 }
 
-fn is_client(pid: u32) -> bool {
+fn is_client(pid: u32, expected: Option<&Path>) -> bool {
     // Wine sets argv[0] to the .exe path; on drives mounted without exec the .exe is not mapped from the file
     let argv0 = std::fs::read(format!("/proc/{pid}/cmdline"))
         .ok()
@@ -80,21 +81,37 @@ fn is_client(pid: u32) -> bool {
         .ok()
         .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()))
         .unwrap_or_default();
-    if (argv0.ends_with("/wowb.exe") || argv0 == "wowb.exe") && exe.starts_with("wine") {
-        return true;
+    let named_client = ["wow.exe", "wowb.exe"].iter().any(|name| argv0.ends_with(&format!("/{name}")) || argv0 == *name);
+    if named_client && exe.starts_with("wine") {
+        if expected.is_none() { return true; }
+        let expected = expected.unwrap().to_string_lossy().replace('\\', "/").to_lowercase();
+        if argv0.strip_prefix("z:").unwrap_or(&argv0) == expected { return true; }
+        if let Some((_, tail)) = expected.split_once("/drive_c/") {
+            if argv0 == format!("c:/{tail}") { return true; }
+        }
     }
     std::fs::read_to_string(format!("/proc/{pid}/maps"))
-        .map(|m| m.lines().any(|l| l.trim_end().to_lowercase().ends_with("/wowb.exe")))
+        .map(|m| m.lines().any(|l| {
+            let path = l.split_whitespace().skip(5).collect::<Vec<_>>().join(" ");
+            let name = path.to_lowercase();
+            if !["/wow.exe", "/wowb.exe"].iter().any(|suffix| name.ends_with(suffix)) { return false; }
+            expected.map_or(true, |expected| std::fs::canonicalize(&path).ok().zip(std::fs::canonicalize(expected).ok())
+                .is_some_and(|(actual, expected)| actual == expected))
+        }))
         .unwrap_or(false)
 }
 
 /// The game process: the WowB.exe Wine process using the most memory (the launcher stub uses ~30 MB).
-pub fn find_client() -> Option<ProcessMemory> {
+pub fn find_client() -> Option<ProcessMemory> { find(None) }
+
+pub fn find_client_for(exe: &Path) -> Option<ProcessMemory> { find(Some(exe)) }
+
+fn find(expected: Option<&Path>) -> Option<ProcessMemory> {
     let me = std::process::id();
     let mut best: Option<(u64, u32)> = None;
     for entry in std::fs::read_dir("/proc").ok()?.flatten() {
         let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
-        if pid == me || !is_client(pid) {
+        if pid == me || !is_client(pid, expected) {
             continue;
         }
         let rss = rss_pages(pid);

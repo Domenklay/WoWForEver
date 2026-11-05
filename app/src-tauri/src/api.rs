@@ -3,7 +3,7 @@
 //! The portal host name is resolved to the configured server address here, and only the embedded CA is trusted,
 //! so this works before the hosts file and the system certificate store are set up.
 
-use crate::config::{Server, CA_PEM};
+use crate::config::{server_ca_pem, Server};
 use crate::i18n::{t, tf};
 use base64::Engine;
 use serde::Deserialize;
@@ -52,7 +52,8 @@ fn basic(ticket: &str) -> String {
 impl Api {
     pub async fn new(server: &Server) -> Result<Self> {
         let addr = resolve(&server.address, server.rest_port).await?;
-        let ca = reqwest::Certificate::from_pem(CA_PEM.as_bytes()).map_err(|e| e.to_string())?;
+        let pem = server_ca_pem(server)?;
+        let ca = reqwest::Certificate::from_pem(pem.as_bytes()).map_err(|e| e.to_string())?;
         let builder = reqwest::Client::builder();
         #[cfg(not(windows))]
         let builder = builder.use_rustls_tls();

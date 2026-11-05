@@ -1,0 +1,57 @@
+name: WoW Forever Multi Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/launcher-forever-multi-20261105]
+    paths: [app/**, .github/workflows/launcher-multi.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: launcher-multi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      FOREVER_CA_CERT: ${{ vars.FOREVER_CA_CERT }}
+      FOREVER_SERVER_ADDRESS: ${{ vars.FOREVER_SERVER_ADDRESS }}
+      FOREVER_WEBSITE: ${{ vars.FOREVER_WEBSITE }}
+      FOREVER_SERVER_NAME: ${{ vars.FOREVER_SERVER_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test launcher and Windows process selection
+        working-directory: app/src-tauri
+        run: cargo test --locked --lib
+      - name: Build installer and portable launcher
+        working-directory: app
+        run: npx --yes @tauri-apps/cli@2 build --bundles nsis
+      - name: Prepare portable package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item app/src-tauri/target/release/forever-launcher.exe dist/WoWForeverMulti.exe
+          Copy-Item app/src-tauri/target/release/bundle/nsis/*.exe dist/
+          if ($env:FOREVER_CA_CERT) {
+            [System.IO.File]::WriteAllText("$pwd/dist/forever_root_ca.crt", $env:FOREVER_CA_CERT)
+          }
+          Copy-Item app/README-MULTI.ru.md dist/README.ru.md
+          Get-ChildItem dist -Filter *.exe | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  $([System.IO.Path]::GetFileName($_.Path))" } |
+            Set-Content dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WoW-Forever-Multi-Windows-1.1.0
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14

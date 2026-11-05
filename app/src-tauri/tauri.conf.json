@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Forever Launcher",
-  "version": "1.0.0",
+  "productName": "WoW Forever Multi",
+  "version": "1.1.0",
   "identifier": "fr.forever.launcher",
   "build": {
     "frontendDist": "../ui"
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Forever Launcher",
+        "title": "WoW Forever Multi",
         "width": 1120,
         "height": 680,
         "minWidth": 900,
@@ -26,12 +26,24 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["appimage", "nsis", "dmg"],
+    "targets": [
+      "appimage",
+      "nsis",
+      "dmg"
+    ],
     "category": "Game",
-    "shortDescription": "Forever Launcher",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico", "icons/icon.png"],
+    "shortDescription": "WoW Forever Multi client launcher",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
     "windows": {
-      "nsis": { "installMode": "currentUser" }
+      "nsis": {
+        "installMode": "currentUser"
+      }
     }
   }
 }

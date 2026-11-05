@@ -24,11 +24,10 @@ fn embed_ca() {
     println!("cargo:rerun-if-changed={file}");
     let pem = match std::env::var("FOREVER_CA_CERT") {
         Ok(text) if !text.trim().is_empty() => text,
-        _ => std::fs::read_to_string(file).unwrap_or_else(|_| {
-            panic!("no server CA: set FOREVER_CA_CERT or copy certs/ca/forever_root_ca.crt (never the .key) to app/src-tauri/{file}")
-        }),
+        _ => std::fs::read_to_string(file).unwrap_or_default(),
     };
-    assert!(pem.contains("-----BEGIN CERTIFICATE-----"), "the server CA is not a PEM certificate");
+    assert!(!pem.contains("PRIVATE KEY"), "only a public CA certificate may be embedded");
+    assert!(pem.is_empty() || pem.contains("-----BEGIN CERTIFICATE-----"), "the server CA is not a PEM certificate");
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("forever_root_ca.crt");
     std::fs::write(out, pem.trim().to_string() + "\n").unwrap();
 }

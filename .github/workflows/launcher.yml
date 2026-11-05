@@ -57,7 +57,7 @@ jobs:
         shell: bash
         run: |
           if [ -z "$FOREVER_CA_CERT" ] && [ ! -f app/src-tauri/resources/forever_root_ca.crt ]; then
-            echo "::error::Set the FOREVER_CA_CERT repository variable (text of certs/ca/forever_root_ca.crt)"; exit 1
+            echo "::notice::No embedded CA: choose the public server certificate in launcher settings or place forever_root_ca.crt next to the portable executable."
           fi
           if [ -z "$FOREVER_SERVER_ADDRESS" ]; then
             echo "::warning::FOREVER_SERVER_ADDRESS is not set: the launcher will point to 127.0.0.1"

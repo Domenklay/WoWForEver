@@ -1,6 +1,6 @@
 //! PC preparation: hosts entry for the portal, trust in the server CA, and (Linux) the Wine/Proton runner.
 
-use crate::config::{Server, Settings, CA_PEM};
+use crate::config::{server_ca_pem, valid_portal, Server, Settings};
 use crate::i18n::{t, tf};
 use base64::Engine;
 use serde::Serialize;
@@ -18,14 +18,17 @@ pub struct Checks {
 
 /// DER bytes of the embedded CA certificate.
 #[cfg_attr(target_os = "macos", allow(dead_code))]
-pub fn ca_der() -> Vec<u8> {
-    let b64: String = CA_PEM.lines().filter(|l| !l.starts_with("-----")).collect();
-    base64::engine::general_purpose::STANDARD.decode(b64).expect("embedded CA is valid PEM")
+pub fn ca_der(server: &Server) -> Result<Vec<u8>, String> {
+    let pem = server_ca_pem(server)?;
+    let body = pem.split("-----BEGIN CERTIFICATE-----").nth(1)
+        .and_then(|s| s.split("-----END CERTIFICATE-----").next()).ok_or_else(|| t("ca_invalid").to_string())?;
+    let b64: String = body.chars().filter(|c| !c.is_ascii_whitespace()).collect();
+    base64::engine::general_purpose::STANDARD.decode(b64).map_err(|_| t("ca_invalid").to_string())
 }
 
 #[cfg_attr(target_os = "macos", allow(dead_code))]
-pub fn ca_sha1() -> [u8; 20] {
-    Sha1::digest(ca_der()).into()
+pub fn ca_sha1(server: &Server) -> Result<[u8; 20], String> {
+    Ok(Sha1::digest(ca_der(server)?).into())
 }
 
 /// IPv4 address the server address resolves to (it may be a DNS name).
@@ -57,10 +60,6 @@ pub fn check(settings: &Settings) -> Checks {
     Checks { hosts, hosts_detail, certificate, certificate_detail }
 }
 
-fn valid_portal(p: &str) -> bool {
-    !p.is_empty() && p.len() < 254 && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
-}
-
 // ------------------------------------------------------------------------------------------------- Windows
 #[cfg(windows)]
 mod imp {
@@ -74,12 +73,12 @@ mod imp {
 
     const HOSTS: &str = r"C:\Windows\System32\drivers\etc\hosts";
 
-    pub fn certificate_status(_: &Settings) -> (bool, String) {
+    pub fn certificate_status(settings: &Settings) -> (bool, String) {
+        let hash = match ca_sha1(&settings.server) { Ok(hash) => hash, Err(e) => return (false, e) };
         unsafe {
             let Ok(store) = CertOpenSystemStoreW(None, w!("ROOT")) else {
                 return (false, t("cert_store_unreadable").into());
             };
-            let hash = ca_sha1();
             let blob = CRYPT_INTEGER_BLOB { cbData: 20, pbData: hash.as_ptr() as *mut u8 };
             let found = CertFindCertificateInStore(store, X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, 0,
                                                    CERT_FIND_SHA1_HASH, Some(&blob as *const _ as _), None);
@@ -99,7 +98,8 @@ mod imp {
             return Err(t("bad_portal").into());
         }
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let params = HSTRING::from(format!("--admin-setup {ip} {}", settings.server.portal));
+        let certificate = base64::engine::general_purpose::STANDARD.encode(ca_der(&settings.server)?);
+        let params = HSTRING::from(format!("--admin-setup {ip} {} {certificate}", settings.server.portal));
         let file = HSTRING::from(exe.as_os_str());
         let mut info = SHELLEXECUTEINFOW {
             cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
@@ -126,11 +126,16 @@ mod imp {
     }
 
     /// Runs in the elevated copy: `--admin-setup <ip> <portal>`. Returns the process exit code.
-    pub fn admin_setup(ip: &str, portal: &str) -> i32 {
+    pub fn admin_setup(ip: &str, portal: &str, encoded_ca: Option<&str>) -> i32 {
         let Ok(ip) = ip.parse::<IpAddr>() else { return 2 };
         if !valid_portal(portal) {
             return 2;
         }
+        let der = match encoded_ca {
+            Some(ca) => match base64::engine::general_purpose::STANDARD.decode(ca) { Ok(ca) => ca, Err(_) => return 4 },
+            None => match ca_der(&Server::default()) { Ok(ca) => ca, Err(_) => return 4 },
+        };
+        if reqwest::Certificate::from_der(&der).is_err() { return 4; }
         let mut code = 0;
         // hosts: drop old lines for the portal, add ours
         match std::fs::read_to_string(HOSTS) {
@@ -149,7 +154,6 @@ mod imp {
         }
         // CA in the machine root store
         unsafe {
-            let der = ca_der();
             match CertOpenStore(CERT_STORE_PROV_SYSTEM_W, CERT_QUERY_ENCODING_TYPE(0), None,
                                 CERT_OPEN_STORE_FLAGS(CERT_SYSTEM_STORE_LOCAL_MACHINE_ID << CERT_SYSTEM_STORE_LOCATION_SHIFT),
                                 Some(w!("ROOT").as_ptr() as _)) {
@@ -193,9 +197,10 @@ killall -HUP mDNSResponder || true
         Ok(path)
     }
 
-    pub fn certificate_status(_: &Settings) -> (bool, String) {
+    pub fn certificate_status(settings: &Settings) -> (bool, String) {
+        let pem = match server_ca_pem(&settings.server) { Ok(pem) => pem, Err(e) => return (false, e) };
         // the client checks the certificate with the system trust settings (keychain)
-        let ok = write_file("forever_root_ca.crt", CA_PEM)
+        let ok = write_file("forever_root_ca.crt", &pem)
             .ok()
             .and_then(|ca| Command::new("security").args(["verify-cert", "-c"]).arg(ca).output().ok())
             .is_some_and(|o| o.status.success());
@@ -230,7 +235,7 @@ killall -HUP mDNSResponder || true
         if !certificate_status(settings).0 {
             // must run in the user's session (not as root): macOS asks for the authorisation itself, a root
             // process gets "no user interaction was possible"
-            let ca = write_file("forever_root_ca.crt", CA_PEM)?;
+            let ca = write_file("forever_root_ca.crt", &server_ca_pem(&settings.server)?)?;
             match Command::new("security").args(["add-trusted-cert", "-d", "-r", "trustRoot"]).arg(&ca).output() {
                 Ok(o) if o.status.success() => {}
                 Ok(o) => errors.push(tf("cert_trust_failed", &[&String::from_utf8_lossy(&o.stderr).trim()])),
@@ -385,16 +390,17 @@ mod imp {
         }
     }
 
-    fn prefix_has_ca(prefix: &str) -> bool {
-        let sha = hex::encode_upper(ca_sha1());
-        ["system.reg", "pfx/system.reg"].iter().any(|r| {
+    fn prefix_has_ca(prefix: &str, server: &Server) -> Result<bool, String> {
+        let sha = hex::encode_upper(ca_sha1(server)?);
+        Ok(["system.reg", "pfx/system.reg"].iter().any(|r| {
             std::fs::read_to_string(Path::new(prefix).join(r)).map(|t| t.contains(&sha)).unwrap_or(false)
-        })
+        }))
     }
 
     pub fn certificate_status(settings: &Settings) -> (bool, String) {
         // the client checks the certificate with the Windows root store of its Wine prefix
-        if prefix_has_ca(&settings.linux.prefix) {
+        let installed = match prefix_has_ca(&settings.linux.prefix, &settings.server) { Ok(ok) => ok, Err(e) => return (false, e) };
+        if installed {
             (true, t("cert_ok_prefix").into())
         } else if !Path::new(&settings.linux.prefix).join("system.reg").exists() {
             (false, t("prefix_missing").into())
@@ -405,11 +411,11 @@ mod imp {
 
     /// Adds the CA to the prefix root store (HKLM\...\Root\Certificates\<SHA1>\Blob).
     pub fn install_ca_in_prefix(settings: &Settings) -> Result<(), String> {
-        if prefix_has_ca(&settings.linux.prefix) {
+        if prefix_has_ca(&settings.linux.prefix, &settings.server)? {
             return Ok(());
         }
-        let der = ca_der();
-        let sha = ca_sha1();
+        let der = ca_der(&settings.server)?;
+        let sha = ca_sha1(&settings.server)?;
         let mut blob = Vec::with_capacity(der.len() + 40);
         for (prop, data) in [(3u32, &sha[..]), (0x20u32, &der[..])] {
             blob.extend(prop.to_le_bytes());

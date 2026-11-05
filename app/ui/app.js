@@ -50,7 +50,8 @@ async function refresh() {
   $('view-login').hidden = logged;
   $('view-play').hidden = !logged;
   $('account').hidden = !logged;
-  $('game-field').textContent = `WoW Forever ${state.gameVersion || '1.60.1.70450'}`;
+  $('game-field').textContent = `WoW Forever${state.gameVersion ? ` ${state.gameVersion}` : ''}`;
+  $('game-login-mode').textContent = t(state.gameAutoLogin ? 'automaticGameLogin' : 'manualGameLogin');
   if (logged) {
     $('account-email').textContent = state.email;
     $('avatar').textContent = state.email[0].toUpperCase();
@@ -226,6 +227,8 @@ function fillSettings() {
   $('s-address').value = draft.server.address;
   $('s-website').value = draft.server.website;
   $('s-portal').value = draft.server.portal;
+  $('s-bnet-port').value = draft.server.bnetPort;
+  $('s-ca-file').value = draft.server.caFile || '';
   gameDirState();
 }
 
@@ -233,7 +236,7 @@ function gameDirState() {
   const el = $('game-dir-state');
   const dir = $('s-game-dir').value.trim();
   const same = dir === state.settings.gameDir;
-  const game = state.platform === 'macos' ? t('gameApp') : 'WowB.exe';
+  const game = state.platform === 'macos' ? t('gameApp') : state.gameExecutable || 'Wow.exe / WowB.exe';
   el.textContent = !dir ? t('noFolder') : same && state.gameFound ? t('gameFound', { game }) : same ? t('gameMissing', { game }) : '';
   el.className = 'small ' + (same && state.gameFound ? 'ok' : dir && same ? 'ko' : '');
 }
@@ -341,6 +344,11 @@ $('cancel-settings').addEventListener('click', closeSettings);
 $('scrim').addEventListener('click', closeSettings);
 $('pick-game').addEventListener('click', () => pick($('s-game-dir'), t('pickGameDir')));
 $('pick-prefix').addEventListener('click', () => pick($('s-prefix'), t('pickPrefix')));
+$('pick-ca').addEventListener('click', async () => {
+  const file = await window.__TAURI__.dialog.open({ directory: false, multiple: false, title: t('caFile'),
+    filters: [{ name: t('caFile'), extensions: ['crt', 'pem', 'cer'] }] });
+  if (file) $('s-ca-file').value = file;
+});
 $('s-game-dir').addEventListener('input', gameDirState);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('settings').hidden) closeSettings(); });
 
@@ -358,6 +366,8 @@ $('save-settings').addEventListener('click', async () => {
   draft.server.address = $('s-address').value.trim();
   draft.server.website = $('s-website').value.trim();
   draft.server.portal = $('s-portal').value.trim();
+  draft.server.bnetPort = Number($('s-bnet-port').value);
+  draft.server.caFile = $('s-ca-file').value.trim();
   try {
     await invoke('save_settings', { settings: draft });
     closeSettings();
@@ -396,7 +406,7 @@ async function refreshNews() {
     card.className = 'news-card';
     card.type = 'button';
     // a drawn placeholder when the post has no image (or it does not load)
-    const thumb = () => Object.assign(document.createElement('div'), { className: 'thumb', textContent: 'F' });
+    const thumb = () => Object.assign(document.createElement('div'), { className: 'thumb', textContent: 'FM' });
     let img = thumb();
     if (n.image) {
       img = document.createElement('img');

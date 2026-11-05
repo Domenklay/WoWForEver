@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Forever Launcher</title>
+  <title>WoW Forever Multi</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,7 +16,7 @@
   </div>
 
   <header class="topbar">
-    <div class="top-logo"><strong>FOREVER</strong><small>WoW 1.60 private server</small></div>
+    <div class="top-logo"><img src="brand-icon.png" alt="FM" width="48" height="48"><div><strong>FOREVER <span>MULTI</span></strong><small>WoW Forever · Multi client launcher</small></div></div>
 
     <div class="status" id="status" data-state="unknown">
       <span class="dot"></span><span id="status-text" data-i18n="checking">Checking the server…</span>
@@ -68,6 +68,7 @@
         <span class="label" data-i18n="versionRealm">Game version &amp; realm</span>
         <div class="field" id="game-field">WoW Forever</div>
         <div class="field" id="realm-field">Realm Forever</div>
+        <p class="small muted" id="game-login-mode"></p>
         <div class="play-group">
           <button class="btn play" id="play" disabled>Play</button>
           <button class="btn play-gear" id="play-settings" data-i18n-title="gameSettings" title="Game settings" aria-label="Game settings">
@@ -105,7 +106,7 @@
     <div class="drawer-body">
       <fieldset>
         <legend data-i18n="game">Game</legend>
-        <label><span><span data-i18n="gameDir">Game folder</span> <span class="muted small" data-i18n="gameDirHint">· _classic_beta_, holds WowB.exe (or the game app on Mac)</span></span>
+        <label><span><span data-i18n="gameDir">Game folder</span> <span class="muted small" data-i18n="gameDirHint">· _forever_ / Wow.exe or _classic_beta_ / WowB.exe</span></span>
           <span class="row"><input id="s-game-dir" type="text" spellcheck="false"><button class="btn small" id="pick-game" data-i18n="browse">Browse</button></span>
         </label>
         <p class="small" id="game-dir-state"></p>
@@ -150,6 +151,10 @@
         <label><span data-i18n="serverAddress">Server address</span><input id="s-address" type="text" spellcheck="false"></label>
         <label><span data-i18n="website">Website</span><input id="s-website" type="url" placeholder="https://…" spellcheck="false"></label>
         <label><span data-i18n="portal">Portal</span><input id="s-portal" type="text" spellcheck="false"></label>
+        <p class="small muted" data-i18n="portalHint">Certificate hostname, for example trinity.actual.battle.net. Put the IP in Server address.</p>
+        <label><span data-i18n="loginPort">Login port</span><input id="s-bnet-port" type="number" min="1" max="65535"></label>
+        <label><span data-i18n="caFile">Public server CA certificate</span><span class="row"><input id="s-ca-file" type="text" spellcheck="false"><button class="btn small" id="pick-ca" data-i18n="browse">Browse</button></span></label>
+        <p class="small muted" data-i18n="caFileHint">Optional when a CA is included in the launcher. Choose the public .crt or .pem file.</p>
       </details>
     </div>
     <footer class="drawer-foot">

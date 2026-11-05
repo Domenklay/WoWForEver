@@ -43,6 +43,10 @@ type Texts = [&'static str; 4];
 
 #[rustfmt::skip]
 const MESSAGES: &[(&str, Texts)] = &[
+    ("bad_server_address", ["Adresse ou ports du serveur invalides.", "Invalid server address or ports.", "Dirección o puertos del servidor no válidos.", "Endereço ou portas do servidor inválidos."]),
+    ("ca_invalid", ["Choisissez un certificat CA public PEM valide, jamais une clé privée.", "Choose a valid public PEM CA certificate, never a private key.", "Elige un certificado CA público PEM válido, nunca una clave privada.", "Escolha um certificado CA público PEM válido, nunca uma chave privada."]),
+    ("ca_missing", ["Choisissez le certificat CA public dans les paramètres du serveur.", "Choose the public server CA certificate in Server settings.", "Elige el certificado CA público en los ajustes del servidor.", "Escolha o certificado CA público nas configurações do servidor."]),
+    ("ca_read", ["Lecture du certificat CA : {}", "Reading the public CA certificate: {}", "Leyendo el certificado CA público: {}", "Lendo o certificado CA público: {}"]),
     ("pkg_unready", ["Ce paquet n’est pas prêt pour l’installation.", "This package is not ready for installation.", "Este paquete aún no está listo para instalar.", "Este pacote ainda não está pronto para instalar."]),
     ("pkg_client", ["Le paquet ne correspond pas au client choisi.", "The package does not match the selected client.", "El paquete no coincide con el cliente seleccionado.", "O pacote não corresponde ao cliente selecionado."]),
     ("pkg_changed", ["Les fichiers du client ont changé. Le paquet ou la restauration doit être préparé à nouveau.", "Client files have changed. The package or rollback needs to be prepared again.", "Los archivos del cliente cambiaron. Hay que preparar de nuevo el paquete o la restauración.", "Os arquivos do cliente mudaram. É necessário preparar novamente o pacote ou a restauração."]),
@@ -58,14 +62,14 @@ const MESSAGES: &[(&str, Texts)] = &[
     ("step_preparing", ["Préparation du jeu…", "Preparing the game…", "Preparando el juego…", "Preparando o jogo…"]),
     ("step_launching", ["Lancement de World of Warcraft…", "Starting World of Warcraft…", "Iniciando World of Warcraft…", "Iniciando World of Warcraft…"]),
     ("running", ["Jeu lancé : connectez-vous au royaume", "Game started: log in to the realm", "Juego iniciado: entra al reino", "Jogo iniciado: entre no reino"]),
-    ("ready", ["Clé du serveur en place : entrez dans le royaume", "Server key in place: enter the realm", "Clave del servidor lista: entra al reino", "Chave do servidor pronta: entre no reino"]),
+    ("ready", ["Clé du serveur prête : vous pouvez vous connecter au jeu.", "Server key ready: you can sign in to the game.", "Clave del servidor lista: puedes iniciar sesión en el juego.", "Chave do servidor pronta: você pode entrar no jogo."]),
     ("closed", ["Le jeu est fermé", "The game is closed", "El juego se cerró", "O jogo foi fechado"]),
-    ("not_started", ["Le jeu n'a pas démarré (aucun WowB.exe trouvé en 3 minutes)", "The game did not start (no WowB.exe found within 3 minutes)", "El juego no arrancó (no se encontró WowB.exe en 3 minutos)", "O jogo não iniciou (nenhum WowB.exe encontrado em 3 minutos)"]),
+    ("not_started", ["Jeu introuvable après 3 minutes dans le dossier choisi.", "No game process from the selected folder found within 3 minutes.", "No se encontró el proceso del juego de la carpeta elegida en 3 minutos.", "Nenhum processo do jogo da pasta escolhida foi encontrado em 3 minutos."]),
     ("mac_copying", ["Copie du jeu pour Forever (première fois ou après une mise à jour)…", "Copying the game for Forever (first time or after an update)…", "Copiando el juego para Forever (primera vez o tras una actualización)…", "Copiando o jogo para o Forever (primeira vez ou após uma atualização)…"]),
     ("mac_signing", ["Signature de la copie du jeu…", "Signing the game copy…", "Firmando la copia del juego…", "Assinando a cópia do jogo…"]),
     // launch errors
     ("already_running", ["le jeu est déjà lancé", "the game is already running", "el juego ya está abierto", "o jogo já está aberto"]),
-    ("game_not_found", ["jeu introuvable : choisissez le dossier _classic_beta_ dans les paramètres", "game not found: choose the _classic_beta_ folder in the settings", "juego no encontrado: elige la carpeta _classic_beta_ en los ajustes", "jogo não encontrado: escolha a pasta _classic_beta_ nas configurações"]),
+    ("game_not_found", ["Jeu introuvable : choisissez _forever_ (Wow.exe), _classic_beta_ (WowB.exe) ou la racine.", "Game not found: choose _forever_ (Wow.exe), _classic_beta_ (WowB.exe), or the installation root.", "Juego no encontrado: elige _forever_ (Wow.exe), _classic_beta_ (WowB.exe) o la raíz.", "Jogo não encontrado: escolha _forever_ (Wow.exe), _classic_beta_ (WowB.exe) ou a raiz."]),
     ("login_first", ["connectez-vous d'abord", "log in first", "inicia sesión primero", "entre na sua conta primeiro"]),
     ("session_expired", ["session expirée : reconnectez-vous", "session expired: log in again", "sesión caducada: vuelve a iniciar sesión", "sessão expirada: entre novamente"]),
     ("session_save", ["enregistrement de la session : {}", "saving the session: {}", "guardando la sesión: {}", "salvando a sessão: {}"]),
@@ -103,7 +107,7 @@ const MESSAGES: &[(&str, Texts)] = &[
     ("cert_ok_prefix", ["certificat installé dans le préfixe Wine", "certificate installed in the Wine prefix", "certificado instalado en el prefijo de Wine", "certificado instalado no prefixo do Wine"]),
     ("prefix_missing", ["préfixe Wine pas encore créé", "Wine prefix not created yet", "prefijo de Wine aún no creado", "prefixo do Wine ainda não criado"]),
     ("cert_not_in_prefix", ["certificat absent du préfixe Wine", "certificate missing from the Wine prefix", "certificado ausente del prefijo de Wine", "certificado ausente do prefixo do Wine"]),
-    ("bad_portal", ["portail invalide", "invalid portal", "portal no válido", "portal inválido"]),
+    ("bad_portal", ["Le portail doit être un nom DNS de certificat, sans IP ni port.", "Portal must be a certificate DNS hostname, without an IP or port.", "El portal debe ser un nombre DNS del certificado, sin IP ni puerto.", "O portal deve ser o nome DNS do certificado, sem IP nem porta."]),
     ("admin_refused", ["autorisation administrateur refusée", "administrator permission refused", "permiso de administrador denegado", "permissão de administrador recusada"]),
     ("install_wait", ["attente de l'installation impossible", "could not wait for the installation", "no se pudo esperar a la instalación", "não foi possível aguardar a instalação"]),
     ("install_failed", ["échec de l'installation (code {})", "installation failed (code {})", "la instalación falló (código {})", "a instalação falhou (código {})"]),

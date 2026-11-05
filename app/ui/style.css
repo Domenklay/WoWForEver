@@ -73,9 +73,12 @@ a:hover { text-decoration: underline; }
   padding: 0 22px;
 }
 .topbar > .top-logo { grid-column: 1; justify-self: start; }
-.top-logo { display: grid; line-height: 1; text-decoration: none; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.6)); }
+.top-logo { display: flex; align-items: center; gap: 10px; line-height: 1; text-decoration: none; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.6)); }
+.top-logo > img { flex: 0 0 48px; }
+.top-logo > div { display: grid; }
+.top-logo strong span { font: 700 12px/1 var(--font); letter-spacing: .16em; vertical-align: middle; color: var(--gold); -webkit-text-fill-color: var(--gold); }
 .top-logo strong {
-  font: 700 30px/1 Georgia, "Times New Roman", serif; letter-spacing: 0.12em;
+  font: 700 26px/1 Georgia, "Times New Roman", serif; letter-spacing: 0.08em;
   background: linear-gradient(180deg, #fff3cf, #f1c45b 55%, #b8822a); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .top-logo small { margin-top: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(255, 255, 255, 0.7); }

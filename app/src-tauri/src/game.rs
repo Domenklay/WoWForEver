@@ -1,4 +1,4 @@
-//! Game preparation and start: WTF config, Launch Options\WoW (auto-login), WowB.exe -launcherlogin.
+//! Game preparation and start: wowf Wow.exe and the legacy beta WowB.exe.
 //! macOS starts a copy of the game app instead: see macos.rs.
 
 use crate::config::Settings;
@@ -19,19 +19,41 @@ pub fn write_wtf(settings: &Settings) -> Result<(), String> {
     let base = dir.join("Config.wtf");
     let text = std::fs::read_to_string(&path).or_else(|_| std::fs::read_to_string(&base)).unwrap_or_default();
     let wanted = [
-        ("portal", settings.server.portal.clone()),
+        ("portal", format!("{}:{}", settings.server.portal, settings.server.bnet_port)),
         ("textLocale", settings.locale.clone()),
         ("audioLocale", settings.locale.clone()),
     ];
     let mut lines: Vec<String> = text
         .lines()
-        .filter(|l| !wanted.iter().any(|(k, _)| l.starts_with(&format!("SET {k} "))))
+        .filter(|l| !wanted.iter().any(|(k, _)| {
+            let mut words = l.split_whitespace();
+            words.next().is_some_and(|w| w.eq_ignore_ascii_case("SET")) &&
+                words.next().is_some_and(|w| w.eq_ignore_ascii_case(k))
+        }))
         .map(str::to_string)
         .collect();
     for (k, v) in wanted {
         lines.push(format!("SET {k} \"{v}\""));
     }
     std::fs::write(&path, lines.join("\r\n") + "\r\n").map_err(|e| format!("{} : {e}", path.display()))
+}
+
+fn launch_args(settings: &Settings) -> Vec<&'static str> {
+    let mut args = Vec::new();
+    if settings.automatic_game_login() { args.push("-launcherlogin"); }
+    args.extend(["-config", WTF_NAME]);
+    args
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn wowf_uses_explicit_config_without_beta_registry_login() {
+        let settings = Settings { game_dir: "missing-client/_forever_".into(), ..Default::default() };
+        assert_eq!(launch_args(&settings), vec!["-config", WTF_NAME]);
+    }
 }
 
 /// Stores the login ticket where the client reads it with -launcherlogin.
@@ -86,10 +108,10 @@ pub fn write_launch_options(settings: &Settings, portal: &str, ticket: &str, gam
 #[cfg(windows)]
 pub fn spawn(settings: &Settings) -> Result<Child, String> {
     Command::new(settings.exe())
-        .args(["-launcherlogin", "-config", WTF_NAME])
+        .args(launch_args(settings))
         .current_dir(&settings.game_dir)
         .spawn()
-        .map_err(|e| tf("launch_failed", &[&"WowB.exe", &e]))
+        .map_err(|e| tf("launch_failed", &[&settings.exe().display(), &e]))
 }
 
 #[cfg(target_os = "linux")]
@@ -97,7 +119,7 @@ pub fn spawn(settings: &Settings) -> Result<Child, String> {
     let (runner, mut env) = crate::system::runner(settings)?;
     let mut cmd: Vec<String> = runner;
     cmd.push(settings.exe().to_string_lossy().into_owned());
-    cmd.extend(["-launcherlogin", "-config", WTF_NAME].map(String::from));
+    cmd.extend(launch_args(settings).into_iter().map(String::from));
     let l = &settings.linux;
     if l.gamescope && crate::system::which("gamescope") {
         // gamescope starts its own Xwayland with a US keyboard unless told otherwise

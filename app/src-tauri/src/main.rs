@@ -6,8 +6,8 @@ fn main() {
     #[cfg(windows)]
     {
         let args: Vec<String> = std::env::args().collect();
-        if args.len() == 4 && args[1] == "--admin-setup" {
-            std::process::exit(forever_launcher_lib::admin_setup(&args[2], &args[3]));
+        if (args.len() == 4 || args.len() == 5) && args[1] == "--admin-setup" {
+            std::process::exit(forever_launcher_lib::admin_setup(&args[2], &args[3], args.get(4).map(String::as_str)));
         }
     }
     // WebKitGTK: the DMA-BUF renderer gives a blank window on some GPU/Wayland setups (NVIDIA...)

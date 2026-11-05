@@ -41,6 +41,8 @@ struct Snapshot {
     runners: Vec<(String, String)>,
     game_found: bool,
     game_version: Option<String>,
+    game_executable: String,
+    game_auto_login: bool,
     playing: bool,
 }
 
@@ -72,6 +74,8 @@ fn get_state(state: State<AppState>) -> Snapshot {
     Snapshot {
         game_found: settings.game_found(),
         game_version: config::installed_version(std::path::Path::new(&settings.game_dir)),
+        game_executable: settings.exe().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        game_auto_login: settings.automatic_game_login(),
         email: Session::load().map(|s| s.email),
         platform: if cfg!(windows) { "windows" } else if cfg!(target_os = "macos") { "macos" } else { "linux" },
         version: env!("CARGO_PKG_VERSION"),
@@ -86,8 +90,10 @@ fn get_state(state: State<AppState>) -> Snapshot {
 fn save_settings(state: State<AppState>, settings: Settings) -> Result<(), String> {
     let mut settings = settings;
     if settings.server.portal.is_empty() {
-        settings.server = Default::default();
+        settings.server.portal = config::DEFAULT_PORTAL.into();
     }
+    settings.game_dir = config::normalize_game_dir(std::path::Path::new(&settings.game_dir)).to_string_lossy().into_owned();
+    settings.server.validate()?;
     settings.save().map_err(|e| e.to_string())?;
     *state.settings.lock().unwrap() = settings;
     Ok(())
@@ -237,6 +243,9 @@ async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
     if !settings.game_found() {
         return Err(t("game_not_found").into());
     }
+    settings.server.validate()?;
+    #[cfg(not(target_os = "macos"))]
+    if patcher::find_client_for(&settings.exe()).is_some() { return Err(t("already_running").into()); }
     let game = std::path::Path::new(&settings.game_dir);
     if game.parent().is_some_and(|root| root.join(".forever-content").exists()) {
         let status = packages::status(game).map_err(package_error)?;
@@ -264,7 +273,7 @@ async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
         let account = login.game_accounts.first().map(|a| a.name.clone()).unwrap_or_else(|| "WoW1".into());
         let portal = format!("{}:{}", s.server.portal, s.server.bnet_port);
         #[cfg(not(target_os = "macos"))]
-        game::write_launch_options(&s, &portal, &login.login_ticket, &account)?;
+        if s.automatic_game_login() { game::write_launch_options(&s, &portal, &login.login_ticket, &account)?; }
         #[cfg(target_os = "macos")]
         macos::write_launch_options(&portal, &login.login_ticket, &account)?;
         Ok(())
@@ -300,6 +309,7 @@ async fn launch(app: &AppHandle, settings: Settings) -> Result<(), String> {
 async fn launch(app: &AppHandle, settings: Settings) -> Result<(), String> {
     emit(app, "step", t("step_launching"));
     let patcher = patcher::Patcher::new(&settings.server.public_key, settings.server.region_group)?;
+    let selected_exe = settings.exe();
     let mut child = game::spawn(&settings)?;
     let app = app.clone();
     std::thread::spawn(move || {
@@ -308,14 +318,14 @@ async fn launch(app: &AppHandle, settings: Settings) -> Result<(), String> {
         std::thread::spawn(move || {
             let _ = child.wait();
         });
-        let first = wait_for_client(child_pid);
+        let first = wait_for_client(child_pid, &selected_exe);
         match first {
             Some(mem) => {
                 emit(&app, "running", t("running"));
                 patcher.watch(
                     Box::new(mem),
                     |cur| {
-                        let other = patcher::find_client()?;
+                        let other = patcher::find_client_for(&selected_exe)?;
                         let better = !cur.alive() || other.rss() > (current_rss(cur) * 2).max(50 * 1024);
                         (other_pid(&other) != cur.pid() && better).then(|| Box::new(other) as Box<dyn patcher::Memory>)
                     },
@@ -348,14 +358,14 @@ fn current_rss(m: &dyn patcher::Memory) -> u64 {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn wait_for_client(child_pid: u32) -> Option<patcher::ProcessMemory> {
+fn wait_for_client(child_pid: u32, selected_exe: &std::path::Path) -> Option<patcher::ProcessMemory> {
     #[cfg(windows)]
     if let Some(m) = patcher::ProcessMemory::open(child_pid) {
-        return Some(m);
+        if m.matches_exe(selected_exe) { return Some(m); }
     }
     let _ = child_pid;
     for _ in 0..180 {
-        if let Some(m) = patcher::find_client() {
+        if let Some(m) = patcher::find_client_for(selected_exe) {
             return Some(m);
         }
         std::thread::sleep(Duration::from_secs(1));
