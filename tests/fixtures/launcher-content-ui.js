@@ -29,6 +29,7 @@ async function invoke(cmd,args){
   if(cmd==='inspect_client_locations')return {targetRoot:'E:/copy',targetData:'E:/copy/Data',referenceRoot:'E:/original',referenceData:'E:/original/Data'};
   if(cmd==='client_work') {
     if(args.request.source.manifestSource==='bad.json')throw {code:'manifest',detail:'unsupported format'};
+    if(workshopReply==='extras' || workshopReply==='quarantined')return {action:workshopReply==='extras'?'verify':'repair',sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:1661,verified:1661,different:18,resourceDifferent:0,storageDifferent:18,remaining:workshopReply==='extras'?18:0,repaired:workshopReply==='extras'?0:18,quarantined:workshopReply==='extras'?0:18,extraStorageFiles:Array.from({length:18},(_,i)=>`Data/data/extra-${i}.idx`),bytes:400,differences:['Data/data/RepairMarker.psv'],reportPath:'E:/reports/client.json',backup:workshopReply==='extras'?null:'E:/copy/.forever-multi/operations/test'};
     if(workshopReply==='storage')return {action:'verify',sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:1661,verified:1574,different:87,resourceDifferent:0,storageDifferent:87,remaining:87,repaired:0,bytes:400,differences:['Data/data/shmem'],reportPath:'E:/reports/client.json'};
     if(workshopReply==='restored')return {action:'repair',sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:1661,verified:1661,different:92,resourceDifferent:4,storageDifferent:88,remaining:0,repaired:92,bytes:400,differences:['Data/data/shmem'],reportPath:'E:/reports/client.json'};
     return {action:args.request.action,sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:4,verified:4,different:0,repaired:0,bytes:400,differences:[],reportPath:'E:/reports/client.json'};
@@ -86,6 +87,10 @@ vm.runInContext(fs.readFileSync(path.join(root,'app/ui/app.js'),'utf8'),context)
   assert.equal(get('w-status-title').textContent,'Only CASC state files differ.');assert.match(get('w-status').textContent,/resource differences: 0/);
   workshopReply='restored';await get('w-repair').handlers.click();
   assert.equal(get('w-status-title').textContent,'Files restored.');assert.match(get('w-status').textContent,/92 restored · 0 unresolved/);
+  workshopReply='extras';await get('w-verify').handlers.click();
+  assert.equal(get('w-status-title').textContent,'CASC storage needs reconciliation.');assert.match(get('w-status').textContent,/Surplus CASC metadata: 18/);assert.doesNotMatch(get('w-status').textContent,/alone do not establish corruption/);
+  workshopReply='quarantined';await get('w-repair').handlers.click();
+  assert.equal(get('w-status-title').textContent,'Files restored.');assert.match(get('w-status').textContent,/18 restored · 0 unresolved/);assert.match(get('w-status').textContent,/moved into the backup: 18/);
   vm.runInContext('state.playing=true;updatePlayButton()',context);
   assert.equal(get('w-repair').disabled,true);assert.equal(get('w-blocked').hidden,false);
   const countBefore=calls.filter(c=>c.cmd==='client_work').length;await get('quick-repair').handlers.click();assert.equal(calls.filter(c=>c.cmd==='client_work').length,countBefore);

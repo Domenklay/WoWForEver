@@ -1,7 +1,7 @@
 # WoWForEver
 
 Для нового `_forever_/Wow.exe` подготовлен наш лаунчер
-**[WoW Forever Multi 1.2.1](app/README-MULTI.ru.md)**: авторский стиль Astral Workshop,
+**[WoW Forever Multi 1.2.2](app/README-MULTI.ru.md)**: авторский стиль Astral Workshop,
 собственные иллюстрация и спрайты, поддержка wowf и прежней беты, настройка ключа
 сервера и [мастерская проверки/восстановления клиента](docs/CLIENT-WORKSHOP.ru.md).
 Полный вход в игру и зависание на экране персонажей проверяются отдельно.

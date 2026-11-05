@@ -958,6 +958,43 @@ Object.assign(TEXTS.ru, {
   "wScanning": "Читаем папки оригинальной установки. Файлы тестовой копии пока не заменяются."
 });
 
+// CASC metadata reconciliation: keep all five locales in sync.
+Object.assign(TEXTS.en, {
+  "wCascTitle": "CASC storage needs reconciliation.",
+  "wCascExtras": "Surplus CASC metadata: {count}. Restore will move it into the backup.",
+  "wCascQuarantined": "Surplus CASC metadata moved into the backup: {count}.",
+  "wErr_storage_baseline": "The baseline needs repair or does not include all 16 CASC index buckets. Choose a healthy, complete original.",
+  "wScope": "Installation files are compared with the selected baseline. Surplus CASC indices, LRU and repair markers are backed up. Other extra files, settings and addons are kept."
+});
+Object.assign(TEXTS.fr, {
+  "wCascTitle": "Le stockage CASC doit être réconcilié.",
+  "wCascExtras": "Métadonnées CASC supplémentaires : {count}. La restauration les déplacera dans la sauvegarde.",
+  "wCascQuarantined": "Métadonnées CASC supplémentaires déplacées dans la sauvegarde : {count}.",
+  "wErr_storage_baseline": "La référence nécessite une réparation ou ne contient pas les 16 groupes d’index CASC. Choisissez un original complet et sain.",
+  "wScope": "Les fichiers sont comparés à la référence choisie. Index CASC, LRU et marqueurs de réparation supplémentaires sont sauvegardés. Autres fichiers, paramètres et addons conservés."
+});
+Object.assign(TEXTS.es, {
+  "wCascTitle": "El almacenamiento CASC necesita reconciliación.",
+  "wCascExtras": "Metadatos CASC adicionales: {count}. Restaurar los moverá a la copia de seguridad.",
+  "wCascQuarantined": "Metadatos CASC adicionales movidos a la copia de seguridad: {count}.",
+  "wErr_storage_baseline": "La referencia necesita reparación o no incluye los 16 grupos de índices CASC. Elige un original completo y en buen estado.",
+  "wScope": "Se comparan archivos con la referencia elegida. Índices CASC, LRU y marcadores de reparación adicionales se guardan en la copia de seguridad. Se conservan otros archivos, ajustes y addons."
+});
+Object.assign(TEXTS.pt, {
+  "wCascTitle": "O armazenamento CASC precisa ser reconciliado.",
+  "wCascExtras": "Metadados CASC extras: {count}. Restaurar irá movê-los para o backup.",
+  "wCascQuarantined": "Metadados CASC extras movidos para o backup: {count}.",
+  "wErr_storage_baseline": "A referência precisa de reparo ou não inclui os 16 grupos de índices CASC. Escolha um original completo e íntegro.",
+  "wScope": "Os arquivos são comparados com a referência escolhida. Índices CASC, LRU e marcadores de reparo extras são guardados no backup. Outros arquivos, configurações e addons são mantidos."
+});
+Object.assign(TEXTS.ru, {
+  "wCascTitle": "Нужно согласовать хранилище CASC.",
+  "wCascExtras": "Лишних метаданных CASC: {count}. Восстановление перенесёт их в резервную копию.",
+  "wCascQuarantined": "В резервную копию перенесено лишних метаданных CASC: {count}.",
+  "wErr_storage_baseline": "Оригинал помечен как требующий ремонта либо не содержит всех 16 групп индексов CASC. Выберите исправный полный оригинал.",
+  "wScope": "Файлы сравниваются с выбранным оригиналом. Лишние индексы CASC, LRU и маркеры ремонта сохраняются в резервной копии. Остальные дополнительные файлы, настройки и аддоны сохраняются."
+});
+
 let lang = 'en';
 
 /// ru, fr, en, es or pt from a setting ('' = system language) or a browser language tag.

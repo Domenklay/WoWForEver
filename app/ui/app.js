@@ -520,10 +520,12 @@ async function runWorkshop(action) {
   try {
     const report = await invoke('client_work', { request: { action, gameDir, source } });
     workshopReport = report;
+    const extras = report.extraStorageFiles?.length || 0;
     const storageOnly = report.storageDifferent > 0 && report.resourceDifferent === 0;
-    $('w-status-title').textContent = t(report.action === 'recover' ? 'wRecovered' : report.repaired > 0 ? 'wRestoredTitle' : report.different ? (storageOnly ? 'wStorageOnly' : 'wDifferences') : 'wMatches');
+    $('w-status-title').textContent = t(report.action === 'recover' ? 'wRecovered' : report.repaired > 0 ? 'wRestoredTitle' : extras ? 'wCascTitle' : report.different ? (storageOnly ? 'wStorageOnly' : 'wDifferences') : 'wMatches');
     $('w-status').textContent = t(report.repaired > 0 ? 'wRepairResult' : 'wVerifyResult', { checked: report.files, different: report.different, restored: report.repaired, remaining: report.remaining ?? Math.max(0, report.different - report.repaired), resources: report.resourceDifferent ?? report.different, storage: report.storageDifferent || 0 });
-    if (report.storageDifferent > 0) $('w-status').textContent += ' ' + t('wStorageHint');
+    if (extras) $('w-status').textContent += ' ' + t(report.quarantined > 0 ? 'wCascQuarantined' : 'wCascExtras', { count: report.quarantined || extras });
+    else if (report.storageDifferent > 0) $('w-status').textContent += ' ' + t('wStorageHint');
     $('w-progress').value = 100;
     $('w-count').textContent = `${report.verified} / ${report.files}`;
     $('w-speed').textContent = bytes(report.bytes);

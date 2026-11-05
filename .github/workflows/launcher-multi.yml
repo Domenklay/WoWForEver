@@ -52,13 +52,16 @@ jobs:
           [System.IO.File]::WriteAllText("$pwd/dist/README.ru.md", $readme)
           $guide = [System.IO.File]::ReadAllText("$pwd/docs/CLIENT-WORKSHOP.ru.md").Replace("../content/client-manifest.schema.json", "client-manifest.schema.json")
           [System.IO.File]::WriteAllText("$pwd/dist/CLIENT-WORKSHOP.ru.md", $guide)
+          Copy-Item docs/CLIENT-STARTUP-DIAGNOSTICS.ru.md dist/CLIENT-STARTUP-DIAGNOSTICS.ru.md
+          New-Item -ItemType Directory -Path dist/scripts -Force | Out-Null
+          Copy-Item scripts/collect-client-startup.ps1 dist/scripts/collect-client-startup.ps1
           Copy-Item content/client-manifest.schema.json dist/client-manifest.schema.json
           Get-ChildItem dist -Filter *.exe | Get-FileHash -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash)  $([System.IO.Path]::GetFileName($_.Path))" } |
             Set-Content dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: WoW-Forever-Multi-Windows-1.2.1
+          name: WoW-Forever-Multi-Windows-1.2.2
           path: dist/*
           if-no-files-found: error
           retention-days: 14

@@ -1,6 +1,8 @@
 //! Client workshop: exact-file baseline verification, local recovery and HTTP manifests.
 //! This operates on complete installation files, not individual CASC objects. It never
-//! invents a CDN profile, changes build versions, executes a downloaded file or deletes extras.
+//! invents a CDN profile, changes build versions or executes a downloaded file.
+//! Surplus CASC bookkeeping is quarantined with the replacement transaction;
+//! unrelated extras and user settings remain untouched.
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -116,6 +118,8 @@ pub struct Report {
     pub storage_different: usize,
     pub remaining: usize,
     pub repaired: usize,
+    pub quarantined: usize,
+    pub extra_storage_files: Vec<String>,
     pub bytes: u64,
     pub differences: Vec<String>,
     pub report_path: String,
@@ -160,8 +164,117 @@ pub fn locations(game_dir: &str, reference_dir: &str) -> Result<Locations> {
 fn storage_metadata(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     lower.strip_prefix("data/data/").is_some_and(|name| {
-        !name.contains('/') && (name == "shmem" || name.ends_with(".idx") || name.ends_with(".lru"))
+        !name.contains('/')
+            && (name == "shmem"
+                || name == "repairmarker.psv"
+                || name.ends_with(".idx")
+                || name.ends_with(".lru"))
     })
+}
+fn index_bucket(name: &str) -> Option<u8> {
+    let lower = name.to_ascii_lowercase();
+    let hex = lower.strip_suffix(".idx")?;
+    if hex.len() != 10 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let bucket = u8::from_str_radix(&hex[..2], 16).ok()?;
+    (bucket < 16).then_some(bucket)
+}
+fn quarantine_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    index_bucket(&lower).is_some()
+        || lower == "repairmarker.psv"
+        || lower.strip_suffix(".lru").is_some_and(|hex| {
+            matches!(hex.len(), 16 | 20) && hex.bytes().all(|b| b.is_ascii_hexdigit())
+        })
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct Quarantine {
+    path: String,
+    sha256: String,
+}
+
+/// Only recognized immediate CASC metadata is eligible. Never remove archives,
+/// user files or arbitrary extras, and never prune from an incomplete baseline.
+fn extra_storage(root: &Path, manifest: &Manifest, cancel: &AtomicBool) -> Result<Vec<Quarantine>> {
+    if manifest
+        .files
+        .iter()
+        .any(|e| e.path.eq_ignore_ascii_case("Data/data/RepairMarker.psv"))
+    {
+        return Err(err(
+            "storage_baseline",
+            "The selected baseline contains Data/data/RepairMarker.psv",
+        ));
+    }
+    let expected: HashSet<_> = manifest
+        .files
+        .iter()
+        .map(|e| e.path.to_ascii_lowercase())
+        .collect();
+    let folder = safe(root, "Data/data")?;
+    if !folder.exists() {
+        return Ok(Vec::new());
+    }
+    let mut extras = Vec::new();
+    for item in fs::read_dir(folder)? {
+        check_cancel(cancel)?;
+        let item = item?;
+        let name = item.file_name().to_string_lossy().into_owned();
+        let path = format!("Data/data/{name}");
+        if !quarantine_name(&name) || expected.contains(&path.to_ascii_lowercase()) {
+            continue;
+        }
+        let file = safe(root, &path)?;
+        if !fs::symlink_metadata(&file)?.is_file() {
+            return Err(err("path", path));
+        }
+        validate_path(&path)?;
+        extras.push(Quarantine {
+            path,
+            sha256: fingerprint(&file, cancel, |_| {})?.1,
+        });
+    }
+    if !extras.is_empty() {
+        let buckets: HashSet<_> = manifest
+            .files
+            .iter()
+            .filter_map(|e| e.path.strip_prefix("Data/data/").and_then(index_bucket))
+            .collect();
+        if buckets.len() != 16 {
+            return Err(err(
+                "storage_baseline",
+                "Surplus CASC metadata requires a baseline with all 16 index buckets",
+            ));
+        }
+    }
+    extras.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(extras)
+}
+type StorageStamp = Vec<(String, u64, SystemTime)>;
+fn storage_stamp(root: &Path) -> Result<StorageStamp> {
+    let mut stamp = Vec::new();
+    for item in fs::read_dir(safe(root, "Data/data")?)? {
+        let item = item?;
+        let name = item.file_name().to_string_lossy().into_owned();
+        let path = safe(root, &format!("Data/data/{name}"))?;
+        let meta = fs::symlink_metadata(path)?;
+        if !meta.is_file() {
+            return Err(err("path", name));
+        }
+        stamp.push((name, meta.len(), meta.modified()?));
+    }
+    stamp.sort();
+    Ok(stamp)
+}
+fn unchanged_storage(root: &Path, before: &StorageStamp) -> Result<()> {
+    if storage_stamp(root)? != *before {
+        return Err(err(
+            "changed",
+            "Original Data/data changed; close games and downloaders",
+        ));
+    }
+    Ok(())
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct Change {
@@ -174,6 +287,8 @@ struct Journal {
     root: String,
     phase: String,
     changes: Vec<Change>,
+    #[serde(default)]
+    quarantines: Vec<Quarantine>,
 }
 
 fn check_cancel(cancel: &AtomicBool) -> Result<()> {
@@ -691,8 +806,39 @@ fn copy(
 }
 fn restore(root: &Path, op: &Path, cancel: &AtomicBool) -> Result<()> {
     let j: Journal = serde_json::from_slice(&fs::read(op.join("journal.json"))?)?;
-    if j.format != "forever-multi-recovery-v1" || Path::new(&j.root) != root {
+    if !matches!(
+        j.format.as_str(),
+        "forever-multi-recovery-v1" | "forever-multi-recovery-v2"
+    ) || Path::new(&j.root) != root
+        || (j.format == "forever-multi-recovery-v1" && !j.quarantines.is_empty())
+    {
         return Err(err("recovery", "Journal identity mismatch"));
+    }
+    let mut seen = HashSet::new();
+    for c in &j.changes {
+        if !seen.insert(c.entry.path.to_ascii_lowercase()) {
+            return Err(err("recovery", "Duplicate journal path"));
+        }
+    }
+    for q in &j.quarantines {
+        validate_path(&q.path)?;
+        if !q
+            .path
+            .strip_prefix("Data/data/")
+            .is_some_and(quarantine_name)
+            || !seen.insert(q.path.to_ascii_lowercase())
+        {
+            return Err(err("recovery", "Invalid quarantine path"));
+        }
+        let dest = safe(root, &q.path)?;
+        let backup = safe(op, &format!("backup/{}", q.path))?;
+        if backup.is_file() {
+            if dest.exists() || fingerprint(&backup, cancel, |_| {})?.1 != q.sha256 {
+                return Err(err("recovery", "Quarantined file or destination changed"));
+            }
+        } else if !dest.is_file() || fingerprint(&dest, cancel, |_| {})?.1 != q.sha256 {
+            return Err(err("recovery", "Quarantined original missing or changed"));
+        }
     }
     // Validate every recovery file before making any change.
     for c in &j.changes {
@@ -723,6 +869,12 @@ fn restore(root: &Path, op: &Path, cancel: &AtomicBool) -> Result<()> {
             fs::rename(&backup, &dest)?;
         } else if c.old_sha256.is_none() && dest.exists() {
             fs::remove_file(dest)?;
+        }
+    }
+    for q in j.quarantines.iter().rev() {
+        let backup = safe(op, &format!("backup/{}", q.path))?;
+        if backup.is_file() {
+            fs::rename(backup, safe(root, &q.path)?)?;
         }
     }
     let marker = op.join("restored");
@@ -806,6 +958,8 @@ pub async fn run(
             storage_different: 0,
             remaining: 0,
             repaired: 0,
+            quarantined: 0,
+            extra_storage_files: Vec::new(),
             bytes: 0,
             differences: Vec::new(),
             report_path: path.to_string_lossy().into_owned(),
@@ -820,6 +974,7 @@ pub async fn run(
         return Err(err("recovery", "No interrupted operation"));
     }
     let http = http_client()?;
+    let mut reference_stamp = None;
     let (m, reference, source_kind) = if !req.source.manifest_source.trim().is_empty() {
         (
             load_manifest(req.source.manifest_source.trim(), &http, cancel).await?,
@@ -836,7 +991,10 @@ pub async fn run(
         if safe(&target, ".build.info")?.is_file() && read_profile(&target)? != p {
             return Err(err("version", p.version));
         }
+        let stamp = storage_stamp(&source)?;
         let files = inventory(&source, &p, cancel, &emit)?;
+        unchanged_storage(&source, &stamp)?;
+        reference_stamp = Some(stamp);
         (
             Manifest {
                 format: "forever-multi-client-v1".into(),
@@ -853,6 +1011,7 @@ pub async fn run(
     if safe(&target, ".build.info")?.is_file() && read_profile(&target)? != m.profile {
         return Err(err("version", m.profile.version));
     }
+    let quarantines = extra_storage(&target, &m, cancel)?;
     let total = m.files.iter().try_fold(0u64, |s, e| {
         s.checked_add(e.bytes)
             .ok_or_else(|| err("manifest", "size overflow"))
@@ -903,7 +1062,10 @@ pub async fn run(
         });
     }
     let mut backup = None;
-    if modifying && !changes.is_empty() {
+    if let (Some(source), Some(stamp)) = (&reference, &reference_stamp) {
+        unchanged_storage(source, stamp)?;
+    }
+    if modifying && (!changes.is_empty() || !quarantines.is_empty()) {
         let required = changes.iter().map(|c| c.entry.bytes).sum::<u64>();
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -965,8 +1127,28 @@ pub async fn run(
             return Err(err("version", "Downloaded metadata differs from manifest"));
         }
         check_cancel(cancel)?;
+        if let (Some(source), Some(stamp)) = (&reference, &reference_stamp) {
+            unchanged_storage(source, stamp)?;
+        }
+        if extra_storage(&target, &m, cancel)? != quarantines {
+            return Err(err(
+                "changed",
+                "Target CASC metadata changed while preparing recovery",
+            ));
+        }
         // Metadata is published after payloads. Recovery metadata is synced BEFORE any rename.
-        changes.sort_by_key(|c| (c.entry.path == ".build.info", c.entry.path.clone()));
+        changes.sort_by_key(|c| {
+            (
+                if c.entry.path == ".build.info" {
+                    3
+                } else if storage_metadata(&c.entry.path) {
+                    2
+                } else {
+                    1
+                },
+                c.entry.path.clone(),
+            )
+        });
         let op = safe(
             &target,
             &format!(
@@ -976,14 +1158,33 @@ pub async fn run(
         )?;
         fs::create_dir_all(&op)?;
         let j = Journal {
-            format: "forever-multi-recovery-v1".into(),
+            format: "forever-multi-recovery-v2".into(),
             root: target.to_string_lossy().into_owned(),
             phase: "committing".into(),
             changes: changes.clone(),
+            quarantines: quarantines.clone(),
         };
         json(&op.join("journal.json"), &j)?;
         let no_cancel = AtomicBool::new(false);
         let commit = (|| -> Result<()> {
+            for q in &quarantines {
+                let dest = safe(&target, &q.path)?;
+                if fingerprint(&dest, &no_cancel, |_| {})?.1 != q.sha256 {
+                    return Err(err("changed", &q.path));
+                }
+                let b = safe(&op, &format!("backup/{}", q.path))?;
+                fs::create_dir_all(b.parent().unwrap())?;
+                fs::rename(dest, b)?;
+                emit(Progress {
+                    phase: "commit",
+                    path: q.path.clone(),
+                    files_done: 0,
+                    files_total: changes.len() + quarantines.len(),
+                    bytes_done: required,
+                    bytes_total: required,
+                    bytes_per_second: 0,
+                });
+            }
             for (i, c) in changes.iter().enumerate() {
                 let dest = safe(&target, &c.entry.path)?;
                 fs::create_dir_all(dest.parent().unwrap())?;
@@ -1005,8 +1206,8 @@ pub async fn run(
                 emit(Progress {
                     phase: "commit",
                     path: c.entry.path.clone(),
-                    files_done: i + 1,
-                    files_total: changes.len(),
+                    files_done: i + 1 + quarantines.len(),
+                    files_total: changes.len() + quarantines.len(),
                     bytes_done: required,
                     bytes_total: required,
                     bytes_per_second: 0,
@@ -1034,7 +1235,8 @@ pub async fn run(
         .iter()
         .filter(|c| storage_metadata(&c.entry.path))
         .count();
-    let report=Report{action:req.action,source_kind,profile:m.profile,files:count,verified:count-changes.len()+repaired,different:changes.len(),resource_different:changes.len()-storage_different,storage_different,remaining:changes.len()-repaired,repaired,bytes:total,differences:changes.iter().take(200).map(|c|c.entry.path.clone()).collect(),report_path:report_path.to_string_lossy().into_owned(),backup,target_root:display_path(&target),reference_root:reference.as_deref().map(display_path),scope:"exact installation files against selected baseline; extra files are preserved; not CASC object validation or server compatibility"};
+    let quarantined = if modifying { quarantines.len() } else { 0 };
+    let report=Report{action:req.action,source_kind,profile:m.profile,files:count,verified:count-changes.len()+repaired,different:changes.len()+quarantines.len(),resource_different:changes.len()-storage_different,storage_different:storage_different+quarantines.len(),remaining:changes.len()+quarantines.len()-repaired-quarantined,repaired:repaired+quarantined,quarantined,extra_storage_files:quarantines.iter().map(|q|q.path.clone()).collect(),bytes:total,differences:changes.iter().map(|c|c.entry.path.clone()).chain(quarantines.iter().map(|q|q.path.clone())).take(200).collect(),report_path:report_path.to_string_lossy().into_owned(),backup,target_root:display_path(&target),reference_root:reference.as_deref().map(display_path),scope:"exact installation files against selected baseline; recognized surplus CASC indices/LRU/repair markers are quarantined; unrelated extras are preserved; not CASC object validation or server compatibility"};
     json(&report_path, &report)?;
     emit(Progress {
         phase: "done",
@@ -1110,11 +1312,244 @@ mod tests {
             )
             .await
         }
+        fn full_index_baseline(&self) {
+            for base in [&self.source, &self.target] {
+                for bucket in 0..16 {
+                    fs::write(
+                        base.join(format!("Data/data/{bucket:02x}00000325.idx")),
+                        format!("synthetic bucket {bucket}"),
+                    )
+                    .unwrap();
+                }
+            }
+        }
     }
     impl Drop for Fixture {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.dir);
         }
+    }
+    #[tokio::test]
+    async fn surplus_casc_generations_are_backed_up_with_payload_recovery_and_unrelated_extras_survive(
+    ) {
+        let f = Fixture::new();
+        f.full_index_baseline();
+        let extra = ["000000032c.idx", "0000000000000001.lru", "RepairMarker.psv"];
+        for name in extra {
+            fs::write(f.target.join("Data/data").join(name), name).unwrap();
+        }
+        fs::write(f.target.join("Data/data/0000000325.idx"), b"broken index").unwrap();
+        fs::write(f.target.join("Data/data/data.000"), b"broken archive").unwrap();
+        fs::write(
+            f.target.join("Data/data/data.999"),
+            b"unrelated extra archive",
+        )
+        .unwrap();
+        fs::write(f.target.join("Data/data/notes.txt"), b"user file").unwrap();
+        let before = f.run("verify").await.unwrap();
+        assert_eq!(
+            (
+                before.different,
+                before.storage_different,
+                before.resource_different,
+                before.remaining,
+                before.quarantined
+            ),
+            (5, 4, 1, 5, 0)
+        );
+        for name in extra {
+            assert!(f.target.join("Data/data").join(name).exists());
+        }
+        let repaired = f.run("repair").await.unwrap();
+        assert_eq!(
+            (
+                repaired.different,
+                repaired.repaired,
+                repaired.quarantined,
+                repaired.remaining
+            ),
+            (5, 5, 3, 0)
+        );
+        assert_eq!(repaired.verified, repaired.files);
+        for name in extra {
+            assert!(!f.target.join("Data/data").join(name).exists());
+            assert_eq!(
+                fs::read(
+                    Path::new(repaired.backup.as_ref().unwrap())
+                        .join("backup/Data/data")
+                        .join(name)
+                )
+                .unwrap(),
+                name.as_bytes()
+            );
+        }
+        assert_eq!(
+            fs::read(f.target.join("Data/data/data.000")).unwrap(),
+            b"correct payload"
+        );
+        assert_eq!(
+            fs::read(f.target.join("Data/data/data.999")).unwrap(),
+            b"unrelated extra archive"
+        );
+        assert_eq!(
+            fs::read(f.target.join("Data/data/notes.txt")).unwrap(),
+            b"user file"
+        );
+        assert_eq!(f.run("verify").await.unwrap().different, 0);
+        assert!(!f.source.join("Data/data/RepairMarker.psv").exists());
+        assert_eq!(
+            fs::read(f.source.join("Data/data/0000000325.idx")).unwrap(),
+            b"synthetic bucket 0"
+        );
+    }
+    #[tokio::test]
+    async fn quarantine_only_repair_is_not_skipped_when_all_expected_files_match() {
+        let f = Fixture::new();
+        f.full_index_baseline();
+        fs::write(
+            f.target.join("Data/data/000000032c.idx"),
+            b"stale generation",
+        )
+        .unwrap();
+        let r = f.run("repair").await.unwrap();
+        assert_eq!(
+            (r.different, r.repaired, r.quarantined, r.remaining),
+            (1, 1, 1, 0)
+        );
+        assert_eq!(r.verified, r.files);
+        assert_eq!(
+            fs::read(f.target.join("Data/data/data.000")).unwrap(),
+            b"correct payload"
+        );
+    }
+    #[tokio::test]
+    async fn failed_payload_replacement_restores_both_quarantined_metadata_and_old_archive() {
+        let f = Fixture::new();
+        f.full_index_baseline();
+        let extra = f.target.join("Data/data/000000032c.idx");
+        fs::write(&extra, b"previous index").unwrap();
+        fs::write(f.target.join("Data/data/data.000"), b"previous archive").unwrap();
+        let result = run(
+            f.request("repair"),
+            f.state.clone(),
+            &AtomicBool::new(false),
+            |p| {
+                if p.phase == "commit" && p.files_done == 0 {
+                    // A staged file disappears after quarantine: the transaction must roll back both kinds of changes.
+                    for entry in fs::read_dir(f.target.join(".forever-multi/staging")).unwrap() {
+                        let file = entry.unwrap().path().join("Data/data/data.000");
+                        if file.exists() {
+                            fs::remove_file(file).unwrap();
+                        }
+                    }
+                }
+            },
+        )
+        .await;
+        assert_eq!(result.err().unwrap().code, "io");
+        assert_eq!(fs::read(extra).unwrap(), b"previous index");
+        assert_eq!(
+            fs::read(f.target.join("Data/data/data.000")).unwrap(),
+            b"previous archive"
+        );
+        assert!(pending(&f.target.canonicalize().unwrap())
+            .unwrap()
+            .is_empty());
+    }
+    #[tokio::test]
+    async fn refuses_quarantine_from_incomplete_or_repair_marked_original() {
+        let f = Fixture::new();
+        fs::write(
+            f.target.join("Data/data/000000032c.idx"),
+            b"keep until proper baseline",
+        )
+        .unwrap();
+        assert_eq!(
+            f.run("repair").await.err().unwrap().code,
+            "storage_baseline"
+        );
+        assert!(!f.target.join(".forever-multi").exists());
+        f.full_index_baseline();
+        fs::write(
+            f.source.join("Data/data/RepairMarker.psv"),
+            b"source needs repair",
+        )
+        .unwrap();
+        assert_eq!(
+            f.run("repair").await.err().unwrap().code,
+            "storage_baseline"
+        );
+        assert!(f.target.join("Data/data/000000032c.idx").exists());
+        assert!(!f.target.join(".forever-multi").exists());
+    }
+    #[tokio::test]
+    async fn changing_original_storage_or_late_target_generation_aborts_before_commit() {
+        let f = Fixture::new();
+        f.full_index_baseline();
+        fs::write(f.target.join("Data/data/data.000"), b"previous archive").unwrap();
+        let result = run(
+            f.request("repair"),
+            f.state.clone(),
+            &AtomicBool::new(false),
+            |p| {
+                if p.phase == "verify" && p.files_done == p.files_total {
+                    fs::write(
+                        f.source.join("Data/data/data.000"),
+                        b"original changed while planning",
+                    )
+                    .unwrap();
+                }
+            },
+        )
+        .await;
+        assert_eq!(result.err().unwrap().code, "changed");
+        assert!(!f.target.join(".forever-multi").exists());
+        let result = run(
+            f.request("repair"),
+            f.state.clone(),
+            &AtomicBool::new(false),
+            |p| {
+                if p.phase == "verify" && p.files_done == p.files_total {
+                    fs::write(
+                        f.target.join("Data/data/000000032c.idx"),
+                        b"new concurrent generation",
+                    )
+                    .unwrap();
+                }
+            },
+        )
+        .await;
+        assert_eq!(result.err().unwrap().code, "changed");
+        assert!(!f.target.join(".forever-multi/operations").exists());
+        assert_eq!(
+            fs::read(f.target.join("Data/data/data.000")).unwrap(),
+            b"previous archive"
+        );
+    }
+    #[test]
+    fn interrupted_v2_quarantine_can_recover_without_source_and_old_journals_remain_readable() {
+        let f = Fixture::new();
+        let root = f.target.canonicalize().unwrap();
+        let path = "Data/data/000000032c.idx";
+        fs::write(root.join(path), b"previous generation").unwrap();
+        let op = root.join(".forever-multi/operations/interrupted-quarantine");
+        fs::create_dir_all(op.join("backup/Data/data")).unwrap();
+        let j = Journal {
+            format: "forever-multi-recovery-v2".into(),
+            root: root.to_string_lossy().into_owned(),
+            phase: "committing".into(),
+            changes: Vec::new(),
+            quarantines: vec![Quarantine {
+                path: path.into(),
+                sha256: sha(b"previous generation"),
+            }],
+        };
+        json(&op.join("journal.json"), &j).unwrap();
+        fs::rename(root.join(path), op.join("backup").join(path)).unwrap();
+        restore(&root, &op, &AtomicBool::new(false)).unwrap();
+        assert_eq!(fs::read(root.join(path)).unwrap(), b"previous generation");
+        let legacy: Journal = serde_json::from_value(serde_json::json!({"format":"forever-multi-recovery-v1","root":root,"phase":"committing","changes":[]})).unwrap();
+        assert!(legacy.quarantines.is_empty());
     }
     #[test]
     fn resolves_game_subfolder_to_shared_data_without_hashing_or_changing_files() {
@@ -1287,6 +1722,7 @@ mod tests {
             format: "forever-multi-recovery-v1".into(),
             root: root.to_string_lossy().into_owned(),
             phase: "committing".into(),
+            quarantines: Vec::new(),
             changes: vec![Change {
                 entry: Entry {
                     path: path.into(),
@@ -1646,6 +2082,7 @@ mod tests {
             format: "forever-multi-recovery-v1".into(),
             root: root.to_string_lossy().into_owned(),
             phase: "committing".into(),
+            quarantines: Vec::new(),
             changes: vec![Change {
                 entry: Entry {
                     path: path.into(),
