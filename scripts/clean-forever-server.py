@@ -35,6 +35,8 @@ def run(command, *, capture=False, data=None):
                             stderr=None if public_workload else subprocess.PIPE, text=True)
     if result.returncode:
         # Resolved Compose files/configs contain private credentials. Never echo them.
+        if 'run' in command and 'extractor' in command:
+            raise RuntimeError('Extraction failed; see extractor output above (the temporary container was removed)')
         raise RuntimeError('Command failed: ' + ' '.join(command[:3]) + '; use the status command for service logs')
     return result.stdout or ''
 
@@ -178,7 +180,8 @@ def model(state, *, published=False):
                           read_only=True, tmpfs=['/tmp:rw,nosuid,nodev,size=64m'],
                           entrypoint=['/usr/local/bin/forever-clean-extract.sh'],
                           volumes=[mount(state['client']['source'], '/client'),
-                                   mount(state['extraction'], '/output', False)])}
+                                   mount(state['extraction'], '/output', False),
+                                   mount(ROOT / 'docker/clean/extract.sh', '/usr/local/bin/forever-clean-extract.sh')])}
     if published:
         services['worldserver']['ports'] = ['127.0.0.1:8085:8085']
         services['bnetserver']['ports'] = ['127.0.0.1:1119:1119', '127.0.0.1:8081:8081']
@@ -348,10 +351,12 @@ def install(args):
                      credentials={key: secrets.token_hex(24) for key in ('root', 'database', 'soap')}, previous=[])
         save(state)
         configure_compose(state)
-        control = directory / 'server.sh'
-        control.write_text('#!/bin/sh\nexec python3 ' + shlex.quote(str(Path(__file__).resolve())) +
-                           ' "$@" --root ' + shlex.quote(str(directory)) + '\n')
-        control.chmod(0o700)
+    # Resume through the current tool checkout, including fixes that do not require
+    # recompiling the already-built pristine game binaries.
+    control = directory / 'server.sh'
+    control.write_text('#!/bin/sh\nexec python3 ' + shlex.quote(str(Path(__file__).resolve())) +
+                       ' "$@" --root ' + shlex.quote(str(directory)) + '\n')
+    control.chmod(0o700)
     print(f"Clean core {CORE[:12]}; EXE {state['client']['exe_build']}; CASC metadata {state['client']['metadata_version']}", flush=True)
     print('State: ' + str(state_path), flush=True)
     if state['phase'] in ('prepared', 'building'):
@@ -373,6 +378,7 @@ def install(args):
             raise RuntimeError('Client identity changed during the build; retain state and choose a matching baseline')
         if Path(state['extraction']).exists() and any(Path(state['extraction']).iterdir()):
             # Preserve a previous partial extraction; do not merge it into a fresh result.
+            print('Retaining previous extraction attempt: ' + state['extraction'], flush=True)
             state['extraction'] = str(directory / ('extract-' + secrets.token_hex(6)))
             Path(state['extraction']).mkdir()
         Path(state['extraction']).mkdir(exist_ok=True)

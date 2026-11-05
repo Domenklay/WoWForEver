@@ -40,6 +40,76 @@ def client(path, key='a' * 32):
 
 
 class CleanServerTests(unittest.TestCase):
+    def extraction_fixture(self, root):
+        # Layout used by the pinned upstream: localized DB2s and per-map VMAPs.
+        for name in ('dbc/ruRU/Map.db2', 'gt/Xp.txt', 'cameras/FILE0001.xxx',
+                     'maps/0000/0000_00_00.map', 'vmaps/0000/0000.vmtree',
+                     'vmaps/GameObjectModels.dtree'):
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'owned nonempty extraction fixture')
+
+    def validate_extraction(self, output):
+        return subprocess.run(['bash', str(ROOT / 'docker/clean/extract.sh'), '--validate-only', str(output)],
+                              capture_output=True, text=True)
+
+    def test_extractor_accepts_upstream_nested_maps_and_localized_db2s(self):
+        with tempfile.TemporaryDirectory(prefix='forever extraction ') as temp:
+            root = Path(temp)
+            self.extraction_fixture(root)
+            before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob('*') if p.is_file()}
+            result = self.validate_extraction(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('does not certify full client file coverage', result.stdout)
+            self.assertEqual(before, {str(p.relative_to(root)): p.read_bytes() for p in root.rglob('*') if p.is_file()})
+
+    def test_extractor_reports_missing_or_empty_payloads_instead_of_accepting_directories(self):
+        for missing, expected in (('vmaps/0000/0000.vmtree', 'vmaps/*.vmtree'),
+                                  ('maps/0000/0000_00_00.map', 'maps/*.map'),
+                                  ('dbc/ruRU/Map.db2', 'dbc/*.db2'),
+                                  ('gt/Xp.txt', 'gt/*.txt'),
+                                  ('cameras/FILE0001.xxx', 'cameras/*.xxx'),
+                                  ('vmaps/GameObjectModels.dtree', 'vmaps/GameObjectModels.dtree')):
+            for empty in (False, True):
+                with self.subTest(missing=missing, empty=empty), tempfile.TemporaryDirectory() as temp:
+                    root = Path(temp)
+                    self.extraction_fixture(root)
+                    if empty:
+                        (root / missing).write_bytes(b'')
+                    else:
+                        (root / missing).unlink()
+                    result = self.validate_extraction(root)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('Extraction incomplete:', result.stderr)
+                    self.assertIn(expected, result.stderr)
+
+    def test_resuming_old_extraction_checkpoint_uses_fixed_script_without_recompiling(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            s = state(root); s['phase'] = 'extracting'
+            old_output = Path(s['extraction']); old_output.mkdir()
+            (old_output / 'old-partial').write_bytes(b'preserve unfinished attempt')
+            (root / 'server.sh').write_text('old checkout')
+            clean.save(s)
+            def compose(saved, *command, **kwargs):
+                model = json.loads(Path(saved['compose']).read_text())
+                extractor = model['services']['extractor']
+                fixed = next(v for v in extractor['volumes'] if v['target'] == '/usr/local/bin/forever-clean-extract.sh')
+                self.assertTrue(fixed['read_only'])
+                self.assertEqual(fixed['source'], str(ROOT / 'docker/clean/extract.sh'))
+                self.assertNotEqual(saved['extraction'], str(old_output))
+                raise RuntimeError('fixture stops after checking extractor launch')
+            args = SimpleNamespace(root=root)
+            with patch.object(clean, 'identity', return_value=s['client']), \
+                    patch.object(clean, 'storage_stamp', return_value=[]), \
+                    patch.object(clean, 'compose', side_effect=compose), patch.object(clean, 'run') as run, patch('builtins.print'):
+                with self.assertRaisesRegex(RuntimeError, 'fixture stops'):
+                    clean.install(args)
+            run.assert_not_called()
+            self.assertEqual((old_output / 'old-partial').read_bytes(), b'preserve unfinished attempt')
+            self.assertIn(str(ROOT / 'scripts/clean-forever-server.py'), (root / 'server.sh').read_text())
+            self.assertEqual((root / 'server.sh').stat().st_mode & 0o777, 0o700)
+
     def exercise_install(self, directory, failure=None):
         events = []
         root = directory / 'clean'
