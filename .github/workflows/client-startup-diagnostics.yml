@@ -1,0 +1,28 @@
+name: Client startup diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/launcher-forever-multi-20261105]
+    paths:
+      - scripts/collect-client-startup.ps1
+      - tests/fixtures/client-startup-diagnostics.ps1
+      - docs/CLIENT-STARTUP-DIAGNOSTICS.ru.md
+      - .github/workflows/client-startup-diagnostics.yml
+permissions:
+  contents: read
+jobs:
+  diagnostics:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify collector with Windows PowerShell 5.1
+        shell: powershell
+        run: ./tests/fixtures/client-startup-diagnostics.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Forever-client-startup-diagnostics
+          path: |
+            scripts/collect-client-startup.ps1
+            docs/CLIENT-STARTUP-DIAGNOSTICS.ru.md
+          if-no-files-found: error
+          retention-days: 7
