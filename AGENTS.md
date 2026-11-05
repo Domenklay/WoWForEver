@@ -5,6 +5,13 @@ based on the [`forever` branch of TrinityCore](https://github.com/advocaite/Trin
 `README.md` first; this file adds what an assistant needs to help someone set it up.
 The user intentionally runs **1.60.1.70532** in this fork; see the compatibility
 limits in README.md. This is not a claim of full compatibility with that client.
+On 2026-11-05 the user requested migration to a newer owned installation at
+`E:\WoW_Forever\_forever_`, preferring ForeverLauncher.exe 2.0.5 and allowing
+the Beta launcher if client selection is needed. Its actual build/product/EXE
+are not yet known. Follow `docs/zones/NEW-CLIENT-MIGRATION.ru.md`; preserve the
+old experiment and rebuild CASC changes against the new baseline instead of
+copying old indexes/configuration. Do not describe the cloud-prepared migration
+tool as a completed Windows deployment or assume the old audited build key.
 
 ## Layout
 

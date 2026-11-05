@@ -18,13 +18,13 @@ EXCLUDED_DIRS = {'cache','logs','errors','screenshots','gpucache','shadercache'}
 EXCLUDED_SUFFIXES = ('.tmp','.temp','.log','.dmp')
 
 
-def inventory(source):
+def inventory(source, parts=PARTS, game_part='_classic_beta_'):
     files = {}
-    for part in PARTS:
+    for part in parts:
         start = source/part
         if start.is_symlink():
             raise ValueError(f'Symlinked source is unsupported: {start}')
-        if part == '.build.info':
+        if part == '.build.info' or part not in {'Data',game_part} and start.is_file():
             if not start.is_file():
                 raise ValueError(f'Missing {start}')
             paths = [start]
@@ -33,7 +33,7 @@ def inventory(source):
                 raise ValueError(f'Missing directory {start}')
             paths = []
             for folder, dirs, names in os.walk(start, followlinks=False):
-                if part == '_classic_beta_':
+                if part == game_part or game_part=='.' and part!='Data':
                     if Path(folder) == start:
                         dirs[:] = [name for name in dirs if name.casefold() not in EXCLUDED_DIRS]
                     names = [name for name in names if not name.casefold().endswith(EXCLUDED_SUFFIXES)]
@@ -49,8 +49,8 @@ def inventory(source):
     return files
 
 
-def build_key(text):
-    rows = list(csv.reader(io.StringIO(text), delimiter='|'))
+def build_key(text, product='wow_classic_beta'):
+    rows = list(csv.reader(io.StringIO(text.lstrip('\ufeff')), delimiter='|'))
     if not rows:
         raise ValueError('Empty .build.info')
     columns = {name.split('!')[0]:i for i,name in enumerate(rows[0])}
@@ -59,9 +59,9 @@ def build_key(text):
     if any(row and len(row)!=len(rows[0]) for row in rows[1:]):
         raise ValueError('Malformed .build.info row')
     matches = [row[columns['Build Key']] for row in rows[1:] if row and
-               row[columns['Product']]=='wow_classic_beta' and row[columns['Active']]=='1']
+               row[columns['Product']]==product and row[columns['Active']]=='1']
     if len(matches)!=1 or len(matches[0])!=32:
-        raise ValueError('Expected one active Classic Beta build')
+        raise ValueError('Expected one active '+product+' build')
     bytes.fromhex(matches[0])
     return matches[0].lower()
 
@@ -83,24 +83,37 @@ def save_state(path, state):
     os.replace(temp,path)
 
 
-def checked_name(name):
+def checked_name(name,parts=PARTS):
     if not isinstance(name,str):
         raise ValueError('Invalid saved copy path')
     path = Path(name)
     if ('\\' in name or path.is_absolute() or
-            '..' in path.parts or not path.parts or path.parts[0] not in PARTS or
+            '..' in path.parts or not path.parts or path.parts[0] not in parts or
             (path.parts[0]=='.build.info' and len(path.parts)!=1)):
         raise ValueError('Invalid saved copy path')
     return name
 
 
-def prepare(source, output, expected_build=AUDITED_BUILD, progress=None):
+def prepare(source, output, expected_build=AUDITED_BUILD, progress=None,layout=None):
+    if layout is not None:
+        required={'parts','game_part','executable','product','marker_name','report_format'}
+        if not isinstance(layout,dict) or not required<=layout.keys():raise ValueError('Invalid client layout')
+        parts=tuple(layout['parts'])
+        if (not {'.build.info','Data'}<=set(parts) or len(parts)!=len(set(parts)) or
+                any(not isinstance(p,str) or not p or '/' in p or '\\' in p or p in {'.','..'} for p in parts)):
+            raise ValueError('Invalid client copy parts')
+        if layout['game_part']!='.' and layout['game_part'] not in parts:raise ValueError('Game folder not selected')
+        for key in ('executable','marker_name'):
+            if not isinstance(layout[key],str) or Path(layout[key]).name!=layout[key] or '\\' in layout[key] or layout[key] in {'','.', '..'}:
+                raise ValueError('Invalid client layout filename')
+        if layout['marker_name'] in parts:raise ValueError('Copy marker conflicts with selected source')
+    else:parts=PARTS
     source, output = Path(source).resolve(strict=True), Path(output).resolve()
     if output.exists():
         raise FileExistsError(f'Destination must be NEW: {output}')
     # The source can be E:\ itself; NEVER recursively copy the entire drive.
     # Reject aliases/case variants of selected client trees on NTFS as well.
-    for part in PARTS:
+    for part in parts:
         selected = source/part
         if output==selected or selected in output.parents:
             raise ValueError('Destination is inside a selected client tree')
@@ -115,19 +128,24 @@ def prepare(source, output, expected_build=AUDITED_BUILD, progress=None):
         raise ValueError('Symlinked copy lock is unsupported')
     with lock.open('a') as guard:
         fcntl.flock(guard,fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return prepare_locked(source,output,expected_build,progress)
+        return prepare_locked(source,output,expected_build,progress,layout)
 
 
-def prepare_locked(source, output, expected_build, progress):
+def prepare_locked(source, output, expected_build, progress, layout=None):
+    parts=tuple(layout['parts']) if layout else PARTS
+    game_part=layout['game_part'] if layout else '_classic_beta_'
+    executable=layout['executable'] if layout else 'WowB.exe'
+    product=layout['product'] if layout else 'wow_classic_beta'
+    marker_name=layout['marker_name'] if layout else 'legion-client-copy.json'
     if output.exists():
         raise FileExistsError(f'Destination must be NEW: {output}')
     text = (source/'.build.info').read_text()
-    actual = build_key(text)
+    actual = build_key(text,product)
     if actual!=expected_build.lower():
         raise ValueError(f'Build changed: expected {expected_build}, found {actual}')
-    if not (source/'_classic_beta_/WowB.exe').is_file():
-        raise ValueError('Missing _classic_beta_/WowB.exe')
-    files = inventory(source)
+    if not (source/game_part/executable).is_file():
+        raise ValueError('Missing '+str(Path(game_part)/executable))
+    files = inventory(source,parts,game_part)
     total = sum(row[0] for row in files.values())
     ancestor = output.parent
     while not ancestor.exists():
@@ -135,6 +153,7 @@ def prepare_locked(source, output, expected_build, progress):
     partial = output.with_name(output.name+'.partial')
     state_path = partial/'state.json'
     identity = dict(format='wowforever-client-copy-state-v1',source=str(source),destination=str(output),build_key=actual)
+    if layout is not None:identity['layout']=layout
     if partial.is_symlink():
         raise ValueError('Symlinked partial directory is unsupported')
     if partial.exists():
@@ -142,6 +161,8 @@ def prepare_locked(source, output, expected_build, progress):
         for folder,dirs,names in os.walk(partial,followlinks=False):
             if any((Path(folder)/name).is_symlink() for name in dirs+names):
                 raise ValueError('Symlinked partial copy is unsupported')
+            if any((Path(folder)/name).is_file() and (Path(folder)/name).stat().st_nlink>1 for name in names):
+                raise ValueError('Hardlinked partial copy is unsupported')
         state = json.loads(state_path.read_text())
         if not isinstance(state,dict) or any(state.get(key)!=value for key,value in identity.items()):
             raise ValueError('Partial copy belongs to a different source/build/destination')
@@ -162,7 +183,7 @@ def prepare_locked(source, output, expected_build, progress):
     work.unlink(missing_ok=True)
     done = state['completed']
     for name in list(done):
-        checked_name(name)
+        checked_name(name,parts)
         if name not in files:
             (stage/name).unlink(missing_ok=True)
             del done[name]
@@ -202,15 +223,16 @@ def prepare_locked(source, output, expected_build, progress):
             digests[name] = digest.hexdigest()
             done[name] = dict(source_info=list(info),sha256=digests[name])
             save_state(state_path,state)
-        if inventory(source)!=files or (source/'.build.info').read_text()!=text:
+        if inventory(source,parts,game_part)!=files or (source/'.build.info').read_text()!=text:
             raise ValueError('Source changed during copy. Close the game/launcher before retrying.')
-        report = dict(format='wowforever-legion-client-copy-v1',source=str(source),destination=str(output),
-                      build_key=actual,files=len(files),bytes=total,copied_parts=list(PARTS),
+        report = dict(format=layout['report_format'] if layout else 'wowforever-legion-client-copy-v1',source=str(source),destination=str(output),
+                      build_key=actual,files=len(files),bytes=total,copied_parts=list(parts),
                       verification='All copied files reread and SHA-256 checked; independent files, no hardlinks',
                       source_client_modified=False,game_data_patch_installed=False,
                       installation_supported=False,sha256=digests,
                       excluded_client_dirs=sorted(EXCLUDED_DIRS),excluded_client_suffixes=list(EXCLUDED_SUFFIXES))
-        (stage/'legion-client-copy.json').write_text(json.dumps(report,indent=2)+'\n')
+        if layout is not None:report['layout']=layout
+        (stage/marker_name).write_text(json.dumps(report,indent=2)+'\n')
         if output.exists():
             raise FileExistsError(output)
         stage.rename(output)
@@ -226,7 +248,7 @@ def prepare_locked(source, output, expected_build, progress):
             progress(f'Copy complete; temporary metadata remains in {partial}')
     if progress:
         progress(f'COPY VERIFIED: {output}')
-        progress(f'Test executable: {output / "_classic_beta_/WowB.exe"}')
+        progress(f'Test executable: {output / game_part / executable}')
     return report
 
 
