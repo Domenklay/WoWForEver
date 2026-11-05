@@ -21,14 +21,18 @@ function Get-RootPath([string]$Value) {
 }
 function Test-LinkedPath([string]$Value) {
     $path = $Value
+    $seen = @{}
     while ($path) {
+        if ($seen.ContainsKey($path)) { throw "Repeated ancestor while checking path: $path" }
+        $seen[$path] = $true
+        Write-Verbose "Inspecting ancestor: $path"
         if (Test-Path -LiteralPath $path) {
             $item = Get-Item -LiteralPath $path -Force
             if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $true }
         }
-        $parent = Split-Path -Parent $path
-        if ($parent -eq $path) { break }
-        $path = $parent
+        $parent = [IO.Directory]::GetParent($path)
+        if ($null -eq $parent) { break }
+        $path = $parent.FullName
     }
     return $false
 }

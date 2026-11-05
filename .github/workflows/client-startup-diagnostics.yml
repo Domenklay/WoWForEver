@@ -10,9 +10,13 @@ on:
       - .github/workflows/client-startup-diagnostics.yml
 permissions:
   contents: read
+concurrency:
+  group: startup-diagnostics-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   diagnostics:
     runs-on: windows-latest
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
       - name: Verify collector with Windows PowerShell 5.1

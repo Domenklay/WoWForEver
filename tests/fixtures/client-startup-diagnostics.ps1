@@ -28,9 +28,11 @@ try {
     [IO.File]::WriteAllText((Join-Path $target 'Data\data\RepairMarker.psv'), 'synthetic repair marker')
     [IO.File]::WriteAllText((Join-Path $target '_forever_\Logs\Tact.log'), ((1..230 | ForEach-Object { "log line $_" }) -join "`n"))
     [IO.File]::WriteAllText((Join-Path $target '_forever_\WTF\Config.wtf'), "SET portal `"trinity.actual.battle.net:1119`"`nSET accountName `"private-config-value`"`n")
+    Write-Host 'Synthetic installations prepared; taking snapshots.'
     $beforeTarget = Snapshot $target; $beforeSource = Snapshot $source
     $reportPath = Join-Path $temp 'report.json'
-    & $collector -ClientRoot (Join-Path $target '_forever_') -ReferenceRoot $source -OutputPath $reportPath
+    Write-Host 'Collecting synthetic startup report.'
+    & $collector -ClientRoot (Join-Path $target '_forever_') -ReferenceRoot $source -OutputPath $reportPath -Verbose
     $raw = [IO.File]::ReadAllText($reportPath); $report = $raw | ConvertFrom-Json
     Assert ($report.comparisonAvailable) 'Both storage folders should be compared'
     Assert (!$report.clientModified -and !$report.referenceModified) 'Collector must declare read-only scope'
@@ -43,13 +45,16 @@ try {
     Assert (!$raw.Contains('private-config-value')) 'Non-diagnostic config values must not be exported'
     Assert ($beforeTarget -eq (Snapshot $target)) 'Target installation changed'
     Assert ($beforeSource -eq (Snapshot $source)) 'Reference installation changed'
+    Write-Host 'Snapshots unchanged; verifying report path protection.'
     $blockedPath = Join-Path $target 'must-not-create.json'; $rejected = $false
     try { & $collector -ClientRoot $target -ReferenceRoot $source -OutputPath $blockedPath } catch { $rejected = $true }
     Assert ($rejected -and !(Test-Path -LiteralPath $blockedPath)) 'Reports inside installations must be rejected'
+    Write-Host 'Verifying missing source handling.'
     $missingPath = Join-Path $temp 'missing.json'
     & $collector -ClientRoot $target -ReferenceRoot (Join-Path $temp 'absent') -OutputPath $missingPath
     $missing = [IO.File]::ReadAllText($missingPath) | ConvertFrom-Json
     Assert (!$missing.comparisonAvailable -and $missing.extraStorageFiles.Count -eq 0) 'Missing source must not make every file extra'
+    Write-Host 'Verifying junction protection.'
     $junction = Join-Path $temp 'linked-source'
     New-Item -ItemType Junction -Path $junction -Target $source | Out-Null
     $rejected = $false
