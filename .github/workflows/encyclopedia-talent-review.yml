@@ -2,10 +2,10 @@ name: Encyclopedia talents and mana review
 on:
   push:
     branches: [feature/encyclopedia-tooltip-mana-20261107]
-    paths: [mods/living-encyclopedia/**, app/src-tauri/addons/forever-encyclopedia.json, app/src-tauri/addons/forever-encyclopedia-test.json, app/src-tauri/src/addon.rs, app/src-tauri/src/config.rs, app/src-tauri/src/lib.rs, app/ui/**, scripts/update-encyclopedia-addon.ps1, tests/fixtures/encyclopedia-addon.ps1, scripts/clean-forever-server.py, scripts/enable-clean-gameplay.py, tests/test_clean_gameplay.py, .github/workflows/encyclopedia-talent-review.yml]
+    paths: [mods/living-encyclopedia/**, app/src-tauri/addons/forever-encyclopedia.json, app/src-tauri/addons/forever-encyclopedia-test.json, app/src-tauri/src/addon.rs, app/src-tauri/src/config.rs, app/src-tauri/src/lib.rs, app/ui/**, scripts/update-encyclopedia-addon.ps1, scripts/update-test-addons.ps1, tests/fixtures/encyclopedia-addon.ps1, tests/fixtures/test-all-addons.ps1, scripts/clean-forever-server.py, scripts/enable-clean-gameplay.py, tests/test_clean_gameplay.py, .github/workflows/encyclopedia-talent-review.yml]
   pull_request:
     branches: [codex/native-cdn-70658-20261106]
-    paths: [mods/living-encyclopedia/**, app/src-tauri/addons/forever-encyclopedia.json, app/src-tauri/addons/forever-encyclopedia-test.json, app/src-tauri/src/addon.rs, app/src-tauri/src/config.rs, app/src-tauri/src/lib.rs, app/ui/**, scripts/update-encyclopedia-addon.ps1, tests/fixtures/encyclopedia-addon.ps1, scripts/clean-forever-server.py, scripts/enable-clean-gameplay.py, tests/test_clean_gameplay.py, .github/workflows/encyclopedia-talent-review.yml]
+    paths: [mods/living-encyclopedia/**, app/src-tauri/addons/forever-encyclopedia.json, app/src-tauri/addons/forever-encyclopedia-test.json, app/src-tauri/src/addon.rs, app/src-tauri/src/config.rs, app/src-tauri/src/lib.rs, app/ui/**, scripts/update-encyclopedia-addon.ps1, scripts/update-test-addons.ps1, tests/fixtures/encyclopedia-addon.ps1, tests/fixtures/test-all-addons.ps1, scripts/clean-forever-server.py, scripts/enable-clean-gameplay.py, tests/test_clean_gameplay.py, .github/workflows/encyclopedia-talent-review.yml]
 permissions:
   contents: read
 jobs:
@@ -54,6 +54,9 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+      - name: Verify all test AddOns, backup and stable restoration
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/fixtures/test-all-addons.ps1 -Repository .
       - name: Verify pinned test download, backups and stable channel rollback
         shell: powershell
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/fixtures/encyclopedia-addon.ps1 -Repository .
