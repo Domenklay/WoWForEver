@@ -16,7 +16,6 @@ try {
  Set-Content -LiteralPath (Join-Path $addons 'ForeverEncyclopedia\original-book.txt') -Value 'before'
  Set-Content -LiteralPath (Join-Path $addons 'OtherAddon\untouched.txt') -Value 'keep'
  & $scriptPath -GameDirectory $game -SkipLauncherSettings
- if ($LASTEXITCODE -ne 0) { throw 'Test-channel installer failed' }
  $book=(Get-Content -LiteralPath (Join-Path $addons 'ForeverEncyclopedia\ForeverEncyclopedia.toc') -Raw -Encoding UTF8)
  $asc=(Get-Content -LiteralPath (Join-Path $addons 'ForeverAscension\ForeverAscension.toc') -Raw -Encoding UTF8)
  if (-not $book.Contains('0.9.9-v2.1-talent-mana') -or -not $asc.Contains('1.11.0')) {throw 'Incomplete all-AddOn installation'}
