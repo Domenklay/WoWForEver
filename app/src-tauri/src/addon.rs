@@ -46,7 +46,7 @@ fn source_path(m:&Manifest)->Result<&'static str,String>{match m.name.as_str(){
 }}
 // Only files published in this project's testing catalog can be downloaded.
 // The catalog updates independently from the installed launcher binary.
-const TEST_CATALOG_URL:&str="https://raw.githubusercontent.com/Domenklay/WoWForEver/feature/encyclopedia-tooltip-mana-20261107/app/src-tauri/addons/testing-catalog.json";
+const TEST_CATALOG_URL:&str="https://raw.githubusercontent.com/Domenklay/WoWForEver/testing/addons-70658/app/src-tauri/addons/testing-catalog.json";
 
 #[derive(Deserialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
