@@ -1,3 +1,16 @@
+Working baseline accepted by user on 2026-11-06: user reports "Супер все работает"
+after successful combined gameplay activation. Treat current 70658 + Multi 1.7.0
+as the working reference, preserve it while doing future fixes. This is a general
+runtime smoke confirmation, not evidence that every spell, simultaneous-player
+scaling case or relog persistence case passed. See docs/BASELINE-70658.ru.md.
+User will develop AddOns separately; current Multi pins and replaces changed
+AddOn files (with backup). Development mode is a future task, not implemented.
+User uploaded gameplay-tools.tar.gz and server-backups.tar.gz; keep private SQL
+and keys out of repository and logs. Their contents were NOT inspected during
+baseline review. Archives created by our prior command contain tools and existing
+pre-install advancement backups, not a fresh post-install database/image snapshot.
+No reinstall, rollback, database reset or client repair is needed for baseline.
+
 Latest user-side deployment VERIFIED on 2026-11-06: corrected installer f7ac66d
 completed GAMEPLAY ACTIVE for Ascension 1.11.0 / protocol 3, Encyclopedia
 0.9.8-v2.1-smartai-abilities and Forever Scaling 0.2.0. User explicitly confirmed

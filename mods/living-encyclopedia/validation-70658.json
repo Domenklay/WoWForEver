@@ -37,5 +37,12 @@
       "encyclopedia": "0.9.8-v2.1-smartai-abilities",
       "scaling": "0.2.0"
     }
-  }
+  },
+  "user_runtime_smoke": {
+    "date": "2026-11-06",
+    "evidence": "User confirmed: Супер все работает",
+    "verified": true,
+    "scope": "general user-reported working installation; individual acceptance cases not enumerated"
+  },
+  "detailed_acceptance_verified": false
 }
