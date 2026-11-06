@@ -18,7 +18,7 @@ adv = importlib.util.module_from_spec(spec); spec.loader.exec_module(adv)
 clean, network, upgrade = adv.clean, adv.network, adv.upgrade
 FORMAT = 'forever-clean-gameplay-v1'
 MARKER = '.gameplay-in-progress.json'
-BOOK_VERSION = '0.9.8-v2.1-smartai-abilities'
+BOOK_VERSION = '0.9.9-v2.1-talent-mana'
 SCALING_VERSION = '0.2.0'
 CURRENT_ROOT = None
 
