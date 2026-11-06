@@ -202,11 +202,15 @@ local function createDock()
         button:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:AddLine(def.name, 1, 0.82, 0.42)
-            if unlocked(def.bit) then
+            if i == 3 then
+                GameTooltip:AddLine("В разработке. Эффект не подключён.", 0.88, 0.57, 0.47, true)
+            elseif unlocked(def.bit) then
                 local cd = tonumber(state.cooldowns[i]) or 0
                 GameTooltip:AddLine(cd > 0 and ("Перезарядка: " .. cd .. " сек.") or "Готово", 0.72, 0.82, 0.68)
+                GameTooltip:AddLine(i == 1 and "Стоимость: 1 мана за 1 поглощение." or "Стоимость: 1 мана за 1 восстановленное HP.", 0.58, 0.78, 0.91, true)
+                if i == 2 then GameTooltip:AddLine("Зарезервированная для щита мана недоступна лечению.", 0.68, 0.71, 0.66, true) end
             else
-                GameTooltip:AddLine(i == 3 and "Нативная версия ещё не подключена." or "Не изучено в дереве талантов.", 0.62, 0.62, 0.62)
+                GameTooltip:AddLine("Не изучено в дереве талантов.", 0.62, 0.62, 0.62)
             end
             GameTooltip:Show()
         end)
