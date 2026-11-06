@@ -114,15 +114,17 @@ def verify_image_ids(path, expected):
                     result.update(descend(child, depth + 1, optional=True))
             else:
                 config = content.get('config', {})
-                if config.get('mediaType') not in CONFIG_TYPES:
-                    raise ValueError('Invalid OCI config type')
                 if config.get('digest') not in configs:
                     # Attestations and unavailable other platforms are not entries
                     # in Docker's runnable compatibility manifest. Their manifest
                     # hash was checked above; they cannot establish image identity.
+                    # OCI artifacts may use application/vnd.oci.empty.v1+json,
+                    # which is valid metadata but is not a container config.
                     visiting.remove(digest)
                     cache[key] = result
                     return result
+                if config.get('mediaType') not in CONFIG_TYPES:
+                    raise ValueError('Unsupported runnable OCI config type: ' + str(config.get('mediaType')))
                 blob(archive, config)
                 layers = content.get('layers', [])
                 if not isinstance(layers, list) or len(layers) > 4096:

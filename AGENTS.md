@@ -1,3 +1,15 @@
+Second user finalization at 61ff871 failed Invalid OCI config type, with no
+server changes or archive rewrites. Bounded diagnostic CONFIRMS four runnable
+application/vnd.oci.image.config.v1+json configs plus THREE non-runnable
+application/vnd.oci.empty.v1+json artifact configs. Root IDs were already proven
+identical to the saved IDs. Fix moves runnable-type validation AFTER excluding
+non-runnable artifact configs; it still rejects unknown types for runnable configs
+and requires every root to reach an exported runnable config. Fixtures now use
+realistic OCI-empty artifact configs by default, including the four-image case.
+Do NOT repeat create/dump/export/stop or manually edit saved hashes. Re-run offline
+finalize against baseline-70658-20261106-231543 with the corrected checkout.
+Finalization and isolated restore still need actual user-side success output.
+
 Latest user backup result: create at 716662d saved current databases, resumed
 world/login/web successfully, saved resources and exported images, then failed
 only at old config-digest identity verification. Existing folder:

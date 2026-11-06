@@ -21,8 +21,9 @@ class SavedImage:
         self.config = self.put({'architecture':'amd64','os':'linux','config':{'Cmd':['server']}}, OCI_CONFIG)
         self.image = self.put({'schemaVersion':2,'mediaType':OCI_MANIFEST,
                                'config':self.config,'layers':[]}, OCI_MANIFEST)
-        self.attestation_config = self.put({'architecture':'unknown','os':'unknown'}, OCI_CONFIG)
+        self.attestation_config = self.put({}, 'application/vnd.oci.empty.v1+json')
         self.attestation = self.put({'schemaVersion':2,'mediaType':OCI_MANIFEST,
+                                     'artifactType':'application/vnd.in-toto+json',
                                      'config':self.attestation_config,'layers':[]}, OCI_MANIFEST)
         self.index = self.put({'schemaVersion':2,'mediaType':OCI_INDEX,
                                'manifests':[self.image,self.attestation]}, OCI_INDEX)
@@ -120,4 +121,26 @@ class DockerArchiveIdentityTests(unittest.TestCase):
                               'config':saved.config,'layers':[absent]}, OCI_MANIFEST)
             saved.write(Path(temp) / 'images.tar', [root])
             with self.assertRaises(KeyError):
+                verify_image_ids(Path(temp) / 'images.tar', {root['digest']})
+
+    def test_oci_artifact_with_empty_config_does_not_invalidate_a_runnable_image_in_the_same_index(self):
+        with tempfile.TemporaryDirectory() as temp:
+            saved = SavedImage()
+            empty = saved.put({}, 'application/vnd.oci.empty.v1+json')
+            artifact = saved.put({'schemaVersion':2, 'mediaType':OCI_MANIFEST,
+                                 'artifactType':'application/vnd.in-toto+json',
+                                 'config':empty, 'layers':[]}, OCI_MANIFEST)
+            root = saved.put({'schemaVersion':2, 'mediaType':OCI_INDEX,
+                              'manifests':[saved.image,artifact]}, OCI_INDEX)
+            saved.write(Path(temp) / 'images.tar', [root])
+            self.assertEqual(verify_image_ids(Path(temp) / 'images.tar', {root['digest']})['format'], 'oci-root')
+
+    def test_unrecognized_type_for_the_runnable_config_still_fails(self):
+        with tempfile.TemporaryDirectory() as temp:
+            saved = SavedImage()
+            config = dict(saved.config, mediaType='application/vnd.oci.empty.v1+json')
+            root = saved.put({'schemaVersion':2, 'mediaType':OCI_MANIFEST,
+                              'config':config, 'layers':[]}, OCI_MANIFEST)
+            saved.write(Path(temp) / 'images.tar', [root])
+            with self.assertRaisesRegex(ValueError, 'config type'):
                 verify_image_ids(Path(temp) / 'images.tar', {root['digest']})
