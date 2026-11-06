@@ -111,6 +111,12 @@
         <legend data-i18n="addonSettings">Game AddOns</legend>
         <label class="row"><input id="s-addon-development" type="checkbox" aria-describedby="addon-dev-hint"><span data-i18n="addonDevMode">AddOn development</span></label>
         <p class="small muted" id="addon-dev-hint" data-i18n="addonDevHint">Keep existing Ascension and Encyclopedia folders unchanged. Missing folders are installed automatically. Turn this off to return to published versions; replaced folders are backed up.</p>
+        <div class="workshop-buttons">
+          <button class="btn small" id="addon-test-install" type="button" data-i18n="addonTestInstall">Скачать все тестовые обновления</button>
+          <button class="btn small ghost" id="addon-test-stable" type="button" data-i18n="addonTestStable">Вернуть стабильные аддоны</button>
+        </div>
+        <p class="small muted addon-channel-status" id="addon-test-status" aria-live="polite"></p>
+        <p class="small muted" data-i18n="addonTestWarning">Скачиваются тестовые версии всех зарегистрированных клиентских аддонов. Автолевелинг и другие серверные модули требуют отдельного обновления worldserver.</p>
       </fieldset>
 
       <fieldset id="content-packages">

@@ -212,6 +212,22 @@ fn package_guard(state: &AppState) -> Result<PackageGuard<'_>,String> {
     { return Err(t("pkg_platform").into()); }
     #[allow(unreachable_code)] Ok(guard)
 }
+/// Explicit test/stable switch. No world database changes and no game launch.
+#[tauri::command]
+async fn install_addon_channel(app: AppHandle, state: State<'_, AppState>, test_mode: bool) -> Result<serde_json::Value, String> {
+    let _guard = package_guard(&state)?;
+    let settings = state.settings.lock().unwrap().clone();
+    if !settings.game_found() { return Err(t("game_not_found").into()); }
+    let game_dir = std::path::Path::new(&settings.game_dir);
+    let result = addon::install_channel(game_dir, test_mode, |line| emit(&app, "log", line)).await?;
+    let mut current = state.settings.lock().unwrap();
+    if current.game_dir != settings.game_dir { return Err("Game directory changed during AddOn installation".into()); }
+    current.addon_test_mode = test_mode;
+    current.save().map_err(|error| error.to_string())?;
+    emit(&app, "log", format!("Client AddOn channel installed: {}", if test_mode {"testing"} else {"stable"}));
+    Ok(result)
+}
+
 #[tauri::command]
 fn content_catalog() -> serde_json::Value {
     serde_json::from_str(include_str!("../../../content/packages/catalog.json")).expect("embedded content catalog")
@@ -342,7 +358,7 @@ async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
     };
 
     emit(app, "step", t("step_preparing"));
-    addon::ensure(std::path::Path::new(&settings.game_dir), settings.addon_development_mode, |message| emit(app, "log", message)).await?;
+    addon::ensure(std::path::Path::new(&settings.game_dir), settings.addon_development_mode, settings.addon_test_mode, |message| emit(app, "log", message)).await?;
     let s = settings.clone();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         game::write_wtf(&s)?;
@@ -462,7 +478,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState { settings: Mutex::new(Settings::load()), playing: AtomicBool::new(false), client_cancel: std::sync::Arc::new(AtomicBool::new(false)) })
         .invoke_handler(tauri::generate_handler![
-            get_state, save_settings, set_language, detect_locale, inspect_official_client, login, logout, server_status, news, checks, repair, play,
+            get_state, save_settings, set_language, detect_locale, inspect_official_client, login, logout, server_status, news, checks, repair, play, install_addon_channel,
             content_catalog, content_status, inspect_content, install_content, rollback_content
             , client_work, native_client_work, cancel_client_work, inspect_client_locations
         ])

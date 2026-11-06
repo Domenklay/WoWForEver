@@ -97,13 +97,15 @@ pub struct Settings {
     pub native_client_dir: String,
     /// Preserve existing project AddOn folders while developing them locally.
     pub addon_development_mode: bool,
+    /// Opt-in test Encyclopedia; does not change Ascension or the core version.
+    pub addon_test_mode: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self { server: Server::default(), game_dir: String::new(), locale: String::new(),
             language: String::new(), linux: LinuxSettings::default(), workshop: crate::client::Settings::default(),
-            protect_client_files: true, native_client_dir: String::new(), addon_development_mode: false }
+            protect_client_files: true, native_client_dir: String::new(), addon_development_mode: false, addon_test_mode: false }
     }
 }
 
@@ -270,12 +272,15 @@ mod tests {
     fn addon_development_is_opt_in_and_survives_settings_roundtrip() {
         let original: Settings = serde_json::from_str(r#"{"gameDir":"E:/client/_forever_","server":{"address":"127.0.0.1"}}"#).unwrap();
         assert!(!original.addon_development_mode);
+        assert!(!original.addon_test_mode);
         let mut enabled = original.clone();
         enabled.addon_development_mode = true;
+        enabled.addon_test_mode = true;
         let saved = serde_json::to_string(&enabled).unwrap();
         assert!(saved.contains("\"addonDevelopmentMode\":true"));
         let loaded: Settings = serde_json::from_str(&saved).unwrap();
         assert!(loaded.addon_development_mode);
+        assert!(loaded.addon_test_mode);
         assert_eq!(loaded.game_dir, original.game_dir);
         assert_eq!(loaded.server.address, original.server.address);
         assert_eq!(loaded.server.public_key, original.server.public_key);

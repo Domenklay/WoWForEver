@@ -29,6 +29,21 @@ class GameplayTests(unittest.TestCase):
             self.assertEqual(target['client'], state['client'])
             game.clean.save(target); self.assertEqual(game.clean.load_state(root / 'state.json'), target)
 
+    def test_preupgrade_encyclopedia_state_is_still_readable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); state, model = fixture(root)
+            target, _ = game.configure(state, model, 'candidate', root / 'advancement/abcdef123456')
+            target['gameplay']['encyclopedia'] = '0.9.8-v2.1-smartai-abilities'
+            game.clean.save(target)
+            self.assertEqual(game.clean.load_state(root / 'state.json'), target)
+            target['gameplay']['encyclopedia'] = '0.9.9-v2.1-talent-mana'
+            game.clean.save(target)
+            self.assertEqual(game.clean.load_state(root / 'state.json'), target)
+            target['gameplay']['encyclopedia'] = 'unrecognized-build'
+            game.clean.save(target)
+            with self.assertRaisesRegex(ValueError, 'Unsupported combined gameplay'):
+                game.clean.load_state(root / 'state.json')
+
     def test_scaling_can_be_left_disabled_without_removing_book_or_ascension(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); state, model = fixture(root)
@@ -106,7 +121,7 @@ class GameplayTests(unittest.TestCase):
                 game.clean.execute(SimpleNamespace(action='start', root=root))
 
     def test_book_manifest_covers_exactly_the_toc_and_all_loaded_lua_files(self):
-        manifest = json.loads((ROOT / 'app/src-tauri/addons/forever-encyclopedia.json').read_text())
+        manifest = json.loads((ROOT / 'app/src-tauri/addons/forever-encyclopedia-test.json').read_text())
         folder = ROOT / 'mods/living-encyclopedia/addon/ForeverEncyclopedia'
         names = {line.strip() for line in (folder / 'ForeverEncyclopedia.toc').read_text().splitlines() if line.strip() and not line.startswith('#')}
         names.add('ForeverEncyclopedia.toc')

@@ -1,6 +1,7 @@
 local ADDON = ...
 local BASE_REQ, BASE_RES = "FEC1", "FER1"
 local TAL_REQ, TAL_RES = "FET1", "FTR1"
+local RUNTIME_REQ, RUNTIME_RES = "FEB1", "FBR1"
 local SERVER_TARGET = "SERVER"
 local Catalog = ForeverEncyclopediaTalentCatalog
 
@@ -51,7 +52,7 @@ local DAMAGE_SCHOOLS={[0]="Физический",[1]="Свет",[2]="Огонь"
 
 local function registerPrefixes()
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
-        for _,p in ipairs({BASE_REQ,BASE_RES,TAL_REQ,TAL_RES}) do pcall(C_ChatInfo.RegisterAddonMessagePrefix,p) end
+        for _,p in ipairs({BASE_REQ,BASE_RES,TAL_REQ,TAL_RES,RUNTIME_REQ,RUNTIME_RES}) do pcall(C_ChatInfo.RegisterAddonMessagePrefix,p) end
     end
 end
 
@@ -65,6 +66,7 @@ end
 
 local function requestBaseStatus() send(BASE_REQ,"status") end
 local function requestTalentStatus() send(TAL_REQ,"status") end
+local function requestRuntimeStatus() send(RUNTIME_REQ,"status") end
 local function requestCatalog(page) send(BASE_REQ,"catalog "..tostring(page or 1).." 0 0 -1") end
 local function requestZones() state.recentZones={}; state.recentZonesLoaded=false; send(BASE_REQ,"recent 3") end
 
@@ -243,18 +245,43 @@ local function drawTalentTab()
         local bg=tex(b,"BACKGROUND",maxed and 0.16 or available and 0.11 or 0.045,maxed and 0.12 or available and 0.075 or 0.040,0.025,0.98); bg:SetAllPoints(); addBorder(b,maxed and 0.70 or available and 0.48 or 0.22,maxed and 0.52 or available and 0.32 or 0.18,0.10,1)
         local icon=b:CreateTexture(nil,"ARTWORK"); icon:SetPoint("TOPLEFT",b,"TOPLEFT",5,-5); icon:SetPoint("BOTTOMRIGHT",b,"BOTTOMRIGHT",-5,5); icon:SetTexture(n.icon); icon:SetDesaturated((not available) and rank==0); icon:SetAlpha((available or rank>0) and 1 or 0.38)
         local badge=b:CreateFontString(nil,"OVERLAY","GameFontNormalSmall"); badge:SetPoint("BOTTOMRIGHT",b,"BOTTOMRIGHT",-3,3); badge:SetText(rank.."/"..n.max); badge:SetTextColor(1,0.86,0.55)
-        b:SetScript("OnClick",function() selectedTalent=n.key; Draw() end); b:SetScript("OnEnter",function() GameTooltip:SetOwner(b,"ANCHOR_RIGHT"); GameTooltip:AddLine(n.name,1,0.82,0.42); GameTooltip:AddLine(n.desc,0.82,0.82,0.82,true); GameTooltip:Show() end); b:SetScript("OnLeave",function() GameTooltip:Hide() end)
+        b:SetScript("OnClick",function() selectedTalent=n.key; Draw() end)
+        b:SetScript("OnEnter",function()
+            local now,nextValue=Catalog.EffectPreview(n,rank,state.ranks,state.maxMana)
+            GameTooltip:SetOwner(b,"ANCHOR_RIGHT")
+            GameTooltip:AddLine(n.name,1,0.82,0.42)
+            GameTooltip:AddLine(n.desc,0.82,0.82,0.82,true)
+            GameTooltip:AddLine("Сейчас: "..now,0.65,0.85,0.85,true)
+            if not maxed then GameTooltip:AddLine("След. ранг: "..nextValue,0.65,0.85,0.65,true) end
+            if not n.implemented then
+                GameTooltip:AddLine("Покупка отключена до реализации.",0.95,0.52,0.45,true)
+            elseif not maxed then
+                GameTooltip:AddLine("Цена следующего ранга: "..ForeverEncyclopediaTalentCost(n,rank).." знаний",0.84,0.73,0.55)
+            end
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave",function() GameTooltip:Hide() end)
         fs(tree,p.x-68,p.y-35,136,n.name,"GameFontNormalSmall",0.82,0.76,0.66,"CENTER")
     end end
     local n=nodeByKey(selectedTalent); if not n or n.branch~=currentBranch then for _,candidate in ipairs(Catalog.nodes) do if candidate.branch==currentBranch then n=candidate; selectedTalent=candidate.key; break end end end
     if n then
         local rank=state.ranks[n.key] or 0; local maxed=rank>=n.max; local cost=maxed and 0 or ForeverEncyclopediaTalentCost(n,rank)
-        fs(detail,18,-18,205,n.name,"GameFontHighlightLarge",1,0.86,0.60); fs(detail,18,-55,205,string.format("Ранг %d / %d",rank,n.max),"GameFontNormal",0.82,0.72,0.55); fs(detail,18,-92,205,n.desc,"GameFontNormal",0.78,0.72,0.64)
-        if n.req then local req=nodeByKey(n.req); fs(detail,18,-230,205,"Требуется: "..(req and req.name or n.req).." "..(n.reqRank or 1),"GameFontNormalSmall",0.72,0.62,0.50) end
-        fs(detail,18,-278,205,"Доступно знаний: "..state.knowledgeAvailable,"GameFontNormal",0.88,0.75,0.48)
-        if maxed then fs(detail,18,-314,205,"Максимальный ранг","GameFontHighlight",0.50,0.82,0.46)
-        elseif not prereqMet(n) then fs(detail,18,-314,205,"Сначала изучите предыдущий узел.","GameFontNormalSmall",0.82,0.48,0.40)
-        else fs(detail,18,-314,205,"Стоимость следующего: "..cost,"GameFontHighlight",0.95,0.78,0.43); local buy=raised(detail,18,-356,205,38,"Изучить",function() send(TAL_REQ,"buy "..n.key) end,false,false); if state.knowledgeAvailable<cost then buy:Disable() end end
+        local now,nextValue=Catalog.EffectPreview(n,rank,state.ranks,state.maxMana)
+        fs(detail,18,-18,205,n.name,"GameFontHighlightLarge",1,0.86,0.60)
+        fs(detail,18,-55,205,string.format("Ранг %d / %d",rank,n.max),"GameFontNormal",0.82,0.72,0.55)
+        fs(detail,18,-84,205,"Сейчас: "..now,"GameFontNormalSmall",0.60,0.81,0.84)
+        if not maxed then fs(detail,18,-120,205,"След. ранг: "..nextValue,"GameFontNormalSmall",0.61,0.83,0.61) end
+        fs(detail,18,-159,205,n.desc,"GameFontNormalSmall",0.78,0.72,0.64)
+        if n.req then local req=nodeByKey(n.req); fs(detail,18,-271,205,"Требуется: "..(req and req.name or n.req).." "..(n.reqRank or 1),"GameFontNormalSmall",0.72,0.62,0.50) end
+        fs(detail,18,-319,205,"Доступно знаний: "..state.knowledgeAvailable,"GameFontNormalSmall",0.88,0.75,0.48)
+        if not n.implemented then fs(detail,18,-354,205,"Эффект ещё не реализован.","GameFontNormalSmall",0.92,0.49,0.44)
+        elseif maxed then fs(detail,18,-354,205,"Максимальный ранг","GameFontHighlight",0.50,0.82,0.46)
+        elseif not prereqMet(n) then fs(detail,18,-354,205,"Нужен предыдущий узел.","GameFontNormalSmall",0.82,0.48,0.40)
+        else
+            fs(detail,18,-354,205,"Стоимость: "..cost.." знаний","GameFontHighlight",0.95,0.78,0.43)
+            local buy=raised(detail,18,-396,205,36,"Изучить",function() send(TAL_REQ,"buy "..n.key) end,false,false)
+            if state.knowledgeAvailable<cost then buy:Disable() end
+        end
     end
 end
 
@@ -308,8 +335,8 @@ local function createUI()
     ui.status=fs(ui,24,-49,230,"Нет связи","GameFontNormalSmall",0.8,0.4,0.35); ui.stats=fs(ui,280,-49,420,"","GameFontNormalSmall",0.82,0.75,0.63,"CENTER"); ui.zone=fs(ui,720,-49,230,"","GameFontHighlight",0.93,0.85,0.70,"RIGHT")
     local labels={"Существа","Локации","Таланты","Облики"}; for i,label in ipairs(labels) do tabButtons[i]=raised(ui,26+(i-1)*232,-91,216,34,label,function() switchTab(i) end,i==currentTab,true) end
     content=CreateFrame("Frame",nil,ui); content:SetPoint("TOPLEFT",ui,"TOPLEFT",16,-132); content:SetSize(948,486)
-    fs(ui,0,-616,950,"Forever Encyclopedia 0.9.4 V2.1","GameFontNormalSmall",0.46,0.40,0.33,"RIGHT")
-    ui:SetScript("OnShow",function() requestBaseStatus(); requestTalentStatus(); if currentTab==1 then requestCatalog(state.catalogPage) elseif currentTab==2 then requestZones() end end)
+    fs(ui,0,-616,950,"Forever Encyclopedia 0.9.9 V2.1","GameFontNormalSmall",0.46,0.40,0.33,"RIGHT")
+    ui:SetScript("OnShow",function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus(); if currentTab==1 then requestCatalog(state.catalogPage) elseif currentTab==2 then requestZones() end end)
     updateHeader(); Draw()
 end
 
@@ -348,6 +375,17 @@ local function parseBase(msg)
     end
 end
 
+local function parseRuntime(msg)
+    if msg:sub(1,5)~="BOOK|" then return end
+    local _,mask,mana,maxMana=strsplit("|",msg)
+    local previousMax,previousMask=state.maxMana,state.abilityMask
+    state.abilityMask=tonumber(mask) or 0
+    state.mana=tonumber(mana) or 0
+    state.maxMana=tonumber(maxMana) or 100
+    updateDock()
+    if (previousMax~=state.maxMana or previousMask~=state.abilityMask) and ui and ui:IsShown() and currentTab==3 then Draw() end
+end
+
 local function parseTalent(msg)
     if msg:sub(1,7)=="POINTS|" then local _,t,s,a=strsplit("|",msg); state.knowledgeTotal=tonumber(t) or 0; state.knowledgeSpent=tonumber(s) or 0; state.knowledgeAvailable=tonumber(a) or 0; state.ranks={}; talentBatch=true
     elseif msg:sub(1,5)=="RANK|" then local _,k,r=strsplit("|",msg); state.ranks[k]=tonumber(r) or 0
@@ -378,8 +416,8 @@ SlashCmdList["FOREVERENCYCLOPEDIAV21"]=function() createUI(); if ui:IsShown() th
 local events=CreateFrame("Frame"); events:RegisterEvent("ADDON_LOADED"); events:RegisterEvent("PLAYER_LOGIN"); events:RegisterEvent("PLAYER_ENTERING_WORLD"); events:RegisterEvent("ZONE_CHANGED_NEW_AREA"); events:RegisterEvent("CHAT_MSG_ADDON")
 events:SetScript("OnEvent",function(_,event,...)
     if event=="ADDON_LOADED" then local name=...; if name~=ADDON then return end; registerPrefixes(); return end
-    if event=="CHAT_MSG_ADDON" then local p,m=...; if p==BASE_RES then parseBase(tostring(m or "")) elseif p==TAL_RES then parseTalent(tostring(m or "")) end; return end
+    if event=="CHAT_MSG_ADDON" then local p,m=...; if p==BASE_RES then parseBase(tostring(m or "")) elseif p==TAL_RES then parseTalent(tostring(m or "")) elseif p==RUNTIME_RES then parseRuntime(tostring(m or "")) end; return end
     if event=="PLAYER_LOGIN" then createDock() end
     if event=="ZONE_CHANGED_NEW_AREA" then state.catalog={}; state.catalogLoaded=false; state.catalogPage=1; selectedCreature=1 end
-    C_Timer.After(1.0,function() requestBaseStatus(); requestTalentStatus(); if ui and ui:IsShown() then if currentTab==1 then requestCatalog(1) elseif currentTab==2 then requestZones() end end end)
+    C_Timer.After(1.0,function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus(); if ui and ui:IsShown() then if currentTab==1 then requestCatalog(1) elseif currentTab==2 then requestZones() end end end)
 end)

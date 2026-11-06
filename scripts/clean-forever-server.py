@@ -609,7 +609,7 @@ def load_state(path):
         raise ValueError('Unsupported Advancement state identity')
     gameplay = state.get('gameplay')
     if gameplay and (not advancement or gameplay.get('version') != 1
-        or gameplay.get('encyclopedia') != '0.9.8-v2.1-smartai-abilities'
+        or gameplay.get('encyclopedia') not in ('0.9.8-v2.1-smartai-abilities', '0.9.9-v2.1-talent-mana')
         or gameplay.get('scaling') not in (None, '0.2.0')
         or not re.fullmatch('[0-9a-f]{64}', gameplay.get('source_sha256', ''))
         or gameplay.get('backup') != advancement['backup']):

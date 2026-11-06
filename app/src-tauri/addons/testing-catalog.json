@@ -1,0 +1,130 @@
+{
+  "format": "forever-addon-testing-v1",
+  "channel": "testing",
+  "project": "Domenklay/WoWForEver",
+  "clientBuild": 70658,
+  "addons": [
+    {
+      "sourcePath": "mods/forever-advancement/addon/ForeverAscension",
+      "manifest": {
+        "format": "forever-addon-v1",
+        "name": "ForeverAscension",
+        "version": "1.11.0",
+        "protocol": 3,
+        "sourceCommit": "9437cf505cf0d2c697403c3c8191d031252ed4a2",
+        "files": [
+          {
+            "name": "Catalog.lua",
+            "size": 10098530,
+            "sha256": "313f9006bac84edeece333dbb4972c49774b5595a11d7f6b9188a585d6ad980e"
+          },
+          {
+            "name": "CharacterStats.lua",
+            "size": 7792,
+            "sha256": "3de4b3c7ab77f808f47129b74a3b4b8d5b14adb18bfc0ebb2bb26ca24ae5fa94"
+          },
+          {
+            "name": "CustomRules.lua",
+            "size": 470,
+            "sha256": "dcc3dbfffa1eef314836caa5a74e478a1f164c715d13bc96d8f6b54b11e0a4fd"
+          },
+          {
+            "name": "ForeverAscension.lua",
+            "size": 36397,
+            "sha256": "9cd87a60127468ede94510df4c4e36672c765d7ccc099d4003bd7685c7563e35"
+          },
+          {
+            "name": "ForeverAscension.toc",
+            "size": 331,
+            "sha256": "79773f1a62de4dc959905b9bd89099e6c281fc04060d6c436d99b654eba6f821"
+          },
+          {
+            "name": "Integration.lua",
+            "size": 9169,
+            "sha256": "d0956aa6239f01e1c409c8c467a501bcc71bc9de53044945e4a7e6fa408ad7a7"
+          },
+          {
+            "name": "Portrait.lua",
+            "size": 4465,
+            "sha256": "f595bbc1c553cd3b7d5db230bbafa25d44d98b2759824d1c58dd35aec9c815f2"
+          }
+        ]
+      }
+    },
+    {
+      "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia",
+      "manifest": {
+        "format": "forever-addon-v1",
+        "name": "ForeverEncyclopedia",
+        "version": "0.9.9-v2.1-talent-mana",
+        "protocol": 1,
+        "sourceCommit": "a59d535b45fb48de027e7748e959a9cf5931c704",
+        "files": [
+          {
+            "name": "ForeverEncyclopedia.toc",
+            "size": 594,
+            "sha256": "6f91cad792a4bcdfd3f34d4be0a48e2d05ee89384916875a4df7905f2774db40"
+          },
+          {
+            "name": "ForeverEncyclopediaTalentData.lua",
+            "size": 14806,
+            "sha256": "014914ff90993a5409d75228fdfb403146824022f0efed3ac4a60814cd5b2aaa"
+          },
+          {
+            "name": "ForeverEncyclopediaTalentOverrides.lua",
+            "size": 7672,
+            "sha256": "ab51d8a75d9dc5debf28a90319ce6885818b52b5b992dabeb173319c77090249"
+          },
+          {
+            "name": "ForeverEncyclopediaV21.lua",
+            "size": 37829,
+            "sha256": "6fc206b494c2063d46de251d89b3b69a9032ac97b361e262878e74351568cf09"
+          },
+          {
+            "name": "ForeverEncyclopediaAbilities.lua",
+            "size": 10537,
+            "sha256": "db9e0d1aaad0b8fac52e2b632fc5aa1fad67446db5180a5b2932b68d35ab3cd6"
+          },
+          {
+            "name": "ForeverEncyclopediaSafeDock.lua",
+            "size": 13823,
+            "sha256": "bcba97645bd0055e0fe59e6d765242acd9b01776833d2003b0c9cda8701a22e8"
+          },
+          {
+            "name": "ForeverEncyclopediaMovableDock.lua",
+            "size": 8746,
+            "sha256": "e18937020106990e293fa607875d4b2c2440f20766e04b524cef320cb6dd2912"
+          },
+          {
+            "name": "ForeverEncyclopediaGuard.lua",
+            "size": 2434,
+            "sha256": "0a42e2ae73e0cd7f8955d959f4cac1ef706ef0076edf1fe79854baf9be52ef85"
+          }
+        ]
+      }
+    }
+  ],
+  "serverModules": [
+    {
+      "name": "Forever Ascension",
+      "stableVersion": "1.11.0",
+      "testVersion": "1.11.0",
+      "status": "server-only",
+      "note": "Серверная часть мультикласса требует отдельной сборки worldserver и резервной копии"
+    },
+    {
+      "name": "Forever Encyclopedia",
+      "stableVersion": "0.9.8-v2.1-smartai-abilities",
+      "testVersion": "0.9.9-v2.1-talent-mana",
+      "status": "server-only",
+      "note": "Новые числовые правила талантов требуют отдельного обновления worldserver"
+    },
+    {
+      "name": "Forever Scaling",
+      "stableVersion": "0.2.0",
+      "testVersion": "0.2.0",
+      "status": "server-only",
+      "note": "Автолевелинг работает в ядре; клиентских Lua-файлов нет, изменения требуют отдельного обновления worldserver"
+    }
+  ]
+}

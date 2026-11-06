@@ -1347,3 +1347,112 @@ Object.assign(TEXTS.pt, {
   "addonDevActive": "Desenvolvimento de addons ativado — as alterações locais são preservadas.",
   "addonDevHint": "As pastas existentes de Ascension e Encyclopedia permanecem intactas. As ausentes são instaladas automaticamente. Desative para voltar às versões publicadas; as pastas substituídas são guardadas em backup."
 });
+
+// Explicit test/stable Encyclopedia downloads with server-side integrity checks.
+Object.assign(TEXTS.ru, {
+  "addonTestInstall": "Скачать тестовую книгу 0.9.9",
+  "addonTestStable": "Вернуть стабильную 0.9.8",
+  "addonTestWarning": "Меняются только файлы аддона. Для новых эффектов талантов нужно отдельно обновить серверное ядро. Предыдущая папка сохраняется в резервной копии.",
+  "addonTestSavePath": "Сначала сохраните выбранную папку игры в настройках.",
+  "addonTestSelected": "Канал: тестовая энциклопедия 0.9.9. При запуске игры обновляется именно она.",
+  "addonStableSelected": "Канал: стабильная энциклопедия 0.9.8.",
+  "addonTestWorking": "Скачивание и проверка SHA-256…",
+  "addonTestComplete": "Установлена энциклопедия {version}."
+});
+Object.assign(TEXTS.en, {
+  "addonTestInstall": "Download test Encyclopedia 0.9.9",
+  "addonTestStable": "Restore stable 0.9.8",
+  "addonTestWarning": "Only AddOn files change. Updated server-side talent effects require a separate worldserver update. A backup of the previous folder is kept.",
+  "addonTestSavePath": "Save the selected game folder in settings first.",
+  "addonTestSelected": "Channel: test Encyclopedia 0.9.9. Play keeps this version selected.",
+  "addonStableSelected": "Channel: stable Encyclopedia 0.9.8.",
+  "addonTestWorking": "Downloading and verifying SHA-256…",
+  "addonTestComplete": "Installed Encyclopedia {version}."
+});
+Object.assign(TEXTS.fr, {
+  "addonTestInstall": "Télécharger Encyclopedia test 0.9.9",
+  "addonTestStable": "Revenir à la version stable 0.9.8",
+  "addonTestWarning": "Seuls les fichiers de l'addon changent. Les nouveaux talents nécessitent une mise à jour séparée du serveur. Une sauvegarde est conservée.",
+  "addonTestSavePath": "Enregistrez d'abord le dossier du jeu.",
+  "addonTestSelected": "Canal : Encyclopedia test 0.9.9. La version reste sélectionnée au lancement.",
+  "addonStableSelected": "Canal : Encyclopedia stable 0.9.8.",
+  "addonTestWorking": "Téléchargement et vérification SHA-256…",
+  "addonTestComplete": "Encyclopedia {version} installée."
+});
+Object.assign(TEXTS.es, {
+  "addonTestInstall": "Descargar Encyclopedia de prueba 0.9.9",
+  "addonTestStable": "Volver a la estable 0.9.8",
+  "addonTestWarning": "Solo cambian los archivos del addon. Los nuevos talentos requieren actualizar el servidor por separado. Se conserva una copia de seguridad.",
+  "addonTestSavePath": "Guarda primero la carpeta del juego.",
+  "addonTestSelected": "Canal: Encyclopedia de prueba 0.9.9. Se conserva al iniciar.",
+  "addonStableSelected": "Canal: Encyclopedia estable 0.9.8.",
+  "addonTestWorking": "Descargando y verificando SHA-256…",
+  "addonTestComplete": "Encyclopedia {version} instalada."
+});
+Object.assign(TEXTS.pt, {
+  "addonTestInstall": "Baixar Encyclopedia de teste 0.9.9",
+  "addonTestStable": "Voltar à versão estável 0.9.8",
+  "addonTestWarning": "Apenas os arquivos do addon mudam. Novos talentos exigem uma atualização separada do servidor. Um backup da pasta anterior é mantido.",
+  "addonTestSavePath": "Salve primeiro a pasta de jogo selecionada.",
+  "addonTestSelected": "Canal: Encyclopedia de teste 0.9.9. A versão é mantida ao iniciar.",
+  "addonStableSelected": "Canal: Encyclopedia estável 0.9.8.",
+  "addonTestWorking": "Baixando e verificando SHA-256…",
+  "addonTestComplete": "Encyclopedia {version} instalada."
+});
+
+// Experimental channel now covers the entire published AddOn catalog.
+Object.assign(TEXTS.ru, {
+  "addonTestInstall": "Скачать все тестовые обновления",
+  "addonTestStable": "Вернуть стабильные аддоны",
+  "addonTestWarning": "Multi скачивает новые версии всех зарегистрированных клиентских аддонов. Модули ядра, включая автолевелинг, обновляются отдельно на сервере.",
+  "addonTestSelected": "Канал: тестовый. Проверяются обновления всех аддонов из экспериментального каталога GitHub.",
+  "addonStableSelected": "Канал: стабильный. Используются закреплённые проверенные версии.",
+  "addonTestComplete": "Проверено/установлено клиентских аддонов: {count}",
+  "addonClientUpdated": "Клиентские аддоны:",
+  "addonServerHeading": "Серверные модули (не устанавливаются в клиент):",
+  "addonServerOnly": "нужна отдельная сборка и установка на сервер"
+});
+Object.assign(TEXTS.en, {
+  "addonTestInstall": "Download all test AddOn updates",
+  "addonTestStable": "Restore stable AddOns",
+  "addonTestWarning": "Multi downloads all registered experimental client AddOns. Server-core modules, including Scaling, must be updated separately on the server.",
+  "addonTestSelected": "Channel: testing. Multi checks all AddOns in the live GitHub testing catalog.",
+  "addonStableSelected": "Channel: stable. Pinned verified versions are used.",
+  "addonTestComplete": "Client AddOns checked/installed: {count}",
+  "addonClientUpdated": "Client AddOns:",
+  "addonServerHeading": "Server modules (not installed in the client):",
+  "addonServerOnly": "requires a separate server build and deployment"
+});
+Object.assign(TEXTS.fr, {
+  "addonTestInstall": "Télécharger tous les AddOns de test",
+  "addonTestStable": "Restaurer les AddOns stables",
+  "addonTestWarning": "Multi télécharge les AddOns client expérimentaux inscrits au catalogue. Les modules serveur, dont Scaling, doivent être mis à jour séparément.",
+  "addonTestSelected": "Canal : test. Multi vérifie tous les AddOns du catalogue GitHub.",
+  "addonStableSelected": "Canal : stable. Versions vérifiées et figées.",
+  "addonTestComplete": "AddOns client vérifiés/installés : {count}",
+  "addonClientUpdated": "AddOns client :",
+  "addonServerHeading": "Modules serveur (non installés dans le client) :",
+  "addonServerOnly": "nécessite une compilation et une installation séparées"
+});
+Object.assign(TEXTS.es, {
+  "addonTestInstall": "Descargar todas las actualizaciones de prueba",
+  "addonTestStable": "Restaurar AddOns estables",
+  "addonTestWarning": "Multi descarga todos los AddOns de cliente experimentales del catálogo. Los módulos del servidor, incluido Scaling, se actualizan aparte.",
+  "addonTestSelected": "Canal: pruebas. Multi comprueba todos los AddOns del catálogo de GitHub.",
+  "addonStableSelected": "Canal: estable. Se usan versiones verificadas y fijadas.",
+  "addonTestComplete": "AddOns verificados/instalados: {count}",
+  "addonClientUpdated": "AddOns del cliente:",
+  "addonServerHeading": "Módulos del servidor (no se instalan en el cliente):",
+  "addonServerOnly": "requiere compilación e instalación separada en el servidor"
+});
+Object.assign(TEXTS.pt, {
+  "addonTestInstall": "Baixar todas as atualizações de teste",
+  "addonTestStable": "Restaurar AddOns estáveis",
+  "addonTestWarning": "Multi baixa todos os AddOns experimentais cadastrados para o cliente. Módulos de servidor, incluindo Scaling, são atualizados separadamente.",
+  "addonTestSelected": "Canal: testes. Multi verifica todos os AddOns do catálogo GitHub.",
+  "addonStableSelected": "Canal: estável. Versões verificadas e fixadas.",
+  "addonTestComplete": "AddOns verificados/instalados: {count}",
+  "addonClientUpdated": "AddOns do cliente:",
+  "addonServerHeading": "Módulos de servidor (não instalados no cliente):",
+  "addonServerOnly": "requer compilação e instalação separada no servidor"
+});

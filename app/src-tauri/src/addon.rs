@@ -1,14 +1,15 @@
 //! Install the pinned project AddOns before the game is spawned.
 //! No client archives, settings, SavedVariables or other AddOns are modified.
 use std::{fs, path::{Path, PathBuf}, time::Duration};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use crate::i18n::{t, tf};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 struct Manifest {format:String, name:String, version:String, protocol:u32, source_commit:String, files:Vec<Entry>}
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Entry {name:String, size:u64, sha256:String}
 fn manifest()->Result<Manifest,String>{
@@ -16,18 +17,96 @@ fn manifest()->Result<Manifest,String>{
 }
 fn parse_manifest(text:&str)->Result<Manifest,String>{
  let m:Manifest=serde_json::from_str(text).map_err(|e|e.to_string())?;
- let valid_version=match m.name.as_str(){"ForeverAscension"=>m.version=="1.11.0"&&m.protocol==3,"ForeverEncyclopedia"=>m.version=="0.9.8-v2.1-smartai-abilities"&&m.protocol==1,_=>false};
- if m.format!="forever-addon-v1" || !valid_version || m.source_commit.len()!=40 || !m.source_commit.bytes().all(|c|c.is_ascii_hexdigit()) || m.files.is_empty(){return Err("Invalid bundled AddOn manifest".into());}
+ let valid_name=m.name.starts_with("Forever") && m.name.len()<=80 && m.name.bytes().all(|b|b.is_ascii_alphanumeric());
+ let valid_version=!m.version.is_empty() && m.version.len()<=96 && m.version.bytes().all(|b|b.is_ascii_alphanumeric() || matches!(b,b'.'|b'-'|b'_'));
+ let valid_protocol=match m.name.as_str(){"ForeverAscension"=>m.protocol==3,"ForeverEncyclopedia"=>m.protocol==1,_=>(1..=10).contains(&m.protocol)};
+ if m.format!="forever-addon-v1" || !valid_name || !valid_version || !valid_protocol || m.source_commit.len()!=40 || !m.source_commit.bytes().all(|c|c.is_ascii_hexdigit()) || m.files.is_empty() || m.files.len()>100{return Err("Invalid bundled AddOn manifest".into());}
  let mut seen=std::collections::HashSet::new();
- for f in &m.files {if f.name.is_empty() || f.name.chars().any(|c|matches!(c, '/'|'\\'|':')) || f.name.starts_with('.') || !seen.insert(&f.name) || f.size>32*1024*1024 || f.sha256.len()!=64 || !f.sha256.bytes().all(|c|c.is_ascii_hexdigit()){return Err("Unsafe AddOn file manifest".into());}}
+ for f in &m.files {
+  if f.name.is_empty() || f.name.len()>128 || !f.name.bytes().all(|c|c.is_ascii_alphanumeric() || matches!(c,b'.'|b'-'|b'_'))
+    || f.name.starts_with('.') || !seen.insert(&f.name) || f.size>32*1024*1024
+    || f.sha256.len()!=64 || !f.sha256.bytes().all(|c|c.is_ascii_hexdigit()) {
+    return Err("Unsafe AddOn file manifest".into());
+  }
+ }
+ if !m.files.iter().any(|f|f.name==format!("{}.toc",m.name)){return Err("AddOn manifest lacks a .toc file".into());}
  Ok(m)
 }
+fn test_manifest()->Result<Manifest,String>{parse_manifest(include_str!("../addons/forever-encyclopedia-test.json"))}
 fn manifests()->Result<Vec<Manifest>,String>{Ok(vec![manifest()?,parse_manifest(include_str!("../addons/forever-encyclopedia.json"))?])}
+fn channel_manifests(test_mode:bool)->Result<Vec<Manifest>,String>{
+ let mut items=manifests()?;
+ if test_mode {items[1]=test_manifest()?;}
+ Ok(items)
+}
 fn source_path(m:&Manifest)->Result<&'static str,String>{match m.name.as_str(){
  "ForeverAscension"=>Ok("mods/forever-advancement/addon/ForeverAscension"),
  "ForeverEncyclopedia"=>Ok("mods/living-encyclopedia/addon/ForeverEncyclopedia"),
  _=>Err("Unsupported project AddOn".into()),
 }}
+// Only files published in this project's testing catalog can be downloaded.
+// The catalog updates independently from the installed launcher binary.
+const TEST_CATALOG_URL:&str="https://raw.githubusercontent.com/Domenklay/WoWForEver/testing/addons-70658/app/src-tauri/addons/testing-catalog.json";
+
+#[derive(Deserialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+struct TestCatalog {
+ format:String, channel:String, project:String, client_build:u32,
+ addons:Vec<TestAddon>, server_modules:Vec<ServerModule>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+struct TestAddon {source_path:String, manifest:Manifest}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+struct ServerModule {name:String, stable_version:String, test_version:String, status:String, note:String}
+
+fn validate_source(path:&str,name:&str)->Result<(),String>{
+ let parts:Vec<_>=path.split('/').collect();
+ if parts.len()!=4 || parts[0]!="mods" || parts[2]!="addon" || parts[3]!=name
+   || parts.iter().any(|part|part.is_empty() || !part.bytes().all(|c|c.is_ascii_alphanumeric() || c==b'-' || c==b'_')){
+  return Err(format!("Unsupported AddOn source directory: {path}"));
+ }
+ Ok(())
+}
+
+fn parse_testing_catalog(body:&str)->Result<TestCatalog,String>{
+ let catalog:TestCatalog=serde_json::from_str(body).map_err(|e|e.to_string())?;
+ if catalog.format!="forever-addon-testing-v1" || catalog.channel!="testing"
+   || catalog.project!="Domenklay/WoWForEver" || catalog.client_build!=70658
+   || catalog.addons.is_empty() || catalog.addons.len()>20 || catalog.server_modules.len()>40{
+  return Err("Unsupported testing catalog".into());
+ }
+ let mut seen=std::collections::HashSet::new();
+ for entry in &catalog.addons {
+  validate_source(&entry.source_path,&entry.manifest.name)?;
+  if !seen.insert(&entry.manifest.name){return Err("Duplicate testing AddOn".into());}
+  parse_manifest(&serde_json::to_string(&entry.manifest).map_err(|e|e.to_string())?)?;
+ }
+ for module in &catalog.server_modules{
+  if module.name.is_empty() || module.name.len()>80 || module.note.len()>500
+   || module.test_version.len()>96 || module.stable_version.len()>96
+   || module.status!="server-only" {
+   return Err("Invalid server-only module metadata".into());
+  }
+ }
+ Ok(catalog)
+}
+
+async fn fetch_testing_catalog()->Result<TestCatalog,String>{
+ let client=reqwest::Client::builder().connect_timeout(Duration::from_secs(8))
+  .timeout(Duration::from_secs(25)).user_agent("WoWForeverMulti-Testing-AddOns")
+  .build().map_err(|e|e.to_string())?;
+ let mut response=client.get(TEST_CATALOG_URL).send().await.map_err(|e|e.to_string())?
+  .error_for_status().map_err(|e|e.to_string())?;
+ let mut bytes=Vec::new();
+ while let Some(chunk)=response.chunk().await.map_err(|e|e.to_string())?{
+  if bytes.len().saturating_add(chunk.len())>256*1024{return Err("Testing catalog exceeds size limit".into());}
+  bytes.extend_from_slice(&chunk);
+ }
+ parse_testing_catalog(std::str::from_utf8(&bytes).map_err(|e|e.to_string())?)
+}
+
 fn direct(path:&Path)->Result<(),String>{
  for p in path.ancestors(){match fs::symlink_metadata(p){
   Ok(meta)=>{if meta.file_type().is_symlink(){return Err(t("addon_link").into());}
@@ -61,12 +140,50 @@ fn preserve_development_folder(target:&Path,development_mode:bool)->Result<bool,
  if !target.is_dir(){return Err("AddOn destination is not a directory".into());}
  Ok(true)
 }
-pub async fn ensure(game:&Path,development_mode:bool,mut log:impl FnMut(String))->Result<(),String>{
+pub async fn ensure(game:&Path,development_mode:bool,test_mode:bool,mut log:impl FnMut(String))->Result<(),String>{
  if development_mode {log(t("addon_dev_mode").into());}
- for m in manifests()? {ensure_one(game,&m,development_mode,&mut log).await?;}
+ if test_mode{
+  match fetch_testing_catalog().await{
+   Ok(catalog)=>{
+    for entry in &catalog.addons{
+     ensure_one(game,&entry.manifest,&entry.source_path,development_mode,&mut log).await?;
+    }
+   }
+   Err(err)=>{
+    // Do not downgrade test AddOns and do not block game launch if GitHub is down.
+    log(format!("Testing catalog unavailable; keeping existing AddOns: {err}"));
+   }
+  }
+ }else{
+  for manifest in manifests()?{
+   ensure_one(game,&manifest,source_path(&manifest)?,development_mode,&mut log).await?;
+  }
+ }
  Ok(())
 }
-async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl FnMut(String))->Result<(),String>{
+
+// A user-triggered switch updates every registered client AddOn. Scaling and
+// all other server-only modules are reported, not written to the game directory.
+pub async fn install_channel(game:&Path,test_mode:bool,mut log:impl FnMut(String))->Result<Value,String>{
+ let mut installed=Vec::new();
+ let mut server_modules=Vec::new();
+ if test_mode{
+  let catalog=fetch_testing_catalog().await?;
+  for entry in &catalog.addons{
+   ensure_one(game,&entry.manifest,&entry.source_path,false,&mut log).await?;
+   installed.push(json!({"name":entry.manifest.name,"version":entry.manifest.version}));
+  }
+  server_modules=catalog.server_modules;
+ }else{
+  for manifest in manifests()?{
+   ensure_one(game,&manifest,source_path(&manifest)?,false,&mut log).await?;
+   installed.push(json!({"name":manifest.name,"version":manifest.version}));
+  }
+ }
+ Ok(json!({"channel":if test_mode{"testing"}else{"stable"},
+  "clientAddons":installed,"serverModules":server_modules}))
+}
+async fn ensure_one(game:&Path,m:&Manifest,source_directory:&str,development_mode:bool,log:&mut impl FnMut(String))->Result<(),String>{
  direct(game)?;
  if !game.join("Wow.exe").is_file()&&!game.join("WowB.exe").is_file(){return Err(t("game_not_found").into());}
  let addons=game.join("Interface/AddOns");let target=addons.join(&m.name);direct(&addons)?;
@@ -85,7 +202,7 @@ async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl F
   let client=reqwest::Client::builder().connect_timeout(Duration::from_secs(10)).timeout(Duration::from_secs(180)).user_agent("WoWForeverMulti-AddOns").build().map_err(|e|e.to_string())?;
   for f in &m.files {
    log(tf("addon_downloading", &[&f.name]));
-   let url=format!("https://raw.githubusercontent.com/Domenklay/WoWForEver/{}/{}/{}",m.source_commit,source_path(m)?,f.name);
+   let url=format!("https://raw.githubusercontent.com/Domenklay/WoWForEver/{}/{}/{}",m.source_commit,source_directory,f.name);
    let mut response=client.get(url).send().await.map_err(|e|e.to_string())?.error_for_status().map_err(|e|e.to_string())?;
    let mut body=Vec::new();
    while let Some(chunk)=response.chunk().await.map_err(|e|e.to_string())? {if body.len().saturating_add(chunk.len())as u64>f.size{return Err("AddOn response exceeds manifest size".into());}body.extend_from_slice(&chunk);}
@@ -110,7 +227,7 @@ async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl F
   fs::create_dir_all(&ascension).unwrap();fs::create_dir_all(&book).unwrap();
   fs::write(ascension.join("Catalog.lua"),b"local development edits").unwrap();
   fs::write(book.join("unfinished.lua"),b"work in progress without a TOC").unwrap();
-  let mut logs=Vec::new();ensure(&temp.0,true,|line|logs.push(line)).await.unwrap();
+  let mut logs=Vec::new();ensure(&temp.0,true,false,|line|logs.push(line)).await.unwrap();
   assert_eq!(fs::read(ascension.join("Catalog.lua")).unwrap(),b"local development edits");
   assert_eq!(fs::read(book.join("unfinished.lua")).unwrap(),b"work in progress without a TOC");
   assert_eq!(fs::read_dir(&ascension).unwrap().count(),1);assert_eq!(fs::read_dir(&book).unwrap().count(),1);
@@ -131,6 +248,23 @@ async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl F
   let temp=Temp::new();let outside=Temp::new();let linked=temp.0.join("ForeverAscension");
   std::os::unix::fs::symlink(&outside.0,&linked).unwrap();
   assert!(preserve_development_folder(&linked,true).is_err());
+ }
+ #[test]fn test_catalog_lists_all_client_addons_and_server_only_scaling(){
+  let catalog=parse_testing_catalog(include_str!("../addons/testing-catalog.json")).unwrap();
+  assert_eq!(catalog.addons.len(),2);
+  assert_eq!(catalog.addons[0].manifest.name,"ForeverAscension");
+  assert_eq!(catalog.addons[1].manifest.name,"ForeverEncyclopedia");
+  assert_eq!(catalog.addons[1].manifest.version,"0.9.9-v2.1-talent-mana");
+  assert!(catalog.server_modules.iter().any(|m|m.name=="Forever Scaling"&&m.status=="server-only"));
+  assert!(validate_source("mods/living-encyclopedia/addon/ForeverEncyclopedia","ForeverEncyclopedia").is_ok());
+ }
+ #[test]fn test_catalog_rejects_untrusted_or_invalid_sources(){
+  let mut data:Value=serde_json::from_str(include_str!("../addons/testing-catalog.json")).unwrap();
+  data["addons"][0]["sourcePath"]=json!("mods/../../addon/ForeverAscension");
+  assert!(parse_testing_catalog(&data.to_string()).is_err());
+  data["addons"][0]["sourcePath"]=json!("mods/forever-advancement/addon/ForeverAscension");
+  data["addons"][1]["manifest"]["files"][0]["name"]=json!("../escape.lua");
+  assert!(parse_testing_catalog(&data.to_string()).is_err());
  }
  #[test]fn both_project_addons_have_independent_pins_and_source_directories(){let values=manifests().unwrap();assert_eq!(values.len(),2);assert_eq!(values[1].name,"ForeverEncyclopedia");assert_eq!(values[1].files.len(),8);assert_ne!(source_path(&values[0]).unwrap(),source_path(&values[1]).unwrap());assert_ne!(values[0].source_commit,values[1].source_commit);}
  #[test]fn encyclopedia_replacement_cannot_overwrite_the_ascension_backup(){let temp=Temp::new();let target=temp.0.join("Interface/AddOns/ForeverEncyclopedia");fs::create_dir_all(&target).unwrap();fs::write(target.join("old.lua"),b"previous book").unwrap();let stage=temp.0.join(".new-book");fs::create_dir(&stage).unwrap();let backup=commit(&temp.0,&stage,&target,"same-run").unwrap().unwrap();assert!(backup.ends_with("ForeverEncyclopedia"));assert_eq!(fs::read(backup.join("old.lua")).unwrap(),b"previous book");assert!(!temp.0.join(".forever-multi/addon-backups/same-run/ForeverAscension").exists());}

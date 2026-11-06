@@ -45,6 +45,38 @@ int main()
     assert(RegenBasisPoints(5) == 100);
     assert(RegenBasisPoints(50) == 100);
 
+    // Tooltip values and server-side calculations share the same formulas.
+    assert(ShieldPercent(0, 0, 0) == 12);
+    assert(ShieldPercent(5, 0, 0) == 22);
+    assert(ShieldPercent(5, 5, 4) == 30);
+    assert(ShieldCooldownSeconds(0) == 30);
+    assert(ShieldCooldownSeconds(3) == 24);
+    assert(ShieldCooldownSeconds(5) == 20);
+    assert(HealPercent(0) == 25);
+    assert(HealPercent(1) == 30);
+    assert(HealPercent(3) == 40);
+    assert(HealTriggerPercent(50, 5) == 70);
+    assert(HealTriggerPercent(75, 5) == 80);
+    assert(HealCooldownSeconds(0) == 25);
+    assert(HealCooldownSeconds(5) == 15);
+    assert(AmplifiedHeal(100, 0) == 100);
+    assert(AmplifiedHeal(100, 1) == 110);
+    assert(AmplifiedHeal(100, 5) == 150);
+    assert(AmplifiedHeal(UINT32_MAX, 5) == UINT32_MAX);
+    assert(ReservePercent(0) == 0);
+    assert(ReservePercent(3) == 15);
+    assert(ReservePercent(5) == 25);
+    assert(Implemented("mend_power"));
+    assert(Implemented("mana_reserve"));
+    assert(Implemented("mana_overflow"));
+    assert(Implemented("identify_abilities"));
+    assert(!Implemented("insight_unlock"));
+    assert(!Implemented("mana_conservation"));
+    assert(!Implemented("aegis_group"));
+    assert(!Implemented("identify_loot"));
+    assert(Find("mana_overflow")->prerequisite == "mana_capacity");
+    assert(Find("mana_overflow")->prerequisiteRank == 10);
+
     // The tree must offer an early benefit while retaining a long-tail sink.
     uint64_t masteryTotal = 0;
     for (std::string_view key : {"aegis_mastery", "mend_mastery", "insight_mastery", "wisdom_mastery", "knowledge_mastery"})
