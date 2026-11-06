@@ -2,6 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tempfile
 import sys
@@ -43,6 +44,43 @@ def client(path, key='a' * 32):
 
 
 class CleanServerTests(unittest.TestCase):
+    def test_legacy_probe_uses_only_shell_and_requires_an_actual_listening_socket(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(('127.0.0.1', 0))
+            port_hex = f'{listener.getsockname()[1]:04X}'
+            command = ['/bin/sh', '-c', clean.OLD_WORLD_SOCKET_PROBE, 'fixture-probe', port_hex]
+            # A missing PATH prevents this test from accidentally relying on
+            # Python, awk, grep or any other program inside the old image.
+            waiting = subprocess.run(command, env={'PATH': '/no-programs'}, text=True, capture_output=True, timeout=5)
+            self.assertEqual(waiting.returncode, 0, waiting.stderr)
+            self.assertEqual(waiting.stdout.strip(), 'WAIT')
+            listener.listen(1)
+            ready = subprocess.run(command, env={'PATH': '/no-programs'}, text=True, capture_output=True, timeout=5)
+            self.assertEqual(ready.returncode, 0, ready.stderr)
+            self.assertEqual(ready.stdout.strip(), 'READY')
+
+    def test_failed_old_probe_shows_public_error_while_sql_errors_remain_private(self):
+        result = SimpleNamespace(returncode=1, stdout='', stderr='public probe error')
+        with patch.object(clean.subprocess, 'run', return_value=result):
+            with self.assertRaisesRegex(RuntimeError, 'old-world.*public probe error'):
+                clean.run(['docker', 'exec', 'old-world', 'sh', '-c', clean.OLD_WORLD_SOCKET_PROBE,
+                           'fixture-probe', '1F95'], capture=True)
+        result.stderr = 'private database credentials must not be printed'
+        with patch.object(clean.subprocess, 'run', return_value=result):
+            with self.assertRaises(RuntimeError) as raised:
+                clean.run(['docker', 'exec', 'clean-mysql', 'mysql'], capture=True)
+        self.assertNotIn('private database credentials', str(raised.exception))
+
+    def test_resumed_switch_rechecks_new_world_before_stopping_any_old_service(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); s = state(root); s['phase'] = 'switching'; clean.save(s)
+            with patch.object(clean, 'wait_world', side_effect=RuntimeError('new world not ready')), \
+                    patch.object(clean, 'stop_previous') as stop, patch.object(clean, 'compose') as compose, patch('builtins.print'):
+                with self.assertRaisesRegex(RuntimeError, 'new world not ready'):
+                    clean.install(SimpleNamespace(root=root, timeout=1))
+            stop.assert_not_called()
+            compose.assert_not_called()
+            self.assertEqual(clean.load_state(root / 'state.json')['phase'], 'switching')
     def running_world(self):
         return {'State': {'Running': True}, 'Config': {'Labels': {
             'org.wowforever.core': clean.CORE, 'org.wowforever.advancement': 'none'}}}
@@ -395,6 +433,9 @@ class CleanServerTests(unittest.TestCase):
             if command[:2] == ['docker', 'logs']:
                 raise AssertionError('A prompt-filled or stale log is not a readiness signal')
             if command[:3] == ['docker', 'exec', 'old-world']:
+                self.assertEqual(command[3:5], ['sh', '-c'])
+                self.assertNotIn('python3', command)
+                self.assertEqual(command[-1], '1F95')
                 return 'READY\n' if ready else 'WAIT\n'
             if command[:2] == ['docker', 'stop']:
                 stopped.append(command)

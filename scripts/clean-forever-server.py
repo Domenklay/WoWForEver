@@ -41,6 +41,10 @@ def run(command, *, capture=False, data=None):
             raise RuntimeError('Extraction failed; see extractor output above (the temporary container was removed)')
         if TABLE_WRITER in command:
             raise RuntimeError('Could not publish verified GameTable: ' + (result.stderr or '').strip()[-1000:])
+        if OLD_WORLD_SOCKET_PROBE in command:
+            # This fixed /proc probe contains no credentials or configuration.
+            raise RuntimeError('Old world socket probe failed for ' + command[2] + ': '
+                               + (result.stderr or '').strip()[-1000:])
         raise RuntimeError('Command failed: ' + ' '.join(command[:3]) + '; use the status command for service logs')
     return result.stdout or ''
 
@@ -244,6 +248,20 @@ else:
     print("READY")
 '''
 
+# Legacy runtime images contain sh but not Python. Inspect only this container's
+# network namespace, using POSIX shell builtins and the kernel LISTEN state.
+OLD_WORLD_SOCKET_PROBE = '''
+for probe_file in /proc/net/tcp /proc/net/tcp6; do
+    [ -r "$probe_file" ] || continue
+    while read -r probe_slot probe_local probe_remote probe_state probe_rest; do
+        case "$probe_local:$probe_state" in
+            *:"$1":0A) printf 'READY\\n'; exit 0 ;;
+        esac
+    done < "$probe_file"
+done
+printf 'WAIT\\n'
+'''
+
 
 def wait_world(state, timeout):
     deadline = time.monotonic() + timeout
@@ -357,7 +375,8 @@ def stop_previous(state):
                 continue
             if item['State']['Running']:
                 if labels['com.docker.compose.service'] == 'worldserver':
-                    tcp = run(['docker', 'exec', ident, 'python3', '-c', WORLD_TCP_PROBE], capture=True).strip()
+                    tcp = run(['docker', 'exec', ident, 'sh', '-c', OLD_WORLD_SOCKET_PROBE,
+                               'forever-old-world-probe', '1F95'], capture=True).strip()
                     if tcp != 'READY':
                         raise RuntimeError('An old worldserver may still be importing its first database; it was not stopped')
                 items.append(dict(id=ident, project=project, service=labels['com.docker.compose.service']))
@@ -491,6 +510,9 @@ def install(args):
     if state['phase'] in ('staged', 'switching'):
         if state['phase'] == 'staged':
             state['phase'] = 'switching'; save(state)
+        # A resumed switch must recheck the current process, not rely on the
+        # readiness result from a previous install invocation.
+        wait_world(state, args.timeout)
         stop_previous(state)
         configure_compose(state, published=True)
         compose(state, 'up', '-d', '--no-build', 'mysql', 'worldserver', 'bnetserver', 'web')
