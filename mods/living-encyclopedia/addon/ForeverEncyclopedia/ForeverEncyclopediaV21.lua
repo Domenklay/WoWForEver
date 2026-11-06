@@ -378,11 +378,12 @@ end
 local function parseRuntime(msg)
     if msg:sub(1,5)~="BOOK|" then return end
     local _,mask,mana,maxMana=strsplit("|",msg)
+    local previousMax,previousMask=state.maxMana,state.abilityMask
     state.abilityMask=tonumber(mask) or 0
     state.mana=tonumber(mana) or 0
     state.maxMana=tonumber(maxMana) or 100
     updateDock()
-    if ui and ui:IsShown() and currentTab==3 then Draw() end
+    if (previousMax~=state.maxMana or previousMask~=state.abilityMask) and ui and ui:IsShown() and currentTab==3 then Draw() end
 end
 
 local function parseTalent(msg)
