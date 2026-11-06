@@ -1,5 +1,15 @@
 # Instructions for AI coding assistants
 
+Latest 2026-11-06 evidence: Multi settings still point to the v4 copy, with
+127.0.0.1/trinity.actual.battle.net:1119 and build 70658. The earlier requested
+original-install logs showed a Nvord login and cannot diagnose the latest v4
+failure. Request fresh logs from the saved gameDir, not an assumed folder.
+Both actual EXEs are 70658. Source preload config 7feb61f3c994bcb168526b8db521514a
+is WOW-70707patch1.60.1_Retail, with verified public metadata fields. Multi 1.4
+does not implement client preload activation. The new audit is read-only;
+see docs/PRELOAD-AUDIT.ru.md. Do not present a manifest check as a working
+updater or relabel an EXE/protocol based only on the package version.
+
 On 2026-11-06 the user authorized moving to 70707 and requested future client
 and database upgrades. They then confirmed the ORIGINAL E:\WoW_Forever EXE
 and active metadata are still 70658, downloaded with Nvord ForeverLauncher
