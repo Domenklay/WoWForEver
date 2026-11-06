@@ -29,7 +29,7 @@ fn parse_manifest(text:&str)->Result<Manifest,String>{
     return Err("Unsafe AddOn file manifest".into());
   }
  }
- if !seen.contains(&format!("{}.toc",m.name)){return Err("AddOn manifest lacks a .toc file".into());}
+ if !m.files.iter().any(|f|f.name==format!("{}.toc",m.name)){return Err("AddOn manifest lacks a .toc file".into());}
  Ok(m)
 }
 fn test_manifest()->Result<Manifest,String>{parse_manifest(include_str!("../addons/forever-encyclopedia-test.json"))}
