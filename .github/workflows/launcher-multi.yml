@@ -81,6 +81,7 @@ jobs:
           Copy-Item docs/CLIENT-70707.ru.md dist/CLIENT-70707.ru.md
           Copy-Item docs/SERVER-UPGRADES.ru.md dist/SERVER-UPGRADES.ru.md
           Copy-Item docs/NATIVE-CDN.ru.md dist/NATIVE-CDN.ru.md
+          Copy-Item docs/BOOTSTRAP-AUDIT.ru.md dist/BOOTSTRAP-AUDIT.ru.md
           Copy-Item docs/RESTORE-70658.ru.md dist/RESTORE-70658.ru.md
           Copy-Item docs/CLIENT-STARTUP-DIAGNOSTICS.ru.md dist/CLIENT-STARTUP-DIAGNOSTICS.ru.md
           New-Item -ItemType Directory -Path dist/scripts -Force | Out-Null
@@ -92,7 +93,7 @@ jobs:
             Set-Content dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: WoW-Forever-Multi-Windows-1.6.0
+          name: WoW-Forever-Multi-Windows-1.6.1
           path: dist/*
           if-no-files-found: error
           retention-days: 14

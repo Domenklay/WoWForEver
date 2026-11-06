@@ -3,7 +3,7 @@ use std::{fs,path::{Path,PathBuf},io::{self,BufRead,Write},sync::{Arc,Mutex},tim
 use anyhow::{bail,Context,Result};
 use serde::{Deserialize,Serialize};
 use serde_json::{json,Value};
-use forever_casc_worker::{profile,ProductCode,net::Http,tact::{install::{self,Event,Options},download::Cancel,verify}};
+use forever_casc_worker::{profile,ProductCode,net::Http,tact::{bootstrap,install::{self,Event,Options},download::Cancel,verify}};
 
 const MARKER:&str=".forever-multi-managed.json";
 #[derive(Debug,Deserialize)]
@@ -78,10 +78,11 @@ async fn run(request:Request,cancel:Cancel)->Result<Value>{
  let mut options=Options::default();options.region=forever_casc_worker::tact::version::Region::Eu;options.locale=request.locale.clone();options.flavor="_forever_".into();options.windows_path=None;options.concurrency=12;
  if request.high_res{options.optional_tags.push("HighRes".into());}
  let mut backup=None;
+ if request.action=="repair" {backup=Some(backup_indices(root)?);}
  if request.action=="verify" || request.action=="repair" {
   let report=verify::deep_scan(root,&cancel,|p|progress("verify",p.checked,p.total,p.bytes,p.bytes_total,""))?;
   if request.action=="repair" && !report.damaged.is_empty(){
-   game_closed()?;backup=Some(backup_indices(root)?);
+   game_closed()?;
    verify::repair_unchanged(&root.join("Data/data"),&report)?;
   } else if request.action=="verify" {
    // Full payload scan is read-only; manifest planning uses an isolated cache.
@@ -92,7 +93,8 @@ async fn run(request:Request,cancel:Cancel)->Result<Value>{
    let store=forever_casc_worker::tact::storage::Storage::open(root)?;
    let present:std::collections::HashSet<[u8;9]>=store.files().map(|e|e.key).collect();
    let missing=prepared.wanted.iter().filter(|e|!present.contains::<[u8]>(&e.ekey[..9])).count();
-   return Ok(json!({"complete":report.is_healthy()&&bad.is_empty()&&missing==0,"build":profile::BUILD,"checked":report.checked,"damaged":report.damaged.len(),"unverifiable":report.unverifiable,"missing":missing,"installFilesDamaged":bad,"directory":root,"gameDir":root.join("_forever_"),"readOnly":true,"runtimeTested":false}));
+   let startup=bootstrap::check(root,&prepared.bootstrap)?;
+   return Ok(json!({"complete":report.is_healthy()&&bad.is_empty()&&missing==0&&startup.complete(),"build":profile::BUILD,"checked":report.checked,"damaged":report.damaged.len(),"unverifiable":report.unverifiable,"missing":missing,"bootstrap":startup,"installFilesDamaged":bad,"directory":root,"gameDir":root.join("_forever_"),"readOnly":true,"runtimeTested":false}));
   }
  }
  let mut own=ownership();write_owned(root,&own)?;
@@ -117,13 +119,16 @@ async fn run(request:Request,cancel:Cancel)->Result<Value>{
  let install_bytes=prepared.install.select(&prepared.tags).into_iter().map(|entry|u64::from(entry.size)).sum();
  if let Some(report)=space_report(root,prepared.plan.bytes(),install_bytes,fs2::available_space(root)?){return Ok(report);}
  if request.high_res {prepared.tag_column=prepared.tag_column.replace("Windows ","Windows HighRes ");}
+ let startup_manifests=prepared.bootstrap.clone();
  let selected=prepared.wanted.len();game_closed()?;
  let result=install::execute(&http,root,&ProductCode::Forever,&options,prepared,&cancel,&mut on_event).await?;
  if !result.complete{return Ok(json!({"complete":false,"paused":cancel.is_cancelled(),"build":profile::BUILD,"selected":selected,"reasons":result.reasons,"missing":result.missing,"directory":root}));}
  let checked=verify::deep_scan(root,&cancel,|p|progress("verify",p.checked,p.total,p.bytes,p.bytes_total,""))?;
  if !checked.is_healthy(){bail!("Post-download verification found {} damaged objects; use Repair",checked.damaged.len());}
+ let startup=bootstrap::check(root,&startup_manifests)?;
+ if !startup.complete(){bail!("Post-download verification found missing or invalid startup manifests");}
  own.complete=true;write_owned(root,&own)?;
- Ok(json!({"complete":true,"build":profile::BUILD,"selected":selected,"checked":checked.checked,"unverifiable":checked.unverifiable,"directory":root,"gameDir":root.join("_forever_"),"backup":backup,"runtimeTested":false}))
+ Ok(json!({"complete":true,"build":profile::BUILD,"selected":selected,"checked":checked.checked,"unverifiable":checked.unverifiable,"bootstrap":startup,"directory":root,"gameDir":root.join("_forever_"),"backup":backup,"runtimeTested":false}))
 }
 #[tokio::main]
 async fn main(){

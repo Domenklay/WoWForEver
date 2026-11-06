@@ -9,15 +9,15 @@ use super::{io, Cpu, Event, InstallError, Options};
 use crate::net::Http;
 use crate::product::ProductCode;
 use crate::tact::archive::FileIndex;
+use crate::tact::bootstrap::{self, Manifest};
 use crate::tact::cdn::Client;
 use crate::tact::config::{BuildConfig, CdnConfig, KeyPair};
 use crate::tact::encoding::Encoding;
 use crate::tact::indices::{IndexCache, Locations};
 use crate::tact::manifest::{DownloadEntry, DownloadManifest, InstallManifest, Tag, TagSet};
-use crate::tact::plan::{reverse_encoding, Loose, Options as PlanOptions, Plan};
+use crate::tact::plan::{reverse_encoding, Options as PlanOptions, Plan};
 use crate::tact::storage::{EKey, Storage};
 use crate::tact::version;
-use crate::text::hex;
 
 /// Everything resolved before a byte is fetched: what the build is, what is
 /// wanted, and where each key lives. Enough for a dry run or a size.
@@ -39,6 +39,8 @@ pub struct Prepared {
     /// needs it at start and no manifest lists it.
     pub encoding_key: EKey,
     pub encoding_blte: Vec<u8>,
+    pub bootstrap: Vec<Manifest>,
+    pub bootstrap_blte: Vec<(EKey, Vec<u8>)>,
     pub install: InstallManifest,
     pub locations: Locations,
     pub loose: FileIndex,
@@ -231,20 +233,40 @@ pub async fn prepare(
         async move {
             let pair = pair.ok_or(InstallError::MissingManifest(what))?;
             let ekey = pair.ekey.ok_or(InstallError::MissingManifest(what))?;
-            Ok::<_, InstallError>(client.fetch_loose(http, &ekey, &pair.ckey).await?)
+            let manifest = Manifest { name: what.into(), ckey: pair.ckey, ekey };
+            if let Ok(mut store) = Storage::open(dest) {
+                if let Some(object) = bootstrap::local_blte(&mut store, &manifest) { return Ok(object); }
+            }
+            let object = client.fetch_loose_blte(http, &ekey, &pair.ckey).await?;
+            if bootstrap::valid_blte(&object.0, &manifest).is_none() {
+                return Err(InstallError::MissingManifest("verified startup BLTE"));
+            }
+            Ok::<_, InstallError>(object)
         }
     };
 
     let encoding_key = build.encoding.ekey.ok_or(InstallError::MissingManifest("encoding"))?;
     let (encoding_blte, encoding) = {
-        let (blte, decoded) = client.fetch_loose_blte(http, &encoding_key, &build.encoding.ckey).await?;
+        let (blte, decoded) = fetch_manifest(Some(build.encoding), "encoding").await?;
         (blte, Encoding::parse(&decoded)?)
     };
     on_event(Event::Encoding { entries: encoding.len() });
 
-    let download_manifest =
-        DownloadManifest::parse(&fetch_manifest(build.download, "download").await?)?;
-    let install = InstallManifest::parse(&fetch_manifest(build.install, "install").await?)?;
+    let (download_blte, decoded) = fetch_manifest(build.download, "download").await?;
+    let download_manifest = DownloadManifest::parse(&decoded)?;
+    drop(decoded);
+    let (install_blte, decoded) = fetch_manifest(build.install, "install").await?;
+    let install = InstallManifest::parse(&decoded)?;
+    drop(decoded);
+    let mut bootstrap_blte = vec![
+        (build.download.and_then(|p| p.ekey).ok_or(InstallError::MissingManifest("download"))?, download_blte),
+        (build.install.and_then(|p| p.ekey).ok_or(InstallError::MissingManifest("install"))?, install_blte),
+    ];
+    if let Some(pair) = build.size {
+        let (blte, _) = fetch_manifest(Some(pair), "size").await?;
+        bootstrap_blte.push((pair.ekey.ok_or(InstallError::MissingManifest("size"))?, blte));
+    }
+    let bootstrap = bootstrap::required(&build, &encoding)?;
     require_cpu(options.cpu, code, download_manifest.tags())?;
     let locale = shipped_locale(&options.locale, download_manifest.tags());
     let tag_column = options.tag_column_for(&locale);
@@ -299,8 +321,10 @@ pub async fn prepare(
     let loose = FileIndex::parse(&std::fs::read(&index_path).map_err(io(&index_path))?)?;
     on_event(Event::Loose { files: loose.len() });
 
-    let wanted_keys: HashSet<EKey> = wanted.iter().map(|e| e.ekey).collect();
-    let ckeys = reverse_encoding(&encoding, &wanted_keys);
+    let mut wanted_keys: HashSet<EKey> = wanted.iter().map(|e| e.ekey).collect();
+    wanted_keys.extend(bootstrap.iter().map(|m| m.ekey));
+    let mut ckeys = reverse_encoding(&encoding, &wanted_keys);
+    ckeys.extend(bootstrap.iter().map(|m| (m.ekey, m.ckey)));
     let mut locations = Locations::default();
     for (archive, _) in &archives {
         if !cache.is_cached(archive, None) {
@@ -320,29 +344,23 @@ pub async fn prepare(
     let probe = StoreProbe::open(dest);
     let have = |ekey: &EKey| probe.has(ekey);
 
+    let seeded: HashSet<EKey> = bootstrap_blte.iter().map(|(key, _)| *key).chain([encoding_key]).collect();
+    let mut planned = wanted.clone();
+    let mut queued: HashSet<EKey> = planned.iter().map(|e| e.ekey).collect();
+    for manifest in &bootstrap {
+        if !seeded.contains(&manifest.ekey) && queued.insert(manifest.ekey) {
+            // Plan resolves actual encoded sizes from the archive/file index.
+            planned.push(DownloadEntry { ekey: manifest.ekey, size: 0, priority: -1 });
+        }
+    }
     let mut plan = Plan::build(
-        &wanted,
+        &planned,
         &locations,
         &loose,
         &ckeys,
-        have,
+        |key| seeded.contains(key) || have(key),
         PlanOptions { max_gap: options.gap_bytes, ..PlanOptions::default() },
     );
-    // No manifest lists the TVFS manifests, and the client reads them at
-    // start: left out, its first launch fetches them itself (with the
-    // encoding, 190 MiB for wowf 1.60.1.70707, measured 2026-11-03).
-    // `vfs-root` repeats `vfs-1`.
-    let mut queued = HashSet::new();
-    for pair in &build.vfs {
-        let Some(ekey) = pair.ekey else { continue };
-        if probe.has(&ekey) || !queued.insert(ekey) {
-            continue;
-        }
-        match loose.lookup(&ekey) {
-            Some(entry) => plan.loose.push(Loose { ekey, ckey: Some(pair.ckey), size: entry.size }),
-            None => { tracing::warn!("required TVFS manifest {} is unavailable", hex(&ekey)); plan.missing.push(ekey); },
-        }
-    }
     if options.skip_loose {
         plan.loose.clear();
     }
@@ -370,6 +388,8 @@ pub async fn prepare(
         encoding,
         encoding_key,
         encoding_blte,
+        bootstrap,
+        bootstrap_blte,
         install,
         locations,
         loose,

@@ -1,3 +1,12 @@
+Local audit 2026-11-06 CONFIRMED 3 missing bootstrap objects in managed 70658:
+INSTALL 69ab17d415ecc051c5eafd9c91f97ae1, DOWNLOAD 5eff2918f3ea1b064548d3c9a24cebb4,
+SIZE ce32a140d31269e6cc9cd288b5b8f375. 586/589 declarations verified including
+ENCODING, ROOT and all VFS. Multi 1.6.1 seeds the three original BLTE objects,
+reuses verified local EN/IN/DL/SIZE, verifies all startup manifests separately
+and backs up IDX before managed Repair. Keep the 84.6 GiB payload; Repair/resume
+uses presence to skip existing data. The exact AV cause and patch-index CDN
+issues remain runtime-unverified; do not claim the crash cured by this fix.
+
 Latest crash: user fully downloaded managed E:\WoWForEver-work\clients\70658.
 Read-only native verification: complete=true, checked=1125135, missing=0,
 unverifiable=0, ruRU/highRes=true. Crash_16248 2026-11-06 19:34:36 Moscow is

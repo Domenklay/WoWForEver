@@ -25,7 +25,7 @@ pub async fn execute(
 ) -> Result<Summary, InstallError> {
     let Prepared {
         plan, remote, cdn, client, encoding, encoding_key, encoding_blte, install, locations, loose, tags,
-        tag_column, flavor, executable, ..
+        tag_column, flavor, executable, bootstrap, bootstrap_blte, ..
     } = prepared;
 
     // Before a byte is fetched: the run ends by writing `.build.info` into
@@ -41,6 +41,7 @@ pub async fn execute(
     writer.write(&encoding_key, &encoding_blte)?;
     // 141 MB for wowf, not to be held through an hours-long download.
     drop(encoding_blte);
+    for (key, raw) in bootstrap_blte { writer.write(&key, &raw)?; }
     let source = Source { http, client: &client };
     let downloader = Downloader::new(DownloadOptions {
         concurrency: options.concurrency,
@@ -111,6 +112,13 @@ pub async fn execute(
             None => "install files incomplete".to_owned(),
         });
     }
+    // Publish the store before publishing complete installation metadata.
+    let store = writer.finish()?;
+    match crate::tact::bootstrap::check(dest, &bootstrap) {
+        Ok(report) if report.complete() => {},
+        Ok(report) => reasons.push(format!("startup manifests: {} missing, {} invalid", report.missing.len(), report.invalid.len())),
+        Err(error) => reasons.push(format!("startup manifest verification failed: {error}")),
+    }
     let complete = reasons.is_empty();
     let incomplete_because = reasons.clone();
 
@@ -169,7 +177,6 @@ pub async fn execute(
         None
     };
 
-    let store = writer.finish()?;
     Ok(Summary {
         outcome,
         store,

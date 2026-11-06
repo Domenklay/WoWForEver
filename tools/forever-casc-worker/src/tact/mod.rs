@@ -1,5 +1,6 @@
 //! GPL-3.0-or-later TACT implementation adapted from pinned Lightforge.
 pub mod archive;
+pub mod bootstrap;
 pub mod blte;
 pub mod cdn;
 pub mod config;
