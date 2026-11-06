@@ -44,6 +44,69 @@ fn source_path(m:&Manifest)->Result<&'static str,String>{match m.name.as_str(){
  "ForeverEncyclopedia"=>Ok("mods/living-encyclopedia/addon/ForeverEncyclopedia"),
  _=>Err("Unsupported project AddOn".into()),
 }}
+// Only files published in this project's testing catalog can be downloaded.
+// The catalog updates independently from the installed launcher binary.
+const TEST_CATALOG_URL:&str="https://raw.githubusercontent.com/Domenklay/WoWForEver/feature/encyclopedia-tooltip-mana-20261107/app/src-tauri/addons/testing-catalog.json";
+
+#[derive(Deserialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+struct TestCatalog {
+ format:String, channel:String, project:String, client_build:u32,
+ addons:Vec<TestAddon>, server_modules:Vec<ServerModule>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+struct TestAddon {source_path:String, manifest:Manifest}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+struct ServerModule {name:String, stable_version:String, test_version:String, status:String, note:String}
+
+fn validate_source(path:&str,name:&str)->Result<(),String>{
+ let parts:Vec<_>=path.split('/').collect();
+ if parts.len()!=4 || parts[0]!="mods" || parts[2]!="addon" || parts[3]!=name
+   || parts.iter().any(|part|part.is_empty() || !part.bytes().all(|c|c.is_ascii_alphanumeric() || c==b'-' || c==b'_')){
+  return Err(format!("Unsupported AddOn source directory: {path}"));
+ }
+ Ok(())
+}
+
+fn parse_testing_catalog(body:&str)->Result<TestCatalog,String>{
+ let catalog:TestCatalog=serde_json::from_str(body).map_err(|e|e.to_string())?;
+ if catalog.format!="forever-addon-testing-v1" || catalog.channel!="testing"
+   || catalog.project!="Domenklay/WoWForEver" || catalog.client_build!=70658
+   || catalog.addons.is_empty() || catalog.addons.len()>20 || catalog.server_modules.len()>40{
+  return Err("Unsupported testing catalog".into());
+ }
+ let mut seen=std::collections::HashSet::new();
+ for entry in &catalog.addons {
+  validate_source(&entry.source_path,&entry.manifest.name)?;
+  if !seen.insert(&entry.manifest.name){return Err("Duplicate testing AddOn".into());}
+  parse_manifest(&serde_json::to_string(&entry.manifest).map_err(|e|e.to_string())?)?;
+ }
+ for module in &catalog.server_modules{
+  if module.name.is_empty() || module.name.len()>80 || module.note.len()>500
+   || module.test_version.len()>96 || module.stable_version.len()>96
+   || module.status!="server-only" {
+   return Err("Invalid server-only module metadata".into());
+  }
+ }
+ Ok(catalog)
+}
+
+async fn fetch_testing_catalog()->Result<TestCatalog,String>{
+ let client=reqwest::Client::builder().connect_timeout(Duration::from_secs(8))
+  .timeout(Duration::from_secs(25)).user_agent("WoWForeverMulti-Testing-AddOns")
+  .build().map_err(|e|e.to_string())?;
+ let mut response=client.get(TEST_CATALOG_URL).send().await.map_err(|e|e.to_string())?
+  .error_for_status().map_err(|e|e.to_string())?;
+ let mut bytes=Vec::new();
+ while let Some(chunk)=response.chunk().await.map_err(|e|e.to_string())?{
+  if bytes.len().saturating_add(chunk.len())>256*1024{return Err("Testing catalog exceeds size limit".into());}
+  bytes.extend_from_slice(&chunk);
+ }
+ parse_testing_catalog(std::str::from_utf8(&bytes).map_err(|e|e.to_string())?)
+}
+
 fn direct(path:&Path)->Result<(),String>{
  for p in path.ancestors(){match fs::symlink_metadata(p){
   Ok(meta)=>{if meta.file_type().is_symlink(){return Err(t("addon_link").into());}
