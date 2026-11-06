@@ -44,6 +44,8 @@ def configuration(kind, environment):
                          'Console.Enable': '0',
                          'Ra.Enable': '0', 'SOAP.Enabled': '1', 'SOAP.IP': '"0.0.0.0"', 'SOAP.Port': '7878',
                          'Logger.sql.sql': '5,DBErrors'})
+    if environment.get('FOREVER_RELEASE_MANAGED') == '1':
+        settings.update({'Updates.EnableDatabases': '0', 'Updates.AutoSetup': '0'})
     return settings
 
 

@@ -82,15 +82,15 @@ vm.runInContext(fs.readFileSync(path.join(root,'app/ui/app.js'),'utf8'),context)
   await get('w-verify').handlers.click();
   const work=calls.find(c=>c.cmd==='client_work');
   assert.equal(work.args.request.gameDir,'E:/copy/_forever_');assert.equal(work.args.request.source.referenceDir,'E:/original');
-  assert.equal(get('w-status-title').textContent,'Files match the baseline.');assert.equal(get('w-copy-report').hidden,false);assert.equal(get('w-progress').value,100);
+  assert.equal(get('w-status-title').textContent,'Files match the selected copy.');assert.equal(get('w-copy-report').hidden,false);assert.equal(get('w-progress').value,100);
   await vm.runInContext('refreshWorkshopLayout()',context);
   assert.match(get('w-layout').textContent,/E:\/copy/);assert.match(get('w-layout').textContent,/E:\/original/);
   workshopReply='storage';await get('w-verify').handlers.click();
-  assert.equal(get('w-status-title').textContent,'Only CASC state files differ.');assert.match(get('w-status').textContent,/resource differences: 0/);
+  assert.equal(get('w-status-title').textContent,'Differences from the selected copy were found.');assert.match(get('w-status').textContent,/resource differences: 0/);
   workshopReply='restored';await get('w-repair').handlers.click();
   assert.equal(get('w-status-title').textContent,'Files restored.');assert.match(get('w-status').textContent,/92 restored · 0 unresolved/);
   workshopReply='extras';await get('w-verify').handlers.click();
-  assert.equal(get('w-status-title').textContent,'CASC storage needs reconciliation.');assert.match(get('w-status').textContent,/Surplus CASC metadata: 18/);assert.doesNotMatch(get('w-status').textContent,/alone do not establish corruption/);
+  assert.equal(get('w-status-title').textContent,'Differences from the selected copy were found.');assert.match(get('w-status').textContent,/differences do not establish corruption/);assert.doesNotMatch(get('w-status').textContent,/Recovery will|reconciliation|moved into/);
   workshopReply='quarantined';await get('w-repair').handlers.click();
   assert.equal(get('w-status-title').textContent,'Files restored.');assert.match(get('w-status').textContent,/18 restored · 0 unresolved/);assert.match(get('w-status').textContent,/moved into the backup: 18/);
   vm.runInContext('state.playing=true;updatePlayButton()',context);

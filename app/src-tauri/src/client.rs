@@ -112,6 +112,9 @@ pub struct Report {
     pub source_kind: &'static str,
     pub profile: Profile,
     pub files: usize,
+    pub comparison_only: bool,
+    pub target_executable_version: Option<String>,
+    pub reference_executable_version: Option<String>,
     pub verified: usize,
     pub different: usize,
     pub resource_different: usize,
@@ -144,6 +147,10 @@ fn display_path(path: &Path) -> String {
     } else {
         value.trim_start_matches(r"\\?\").into()
     }
+}
+fn executable_version(root: &Path) -> Option<String> {
+    let settings = crate::config::Settings { game_dir: root.to_string_lossy().into_owned(), ..Default::default() };
+    crate::official::executable_version(&settings.exe())
 }
 pub fn locations(game_dir: &str, reference_dir: &str) -> Result<Locations> {
     let target = root(game_dir, false)?;
@@ -952,6 +959,9 @@ pub async fn run(
                 build_key: String::new(),
             }),
             files: 0,
+            comparison_only: false,
+            target_executable_version: None,
+            reference_executable_version: None,
             verified: 0,
             different: 0,
             resource_different: 0,
@@ -1236,7 +1246,13 @@ pub async fn run(
         .filter(|c| storage_metadata(&c.entry.path))
         .count();
     let quarantined = if modifying { quarantines.len() } else { 0 };
-    let report=Report{action:req.action,source_kind,profile:m.profile,files:count,verified:count-changes.len()+repaired,different:changes.len()+quarantines.len(),resource_different:changes.len()-storage_different,storage_different:storage_different+quarantines.len(),remaining:changes.len()+quarantines.len()-repaired-quarantined,repaired:repaired+quarantined,quarantined,extra_storage_files:quarantines.iter().map(|q|q.path.clone()).collect(),bytes:total,differences:changes.iter().map(|c|c.entry.path.clone()).chain(quarantines.iter().map(|q|q.path.clone())).take(200).collect(),report_path:report_path.to_string_lossy().into_owned(),backup,target_root:display_path(&target),reference_root:reference.as_deref().map(display_path),scope:"exact installation files against selected baseline; recognized surplus CASC indices/LRU/repair markers are quarantined; unrelated extras are preserved; not CASC object validation or server compatibility"};
+    let comparison_only = !modifying;
+    let report=Report{action:req.action,source_kind,profile:m.profile,files:count,
+        comparison_only,target_executable_version:executable_version(&target),
+        reference_executable_version:reference.as_deref().and_then(executable_version),
+        verified:count-changes.len()+repaired,different:changes.len()+quarantines.len(),resource_different:changes.len()-storage_different,storage_different:storage_different+quarantines.len(),remaining:changes.len()+quarantines.len()-repaired-quarantined,repaired:repaired+quarantined,quarantined,extra_storage_files:quarantines.iter().map(|q|q.path.clone()).collect(),bytes:total,differences:changes.iter().map(|c|c.entry.path.clone()).chain(quarantines.iter().map(|q|q.path.clone())).take(200).collect(),report_path:report_path.to_string_lossy().into_owned(),backup,target_root:display_path(&target),reference_root:reference.as_deref().map(display_path),
+        scope:if comparison_only { "Read-only comparison against a baseline; no game payloads copied or quarantined. Differences do not establish CASC corruption, download completeness or server compatibility." }
+        else { "Explicit baseline replacement; recognized surplus CASC metadata quarantined; not CASC object validation or a client/server version upgrade" }};
     json(&report_path, &report)?;
     emit(Progress {
         phase: "done",

@@ -36,16 +36,21 @@ elif [[ "$#" != 0 ]]; then
 fi
 test -f /client/.build.info
 test -d /client/Data
-test -d /client/_forever_
+product="${FOREVER_CASC_PRODUCT:-wowf}"
+case "$product" in
+    wowf) test -d /client/_forever_ ;;
+    wow_classic_beta) test -d /client/_classic_beta_ ;;
+    *) printf 'Unsupported CASC product\n' >&2; exit 2 ;;
+esac
 test -z "$(ls -A /output)"
 cd /output
-/opt/trinitycore/bin/mapextractor -i /client -o /output -p wowf
+/opt/trinitycore/bin/mapextractor -i /client -o /output -p "$product"
 test -d dbc && test -d maps && test -d gt && test -d cameras
 mkdir .vmap-work
 cd .vmap-work
-/opt/trinitycore/bin/vmap4extractor -d /client -p wowf
+/opt/trinitycore/bin/vmap4extractor -d /client -p "$product"
 cd /output
 mkdir vmaps
 /opt/trinitycore/bin/vmap4assembler .vmap-work/Buildings vmaps
 validate_output /output
-printf 'Extraction complete: wowf, fresh dbc/gt/cameras/maps/vmaps\n'
+printf 'Extraction complete: %s, fresh dbc/gt/cameras/maps/vmaps\n' "$product"

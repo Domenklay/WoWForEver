@@ -160,11 +160,11 @@ def model(state, *, published=False):
     credential = state['credentials']
     common = dict(image=state['image'], pull_policy='never', networks=['clean'], restart='no',
                   environment=dict(DB_PASSWORD=credential['database']))
-    data = mount(directory / 'data', '/opt/trinitycore/data')
+    data = mount(state.get('data_directory', directory / 'data'), '/opt/trinitycore/data')
     logs = dict(type='volume', source='logs', target='/opt/trinitycore/logs')
     entrypoint = mount(ROOT / 'docker/clean/entrypoint.py', '/usr/local/bin/forever-clean-entrypoint.py')
     services = {
-        'mysql': dict(image='mysql:8.0', networks=['clean'], restart='unless-stopped',
+        'mysql': dict(image=state.get('mysql_image', 'mysql:8.0'), networks=['clean'], restart='unless-stopped',
                       environment=dict(MYSQL_ROOT_PASSWORD=credential['root'], DB_PASSWORD=credential['database']),
                       command=['--max-allowed-packet=1G', '--skip-log-bin', '--innodb-buffer-pool-size=512M',
                                '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci'],
@@ -196,11 +196,16 @@ def model(state, *, published=False):
         services['worldserver']['ports'] = ['127.0.0.1:8085:8085']
         services['bnetserver']['ports'] = ['127.0.0.1:1119:1119', '127.0.0.1:8081:8081']
         services['web']['ports'] = ['127.0.0.1:8088:8000']
-    return dict(name=PROJECT, services=services, networks={'clean': {}}, volumes={'mysql-data': {}, 'logs': {}})
+    if state.get('release'):
+        # Database changes run explicitly on the isolated clone, never implicitly
+        # through normal starts. Missing clone tables must not trigger fresh setup.
+        for service in ('worldserver', 'bnetserver', 'initialize'):
+            services[service]['environment']['FOREVER_RELEASE_MANAGED'] = '1'
+    return dict(name=state.get('project', PROJECT), services=services, networks={'clean': {}}, volumes={'mysql-data': {}, 'logs': {}})
 
 
 def compose(state, *args, capture=False, data=None):
-    return run(['docker', 'compose', '-p', PROJECT, '-f', state['compose'], *args], capture=capture, data=data)
+    return run(['docker', 'compose', '-p', state.get('project', PROJECT), '-f', state['compose'], *args], capture=capture, data=data)
 
 
 def save(state):
@@ -219,7 +224,7 @@ def container(state, service):
     values = json.loads(run(['docker', 'inspect', ident], capture=True))
     item = values[0]
     labels = item['Config'].get('Labels', {})
-    if labels.get('com.docker.compose.project') != PROJECT or labels.get('com.docker.compose.service') != service:
+    if labels.get('com.docker.compose.project') != state.get('project', PROJECT) or labels.get('com.docker.compose.service') != service:
         raise ValueError('Container ownership mismatch')
     return item
 
@@ -270,7 +275,7 @@ def wait_world(state, timeout):
         if not item or not item['State']['Running']:
             raise RuntimeError('Clean worldserver stopped; inspect status')
         labels = item['Config'].get('Labels', {})
-        if labels.get('org.wowforever.core') != CORE or labels.get('org.wowforever.advancement') != 'none':
+        if labels.get('org.wowforever.core') != state['core'] or labels.get('org.wowforever.advancement') != 'none':
             raise RuntimeError('Unexpected game server image; expected the pinned pristine core without Advancement')
         # A log tail is not a readiness signal: CLI prompts can evict the line,
         # and a previous process's ready message can survive a later restart.
@@ -319,14 +324,14 @@ def storage_stamp(root):
 
 def ensure_game_tables(state):
     """Repair only an authenticated missing table, preserving completed imports."""
-    output = Path(state['root']) / 'data'
+    output = Path(state.get('data_directory', Path(state['root']) / 'data'))
     missing = missing_tables(output)
     if not missing:
         return
     if missing != ['ArtifactKnowledgeMultiplier.txt']:
         raise RuntimeError('Missing required GameTables: ' + ', '.join(missing)
                            + '. Keep the extraction and inspect the client; no dummy tables were generated.')
-    expected = dict(core=CORE, exe_sha256=state['client']['exe_sha256'], build_key=state['client']['build_key'])
+    expected = dict(core=state['core'], exe_sha256=state['client']['exe_sha256'], build_key=state['client']['build_key'])
     if json.loads((output / '.clean-extraction.json').read_text()) != expected:
         raise ValueError('GameTable repair requires this clean installation extraction checkpoint')
     if output.is_symlink() or (output / 'gt').is_symlink():
@@ -551,7 +556,18 @@ def prepare_client_command(state):
 
 def load_state(path):
     state = json.loads(path.read_text())
-    if state.get('format') != FORMAT or state.get('project') != PROJECT or state.get('core') != CORE or Path(state['root']) != path.parent.resolve():
+    valid_generation = state.get('project') == PROJECT and state.get('core') == CORE
+    if state.get('release'):
+        from server_release_catalog import release
+        descriptor = release(state['release'])
+        valid_generation = bool(re.fullmatch(r'forever-clean-r-[0-9a-f]{12}', state.get('project', '')) and
+                                state.get('core') == descriptor['core'] and
+                                state.get('client', {}).get('exe_build') == descriptor['client_build'])
+        data = Path(state.get('data_directory', ''))
+        expected = path.parent.resolve() / 'upgrades' / state.get('project', '')[-12:] / 'data'
+        if data != expected or any(p.is_symlink() for p in (data, *data.parents)):
+            valid_generation = False
+    if state.get('format') != FORMAT or not valid_generation or Path(state['root']) != path.parent.resolve():
         raise ValueError('Clean state identity mismatch')
     if Path(state['compose']) != path.parent.resolve() / 'compose.private.json':
         raise ValueError('Unexpected Compose path')
@@ -595,6 +611,8 @@ def purge_old(state):
 
 
 def execute(args):
+    if args.action != 'status' and (args.root / '.upgrade-in-progress.json').exists():
+        raise ValueError('An upgrade was interrupted or is in progress. Use upgrade-forever-server.py rollback --plan before lifecycle commands')
     if args.action == 'install':
         install(args)
     else:

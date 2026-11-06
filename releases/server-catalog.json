@@ -1,0 +1,18 @@
+{
+  "format": "wowforever-server-releases-v1",
+  "releases": [
+    {
+      "id": "forever-1.60.1.70707",
+      "client_build": 70707,
+      "products": ["wowf", "wow_classic_beta"],
+      "core": "b4e7b940593f6402a822d4fbcdf31331d16f73b6",
+      "from_builds": [70658],
+      "protocol": "70658-family; upstream PR 271 reports 70707 unchanged; real-client validation pending",
+      "database": {
+        "from": "pristine-b4e7b940593f",
+        "to": "pristine-b4e7b940593f",
+        "migrations": []
+      }
+    }
+  ]
+}

@@ -1090,6 +1090,62 @@ Object.assign(TEXTS.pt, {
   "official_protected": "O Battle.net gerencia esta instalação. Downloads, recuperação e pacotes experimentais do Multi estão desativados."
 });
 
+Object.assign(TEXTS.ru, {
+  wReadOnlyNotice: 'Это только сравнение файлов. Различия CASC могут возникать при подгрузке и обновлении; они не доказывают повреждение. Файлы не копировались и не переносились.',
+  wComparisonDifferences: 'Найдены различия с выбранной копией.',
+  wComparisonMatches: 'Файлы совпадают с выбранной копией.',
+  wComparisonVersions: 'EXE проверяемой установки: {target} · EXE источника: {source} · метаданные источника: {metadata}',
+  officialTitle: 'Подключить установленный клиент',
+  officialIntro: 'Дождись полной установки в ForeverLauncher или Battle.net и выбери её папку. Multi подготовит подключение к серверу.',
+  officialScope: 'Архивами, индексами и EXE управляет исходный установщик. Multi использует отдельный профиль подключения и ключ сервера в памяти игры.',
+  officialCompleteness: 'Версия и папка не подтверждают полноту ресурсов. Дождись окончания установки в исходном лаунчере. Предзагрузка ещё может не обновить EXE.',
+  official_protected: 'Защита файлов включена. Скачивание, восстановление и экспериментальные пакеты Multi отключены для этой установки.'
+});
+Object.assign(TEXTS.en, {
+  wReadOnlyNotice: 'This is only a file comparison. Streaming and updates can change CASC files; differences do not establish corruption. No files were copied or quarantined.',
+  wComparisonDifferences: 'Differences from the selected copy were found.',
+  wComparisonMatches: 'Files match the selected copy.',
+  wComparisonVersions: 'Target EXE: {target} · Source EXE: {source} · Source metadata: {metadata}',
+  officialTitle: 'Connect an installed client',
+  officialIntro: 'Finish the full installation in ForeverLauncher or Battle.net, then choose its folder. Multi prepares the server connection.',
+  officialScope: 'The source installer manages archives, indices and EXE. Multi uses a separate connection profile and a server key in game memory.',
+  officialCompleteness: 'Version and folder checks do not establish complete resources. Finish installation in the source launcher. Preloading may not have updated the EXE yet.',
+  official_protected: 'File protection is enabled. Multi downloads, recovery and experimental packages are disabled for this installation.'
+});
+Object.assign(TEXTS.fr, {
+  wReadOnlyNotice: 'Il s’agit seulement d’une comparaison. Le streaming et les mises à jour peuvent modifier CASC ; les différences ne prouvent pas une corruption. Aucun fichier copié ni mis en quarantaine.',
+  wComparisonDifferences: 'Des différences avec la copie choisie ont été trouvées.',
+  wComparisonMatches: 'Les fichiers correspondent à la copie choisie.',
+  wComparisonVersions: 'EXE cible : {target} · EXE source : {source} · Métadonnées source : {metadata}',
+  officialTitle: 'Connecter un client installé',
+  officialIntro: 'Terminez l’installation complète dans ForeverLauncher ou Battle.net, puis choisissez son dossier. Multi prépare la connexion au serveur.',
+  officialScope: 'L’installateur source gère les archives, index et EXE. Multi utilise un profil séparé et une clé serveur en mémoire du jeu.',
+  officialCompleteness: 'La version et le dossier ne garantissent pas tous les fichiers. Terminez l’installation dans le launcher source. Le préchargement peut laisser l’ancien EXE actif.',
+  official_protected: 'La protection des fichiers est active. Téléchargement, récupération et paquets expérimentaux Multi sont désactivés pour cette installation.'
+});
+Object.assign(TEXTS.es, {
+  wReadOnlyNotice: 'Solo se comparan archivos. El streaming y las actualizaciones pueden cambiar CASC; las diferencias no demuestran daños. No se copiaron ni movieron archivos.',
+  wComparisonDifferences: 'Se encontraron diferencias con la copia elegida.',
+  wComparisonMatches: 'Los archivos coinciden con la copia elegida.',
+  wComparisonVersions: 'EXE de destino: {target} · EXE de origen: {source} · Metadatos de origen: {metadata}',
+  officialTitle: 'Conectar un cliente instalado',
+  officialIntro: 'Termina la instalación completa en ForeverLauncher o Battle.net y elige su carpeta. Multi prepara la conexión al servidor.',
+  officialScope: 'El instalador de origen administra archivos, índices y EXE. Multi usa un perfil separado y una clave del servidor en la memoria del juego.',
+  officialCompleteness: 'La versión y la carpeta no garantizan todos los recursos. Termina la instalación en el launcher de origen. La precarga puede mantener activo el EXE anterior.',
+  official_protected: 'La protección está activada. Las descargas, restauraciones y paquetes experimentales de Multi están desactivados para esta instalación.'
+});
+Object.assign(TEXTS.pt, {
+  wReadOnlyNotice: 'Esta é apenas uma comparação. Streaming e atualizações podem alterar o CASC; diferenças não comprovam corrupção. Nenhum arquivo foi copiado ou movido.',
+  wComparisonDifferences: 'Foram encontradas diferenças em relação à cópia escolhida.',
+  wComparisonMatches: 'Os arquivos correspondem à cópia escolhida.',
+  wComparisonVersions: 'EXE de destino: {target} · EXE de origem: {source} · Metadados de origem: {metadata}',
+  officialTitle: 'Conectar um cliente instalado',
+  officialIntro: 'Conclua a instalação completa no ForeverLauncher ou Battle.net e escolha a pasta. O Multi prepara a conexão ao servidor.',
+  officialScope: 'O instalador de origem gerencia arquivos, índices e EXE. O Multi usa um perfil separado e uma chave do servidor na memória do jogo.',
+  officialCompleteness: 'A versão e a pasta não garantem todos os recursos. Conclua a instalação no launcher de origem. A pré-carga pode manter o EXE anterior ativo.',
+  official_protected: 'A proteção de arquivos está ativa. Downloads, recuperação e pacotes experimentais do Multi estão desativados para esta instalação.'
+});
+
 let lang = 'en';
 
 /// ru, fr, en, es or pt from a setting ('' = system language) or a browser language tag.

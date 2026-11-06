@@ -518,6 +518,7 @@ function sourceState() {
   const s = workshopSource();
   const kind = s.manifestSource ? 'wSourceManifest' : s.referenceDir ? 'wSourceReference' : 'wSourceNone';
   $('w-source-state').textContent = t(kind);
+  if (state?.settings.protectClientFiles) $('w-source-state').textContent += ' ' + t('wReadOnlyNotice');
   $('w-source-state').dataset.ready = String(!!(s.manifestSource || s.referenceDir));
   clearTimeout(layoutTimer);
   layoutTimer = setTimeout(refreshWorkshopLayout, 200);
@@ -582,14 +583,16 @@ async function runWorkshop(action) {
     workshopReport = report;
     const extras = report.extraStorageFiles?.length || 0;
     const storageOnly = report.storageDifferent > 0 && report.resourceDifferent === 0;
-    $('w-status-title').textContent = t(report.action === 'recover' ? 'wRecovered' : report.repaired > 0 ? 'wRestoredTitle' : extras ? 'wCascTitle' : report.different ? (storageOnly ? 'wStorageOnly' : 'wDifferences') : 'wMatches');
+    const comparison = report.comparisonOnly ?? report.action === 'verify';
+    $('w-status-title').textContent = t(comparison ? (report.different ? 'wComparisonDifferences' : 'wComparisonMatches') : report.action === 'recover' ? 'wRecovered' : report.repaired > 0 ? 'wRestoredTitle' : extras ? 'wCascTitle' : report.different ? (storageOnly ? 'wStorageOnly' : 'wDifferences') : 'wMatches');
     $('w-status').textContent = t(report.repaired > 0 ? 'wRepairResult' : 'wVerifyResult', { checked: report.files, different: report.different, restored: report.repaired, remaining: report.remaining ?? Math.max(0, report.different - report.repaired), resources: report.resourceDifferent ?? report.different, storage: report.storageDifferent || 0 });
-    if (extras) $('w-status').textContent += ' ' + t(report.quarantined > 0 ? 'wCascQuarantined' : 'wCascExtras', { count: report.quarantined || extras });
+    if (comparison) $('w-status').textContent += ' ' + t('wReadOnlyNotice');
+    else if (extras) $('w-status').textContent += ' ' + t(report.quarantined > 0 ? 'wCascQuarantined' : 'wCascExtras', { count: report.quarantined || extras });
     else if (report.storageDifferent > 0) $('w-status').textContent += ' ' + t('wStorageHint');
     $('w-progress').value = 100;
     $('w-count').textContent = `${report.verified} / ${report.files}`;
     $('w-speed').textContent = bytes(report.bytes);
-    $('w-current').textContent = report.profile.version ? `${report.profile.product} · ${report.profile.version}` : '';
+    $('w-current').textContent = t('wComparisonVersions', { target: report.targetExecutableVersion || '—', source: report.referenceExecutableVersion || '—', metadata: report.profile.version || '—' });
     const lines = [report.targetRoot ? t('wResolvedTarget', { path: report.targetRoot }) : '', report.referenceRoot ? t('wResolvedSource', { path: report.referenceRoot }) : '', t(report.sourceKind === 'reference' ? 'wScopeReference' : 'wScopeManifest'), report.backup ? t('wBackup', { path: report.backup }) : '', ...(report.differences || [])];
     $('w-report-text').textContent = lines.filter(Boolean).join('\n');
     $('w-report').hidden = false; $('w-copy-report').hidden = false;

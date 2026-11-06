@@ -1,0 +1,27 @@
+name: Versioned Forever upgrade checks
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/forever-upgrades-70707-20261106]
+    paths: [scripts/**, docker/clean/**, releases/**, tests/**, .github/workflows/server-upgrades.yml]
+permissions:
+  contents: read
+concurrency:
+  group: server-upgrades-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  lifecycle-and-database-clone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify upgrade gates, failure recovery and existing lifecycle
+        run: |
+          python3 -m unittest discover -s tests -p 'test_server_release_upgrade.py' -v
+          python3 -m unittest discover -s tests -p 'test_clean*.py' -v
+          bash -n docker/clean/extract.sh docker/clean/mysql-init.sh
+      - name: Verify real MySQL snapshot, clone, isolated schema migration and retained progress
+        run: python3 tests/fixtures/release-database-roundtrip.py

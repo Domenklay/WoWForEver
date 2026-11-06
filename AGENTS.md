@@ -1,5 +1,15 @@
 # Instructions for AI coding assistants
 
+On 2026-11-06 the user authorized moving to 70707 and requested future client
+and database upgrades. They then confirmed the ORIGINAL E:\WoW_Forever EXE
+and active metadata are still 70658, downloaded with Nvord ForeverLauncher
+2.0.5. Do not switch the server or relabel metadata until a real 70707 EXE
+is activated. Follow docs/SERVER-UPGRADES.ru.md: new extracted resources,
+private four-DB snapshot, isolated DB clone, reviewed versioned migrations,
+verified cutover and retained old generation. Never reset existing progress
+or reuse its DB volume for staging. The launcher comparison is read-only and
+does not establish corruption or completeness from whole-CASC-file differences.
+
 On 2026-11-06 the user selected a 70707 preload. See docs/CLIENT-70707.ru.md.
 Preload metadata is not an activated EXE. The 70707/70755 upstream PR 271
 was open, not merged when inspected. Do not apply its whole SQL (it switches
