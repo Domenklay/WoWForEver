@@ -115,7 +115,7 @@ public:
     Startup() : WorldScript("forever_scaling_startup") { }
     void OnWorldInitialized() override
     {
-        TC_LOG_INFO("scripts", "ForeverScaling ready: personal-virtual-v0.2 (enabled={}, damageGuard={})",
+        TC_LOG_INFO("scripts", "ForeverScaling ready: personal-virtual-v0.3 (enabled={}, damageGuard={})",
             Enabled(), DamageGuardEnabled());
     }
 };
@@ -125,6 +125,6 @@ void AddSC_forever_scaling()
 {
     new ForeverScaling::DamageGuard();
     new ForeverScaling::Startup();
-    TC_LOG_INFO("server.loading", "ForeverScaling: personal-virtual-v0.2 registered (enabled={}, damageGuard={})",
+    TC_LOG_INFO("server.loading", "ForeverScaling: personal-virtual-v0.3 registered (enabled={}, damageGuard={})",
         ForeverScaling::Enabled(), ForeverScaling::DamageGuardEnabled());
 }
