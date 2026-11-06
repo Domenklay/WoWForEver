@@ -1,5 +1,15 @@
 # Instructions for AI coding assistants
 
+The user's revision-2 report establishes the actual ambiguity: the 70707
+INSTALL has two Windows x86_64 root Wow.exe entries, CN-only CKey
+606df11c09fe22c9456b951a89848329 (109949136 bytes) and EU/KR/TW/US CKey
+753e09cce90875e466bbf55c3d3ce169 (85829840 bytes). The common loader is
+bff1efe594682fd926c51bacf701bf40 (41311952 bytes). The numeric Windows=1
+and x86_64=2 categories were correct for this actual manifest. Revision 3
+adds explicit named region-mask selection, default EU, before bootstrap
+uniqueness checks. It still does not activate, extract or prove payload
+availability/version; await the regional local-read audit output.
+
 The user's first local preload audit read INSTALL successfully but failed to
 select a root Windows x64 Wow.exe (bootstrap empty). This is not proof that
 the payload is absent. Audit revision 2 selects named masks without assuming

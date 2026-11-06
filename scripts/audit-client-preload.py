@@ -18,6 +18,7 @@ import sys
 from casc_manifest_update import Encoding
 
 TARGET_KEY = '7feb61f3c994bcb168526b8db521514a'
+REGIONS = ('EU', 'US', 'KR', 'TW', 'CN')
 
 
 def direct(path):
@@ -88,14 +89,28 @@ def install_manifest(body):
             for e in parse_install_manifest(body)['entries'] if e['selected_windows_x64']]
 
 
-def manifest_diagnostics(parsed):
+def regional_entries(parsed, region):
+    if region not in REGIONS:
+        raise ValueError('Unsupported install region')
+    if sum(tag['name'] == region for tag in parsed['tags']) != 1:
+        raise ValueError('Exactly one requested region tag must be present: ' + region)
+    return [e for e in parsed['entries'] if e['selected_windows_x64'] and
+            any(tag['name'] == region for tag in e['tags'])]
+
+
+def manifest_diagnostics(parsed, region=None):
     entries = parsed['entries']
     candidates = [e for e in entries if e['path'].lower().endswith('.exe') or
                   e['path'].rsplit('/', 1)[-1].lower() == 'wow_loader.dll']
-    return dict(tags=parsed['tags'], entries=len(entries),
-                windows_x64_entries=sum(e['selected_windows_x64'] for e in entries),
-                executable_candidates=candidates[:64], executable_candidates_total=len(candidates),
-                executable_candidates_truncated=len(candidates) > 64)
+    report = dict(tags=parsed['tags'], entries=len(entries),
+                  windows_x64_entries=sum(e['selected_windows_x64'] for e in entries),
+                  executable_candidates=candidates[:64], executable_candidates_total=len(candidates),
+                  executable_candidates_truncated=len(candidates) > 64)
+    if region is not None:
+        selected = lambda e: e['selected_windows_x64'] and any(t['name'] == region for t in e['tags'])
+        report.update(requested_region=region, windows_x64_region_entries=sum(selected(e) for e in entries),
+                      executable_candidates=[dict(e, selected_for_region=selected(e)) for e in candidates[:64]])
+    return report
 
 
 def open_store(root):
@@ -117,7 +132,8 @@ def md5_file(path):
     return md5.hexdigest()
 
 
-def audit(selected, build_key=TARGET_KEY, expected_build=70707):
+def audit(selected, build_key=TARGET_KEY, expected_build=70707, region='EU'):
+    if region not in REGIONS: raise ValueError('Unsupported install region')
     root = direct(selected)
     if root.is_file(): root = root.parent
     if root.name == '_forever_': root = root.parent
@@ -139,8 +155,9 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707):
     active = [row for row in active if row.get('Product') == 'wowf' and row.get('Active') == '1']
     if len(active) != 1: raise ValueError('Expected one active wowf row')
     before = stamp(root)
-    report = dict(format='wowforever-preload-audit-v1', audit_revision=2, source=str(root), active_metadata_version=active[0].get('Version'),
+    report = dict(format='wowforever-preload-audit-v1', audit_revision=3, source=str(root), active_metadata_version=active[0].get('Version'),
                   active_build_key=active[0].get('Build Key'), preload_build=expected_build, preload_build_key=build_key,
+                  selected_install_tags=['Windows', 'x86_64', region],
                   comparison_only=True, activated=False, activation_ready=False,
                   protocol_build_verified=False, full_asset_integrity_verified=False, bootstrap=[])
     try:
@@ -149,13 +166,14 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707):
         print('READ ONLY: validating the target INSTALL manifest...', file=sys.stderr, flush=True)
         install_ckey, install_ekey = pair(config, 'install')
         parsed = parse_install_manifest(store.read(install_ekey, install_ckey))
-        report['install_manifest'] = manifest_diagnostics(parsed)
+        report['install_manifest'] = manifest_diagnostics(parsed, region)
         entries = [dict(path=e['path'], ckey=e['ckey'], bytes=e['bytes'])
-                   for e in parsed['entries'] if e['selected_windows_x64']]
-        report['windows_install_entries'] = len(entries)
+                   for e in regional_entries(parsed, region)]
+        report['windows_install_entries'] = report['install_manifest']['windows_x64_entries']
+        report['selected_install_entries'] = len(entries)
         wanted = [entry for entry in entries if entry['path'].lower() in ('wow.exe', 'wow_loader.dll')]
         if sum(entry['path'].lower() == 'wow.exe' for entry in wanted) != 1 or len(wanted) != len({e['path'].lower() for e in wanted}):
-            raise ValueError('Cannot select one root Windows x64 Wow.exe; see install_manifest tags and executable_candidates. No path or tag substitution was performed.')
+            raise ValueError('Cannot select one root Windows x64 ' + region + ' Wow.exe; see install_manifest tags and executable_candidates. No path or tag substitution was performed.')
         print('READ ONLY: comparing active bootstrap files with the target manifest...', file=sys.stderr, flush=True)
         for entry in wanted:
             current = root / '_forever_' / entry['path']
@@ -199,8 +217,9 @@ def main():
     parser.add_argument('--client', type=Path, required=True)
     parser.add_argument('--build-key', default=TARGET_KEY)
     parser.add_argument('--expected-build', type=int, default=70707)
+    parser.add_argument('--region', choices=REGIONS, default='EU', help='INSTALL region mask (default: EU); does not change the client region')
     args = parser.parse_args()
-    print(json.dumps(audit(args.client, args.build_key, args.expected_build), ensure_ascii=False, indent=2))
+    print(json.dumps(audit(args.client, args.build_key, args.expected_build, args.region), ensure_ascii=False, indent=2))
 
 
 if __name__ == '__main__':

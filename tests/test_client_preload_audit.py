@@ -24,12 +24,15 @@ storelib = module('preload_fixture_store', 'update-casc-sandbox.py')
 lab = storelib.lab
 
 
-def manifest(entries, tag_kinds=(1, 2)):
-    mask = bytes(sum(0x80 >> (i % 8) for i in range(start, min(start + 8, len(entries))))
-                 for start in range(0, len(entries), 8))
-    return (b'IN\x01\x10' + struct.pack('>HI', 2, len(entries)) +
-            b'Windows\0' + struct.pack('>H', tag_kinds[0]) + mask +
-            b'x86_64\0' + struct.pack('>H', tag_kinds[1]) + mask +
+def manifest(entries, tag_kinds=(1, 2), regions=None):
+    def mask(indices):
+        return bytes(sum(0x80 >> (i % 8) for i in range(start, min(start + 8, len(entries))) if i in indices)
+                     for start in range(0, len(entries), 8))
+    if regions is None: regions = {'EU': list(range(len(entries)))}
+    tags = [('Windows', tag_kinds[0], range(len(entries))), ('x86_64', tag_kinds[1], range(len(entries)))]
+    tags += [(name, 4, indices) for name, indices in regions.items()]
+    return (b'IN\x01\x10' + struct.pack('>HI', len(tags), len(entries)) +
+            b''.join(name.encode() + b'\0' + struct.pack('>H', kind) + mask(indices) for name, kind, indices in tags) +
             b''.join(name.encode() + b'\0' + obj['ckey'] + struct.pack('>I', len(obj['content'])) for name, obj in entries))
 
 
@@ -38,7 +41,7 @@ def snapshot(root):
             for p in root.rglob('*') if p.is_file()}
 
 
-def source(directory, resident=True, names=('Wow.exe', 'wow_loader.dll'), tag_kinds=(1, 2)):
+def source(directory, resident=True, names=('Wow.exe', 'wow_loader.dll'), tag_kinds=(1, 2), include_china=False):
     root = directory / 'owned'
     with patch.object(lab, 'PRODUCT', 'wowf'):
         lab.write_store(root)
@@ -46,9 +49,16 @@ def source(directory, resident=True, names=('Wow.exe', 'wow_loader.dll'), tag_ki
     old_ck, old_ek = (bytes.fromhex(v) for v in store.values['encoding'].split()[:2])
     wow = lab.asset(b'MZ-owned-synthetic-wow-binary')
     loader = lab.asset(b'MZ-owned-synthetic-new-loader')
-    encoding = lab.asset(extend_encoding(store.read(old_ek, old_ck), [wow, loader]))
-    install = lab.asset(manifest([(names[0], wow), (names[1], loader)], tag_kinds))
-    additions = [encoding, install] + ([wow, loader] if resident else [])
+    china = lab.asset(b'MZ-owned-synthetic-China-binary')
+    assets = [wow, loader] + ([china] if include_china else [])
+    encoding = lab.asset(extend_encoding(store.read(old_ek, old_ck), assets))
+    entries = [(names[0], wow), (names[1], loader)]
+    regions = None
+    if include_china:
+        entries.insert(0, ('Wow.exe', china))
+        regions = {'EU': [1, 2], 'CN': [0, 2], 'US': [1, 2], 'KR': [1, 2], 'TW': [1, 2]}
+    install = lab.asset(manifest(entries, tag_kinds, regions))
+    additions = [encoding, install] + (assets if resident else [])
     archive = bytearray((root / 'Data/data/data.000').read_bytes())
     records = {i: list(bucket['records']) for i, bucket in store.buckets.items()}
     for obj in additions:
@@ -174,6 +184,42 @@ class PreloadAuditTests(unittest.TestCase):
         self.assertEqual(len(details['executable_candidates']), 64)
         self.assertTrue(details['executable_candidates_truncated'])
         self.assertEqual(details['windows_x64_entries'], 70)
+
+    def test_regional_wow_duplicates_choose_eu_or_cn_by_actual_masks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root, key = source(Path(temp), include_china=True)
+            before = snapshot(root)
+            for region, matches_active in [('EU', True), ('CN', False), ('US', True), ('KR', True), ('TW', True)]:
+                with self.subTest(region=region):
+                    report = audit.audit(root, key, region=region)
+                    self.assertEqual(report['status'], 'manifest-verified')
+                    self.assertEqual(report['selected_install_tags'], ['Windows', 'x86_64', region])
+                    self.assertEqual(report['audit_revision'], 3)
+                    wow, loader = report['bootstrap']
+                    self.assertEqual(wow['path'], 'Wow.exe')
+                    self.assertEqual(wow['matches_active_file'], matches_active)
+                    self.assertTrue(wow['verified_local_preload_copy'])
+                    self.assertTrue(loader['verified_local_preload_copy'])
+                    candidates = report['install_manifest']['executable_candidates']
+                    selected_wow = [e for e in candidates if e['path'] == 'Wow.exe' and e['selected_for_region']]
+                    self.assertEqual(len(selected_wow), 1)
+                    self.assertEqual(selected_wow[0]['ckey'], wow['ckey'])
+                    self.assertFalse(report['activated'])
+            self.assertEqual(snapshot(root), before)
+
+    def test_missing_region_does_not_fall_back_to_first_executable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root, key = source(Path(temp))
+            before = snapshot(root)
+            report = audit.audit(root, key, region='CN')
+            self.assertEqual(report['status'], 'cannot-complete-local-audit')
+            self.assertIn('region tag', report['detail'])
+            self.assertEqual(report['bootstrap'], [])
+            self.assertEqual(report['install_manifest']['requested_region'], 'CN')
+            self.assertFalse(report['activation_ready'])
+            self.assertEqual(snapshot(root), before)
+            with self.assertRaisesRegex(ValueError, 'Unsupported install region'):
+                audit.audit(root, key, region='AUTO')
 
 
 if __name__ == '__main__': unittest.main()
