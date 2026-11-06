@@ -45,6 +45,13 @@ def inject(core,module=None):
     player_source=core/'src/server/game/Entities/Player/Player.cpp'
     if player_header.exists() and player_source.exists():
         header=player_header.read_text();source=player_source.read_text()
+        # The pinned core's existing profession declaration relies on its PCH
+        # for this type. Keep Player.h valid during standalone compilation too.
+        if 'IsClassicProfessionChildSkill' in header and 'struct SkillLineEntry;' not in header:
+            marker='struct SkillRaceClassInfoEntry;'
+            if header.count(marker)!=1:raise ValueError('Unknown player skill forward declarations')
+            header=header.replace(marker,'struct SkillLineEntry;\n'+marker)
+            player_header.write_text(header)
         declaration='        void SetSkill(uint32 id, uint16 step, uint16 newVal, uint16 maxVal);'
         if 'SyncForeverAdvancementClassSkills' not in header:
             if header.count(declaration)!=1:raise ValueError('Unknown Player skill declaration')

@@ -11,6 +11,7 @@ parser.add_argument('--build', type=Path, required=True)
 args = parser.parse_args()
 units = ('ForeverAdvancement.cpp', 'Player.cpp', 'DB2Stores.cpp', 'HotfixHandler.cpp', 'ChatHandler.cpp')
 commands = json.loads((args.build / 'compile_commands.json').read_text())
+failed = []
 for unit in units:
     matches = [item for item in commands if Path(item['file']).name == unit]
     if len(matches) != 1:
@@ -25,5 +26,8 @@ for unit in units:
         command.append(word)
     command.append('-fsyntax-only')
     print('Checking pinned 70658 source: ' + unit, flush=True)
-    subprocess.run(command, cwd=item['directory'], check=True)
+    if subprocess.run(command, cwd=item['directory']).returncode:
+        failed.append(unit)
+if failed:
+    raise SystemExit('Compilation failed: ' + ', '.join(failed))
 print('Pinned 70658 adapter and all four modified core units compile successfully.')
