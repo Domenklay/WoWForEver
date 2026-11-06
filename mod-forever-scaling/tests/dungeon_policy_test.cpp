@@ -73,6 +73,8 @@ int main()
     assert(EncounterSnapshot::ScaleUnsigned(1000, solo.HealthMultiplier(EnemyKind::Trash)) == 400);
     assert(EncounterSnapshot::ScaleUnsigned(1000, solo.HealthMultiplier(EnemyKind::Boss)) == 550);
     assert(EncounterSnapshot::ScaleUnsigned(1000, full.HealthMultiplier(EnemyKind::Boss)) == 1000);
+    assert(EncounterSnapshot::ScaleUnsigned(101, 0.4) == 41);
+    assert(EncounterSnapshot::ScaleUnsigned(999, 0.55) == 550);
     assert(EncounterSnapshot::ScaleUnsigned(0, 0.5) == 0);
     assert(EncounterSnapshot::ScaleUnsigned(1, 0.4) == 1);
     assert(EncounterSnapshot::ScaleUnsigned(100, 5.0) == 100);
