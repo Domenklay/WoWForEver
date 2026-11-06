@@ -19,7 +19,7 @@ clean, network, upgrade = adv.clean, adv.network, adv.upgrade
 FORMAT = 'forever-clean-gameplay-v1'
 MARKER = '.gameplay-in-progress.json'
 BOOK_VERSION = '0.9.8-v2.1-smartai-abilities'
-SCALING_VERSION = '0.2.0'
+SCALING_VERSION = '0.3.0'
 CURRENT_ROOT = None
 
 
@@ -28,7 +28,7 @@ def source_id():
              'mods/living-encyclopedia/server', 'mods/living-encyclopedia/sql', 'mod-forever-scaling/server')
              for p in sorted((ROOT / folder).glob('*')) if p.is_file()]
     paths += [ROOT / p for p in ('scripts/inject-advancement.py', 'scripts/inject-gameplay.py',
-              'scripts/inject-forever-scaling.py', 'docker/gameplay/Dockerfile', 'docker/clean/entrypoint.py',
+              'scripts/inject-forever-scaling.py', 'scripts/inject-forever-dungeons.py', 'docker/gameplay/Dockerfile', 'docker/clean/entrypoint.py',
               'docker/patches/0004-forever-subclass-server-addon-endpoint.patch')]
     digest = hashlib.sha256()
     for p in paths: digest.update(str(p.relative_to(ROOT)).encode() + b'\0' + p.read_bytes() + b'\0')
@@ -97,7 +97,7 @@ def configure(before, model, candidate, folder, scaling=True):
 
 def wait_module(state, timeout=180):
     patterns = list(adv.READY_PATTERNS) + ['ForeverEncyclopedia ready:']
-    if state['gameplay'].get('scaling'): patterns.append('ForeverScaling ready: personal-virtual-v0.2 (enabled=true')
+    if state['gameplay'].get('scaling'): patterns.append('ForeverScaling ready: personal-virtual-v' + state['gameplay']['scaling'].rsplit('.', 1)[0] + ' (enabled=true')
     return adv.module_readiness.wait(clean, state, patterns, timeout)
 
 

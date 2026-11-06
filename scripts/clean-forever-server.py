@@ -610,7 +610,7 @@ def load_state(path):
     gameplay = state.get('gameplay')
     if gameplay and (not advancement or gameplay.get('version') != 1
         or gameplay.get('encyclopedia') != '0.9.8-v2.1-smartai-abilities'
-        or gameplay.get('scaling') not in (None, '0.2.0')
+        or gameplay.get('scaling') not in (None, '0.2.0', '0.3.0')
         or not re.fullmatch('[0-9a-f]{64}', gameplay.get('source_sha256', ''))
         or gameplay.get('backup') != advancement['backup']):
         raise ValueError('Unsupported combined gameplay state identity')

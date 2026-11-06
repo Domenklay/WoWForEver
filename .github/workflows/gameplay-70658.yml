@@ -1,8 +1,10 @@
 name: Combined gameplay on pinned 70658
 on:
+  pull_request:
+    paths: [mod-forever-scaling/**, scripts/inject-gameplay.py, scripts/inject-forever-scaling.py, scripts/inject-forever-dungeons.py, scripts/enable-clean-gameplay.py, docker/gameplay/**, .github/workflows/gameplay-70658.yml]
   push:
     branches: [codex/native-cdn-70658-20261106]
-    paths: [mods/living-encyclopedia/**, mod-forever-scaling/**, scripts/inject-gameplay.py, scripts/inject-forever-scaling.py, scripts/check-gameplay-core.py, scripts/enable-clean-gameplay.py, scripts/module_readiness.py, docker/gameplay/**, tests/test_clean_gameplay.py, tests/test_module_readiness.py, .github/workflows/gameplay-70658.yml]
+    paths: [mods/living-encyclopedia/**, mod-forever-scaling/**, scripts/inject-gameplay.py, scripts/inject-forever-scaling.py, scripts/inject-forever-dungeons.py, scripts/check-gameplay-core.py, scripts/enable-clean-gameplay.py, scripts/module_readiness.py, docker/gameplay/**, tests/test_clean_gameplay.py, tests/test_module_readiness.py, .github/workflows/gameplay-70658.yml]
   workflow_dispatch:
 permissions:
   contents: read
