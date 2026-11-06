@@ -73,6 +73,7 @@ jobs:
           }
           $readme = [System.IO.File]::ReadAllText("$pwd/app/README-MULTI.ru.md")
           $readme = $readme.Replace("../docs/NATIVE-CDN.ru.md", "NATIVE-CDN.ru.md").Replace("../docs/RESTORE-70658.ru.md", "RESTORE-70658.ru.md").Replace("../docs/CLIENT-WORKSHOP.ru.md", "CLIENT-WORKSHOP.ru.md").Replace("../docs/CLIENT-70707.ru.md", "CLIENT-70707.ru.md").Replace("../docs/SERVER-UPGRADES.ru.md", "SERVER-UPGRADES.ru.md").Replace("../docs/screenshots/", "https://raw.githubusercontent.com/Domenklay/WoWForEver/codex/launcher-forever-multi-20261105/docs/screenshots/")
+          $readme = $readme.Replace("../docs/BOOTSTRAP-AUDIT.ru.md", "BOOTSTRAP-AUDIT.ru.md")
           [System.IO.File]::WriteAllText("$pwd/dist/README.ru.md", $readme)
           $guide = [System.IO.File]::ReadAllText("$pwd/docs/CLIENT-WORKSHOP.ru.md").Replace("../content/client-manifest.schema.json", "client-manifest.schema.json")
           [System.IO.File]::WriteAllText("$pwd/dist/CLIENT-WORKSHOP.ru.md", $guide)

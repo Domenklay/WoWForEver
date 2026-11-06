@@ -1,5 +1,22 @@
 use super::{Cancel, DownloadError, Source};
 use crate::text::hex;
+use std::io::Read;
+
+fn matches_existing(path: &std::path::Path, entry: &crate::tact::manifest::InstallEntry) -> bool {
+    let Ok(metadata) = std::fs::symlink_metadata(path) else { return false; };
+    if !metadata.is_file() || metadata.len() != u64::from(entry.size) { return false; }
+    let Ok(mut file) = std::fs::File::open(path) else { return false; };
+    let mut digest = md5::Context::new();
+    let mut block = [0u8; 65536];
+    loop {
+        match file.read(&mut block) {
+            Ok(0) => break,
+            Ok(n) => digest.consume(&block[..n]),
+            Err(_) => return false,
+        }
+    }
+    digest.finalize().0 == entry.ckey
+}
 
 /// The three lookups that turn a content key into a fetch: what it encodes
 /// to, which archive holds it, and whether it is loose instead.
@@ -58,6 +75,17 @@ pub async fn extract_install(
             report.failed.push((entry.path.clone(), reason));
         };
 
+        let Some(relative) = entry.relative_path() else {
+            fail(&mut report, "the install manifest names a path outside the install".into());
+            continue;
+        };
+        let path = resolve_windows_path(dest, &relative);
+        if matches_existing(&path, entry) {
+            let existing = Extracted { path, bytes: u64::from(entry.size) };
+            progress(&existing); report.written.push(existing);
+            continue;
+        }
+
         let Some(ekey) = encoding.ekey_for(&entry.ckey) else {
             fail(&mut report, format!("encoding does not list content key {}", hex(&entry.ckey)));
             continue;
@@ -103,11 +131,6 @@ pub async fn extract_install(
             continue;
         }
 
-        let Some(relative) = entry.relative_path() else {
-            fail(&mut report, "the install manifest names a path outside the install".into());
-            continue;
-        };
-        let path = resolve_windows_path(dest, &relative);
         match crate::fsutil::write_atomic_with_mode(&path, &decoded, 0o644) {
             Ok(()) => {
                 let written = Extracted { path, bytes: decoded.len() as u64 };
@@ -119,6 +142,20 @@ pub async fn extract_install(
     }
 
     Ok(report)
+}
+
+#[cfg(test)]
+mod resume_tests {
+    use super::*;
+    #[test]
+    fn unchanged_executables_are_reused_but_same_size_corruption_is_not() {
+        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("Wow.exe");
+        let entry = crate::tact::manifest::InstallEntry { path: "Wow.exe".into(), size: 4, ckey: md5::compute(b"game").0 };
+        assert!(!matches_existing(&path, &entry));
+        std::fs::write(&path, b"game").unwrap(); assert!(matches_existing(&path, &entry));
+        std::fs::write(&path, b"fake").unwrap(); assert!(!matches_existing(&path, &entry));
+        std::fs::write(&path, b"gam").unwrap(); assert!(!matches_existing(&path, &entry));
+    }
 }
 
 /// The `.flavor.info` line a client reads to know which product it is.

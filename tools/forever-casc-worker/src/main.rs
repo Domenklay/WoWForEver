@@ -117,7 +117,9 @@ async fn run(request:Request,cancel:Cancel)->Result<Value>{
  // Reserve space for loose INSTALL output as well as encoded downloads. Already
  // stored CASC objects are excluded by the resume plan; never skip this check.
  let install_bytes=prepared.install.select(&prepared.tags).into_iter().map(|entry|u64::from(entry.size)).sum();
- if let Some(report)=space_report(root,prepared.plan.bytes(),install_bytes,fs2::available_space(root)?){return Ok(report);}
+ let seed_bytes=prepared.bootstrap_blte.iter().map(|(key,raw)|if prepared.probe.has(key){0}else{raw.len() as u64+30}).sum::<u64>()
+  + if prepared.probe.has(&prepared.encoding_key){0}else{prepared.encoding_blte.len() as u64+30};
+ if let Some(report)=space_report(root,prepared.plan.bytes().saturating_add(seed_bytes),install_bytes,fs2::available_space(root)?){return Ok(report);}
  if request.high_res {prepared.tag_column=prepared.tag_column.replace("Windows ","Windows HighRes ");}
  let startup_manifests=prepared.bootstrap.clone();
  let selected=prepared.wanted.len();game_closed()?;
