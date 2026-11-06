@@ -1347,3 +1347,55 @@ Object.assign(TEXTS.pt, {
   "addonDevActive": "Desenvolvimento de addons ativado — as alterações locais são preservadas.",
   "addonDevHint": "As pastas existentes de Ascension e Encyclopedia permanecem intactas. As ausentes são instaladas automaticamente. Desative para voltar às versões publicadas; as pastas substituídas são guardadas em backup."
 });
+
+// Explicit test/stable Encyclopedia downloads with server-side integrity checks.
+Object.assign(TEXTS.ru, {
+  "addonTestInstall": "Скачать тестовую книгу 0.9.9",
+  "addonTestStable": "Вернуть стабильную 0.9.8",
+  "addonTestWarning": "Меняются только файлы аддона. Для новых эффектов талантов нужно отдельно обновить серверное ядро. Предыдущая папка сохраняется в резервной копии.",
+  "addonTestSavePath": "Сначала сохраните выбранную папку игры в настройках.",
+  "addonTestSelected": "Канал: тестовая энциклопедия 0.9.9. При запуске игры обновляется именно она.",
+  "addonStableSelected": "Канал: стабильная энциклопедия 0.9.8.",
+  "addonTestWorking": "Скачивание и проверка SHA-256…",
+  "addonTestComplete": "Установлена энциклопедия {version}."
+});
+Object.assign(TEXTS.en, {
+  "addonTestInstall": "Download test Encyclopedia 0.9.9",
+  "addonTestStable": "Restore stable 0.9.8",
+  "addonTestWarning": "Only AddOn files change. Updated server-side talent effects require a separate worldserver update. A backup of the previous folder is kept.",
+  "addonTestSavePath": "Save the selected game folder in settings first.",
+  "addonTestSelected": "Channel: test Encyclopedia 0.9.9. Play keeps this version selected.",
+  "addonStableSelected": "Channel: stable Encyclopedia 0.9.8.",
+  "addonTestWorking": "Downloading and verifying SHA-256…",
+  "addonTestComplete": "Installed Encyclopedia {version}."
+});
+Object.assign(TEXTS.fr, {
+  "addonTestInstall": "Télécharger Encyclopedia test 0.9.9",
+  "addonTestStable": "Revenir à la version stable 0.9.8",
+  "addonTestWarning": "Seuls les fichiers de l'addon changent. Les nouveaux talents nécessitent une mise à jour séparée du serveur. Une sauvegarde est conservée.",
+  "addonTestSavePath": "Enregistrez d'abord le dossier du jeu.",
+  "addonTestSelected": "Canal : Encyclopedia test 0.9.9. La version reste sélectionnée au lancement.",
+  "addonStableSelected": "Canal : Encyclopedia stable 0.9.8.",
+  "addonTestWorking": "Téléchargement et vérification SHA-256…",
+  "addonTestComplete": "Encyclopedia {version} installée."
+});
+Object.assign(TEXTS.es, {
+  "addonTestInstall": "Descargar Encyclopedia de prueba 0.9.9",
+  "addonTestStable": "Volver a la estable 0.9.8",
+  "addonTestWarning": "Solo cambian los archivos del addon. Los nuevos talentos requieren actualizar el servidor por separado. Se conserva una copia de seguridad.",
+  "addonTestSavePath": "Guarda primero la carpeta del juego.",
+  "addonTestSelected": "Canal: Encyclopedia de prueba 0.9.9. Se conserva al iniciar.",
+  "addonStableSelected": "Canal: Encyclopedia estable 0.9.8.",
+  "addonTestWorking": "Descargando y verificando SHA-256…",
+  "addonTestComplete": "Encyclopedia {version} instalada."
+});
+Object.assign(TEXTS.pt, {
+  "addonTestInstall": "Baixar Encyclopedia de teste 0.9.9",
+  "addonTestStable": "Voltar à versão estável 0.9.8",
+  "addonTestWarning": "Apenas os arquivos do addon mudam. Novos talentos exigem uma atualização separada do servidor. Um backup da pasta anterior é mantido.",
+  "addonTestSavePath": "Salve primeiro a pasta de jogo selecionada.",
+  "addonTestSelected": "Canal: Encyclopedia de teste 0.9.9. A versão é mantida ao iniciar.",
+  "addonStableSelected": "Canal: Encyclopedia estável 0.9.8.",
+  "addonTestWorking": "Baixando e verificando SHA-256…",
+  "addonTestComplete": "Encyclopedia {version} instalada."
+});
