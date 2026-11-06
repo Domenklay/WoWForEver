@@ -43,6 +43,59 @@ def client(path, key='a' * 32):
 
 
 class CleanServerTests(unittest.TestCase):
+    def running_world(self):
+        return {'State': {'Running': True}, 'Config': {'Labels': {
+            'org.wowforever.core': clean.CORE, 'org.wowforever.advancement': 'none'}}}
+
+    def test_ready_world_is_detected_by_live_tcp_and_realm_even_when_logs_are_only_cli_prompts(self):
+        s = state(Path('/fixture')); s['client']['exe_build'] = 70658
+        def compose(saved, *args, **kwargs):
+            self.assertEqual(args[:4], ('exec', '-T', 'worldserver', 'python3'))
+            return 'READY\n'
+        with patch.object(clean, 'container', return_value=self.running_world()), \
+                patch.object(clean, 'compose', side_effect=compose), \
+                patch.object(clean, 'sql', return_value='70\t70658\t137\t0\n') as sql, \
+                patch.object(clean.time, 'sleep') as sleep, patch('builtins.print'):
+            clean.wait_world(s, 2)
+        sql.assert_called_once()
+        self.assertIn('contentSetId,flag', sql.call_args.args[1])
+        sleep.assert_not_called()
+
+    def test_readiness_waits_for_tcp_and_online_flag_instead_of_trusting_an_old_ready_log(self):
+        s = state(Path('/fixture')); s['client']['exe_build'] = 70658
+        # TCP is initially unavailable; then the listener exists but realm offline
+        # has not been cleared; finally both actual readiness conditions hold.
+        with patch.object(clean, 'container', return_value=self.running_world()), \
+                patch.object(clean, 'compose', side_effect=['WAIT\n', 'READY\n', 'READY\n']) as compose, \
+                patch.object(clean, 'sql', side_effect=['70\t70658\t137\t2\n', '70\t70658\t137\t0\n']) as sql, \
+                patch.object(clean.time, 'sleep') as sleep, patch('builtins.print'):
+            clean.wait_world(s, 2)
+        self.assertEqual(compose.call_count, 3)
+        self.assertEqual(sql.call_count, 2)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertTrue(all(call.args[1] == 'exec' for call in compose.call_args_list))
+
+    def test_tcp_listener_cannot_bypass_wrong_build_extra_realms_or_wrong_core(self):
+        s = state(Path('/fixture')); s['client']['exe_build'] = 70658
+        for rows in ('70\t70790\t137\t0\n', '70\t70658\t138\t0\n',
+                     '70\t70658\t137\t0\n71\t70658\t137\t0\n'):
+            with self.subTest(rows=rows), patch.object(clean, 'container', return_value=self.running_world()), \
+                    patch.object(clean, 'compose', return_value='READY\n'), patch.object(clean, 'sql', return_value=rows):
+                with self.assertRaisesRegex(RuntimeError, 'actual client build'):
+                    clean.wait_world(s, 2)
+        item = self.running_world(); item['Config']['Labels']['org.wowforever.advancement'] = 'installed'
+        with patch.object(clean, 'container', return_value=item), patch.object(clean, 'compose') as compose:
+            with self.assertRaisesRegex(RuntimeError, 'pristine core'):
+                clean.wait_world(s, 2)
+            compose.assert_not_called()
+
+    def test_stopped_world_is_not_ready_even_if_it_was_ready_before(self):
+        with patch.object(clean, 'container', return_value={'State': {'Running': False}}), \
+                patch.object(clean, 'compose') as compose:
+            with self.assertRaisesRegex(RuntimeError, 'worldserver stopped'):
+                clean.wait_world(state(Path('/fixture')), 2)
+            compose.assert_not_called()
+
     def extraction_fixture(self, root):
         # Layout used by the pinned upstream: localized DB2s and per-map VMAPs.
         for name in ('dbc/ruRU/Map.db2', 'gt/Xp.txt', 'cameras/FILE0001.xxx',
@@ -281,6 +334,9 @@ class CleanServerTests(unittest.TestCase):
             service = m['services'][name]
             self.assertEqual(service['image'], 'fixture-clean-core')
             self.assertEqual(set(service['environment']), {'DB_PASSWORD'})
+            runtime = next(v for v in service['volumes'] if v['target'] == '/usr/local/bin/forever-clean-entrypoint.py')
+            self.assertEqual(runtime['source'], str(ROOT / 'docker/clean/entrypoint.py'))
+            self.assertTrue(runtime['read_only'])
             for volume in service['volumes']:
                 self.assertNotIn('overrides', volume['target'])
                 if volume['target'] == '/opt/trinitycore/data':
@@ -301,6 +357,7 @@ class CleanServerTests(unittest.TestCase):
         self.assertEqual(config['RealmID'], '70')
         self.assertEqual(config['Realm.SuperDistrictID'], '2')
         self.assertEqual(config['Network.EnterEncryptedModeRegionGroup'], '8')
+        self.assertEqual(config['Console.Enable'], '0')
         self.assertFalse(any('Advancement' in key or 'Subclass' in key for key in config))
         self.assertEqual(entry.configuration('bnetserver', env)['Realm.AlsoAcceptBuilds'], '""')
         with tempfile.TemporaryDirectory() as temp:
@@ -328,6 +385,7 @@ class CleanServerTests(unittest.TestCase):
     def test_owned_old_projects_are_stopped_only_after_import_is_confirmed(self):
         s = state(Path('/new'))
         stopped = []
+        ready = False
         def execute(command, **kwargs):
             if command[:2] == ['docker', 'ps']:
                 return 'old-world' if command[-1].endswith('=forever') else ''
@@ -335,7 +393,9 @@ class CleanServerTests(unittest.TestCase):
                 return json.dumps([{'Id':'old-world', 'State':{'Running':True}, 'Config':{'Labels':{
                     'com.docker.compose.project':'forever', 'com.docker.compose.service':'worldserver'}}}])
             if command[:2] == ['docker', 'logs']:
-                return 'First world database import in progress'
+                raise AssertionError('A prompt-filled or stale log is not a readiness signal')
+            if command[:3] == ['docker', 'exec', 'old-world']:
+                return 'READY\n' if ready else 'WAIT\n'
             if command[:2] == ['docker', 'stop']:
                 stopped.append(command)
             return ''
@@ -343,6 +403,10 @@ class CleanServerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'importing'):
                 clean.stop_previous(s)
         self.assertFalse(stopped)
+        ready = True
+        with patch.object(clean, 'run', side_effect=execute), patch.object(clean, 'save'):
+            clean.stop_previous(s)
+        self.assertEqual(stopped, [['docker', 'stop', '-t', '120', 'old-world']])
 
     def test_purge_is_scoped_and_never_forces_unowned_or_running_storage(self):
         s = state(Path('/new')); s['phase'] = 'ready'

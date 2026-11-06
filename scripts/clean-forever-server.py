@@ -158,6 +158,7 @@ def model(state, *, published=False):
                   environment=dict(DB_PASSWORD=credential['database']))
     data = mount(directory / 'data', '/opt/trinitycore/data')
     logs = dict(type='volume', source='logs', target='/opt/trinitycore/logs')
+    entrypoint = mount(ROOT / 'docker/clean/entrypoint.py', '/usr/local/bin/forever-clean-entrypoint.py')
     services = {
         'mysql': dict(image='mysql:8.0', networks=['clean'], restart='unless-stopped',
                       environment=dict(MYSQL_ROOT_PASSWORD=credential['root'], DB_PASSWORD=credential['database']),
@@ -167,11 +168,12 @@ def model(state, *, published=False):
                                mount(ROOT / 'docker/clean/mysql-init.sh', '/docker-entrypoint-initdb.d/01-clean.sh')],
                       healthcheck=dict(test=['CMD-SHELL', 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -h 127.0.0.1 -uroot --silent'],
                                        interval='5s', timeout='5s', retries=60, start_period='20s')),
-        'initialize': dict(common, command=['initialize'], volumes=[data, logs],
+        'initialize': dict(common, command=['initialize'], volumes=[data, logs, entrypoint],
                            depends_on={'mysql': {'condition': 'service_healthy'}}, profiles=['setup']),
-        'worldserver': dict(common, command=['worldserver'], volumes=[data, logs],
+        'worldserver': dict(common, command=['worldserver'], volumes=[data, logs, entrypoint],
+                            logging=dict(driver='json-file', options={'max-size': '20m', 'max-file': '3'}),
                             depends_on={'mysql': {'condition': 'service_healthy'}}),
-        'bnetserver': dict(common, command=['bnetserver'], volumes=[logs, mount(state['certs'], '/opt/trinitycore/certs')],
+        'bnetserver': dict(common, command=['bnetserver'], volumes=[logs, entrypoint, mount(state['certs'], '/opt/trinitycore/certs')],
                            extra_hosts=['trinity.actual.battle.net:127.0.0.1'],
                            depends_on={'mysql': {'condition': 'service_healthy'}}),
         'web': dict(image=state['web_image'], pull_policy='never', networks=['clean'], restart='unless-stopped',
@@ -231,6 +233,18 @@ def wait_exit(state, service, timeout):
     raise RuntimeError('Import is still running. It was not stopped; rerun install to continue waiting, or use status')
 
 
+WORLD_TCP_PROBE = '''
+import socket
+try:
+    with socket.create_connection(("127.0.0.1", 8085), 2):
+        pass
+except OSError:
+    print("WAIT")
+else:
+    print("READY")
+'''
+
+
 def wait_world(state, timeout):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -240,15 +254,21 @@ def wait_world(state, timeout):
         labels = item['Config'].get('Labels', {})
         if labels.get('org.wowforever.core') != CORE or labels.get('org.wowforever.advancement') != 'none':
             raise RuntimeError('Unexpected game server image; expected the pinned pristine core without Advancement')
-        logs = compose(state, 'logs', '--no-color', '--tail=3000', 'worldserver', capture=True)
-        if re.search(r'worldserver-daemon.*ready', logs):
-            if 'ForeverAdvancement ready:' in logs:
-                raise RuntimeError('A clean worldserver must not load the advancement module')
+        # A log tail is not a readiness signal: CLI prompts can evict the line,
+        # and a previous process's ready message can survive a later restart.
+        tcp = compose(state, 'exec', '-T', 'worldserver', 'python3', '-c', WORLD_TCP_PROBE, capture=True).strip()
+        if tcp == 'READY':
             expected = ['70', str(state['client']['exe_build']), '137']
-            if sql(state, 'SELECT id,gamebuild,contentSetId FROM auth.realmlist;\n').split() != expected:
+            realm = sql(state, 'SELECT id,gamebuild,contentSetId,flag FROM auth.realmlist;\n').split()
+            if len(realm) != 4 or realm[:3] != expected:
                 raise RuntimeError('The running clean server did not retain one realm with the actual client build')
-            return
-        print('Waiting for pristine worldserver readiness...', flush=True)
+            if not int(realm[3]) & 2:  # REALM_FLAG_OFFLINE is cleared after StartNetwork succeeds.
+                print('Pristine worldserver ready: TCP 8085 and online realm 70 / build ' + expected[1] + ' verified.', flush=True)
+                return
+            reason = 'realm is still marked offline'
+        else:
+            reason = 'TCP 8085 is not accepting connections yet'
+        print('Waiting for pristine worldserver readiness: ' + reason + '...', flush=True)
         time.sleep(10)
     raise RuntimeError('Clean worldserver readiness timed out; inspect status')
 
@@ -337,8 +357,8 @@ def stop_previous(state):
                 continue
             if item['State']['Running']:
                 if labels['com.docker.compose.service'] == 'worldserver':
-                    logs = run(['docker', 'logs', '--tail=15000', ident], capture=True)
-                    if not ('World initialized' in logs or re.search(r'worldserver-daemon.*ready', logs)):
+                    tcp = run(['docker', 'exec', ident, 'python3', '-c', WORLD_TCP_PROBE], capture=True).strip()
+                    if tcp != 'READY':
                         raise RuntimeError('An old worldserver may still be importing its first database; it was not stopped')
                 items.append(dict(id=ident, project=project, service=labels['com.docker.compose.service']))
     # Record all identities before stopping anything; rollback can restore only these containers.
@@ -462,6 +482,9 @@ def install(args):
         state['phase'] = 'initialized'; save(state)
     if state['phase'] == 'initialized':
         ensure_game_tables(state)
+        # Apply runtime Python/config fixes to existing images without rebuilding
+        # the pinned game binaries or rerunning the completed SQL initialization.
+        configure_compose(state)
         compose(state, 'up', '-d', '--no-build', 'worldserver')
         wait_world(state, args.timeout)
         state['phase'] = 'staged'; save(state)

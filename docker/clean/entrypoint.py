@@ -41,6 +41,7 @@ def configuration(kind, environment):
                          'Updates.EnableDatabases': '15', 'Updates.AutoSetup': '1',
                          'Network.SkipBuildAuthKeyCheck': '1', 'Network.EnterEncryptedModeRegionGroup': '8',
                          'DBC.Locale': '8', 'mmap.enablePathFinding': '0', 'Classic.Hardcore': '0',
+                         'Console.Enable': '0',
                          'Ra.Enable': '0', 'SOAP.Enabled': '1', 'SOAP.IP': '"0.0.0.0"', 'SOAP.Port': '7878',
                          'Logger.sql.sql': '5,DBErrors'})
     return settings
