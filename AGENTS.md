@@ -1,3 +1,17 @@
+Multi 1.6.0 release verification: Windows run 42233852826 succeeded (56 launcher
+and 220 worker tests), artifact 13511325368 downloaded and ZIP/EXE hashes/public
+CA/GPL source checked. Server checks run 42234269575 on Ubuntu 24.04 succeeded:
+401 Python tests (28 conditional skips), and real-source CMake-flag syntax checks
+for ForeverAdvancement.cpp, Player.cpp, DB2Stores.cpp, HotfixHandler.cpp and
+ChatHandler.cpp. Source commit 58b542e0e97a2770718986665f434f56637f577b adds a
+missing SkillLineEntry forward declaration hidden by upstream's PCH. Installer
+still performs full user-side compilation/linking before downtime. User was given
+fetch/worktree/enable-clean-advancement.py install --jobs 2 command; deployment
+output has NOT arrived. Do not claim live deployment or gameplay success yet.
+Keep current client download running; update launcher after it finishes. Manifest
+uses immutable addon source 9437cf505cf0d2c697403c3c8191d031252ed4a2; all seven
+remote GitHub blob identities match local pinned files. See validation-70658.json.
+
 Latest user explicitly authorizes restoring the existing multiclass system on
 ready 70658 and automatic missing-AddOn installation before play, while the native
 client download continues. This supersedes the earlier no-gameplay clean baseline

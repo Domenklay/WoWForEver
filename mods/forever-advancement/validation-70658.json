@@ -1,0 +1,32 @@
+{
+  "format": "forever-advancement-validation-v1",
+  "date": "2026-11-06",
+  "core_commit": "b4e7b940593f6402a822d4fbcdf31331d16f73b6",
+  "server_source_commit": "58b542e0e97a2770718986665f434f56637f577b",
+  "addon_version": "1.11.0",
+  "protocol": 3,
+  "launcher_version": "1.6.0",
+  "python": {
+    "run": 401,
+    "skipped": 28,
+    "failed": 0
+  },
+  "windows_launcher_tests": 56,
+  "windows_content_worker_tests": 220,
+  "actual_core_syntax_units": [
+    "ForeverAdvancement.cpp",
+    "Player.cpp",
+    "DB2Stores.cpp",
+    "HotfixHandler.cpp",
+    "ChatHandler.cpp"
+  ],
+  "core_checks_run": 42234269575,
+  "launcher_run": 42233852826,
+  "launcher_artifact": 13511325368,
+  "package_sha256": "191154254499ac3b8758ba124f51b111fe3de65dbd53b8e2b57b69a12714eb93",
+  "ca_unchanged": true,
+  "runtime_image_linking": "performed by user-side installer before downtime; not claimed from syntax checks",
+  "user_server_deployment_verified": false,
+  "actual_gameplay_verified": false,
+  "custom_mana_forged_barrier_effects_implemented": false
+}
