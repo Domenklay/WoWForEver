@@ -1,0 +1,22 @@
+{
+  "format": "forever-gameplay-70658-validation-v1",
+  "core": "b4e7b940593f6402a822d4fbcdf31331d16f73b6",
+  "server_commit": "46dc1f9a347a463fa9516607fca84f7c5e357995",
+  "server_checks_run": 42264029569,
+  "launcher_commit": "2dc905787dc7a525bf12bee8967d341e9d6655f7",
+  "launcher_run": 42263618311,
+  "artifact": 13526931172,
+  "zip_sha256": "6ec0890042da3533ed94eb3471e38391241be6dd493f5454af4e1664b2ee6d35",
+  "tests": {
+    "python": 413,
+    "python_skipped": 28,
+    "launcher_windows": 58,
+    "worker_windows": 224,
+    "core_translation_units": 12
+  },
+  "source_sha256": "4530bd4e14a1193236e18203ca3e8977680cbea01804afdcd77630647889b1e1",
+  "advancement_source_sha256": "5fca3dc2eb4de36967900718016add6fb0e6834f316edcdb2f1249e996632309",
+  "user_server_deployed": false,
+  "gameplay_verified": false,
+  "companion_model": "diagnostic creature template 1933; flying book DisplayID unverified"
+}

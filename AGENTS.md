@@ -1,3 +1,20 @@
+Combined gameplay delivery VERIFIED: server commit 46dc1f9a347a463fa9516607fca84f7c5e357995;
+checks run 42264029569 SUCCESS (413 Python tests, 28 skips; all 12 real
+CMake-flag translation units compile). This is syntax compilation, not full runtime
+linking; enable-clean-gameplay.py performs the full user-side build before downtime.
+Multi 1.7.0 commit 2dc905787dc7a525bf12bee8967d341e9d6655f7, Windows run
+42263618311 SUCCESS: 58 launcher tests, 224 worker tests, 5-language UI, PS5.1,
+NSIS/portable. Artifact 13526931172 (9141650 bytes), ZIP SHA256
+6ec0890042da3533ed94eb3471e38391241be6dd493f5454af4e1664b2ee6d35.
+ZIP/EXE hashes/PE architecture/GPL source/book guide/unchanged CA checked.
+User received fetch + persistent gameplay-tools worktree +
+enable-clean-gameplay.py install --jobs 2 command. Await installation output.
+Optional questions about Scaling vs character autolevel and filtered state
+remain unanswered; package defaults to the existing NPC Scaling, --no-scaling
+is available. Do NOT claim deployed server, working new AddOns on 70658, or
+verified flying-book model. Current companion is diagnostic creature 1933.
+See mods/living-encyclopedia/validation-70658.json and docs/GAMEPLAY-70658.ru.md.
+
 New active request: user confirms previous client launched without lag; wants our
 multiclass, companion book and autolevel on the ready server/client. This does NOT
 prove 1.6.1 repair was run or cured the crash. Imported living-encyclopedia
