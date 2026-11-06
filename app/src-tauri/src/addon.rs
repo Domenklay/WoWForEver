@@ -16,7 +16,7 @@ fn manifest()->Result<Manifest,String>{
 }
 fn parse_manifest(text:&str)->Result<Manifest,String>{
  let m:Manifest=serde_json::from_str(text).map_err(|e|e.to_string())?;
- let valid_version=match m.name.as_str(){"ForeverAscension"=>m.version=="1.11.0"&&m.protocol==3,"ForeverEncyclopedia"=>m.version=="0.9.8-v2.1-smartai-abilities"&&m.protocol==1,_=>false};
+ let valid_version=match m.name.as_str(){"ForeverAscension"=>m.version=="1.11.0"&&m.protocol==3,"ForeverEncyclopedia"=>m.version=="0.9.9-v2.1-talent-mana"&&m.protocol==1,_=>false};
  if m.format!="forever-addon-v1" || !valid_version || m.source_commit.len()!=40 || !m.source_commit.bytes().all(|c|c.is_ascii_hexdigit()) || m.files.is_empty(){return Err("Invalid bundled AddOn manifest".into());}
  let mut seen=std::collections::HashSet::new();
  for f in &m.files {if f.name.is_empty() || f.name.chars().any(|c|matches!(c, '/'|'\\'|':')) || f.name.starts_with('.') || !seen.insert(&f.name) || f.size>32*1024*1024 || f.sha256.len()!=64 || !f.sha256.bytes().all(|c|c.is_ascii_hexdigit()){return Err("Unsafe AddOn file manifest".into());}}
