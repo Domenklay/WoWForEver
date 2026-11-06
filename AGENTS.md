@@ -1,5 +1,17 @@
 # Instructions for AI coding assistants
 
+On 2026-11-06 the user reported that launcher recovery again preceded an
+"installation files are corrupted" error and explicitly requested a plain copy
+without our transformations. Follow docs/CLIENT-PRISTINE-COPY.ru.md: use the
+entire owned E:\WoW_Forever root, including Data and .build.info, and a new empty
+destination. Compare every file by SHA-256 before first launch. Do not apply
+our repair/quarantine, metadata restoration, CASC experiments, add-on transfer
+or clean-client settings reset to that baseline unless the user explicitly
+requests them again. Preserve the running clean server. Exact file copying is
+not a claim that the character-screen hang has been fixed. Launcher network
+configuration and runtime public-key replacement must be described separately
+from changes to client archives; obtain fresh evidence before proposing fixes.
+
 The user requested a clean server reset on 2026-11-05 after confirming that the
 actual test Wow.exe FileVersion is 1.60.1.70658. Follow docs/CLEAN-FOREVER-SERVER.ru.md.
 The clean setup pins pristine upstream forever b4e7b940593f6402a822d4fbcdf31331d16f73b6,
