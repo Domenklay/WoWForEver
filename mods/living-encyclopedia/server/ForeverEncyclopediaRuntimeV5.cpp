@@ -160,12 +160,12 @@ static uint32 AbilityMask(RankMap const& ranks)
 
 static uint32 ShieldCooldownSeconds(RuntimeState const& state)
 {
-    return std::max<uint32>(20, 30 - std::min<uint32>(10, GetRank(state.ranks, "aegis_reflex") * 2));
+    return ForeverEncyclopedia::Talents::ShieldCooldownSeconds(GetRank(state.ranks, "aegis_reflex"));
 }
 
 static uint32 HealCooldownSeconds(RuntimeState const& state)
 {
-    return std::max<uint32>(15, 25 - std::min<uint32>(10, GetRank(state.ranks, "mend_reflex") * 2));
+    return ForeverEncyclopedia::Talents::HealCooldownSeconds(GetRank(state.ranks, "mend_reflex"));
 }
 
 static uint32 CooldownRemaining(Clock::time_point ready)
@@ -226,26 +226,20 @@ static uint32 SpendableMana(RuntimeState const& state)
 
 static uint32 ShieldCapPct(RuntimeState const& state)
 {
-    // 12% baseline, early ranks matter immediately, absolute cap remains 30% max HP.
-    uint32 pct = 12;
-    pct += std::min<uint32>(10, GetRank(state.ranks, "aegis_strength") * 2);
-    pct += std::min<uint32>(5, GetRank(state.ranks, "aegis_efficiency"));
-    pct += std::min<uint32>(4, GetRank(state.ranks, "aegis_overcharge"));
-    return std::min<uint32>(30, pct);
+    return ForeverEncyclopedia::Talents::ShieldPercent(GetRank(state.ranks, "aegis_strength"),
+        GetRank(state.ranks, "aegis_efficiency"), GetRank(state.ranks, "aegis_overcharge"));
 }
 
 static uint32 HealCapPct(RuntimeState const& state)
 {
-    // User rule retained: ordinary heal cannot exceed 25%; late specialization raises it to 40%.
-    uint32 pct = 25 + std::min<uint32>(15, GetRank(state.ranks, "mend_deep") * 5);
-    return std::min<uint32>(40, pct);
+    return ForeverEncyclopedia::Talents::HealPercent(GetRank(state.ranks, "mend_deep"));
 }
 
 static uint32 EffectiveHealThreshold(RuntimeState const& state)
 {
-    // "mend_efficiency" no longer discounts mana (1 mana must always equal 1 HP).
-    // It instead lets the book react a little earlier.
-    return std::min<uint32>(80, state.healThreshold + GetRank(state.ranks, "mend_efficiency") * 4);
+    // Healing costs 1:1; efficiency improves the trigger threshold, not the cost.
+    return ForeverEncyclopedia::Talents::HealTriggerPercent(state.healThreshold,
+        GetRank(state.ranks, "mend_efficiency"));
 }
 
 static uint32 ResolveHealSpell(Player* player)
@@ -358,7 +352,7 @@ static RuntimeState LoadRuntime(Player* player)
         state.manaReserve = f[5].GetUInt32();
     }
 
-    uint32 talentReserve = state.maxMana * std::min<uint32>(25, GetRank(state.ranks, "mana_reserve") * 5) / 100;
+    uint32 talentReserve = uint32(uint64(state.maxMana) * ForeverEncyclopedia::Talents::ReservePercent(GetRank(state.ranks, "mana_reserve")) / 100);
     state.manaReserve = std::max(state.manaReserve, talentReserve);
     state.lastRegen = Clock::now();
     state.lastPersist = state.lastRegen;
@@ -376,13 +370,13 @@ static void RefreshRuntimeLocked(Player* player, RuntimeState& state)
     state.maxMana = MaxMana(knowledge, state.ranks);
     if (state.maxMana > oldMax)
     {
-        state.mana = std::min(state.maxMana, state.mana + (state.maxMana - oldMax));
+        state.mana = uint32(std::min<uint64>(state.maxMana, uint64(state.mana) + state.maxMana - oldMax));
         state.dirty = true;
     }
     else
         state.mana = std::min(state.mana, state.maxMana);
 
-    uint32 talentReserve = state.maxMana * std::min<uint32>(25, GetRank(state.ranks, "mana_reserve") * 5) / 100;
+    uint32 talentReserve = uint32(uint64(state.maxMana) * ForeverEncyclopedia::Talents::ReservePercent(GetRank(state.ranks, "mana_reserve")) / 100);
     state.manaReserve = std::max(state.manaReserve, talentReserve);
 }
 
@@ -432,9 +426,9 @@ static bool StartShieldCast(Player* player, RuntimeState& state, Creature* compa
     if (Clock::now() < state.shieldReady)
         return false;
 
-    uint32 spendable = SpendableMana(state);
+    // The reserve is dedicated to emergency shields; healing/utility may not spend it.
     uint32 cap = player->CountPctFromMaxHealth(ShieldCapPct(state));
-    uint32 amount = std::min(spendable, cap);
+    uint32 amount = std::min(state.mana, cap);
     if (!amount)
         return false;
 
@@ -487,7 +481,7 @@ static bool FinalizeShield(Player* player, RuntimeState& state, Creature* compan
 
     if (absorb)
     {
-        uint32 amount = std::min(state.pendingShieldAmount, SpendableMana(state));
+        uint32 amount = std::min(state.pendingShieldAmount, state.mana);
         if (!amount)
         {
             absorb->GetBase()->Remove();
@@ -616,7 +610,9 @@ public:
         uint32 missing = uint32(std::min<uint64>(UINT32_MAX, player->GetMaxHealth() - player->GetHealth()));
         uint32 cap = player->CountPctFromMaxHealth(HealCapPct(*state));
         uint32 spendable = SpendableMana(*state);
-        uint32 allowed = std::min({ gain, missing, cap, spendable });
+        uint32 amplified = ForeverEncyclopedia::Talents::AmplifiedHeal(gain,
+            GetRank(state->ranks, "mend_power"));
+        uint32 allowed = std::min({ amplified, missing, cap, spendable });
 
         gain = allowed;
         if (!allowed)
@@ -789,7 +785,7 @@ public:
                 {
                     uint32 gain = RegenGain(player, *state);
                     uint32 oldMana = state->mana;
-                    state->mana = std::min(state->maxMana, state->mana + gain);
+                    state->mana = uint32(std::min<uint64>(state->maxMana, uint64(state->mana) + gain));
                     state->lastRegen = now;
                     if (state->mana != oldMana)
                     {
