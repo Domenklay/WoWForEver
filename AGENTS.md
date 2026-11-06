@@ -1,3 +1,16 @@
+Multi 1.6.1 VERIFIED build: source c4489d44ce983d103a6c02a19da489f62d01f98a;
+Windows run 42258301007 SUCCESS, artifact 13523878465 (9136636 bytes).
+ZIP SHA256 9221a55013d27ff7f88452811ab30d6af1670f84590841a8243f35447013776f.
+ZIP CRC, all EXE hashes/PE architecture, matching new GPL worker source and CA
+(byte-identical d2a887df...) checked. Native checks run 42258300921 SUCCESS:
+224 Windows worker tests, 241 Linux worker tests; main launcher 56 tests, UI
+five languages/PS 5.1 passed. Python 405 total, 28 skips, no failures.
+User was given full-archive 1.6.1 download and SAME clients/70658 managed Repair
+(Russian, HighRes=true), then reconnect/enter world. Await USER repair/runtime
+result: do NOT claim their local files repaired or the ACCESS_VIOLATION cured.
+Installer now reuses matching local EXE/DLL hashes; full asset scans read disk
+but do not imply an 84.6GiB redownload. No server/DB/CA changes in this fix.
+
 Local audit 2026-11-06 CONFIRMED 3 missing bootstrap objects in managed 70658:
 INSTALL 69ab17d415ecc051c5eafd9c91f97ae1, DOWNLOAD 5eff2918f3ea1b064548d3c9a24cebb4,
 SIZE ce32a140d31269e6cc9cd288b5b8f375. 586/589 declarations verified including
