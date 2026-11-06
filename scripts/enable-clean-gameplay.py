@@ -97,7 +97,7 @@ def configure(before, model, candidate, folder, scaling=True):
 
 def wait_module(state, timeout=180):
     patterns = list(adv.READY_PATTERNS) + ['ForeverEncyclopedia ready:']
-    if state['gameplay'].get('scaling'): patterns.append('ForeverScaling ready: personal-virtual-v' + state['gameplay']['scaling'].rsplit('.', 1)[0] + ' (enabled=true'
+    if state['gameplay'].get('scaling'): patterns.append('ForeverScaling ready: personal-virtual-v' + state['gameplay']['scaling'].rsplit('.', 1)[0] + ' (enabled=true')
     return adv.module_readiness.wait(clean, state, patterns, timeout)
 
 
