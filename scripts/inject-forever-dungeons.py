@@ -167,6 +167,10 @@ def inject(core: Path, module: Path):
     }
     Unit::setDeathState(s);''', 'respawn')
     source = once(source,
+                  'float Creature::GetDamageMultiplierForTarget(WorldObject const* target) const\n{\n    if (!HasScalableLevels() && !ForeverScalingCore::EnabledFor(this, target))\n        return 1.0f;',
+                  'float Creature::GetDamageMultiplierForTarget(WorldObject const* target) const\n{\n    if (!HasScalableLevels() && !ForeverScalingCore::EnabledFor(this, target) &&\n        !(_foreverDungeonPartySize && ForeverScalingCore::DungeonEnabled(this)))\n        return 1.0f;',
+                  'player-controlled pet scaling gate')
+    source = once(source,
                   '    return GetBaseDamageForLevel(levelForTarget) / GetBaseDamageForLevel(GetLevel());',
                   '''    float personalMultiplier = GetBaseDamageForLevel(levelForTarget) / GetBaseDamageForLevel(GetLevel());
     return personalMultiplier * ForeverScalingCore::DungeonDamageFactor(this, target, _foreverDungeonPartySize);''',
