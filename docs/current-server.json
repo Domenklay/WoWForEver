@@ -7,7 +7,8 @@
   "baseline_branch": "baseline/70658-working-20261106",
   "evidence": {
     "runtime": "user-supplied filtered state, Compose mounts and controller on 2026-11-07",
-    "gameplay": "user confirmed general working gameplay; detailed acceptance incomplete"
+    "gameplay": "user confirmed general working gameplay; detailed acceptance incomplete",
+    "backup_and_database_restore": "user-supplied BASELINE BACKUP VERIFIED and DATABASE RESTORE VERIFIED output on 2026-11-07; source 877b877"
   },
   "server": {
     "phase": "ready",
@@ -161,15 +162,26 @@
     "addon_development_default": false
   },
   "backup": {
-    "directory_windows": "E:\\WoWForEver-work\\reports\\baseline-70658-20261106-231543",
-    "directory_wsl": "/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543",
+    "directory_windows": "E:\\WoWForEver-work\\reports\\baseline-70658-20261107-003902",
+    "directory_wsl": "/mnt/e/WoWForEver-work/reports/baseline-70658-20261107-003902",
     "user_integrity_verified": true,
-    "verifier_commit": "c9d344269739a974dfb2abb1de37a557716b2578",
+    "verifier_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
     "module_rollback_record": "/home/Kayter/WoWForEver-clean/advancement/4bae99119c86/install.json",
     "database_restore_ci_verified": true,
     "database_restore_ci_run": 42295336273,
-    "database_restore_user_verified": false,
-    "full_server_restore_verified": false
+    "database_restore_user_verified": true,
+    "full_server_restore_verified": false,
+    "previous_verified_backups": [
+      {
+        "directory_wsl": "/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543",
+        "verifier_commit": "c9d344269739a974dfb2abb1de37a557716b2578",
+        "user_integrity_verified": true
+      }
+    ],
+    "created_with_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
+    "database_restore_user_report_wsl": "/mnt/e/WoWForEver-work/reports/restore-test-20261107-004340-520b852f5c8f/report.json",
+    "database_restore_user_source_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
+    "database_restore_trial_cleanup_verified": true
   },
   "checks": {
     "launcher_windows": 61,

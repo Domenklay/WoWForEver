@@ -47,8 +47,9 @@ Source extraction and selected launcher client path are independent.
 
 ## Backup and validation status
 
-User confirmed BASELINE BACKUP VERIFIED for
-`/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543` on verifier c9d3442.
+User confirmed BASELINE BACKUP VERIFIED for the fresh snapshot
+`/mnt/e/WoWForEver-work/reports/baseline-70658-20261107-003902` created on source 877b877.
+Keep the previous verified `baseline-70658-20261106-231543` as an older reference.
 This contains current four-DB SQL, resources/TLS/settings/controller sources and
 exact images, not the WoW client. Module rollback record:
 `~/WoWForEver-clean/advancement/4bae99119c86/install.json`; its databases-before
@@ -61,8 +62,12 @@ live binds, 1 CPU/1GiB, and temporary credentials. It compares counts/schema and
 ten module tables; cleanup removes only nonce-owned resources. No live Compose
 or state is a restore target. `--cleanup-report` validates identity/path/labels.
 Real MySQL integration CI 42295336273 passed with generated data, views, module
-values, invalid-SQL rejection, cleanup and unchanged-source checks. User-side SQL
-trial result and full worldserver/client recovery are still pending.
+values, invalid-SQL rejection, cleanup and unchanged-source checks. The actual
+user-side four-database trial also PASSED on source 877b877, including count/schema
+comparison, ten module tables and removal of its trial container/volume. Report:
+`/mnt/e/WoWForEver-work/reports/restore-test-20261107-004340-520b852f5c8f/report.json`.
+Full worldserver/bnetserver/web startup and client login from restored archives
+remain untested; a successful SQL trial does not prove full server recovery.
 
 ## Launcher
 

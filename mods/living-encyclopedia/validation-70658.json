@@ -47,10 +47,15 @@
   "detailed_acceptance_verified": false,
   "user_server_backup": {
     "verified": true,
-    "evidence": "user-supplied BASELINE BACKUP VERIFIED output",
-    "directory": "/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543",
-    "verifier_commit": "c9d344269739a974dfb2abb1de37a557716b2578",
-    "isolated_restore_verified": false
+    "evidence": "user-supplied BASELINE BACKUP VERIFIED and DATABASE RESTORE VERIFIED output on 2026-11-07",
+    "directory": "/mnt/e/WoWForEver-work/reports/baseline-70658-20261107-003902",
+    "verifier_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
+    "isolated_restore_verified": false,
+    "database_restore_verified": true,
+    "database_restore_report_wsl": "/mnt/e/WoWForEver-work/reports/restore-test-20261107-004340-520b852f5c8f/report.json",
+    "database_restore_trial_cleanup_verified": true,
+    "isolated_restore_scope": "Full server startup remains untested; isolated SQL restoration passed",
+    "full_server_restore_verified": false
   },
   "launcher_development_release": {
     "version": "1.7.1",
