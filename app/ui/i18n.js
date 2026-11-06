@@ -1399,3 +1399,60 @@ Object.assign(TEXTS.pt, {
   "addonTestWorking": "Baixando e verificando SHA-256…",
   "addonTestComplete": "Encyclopedia {version} instalada."
 });
+
+// Experimental channel now covers the entire published AddOn catalog.
+Object.assign(TEXTS.ru, {
+  "addonTestInstall": "Скачать все тестовые обновления",
+  "addonTestStable": "Вернуть стабильные аддоны",
+  "addonTestWarning": "Multi скачивает новые версии всех зарегистрированных клиентских аддонов. Модули ядра, включая автолевелинг, обновляются отдельно на сервере.",
+  "addonTestSelected": "Канал: тестовый. Проверяются обновления всех аддонов из экспериментального каталога GitHub.",
+  "addonStableSelected": "Канал: стабильный. Используются закреплённые проверенные версии.",
+  "addonTestComplete": "Проверено/установлено клиентских аддонов: {count}",
+  "addonClientUpdated": "Клиентские аддоны:",
+  "addonServerHeading": "Серверные модули (не устанавливаются в клиент):",
+  "addonServerOnly": "нужна отдельная сборка и установка на сервер"
+});
+Object.assign(TEXTS.en, {
+  "addonTestInstall": "Download all test AddOn updates",
+  "addonTestStable": "Restore stable AddOns",
+  "addonTestWarning": "Multi downloads all registered experimental client AddOns. Server-core modules, including Scaling, must be updated separately on the server.",
+  "addonTestSelected": "Channel: testing. Multi checks all AddOns in the live GitHub testing catalog.",
+  "addonStableSelected": "Channel: stable. Pinned verified versions are used.",
+  "addonTestComplete": "Client AddOns checked/installed: {count}",
+  "addonClientUpdated": "Client AddOns:",
+  "addonServerHeading": "Server modules (not installed in the client):",
+  "addonServerOnly": "requires a separate server build and deployment"
+});
+Object.assign(TEXTS.fr, {
+  "addonTestInstall": "Télécharger tous les AddOns de test",
+  "addonTestStable": "Restaurer les AddOns stables",
+  "addonTestWarning": "Multi télécharge les AddOns client expérimentaux inscrits au catalogue. Les modules serveur, dont Scaling, doivent être mis à jour séparément.",
+  "addonTestSelected": "Canal : test. Multi vérifie tous les AddOns du catalogue GitHub.",
+  "addonStableSelected": "Canal : stable. Versions vérifiées et figées.",
+  "addonTestComplete": "AddOns client vérifiés/installés : {count}",
+  "addonClientUpdated": "AddOns client :",
+  "addonServerHeading": "Modules serveur (non installés dans le client) :",
+  "addonServerOnly": "nécessite une compilation et une installation séparées"
+});
+Object.assign(TEXTS.es, {
+  "addonTestInstall": "Descargar todas las actualizaciones de prueba",
+  "addonTestStable": "Restaurar AddOns estables",
+  "addonTestWarning": "Multi descarga todos los AddOns de cliente experimentales del catálogo. Los módulos del servidor, incluido Scaling, se actualizan aparte.",
+  "addonTestSelected": "Canal: pruebas. Multi comprueba todos los AddOns del catálogo de GitHub.",
+  "addonStableSelected": "Canal: estable. Se usan versiones verificadas y fijadas.",
+  "addonTestComplete": "AddOns verificados/instalados: {count}",
+  "addonClientUpdated": "AddOns del cliente:",
+  "addonServerHeading": "Módulos del servidor (no se instalan en el cliente):",
+  "addonServerOnly": "requiere compilación e instalación separada en el servidor"
+});
+Object.assign(TEXTS.pt, {
+  "addonTestInstall": "Baixar todas as atualizações de teste",
+  "addonTestStable": "Restaurar AddOns estáveis",
+  "addonTestWarning": "Multi baixa todos os AddOns experimentais cadastrados para o cliente. Módulos de servidor, incluindo Scaling, são atualizados separadamente.",
+  "addonTestSelected": "Canal: testes. Multi verifica todos os AddOns do catálogo GitHub.",
+  "addonStableSelected": "Canal: estável. Versões verificadas e fixadas.",
+  "addonTestComplete": "AddOns verificados/instalados: {count}",
+  "addonClientUpdated": "AddOns do cliente:",
+  "addonServerHeading": "Módulos de servidor (não instalados no cliente):",
+  "addonServerOnly": "requer compilação e instalação separada no servidor"
+});
