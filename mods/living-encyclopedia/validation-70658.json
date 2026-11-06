@@ -51,5 +51,16 @@
     "directory": "/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543",
     "verifier_commit": "c9d344269739a974dfb2abb1de37a557716b2578",
     "isolated_restore_verified": false
+  },
+  "launcher_development_release": {
+    "version": "1.7.1",
+    "commit": "87edd5aa6bdf0168dd25714c17b5815df82f6c68",
+    "run": 42291254078,
+    "artifact": 13540302260,
+    "zip_sha256": "a9254f60a896d7e029dc78cc7a6e1b39d16875224ec9e446b233b5e86f5c8d29",
+    "windows_launcher_tests": 61,
+    "worker_tests": 224,
+    "artifact_verified": true,
+    "runtime_user_verified": false
   }
 }

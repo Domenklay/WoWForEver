@@ -7,7 +7,14 @@ folders are preserved (even incomplete); absent folders still use pinned verifie
 installation. Normal mode remains the default; turning development off restores
 published-file verification and existing replacement backups. UI has a settings
 checkbox and visible home notice, all five languages. Direct folder/junction
-restrictions remain. Windows build/artifact verification still pending this change.
+restrictions remain. Windows build/artifact VERIFIED: source 87edd5aa6bdf0168dd25714c17b5815df82f6c68;
+run 42291254078 SUCCESS, 61 launcher and 224 worker tests, UI five languages,
+PS5.1, portable/NSIS. Artifact 13540302260 (9149166 bytes), ZIP SHA256
+a9254f60a896d7e029dc78cc7a6e1b39d16875224ec9e446b233b5e86f5c8d29.
+Downloaded and checked ZIP CRC, EXE hashes/PE architecture, new settings key,
+README, matching GPL worker source and unchanged public CA d2a887df... .
+Combined run 42291253941 SUCCESS: 449 Python tests, 28 skips, all 12 core units.
+Native checks 42291254097 SUCCESS. User-side new development-mode test pending.
 Do not change the working server or gameplay module source for launcher delivery.
 
 Second user finalization at 61ff871 failed Invalid OCI config type, with no
