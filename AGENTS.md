@@ -1,3 +1,12 @@
+Latest user failure: native-1793971600150914800.json confirms insufficient disk
+space before game payload transfer (84.6 GiB selected). Multi 1.5.1 reports
+required/free/missing bytes and destination, reserves loose INSTALL output too,
+and keeps incomplete clients disconnected. Do not delete original/v4/70707
+staging to make space without a concrete scoped user instruction. The network
+repair failed with a formerly opaque Compose error; cause is NOT yet known.
+Current tool exposes redacted stderr/operation and reports rollback failures;
+status is read-only. Await actual user Docker diagnostic before claiming fixed.
+
 # Instructions for AI coding assistants
 
 Multi 1.5 adds a separate managed 70658 CDN installation screen and standalone

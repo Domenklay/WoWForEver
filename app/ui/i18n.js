@@ -1305,3 +1305,13 @@ TEXTS.en.official_managed_incomplete = "This managed client is incomplete. Resum
 TEXTS.fr.official_managed_incomplete = "Le téléchargement géré est incomplet. Reprenez le téléchargement ou la réparation dans Téléchargement du jeu.";
 TEXTS.es.official_managed_incomplete = "Este cliente administrado está incompleto. Continúa la descarga o repáralo en Descarga del juego.";
 TEXTS.pt.official_managed_incomplete = "Este cliente gerenciado está incompleto. Continue o download ou repare em Download do jogo.";
+
+Object.assign(TEXTS.ru, {"nLowSpace": "Недостаточно места на выбранном диске", "nSpaceDetail": "Папка: {path}\nНужно свободного места: {required}; доступно: {available}; не хватает: {missing}. Выбери новую папку на другом диске или освободи место и продолжи загрузку."});
+
+Object.assign(TEXTS.en, {"nLowSpace": "Not enough space on the selected drive", "nSpaceDetail": "Folder: {path}\nFree space required: {required}; available: {available}; shortfall: {missing}. Choose a new folder on another drive or free space and resume."});
+
+Object.assign(TEXTS.fr, {"nLowSpace": "Espace insuffisant sur le disque choisi", "nSpaceDetail": "Dossier : {path}\nEspace libre requis : {required} ; disponible : {available} ; manquant : {missing}. Choisissez un nouveau dossier sur un autre disque ou libérez de l’espace et reprenez."});
+
+Object.assign(TEXTS.es, {"nLowSpace": "Espacio insuficiente en la unidad elegida", "nSpaceDetail": "Carpeta: {path}\nEspacio libre necesario: {required}; disponible: {available}; falta: {missing}. Elige una carpeta nueva en otra unidad o libera espacio y continúa."});
+
+Object.assign(TEXTS.pt, {"nLowSpace": "Espaço insuficiente na unidade escolhida", "nSpaceDetail": "Pasta: {path}\nEspaço livre necessário: {required}; disponível: {available}; faltam: {missing}. Escolha uma pasta nova em outra unidade ou libere espaço e continue."});

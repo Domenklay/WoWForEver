@@ -31,6 +31,19 @@ SUPPORTED = (70658, 70790)
 SERVICES = ('mysql', 'worldserver', 'bnetserver', 'web')
 
 
+class CommandFailure(RuntimeError):
+    """Keep diagnostics available to a caller which knows the private state.
+
+    The default string deliberately contains neither arguments nor stderr.
+    """
+    def __init__(self, command, result):
+        self.command = tuple(command)
+        self.returncode = result.returncode
+        self.stderr = result.stderr or ''
+        super().__init__('Command failed: ' + ' '.join(command[:3])
+                         + '; use the status command for service logs')
+
+
 def run(command, *, capture=False, data=None):
     public_workload = command[:2] == ['docker', 'build'] or ('run' in command and 'extractor' in command)
     result = subprocess.run(command, input=data, stdout=subprocess.PIPE if capture else None,
@@ -45,7 +58,7 @@ def run(command, *, capture=False, data=None):
             # This fixed /proc probe contains no credentials or configuration.
             raise RuntimeError('Old world socket probe failed for ' + command[2] + ': '
                                + (result.stderr or '').strip()[-1000:])
-        raise RuntimeError('Command failed: ' + ' '.join(command[:3]) + '; use the status command for service logs')
+        raise CommandFailure(command, result)
     return result.stdout or ''
 
 

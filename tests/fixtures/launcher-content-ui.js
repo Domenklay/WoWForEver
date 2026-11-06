@@ -14,6 +14,7 @@ function get(id){if(!elements.has(id))elements.set(id,element());return elements
 let selected={id:'legion-dalaran',name:'Dalaran',version:'1',ready:false,reason:'unverified',files:0};
 const calls=[];
 let workshopReply="match";
+let nativeReply={complete:true,build:70658,gameDir:'E:/managed/_forever_',reportPath:'E:/reports/native.json',checked:20000};
 let officialReply={gameDir:'E:/Battle.net/World of Warcraft/_forever_',executable:'E:/Battle.net/World of Warcraft/_forever_/Wow.exe',product:'wowf',version:'1.60.1.70790',metadataVersion:'1.60.1.70658',serverBuild:70658,ready:false,status:'official_mismatch'};
 const state={settings:{gameDir:'E:/client/_classic_beta_',language:'en',locale:'ruRU',server:{website:'',name:'Forever'}},gameFound:true,gameVersion:'1.60.1.70532',email:null,platform:'windows',version:'test',locales:['ruRU'],runners:[],playing:false};
 async function invoke(cmd,args){
@@ -29,7 +30,7 @@ async function invoke(cmd,args){
   if(cmd==='install_content')return {installed:'Owned zone 1',recoveryNeeded:false,backup:'E:/backup'};
   if(cmd==='rollback_content')return {installed:null,recoveryNeeded:false,backup:null};
   if(cmd==='inspect_client_locations')return {targetRoot:'E:/copy',targetData:'E:/copy/Data',referenceRoot:'E:/original',referenceData:'E:/original/Data'};
-  if(cmd==='native_client_work')return {complete:true,build:70658,gameDir:'E:/managed/_forever_',reportPath:'E:/reports/native.json',checked:20000};
+  if(cmd==='native_client_work')return structuredClone(nativeReply);
   if(cmd==='client_work') {
     if(args.request.source.manifestSource==='bad.json')throw {code:'manifest',detail:'unsupported format'};
     if(workshopReply==='extras' || workshopReply==='quarantined')return {action:workshopReply==='extras'?'verify':'repair',sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:1661,verified:1661,different:18,resourceDifferent:0,storageDifferent:18,remaining:workshopReply==='extras'?18:0,repaired:workshopReply==='extras'?0:18,quarantined:workshopReply==='extras'?0:18,extraStorageFiles:Array.from({length:18},(_,i)=>`Data/data/extra-${i}.idx`),bytes:400,differences:['Data/data/RepairMarker.psv'],reportPath:'E:/reports/client.json',backup:workshopReply==='extras'?null:'E:/copy/.forever-multi/operations/test'};
@@ -139,6 +140,15 @@ vm.runInContext(fs.readFileSync(path.join(root,'app/ui/app.js'),'utf8'),context)
   assert.equal(calls.filter(c=>c.cmd==='native_client_work').length,nativeBefore);
   get('n-dir').value='E:/managed';get('n-locale').value='ruRU';get('n-hd').checked=true;
   const oldServer=structuredClone(state.settings.server),oldDir=state.settings.gameDir;
+  const completeReply=nativeReply;
+  nativeReply={complete:false,code:'insufficient_disk_space',directory:'E:/managed',requiredBytes:100*1024**3,availableBytes:20*1024**3,missingBytes:80*1024**3,reportPath:'E:/reports/native.json'};
+  await get('n-download').handlers.click();
+  assert.match(get('n-status').textContent,/space|места/i);
+  assert.match(get('n-detail').textContent,/E:\/managed/);
+  assert.match(get('n-detail').textContent,/100.*20.*80/);
+  assert.equal(get('n-connect').disabled,true);
+  assert.equal(state.settings.gameDir,oldDir,'low space must not connect an incomplete client');
+  nativeReply=completeReply;
   await get('n-download').handlers.click();
   const native=calls.find(c=>c.cmd==='native_client_work');
   assert.deepEqual(JSON.parse(JSON.stringify(native.args.request)),{action:'download',directory:'E:/managed',locale:'ruRU',highRes:true});

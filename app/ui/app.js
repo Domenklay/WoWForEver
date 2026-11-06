@@ -680,8 +680,9 @@ async function runNative(action) {
   try {
     const result = await invoke('native_client_work', { request: { action, directory, locale: $('n-locale').value || 'ruRU', highRes: !!$('n-hd').checked } });
     nativeReport = result;
-    $('n-status').textContent = t(result.complete ? 'nComplete' : 'nIncomplete');
-    $('n-detail').textContent = (result.reasons || []).join('\n');
+    const lowSpace = result.code === 'insufficient_disk_space';
+    $('n-status').textContent = t(lowSpace ? 'nLowSpace' : result.complete ? 'nComplete' : 'nIncomplete');
+    $('n-detail').textContent = lowSpace ? t('nSpaceDetail', { path: result.directory || directory, required: bytes(result.requiredBytes), available: bytes(result.availableBytes), missing: bytes(result.missingBytes) }) : (result.reasons || [result.detail || '']).join('\n');
     $('n-report').textContent = t('nReport', { path: result.reportPath || '' });
     const settings = structuredClone(state.settings); settings.nativeClientDir = directory;
     await invoke('save_settings', { settings });

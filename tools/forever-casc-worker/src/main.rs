@@ -38,6 +38,14 @@ fn claim(root:&Path,write:bool)->Result<()> {
 fn write_owned(root:&Path,state:&Owned)->Result<()>{let path=root.join(MARKER);direct(&path)?;forever_casc_worker::fsutil::write_atomic(&path,&serde_json::to_vec_pretty(state)?)?;Ok(())}
 fn emit(value:Value){let mut out=io::stdout().lock();let _=writeln!(out,"{value}");let _=out.flush();}
 fn progress(phase:&str,done:u64,total:u64,bytes:u64,bytes_total:u64,detail:impl AsRef<str>){emit(json!({"kind":"progress","phase":phase,"done":done,"total":total,"bytes":bytes,"bytesTotal":bytes_total,"detail":detail.as_ref()}));}
+fn space_report(root:&Path,download:u64,install:u64,available:u64)->Option<Value>{
+ let reserve=512*1024*1024u64;
+ let required=download.saturating_add(install).saturating_add(reserve);
+ (available<required).then(||json!({"complete":false,"code":"insufficient_disk_space","build":profile::BUILD,
+  "directory":root,"downloadBytes":download,"installBytes":install,"reserveBytes":reserve,
+  "requiredBytes":required,"availableBytes":available,"missingBytes":required.saturating_sub(available),
+  "detail":"Insufficient disk space for the complete selected client","runtimeTested":false}))
+}
 fn game_closed()->Result<()> {
  #[cfg(windows)] for exe in ["Wow.exe","WowB.exe"] {
   let out=std::process::Command::new("tasklist.exe").args(["/FI",&format!("IMAGENAME eq {exe}"),"/FO","CSV","/NH"]).output()?;
@@ -104,7 +112,10 @@ async fn run(request:Request,cancel:Cancel)->Result<Value>{
  // Refuse a locale fallback: Russian selection must not silently fetch English.
  if !prepared.tag_column.split_whitespace().any(|word|word==request.locale.as_str()){bail!("The pinned manifest does not ship the requested locale");}
  if prepared.wanted.is_empty(){bail!("Full selection is empty");}
- if fs2::available_space(root)? < prepared.plan.bytes().saturating_add(512*1024*1024){bail!("Insufficient disk space for the complete selected client");}
+ // Reserve space for loose INSTALL output as well as encoded downloads. Already
+ // stored CASC objects are excluded by the resume plan; never skip this check.
+ let install_bytes=prepared.install.select(&prepared.tags).into_iter().map(|entry|u64::from(entry.size)).sum();
+ if let Some(report)=space_report(root,prepared.plan.bytes(),install_bytes,fs2::available_space(root)?){return Ok(report);}
  if request.high_res {prepared.tag_column=prepared.tag_column.replace("Windows ","Windows HighRes ");}
  let selected=prepared.wanted.len();game_closed()?;
  let result=install::execute(&http,root,&ProductCode::Forever,&options,prepared,&cancel,&mut on_event).await?;
@@ -130,4 +141,5 @@ async fn main(){
  #[test]fn an_original_installation_can_never_be_adopted_or_changed(){let parent=tempfile::tempdir().unwrap();let root=parent.path().join("original");fs::create_dir(&root).unwrap();fs::write(root.join(".build.info"),b"owned original").unwrap();assert!(claim(&root,true).is_err());assert_eq!(fs::read(root.join(".build.info")).unwrap(),b"owned original");assert!(!root.join(MARKER).exists());}
  #[test]fn a_new_directory_is_pinned_and_can_resume_only_the_same_build(){let parent=tempfile::tempdir().unwrap();let root=parent.path().join("managed");claim(&root,true).unwrap();claim(&root,true).unwrap();let mut wrong=ownership();wrong.build=70707;write_owned(&root,&wrong).unwrap();assert!(claim(&root,true).is_err());}
  #[test]fn transport_rejects_login_and_certificate_fields(){let value=json!({"action":"download","directory":"C:/new","portal":"logon.nvord.com","caFile":"other.crt"});assert!(serde_json::from_value::<Request>(value).is_err());}
+ #[test]fn low_space_reports_the_selected_volume_and_exact_shortfall(){let root=Path::new("E:/new");let report=space_report(root,1000,200,100).unwrap();assert_eq!(report["directory"],json!(root));assert_eq!(report["code"],"insufficient_disk_space");assert_eq!(report["requiredBytes"],512*1024*1024u64+1200);assert_eq!(report["missingBytes"],512*1024*1024u64+1100);assert_eq!(report["complete"],false);assert!(space_report(root,1000,200,512*1024*1024+1200).is_none());}
 }

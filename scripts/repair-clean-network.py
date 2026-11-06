@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import socket
 import ssl
@@ -19,6 +20,37 @@ spec = importlib.util.spec_from_file_location('network_clean', Path(__file__).wi
 clean = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(clean)
 EXPECTED = '127.0.0.1:8085:8085'
+
+
+def command_error(state, error):
+    """Expose the Docker operation and stderr, never resolved credentials."""
+    if not isinstance(error, clean.CommandFailure):
+        return str(error)
+    command = error.command
+    if command[:2] == ('docker', 'compose'):
+        # Skip -p PROJECT -f PRIVATE_PATH, and never echo exec arguments/SQL.
+        operation = command[6] if len(command) > 6 else 'unknown'
+        label = 'docker compose ' + operation
+    else:
+        label = ' '.join(command[:2])
+    text = error.stderr
+    secrets_to_hide = set(str(v) for v in state.get('credentials', {}).values() if v)
+    try:
+        model = json.loads(Path(state['compose']).read_bytes())
+        for service in model.get('services', {}).values():
+            env = service.get('environment', {})
+            entries = env.items() if isinstance(env, dict) else (item.split('=', 1) for item in env if '=' in item)
+            for key, value in entries:
+                if value and re.search(r'password|passwd|secret|token|credential', key, re.I):
+                    secrets_to_hide.add(str(value))
+    except (OSError, ValueError, TypeError):
+        # Without the model we cannot safely expose arbitrary Compose errors.
+        text = '(Docker details withheld: private Compose could not be read)'
+    for secret in sorted(secrets_to_hide, key=len, reverse=True):
+        text = text.replace(secret, '[REDACTED]')
+    text = re.sub(r'(?i)((?:password|passwd|secret|token)\s*[=:]\s*)[^\s,;]+', r'\1[REDACTED]', text)
+    text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', text)
+    return f'{label} failed (exit {error.returncode}): ' + (text.strip()[-6000:] or '(Docker returned no stderr)')
 
 
 def checked(root):
@@ -91,8 +123,10 @@ def repair(state):
     # Keep every other service, mount, credential, network and volume unchanged.
     service['ports'] = [EXPECTED]
     clean.write_private(path, model)
+    recreate_started = False
     try:
         clean.compose(state, 'config', '-q')
+        recreate_started = True
         clean.compose(state, 'up', '-d', '--no-build', '--no-deps', '--force-recreate', 'worldserver')
         clean.wait_world(state, 180)
         report = status(state)
@@ -100,15 +134,20 @@ def repair(state):
             raise RuntimeError('Worldserver did not acquire the required host loopback port')
         report.update(changed=True, backup=str(backup), note='Only worldserver publication repaired; MySQL, accounts, characters, TLS identity and client build retained')
         return report
-    except Exception:
+    except Exception as failure:
         # Restore the exact private input, not a newly generated deployment.
         temp = path.with_suffix('.rollback')
         with temp.open('xb') as stream:
             os.chmod(temp, 0o600)
             stream.write(original)
         temp.replace(path)
+        if not recreate_started:
+            # Invalid Compose never reached Docker up; leave running services alone.
+            raise
         try: clean.compose(state, 'up', '-d', '--no-build', '--no-deps', 'worldserver')
-        except Exception: pass
+        except Exception as rollback:
+            raise RuntimeError(command_error(state, failure) + '\nOriginal Compose restored, but restarting worldserver also failed: '
+                               + command_error(state, rollback)) from failure
         raise
 
 
@@ -118,14 +157,20 @@ def main():
     parser.add_argument('--root', type=Path, default=Path.home() / 'WoWForEver-clean')
     args = parser.parse_args()
     os.umask(0o077)
-    if args.action == 'status': report = status(checked(args.root))
+    state = checked(args.root)
+    if args.action == 'status':
+        try: report = status(state)
+        except clean.CommandFailure as error: raise RuntimeError(command_error(state, error)) from error
     else:
         lock_path = Path.home() / '.cache/forever-clean-control.lock'
         lock_path.parent.mkdir(exist_ok=True)
         with lock_path.open('a') as lock:
             try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError: raise ValueError('Another clean-server operation is running')
-            report = repair(checked(args.root))
+            # Revalidate while holding the lifecycle lock.
+            state = checked(args.root)
+            try: report = repair(state)
+            except clean.CommandFailure as error: raise RuntimeError(command_error(state, error)) from error
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

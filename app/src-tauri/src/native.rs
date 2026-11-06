@@ -39,6 +39,7 @@ pub fn run(worker:&Path,request:Request,cancel:&AtomicBool,mut emit:impl FnMut(V
  let id=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
  let path=directory.join(format!("native-{id}.json"));
  let mut value=report.unwrap_or_else(||json!({"complete":false,"detail":failure.clone().unwrap_or_else(||"Worker returned no report".into())}));
+ value["request"]=serde_json::to_value(&request).map_err(|e|e.to_string())?;
  value["reportPath"]=json!(path);value["workerDiagnostics"]=json!(diagnostics);
  std::fs::write(&path,serde_json::to_vec_pretty(&value).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
  if !exit.success(){return Err(format!("{} ({})",failure.unwrap_or_else(||"CDN worker failed".into()),path.display()));}

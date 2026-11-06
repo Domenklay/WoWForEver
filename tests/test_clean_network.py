@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -26,6 +27,36 @@ def fixture(root):
 
 
 class CleanNetworkTests(unittest.TestCase):
+    def test_docker_error_exposes_operation_and_reason_but_redacts_private_values(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state, _ = fixture(Path(temp))
+            state['credentials'] = {'database': 'another-private-test'}
+            command = ['docker', 'compose', '-p', state['project'], '-f', state['compose'], 'config', '-q']
+            failure = network.clean.CommandFailure(command, subprocess.CompletedProcess(command, 1, stderr='invalid mount /missing/data; DB_PASSWORD=private-test secret=another-private-test'))
+            self.assertNotIn('private-test', str(failure))
+            message = network.command_error(state, failure)
+            self.assertIn('docker compose config failed (exit 1)', message)
+            self.assertIn('/missing/data', message)
+            self.assertNotIn('private-test', message)
+            self.assertIn('[REDACTED]', message)
+
+    def test_invalid_compose_restores_file_without_restarting_world(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state, _ = fixture(Path(temp)); before = Path(state['compose']).read_bytes()
+            with patch.object(network, 'world_bindings', return_value=[]), patch.object(network.socket, 'socket'), \
+                 patch.object(network.clean, 'compose', side_effect=RuntimeError('invalid compose')) as compose:
+                with self.assertRaisesRegex(RuntimeError, 'invalid compose'): network.repair(state)
+            self.assertEqual(compose.call_count, 1)
+            self.assertEqual(Path(state['compose']).read_bytes(), before)
+
+    def test_failed_rollback_is_reported_alongside_original_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state, _ = fixture(Path(temp)); before = Path(state['compose']).read_bytes()
+            with patch.object(network, 'world_bindings', return_value=[]), patch.object(network.socket, 'socket'), \
+                 patch.object(network.clean, 'compose', side_effect=[None, RuntimeError('recreate failed'), RuntimeError('rollback failed')]):
+                with self.assertRaisesRegex(RuntimeError, 'recreate failed.*\n.*rollback failed'): network.repair(state)
+            self.assertEqual(Path(state['compose']).read_bytes(), before)
+
     def test_missing_port_recreates_only_world_and_preserves_every_other_field(self):
         with tempfile.TemporaryDirectory() as temp:
             state, before = fixture(Path(temp))
