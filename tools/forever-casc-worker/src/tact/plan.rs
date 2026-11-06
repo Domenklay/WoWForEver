@@ -1,0 +1,505 @@
+//! The fetch plan: every request the download will make, decided up front.
+//!
+//! A retail build's wanted files sit in ~1400 archives: one request each is
+//! 1.57 million requests, whole archives are 174.5 GiB for 123.0 GiB wanted.
+//! The plan sits between:
+//!
+//! 1. locate every wanted key in its archive index,
+//! 2. sort by `(archive, offset)`,
+//! 3. merge neighbours separated by less than [`Options::max_gap`] into one
+//!    **run**, capped at [`Options::max_run`] bytes,
+//! 4. fetch each run with one range request and split it locally.
+//!
+//! Merging costs the padding between files; the defaults are measured, see
+//! [`Options`]. Keys the file index lists are fetched whole by plain GET.
+//! Keys in neither are [`Plan::missing`], found at planning time.
+
+use std::collections::{HashMap, HashSet};
+
+use super::archive::FileIndex;
+use super::config::CKey;
+use super::encoding::Encoding;
+use super::indices::Locations;
+use super::manifest::DownloadEntry;
+use super::storage::EKey;
+
+/// How aggressively neighbouring files are merged into one request. Measured
+/// over 12.1.0 (1,574,027 files, 123.0 GiB, 1406 archives):
+///
+/// ```text
+/// max_gap   requests   transfer   wasted
+///       0    102,790    123.0 GiB   0.00 GiB
+///     16K     78,402    123.1 GiB   0.13 GiB
+///     64K     60,717    123.8 GiB   0.75 GiB   <- default
+///    128K     50,940    124.7 GiB   1.67 GiB
+///    256K     41,831    126.5 GiB   3.48 GiB
+///      1M     27,946    134.0 GiB  10.98 GiB
+///      4M     23,710    144.5 GiB  21.47 GiB
+/// ```
+///
+/// 64 KiB buys 41% fewer requests for 0.6% more bytes; past it, each step
+/// costs about a gigabyte. Requests already average 2.1 MB there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Options {
+    /// Merge two files if the unwanted bytes between them are fewer than this.
+    /// Zero merges only adjacent files, already a 15x reduction.
+    pub max_gap: u32,
+    /// Never let a run exceed this many bytes: bounds a response's memory and
+    /// what a pause throws away.
+    pub max_run: u32,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self { max_gap: 64 * 1024, max_run: 8 * 1024 * 1024 }
+    }
+}
+
+/// One file inside a run, and what verifies it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Piece {
+    pub ekey: EKey,
+    /// Content key, which verifies the decoded bytes. Absent when encoding has
+    /// no entry for this key (2 of 12.1.0's files, both in Agent's store), and
+    /// then the file is stored unverified, as Agent does.
+    pub ckey: Option<CKey>,
+    /// Offset of this file's bytes from the start of its run.
+    pub at: u32,
+    /// Length of this file's bytes, CASC entry header included.
+    pub size: u32,
+}
+
+/// One range request: a contiguous stretch of one archive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Run {
+    /// Hash of the archive to request from.
+    pub archive: String,
+    /// Offset of the run from the start of the archive.
+    pub offset: u32,
+    /// Bytes to request.
+    pub length: u32,
+    /// The wanted files inside it, in offset order.
+    pub pieces: Vec<Piece>,
+}
+
+impl Run {
+    /// The HTTP `Range` value for this run, `None` if empty.
+    pub fn range(&self) -> Option<String> {
+        let last = u64::from(self.offset).checked_add(u64::from(self.length))?.checked_sub(1)?;
+        Some(format!("bytes={}-{last}", self.offset))
+    }
+
+    /// Bytes transferred that no wanted file needs.
+    pub fn padding(&self) -> u64 {
+        // Overlapping pieces share bytes, so their sizes can sum past the run.
+        u64::from(self.length).saturating_sub(self.pieces.iter().map(|p| u64::from(p.size)).sum())
+    }
+
+    /// One piece's bytes out of a fetched run; `None` if the response is
+    /// short (truncated, or the range was ignored).
+    pub fn slice<'a>(&self, body: &'a [u8], piece: &Piece) -> Option<&'a [u8]> {
+        let start = piece.at as usize;
+        let end = start.checked_add(piece.size as usize)?;
+        body.get(start..end)
+    }
+}
+
+/// A loose file: served whole at its own URL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Loose {
+    pub ekey: EKey,
+    pub ckey: Option<CKey>,
+    pub size: u32,
+}
+
+/// Everything the download will request.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Plan {
+    pub runs: Vec<Run>,
+    pub loose: Vec<Loose>,
+    /// Wanted, but in no archive index and not loose. Nothing can fetch these.
+    pub missing: Vec<EKey>,
+    /// Wanted, but already in the local store, the resume path.
+    pub already_present: usize,
+}
+
+impl Plan {
+    /// Build a plan for `wanted`, skipping keys `already_have` says are stored.
+    pub fn build(
+        wanted: &[DownloadEntry],
+        locations: &Locations,
+        loose_index: &FileIndex,
+        ckeys: &HashMap<EKey, CKey>,
+        already_have: impl Fn(&EKey) -> bool,
+        options: Options,
+    ) -> Self {
+        let mut plan = Self::default();
+        // (archive index into `archives`, offset, size, ekey)
+        let mut archived: Vec<(u32, u32, u32, EKey)> = Vec::new();
+        let mut archives: Vec<String> = Vec::new();
+        let mut archive_id = HashMap::<String, u32>::new();
+
+        for entry in wanted {
+            if already_have(&entry.ekey) {
+                plan.already_present += 1;
+                continue;
+            }
+
+            if let Some((archive, located)) = locations.get(&entry.ekey) {
+                #[allow(clippy::cast_possible_truncation, reason = "archive ids number in the thousands")]
+                let id = *archive_id.entry(archive.to_owned()).or_insert_with(|| {
+                    archives.push(archive.to_owned());
+                    (archives.len() - 1) as u32
+                });
+                archived.push((id, located.offset, located.size, entry.ekey));
+            } else if let Some(entry_loose) = loose_index.lookup(&entry.ekey) {
+                plan.loose.push(Loose {
+                    ekey: entry.ekey,
+                    ckey: ckeys.get(&entry.ekey).copied(),
+                    size: entry_loose.size,
+                });
+            } else {
+                plan.missing.push(entry.ekey);
+            }
+        }
+
+        // Sorted: the merge is one pass, and each archive reads sequentially.
+        archived.sort_unstable();
+
+        let mut current: Option<Run> = None;
+        for (id, offset, size, ekey) in archived {
+            let piece_end = u64::from(offset) + u64::from(size);
+
+            let extends = current.as_ref().is_some_and(|run| {
+                let run_end = u64::from(run.offset) + u64::from(run.length);
+                archives[id as usize] == run.archive
+                    // A start before the run's end is an overlap; merge it.
+                    && u64::from(offset) <= run_end + u64::from(options.max_gap)
+                    && piece_end - u64::from(run.offset) <= u64::from(options.max_run)
+            });
+
+            match (extends, current.as_mut()) {
+                (true, Some(run)) => {
+                    // Never shorter: a piece inside the run must not cut it back.
+                    #[allow(clippy::cast_possible_truncation, reason = "`extends` bounds it by max_run")]
+                    let end = (piece_end - u64::from(run.offset)) as u32;
+                    run.length = run.length.max(end);
+                    run.pieces.push(Piece {
+                        ekey,
+                        ckey: ckeys.get(&ekey).copied(),
+                        at: offset - run.offset,
+                        size,
+                    });
+                }
+                _ => {
+                    if let Some(done) = current.take() {
+                        plan.runs.push(done);
+                    }
+                    current = Some(Run {
+                        archive: archives[id as usize].clone(),
+                        offset,
+                        length: size,
+                        pieces: vec![Piece { ekey, ckey: ckeys.get(&ekey).copied(), at: 0, size }],
+                    });
+                }
+            }
+        }
+        if let Some(done) = current.take() {
+            plan.runs.push(done);
+        }
+
+        plan
+    }
+
+    /// How many HTTP requests the plan makes.
+    pub fn requests(&self) -> usize {
+        self.runs.len() + self.loose.len()
+    }
+
+    /// How many files the plan fetches.
+    pub fn files(&self) -> usize {
+        self.runs.iter().map(|r| r.pieces.len()).sum::<usize>() + self.loose.len()
+    }
+
+    /// Bytes actually transferred, padding included.
+    pub fn bytes(&self) -> u64 {
+        self.runs.iter().map(|r| u64::from(r.length)).sum::<u64>()
+            + self.loose.iter().map(|l| u64::from(l.size)).sum::<u64>()
+    }
+
+    /// Bytes transferred that no wanted file needs.
+    pub fn padding(&self) -> u64 {
+        self.runs.iter().map(Run::padding).sum()
+    }
+
+    /// Whether every wanted key could be located.
+    pub fn is_complete(&self) -> bool {
+        self.missing.is_empty()
+    }
+}
+
+/// Encoding key → content key, for the keys in `wanted` only, in one pass:
+/// the manifest is sorted by content key, so a lookup per file is a scan.
+pub fn reverse_encoding(encoding: &Encoding, wanted: &HashSet<EKey>) -> HashMap<EKey, CKey> {
+    let mut map = HashMap::with_capacity(wanted.len());
+    for entry in encoding.entries() {
+        if wanted.contains(&entry.ekey) {
+            map.entry(entry.ekey).or_insert(entry.ckey);
+        }
+    }
+    map
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::archive::ArchiveIndex;
+    use super::super::indices::Locations;
+
+    fn key(n: u8) -> EKey {
+        let mut k = [0u8; 16];
+        k[0] = n;
+        k
+    }
+
+    fn index_bytes(entries: &[(EKey, u32, u32)]) -> Vec<u8> {
+        let (block_size, entry_size) = (4096usize, 24usize);
+        let per_block = block_size / entry_size;
+        let blocks = entries.len().div_ceil(per_block).max(1);
+
+        let mut out = vec![0u8; blocks * block_size];
+        for (i, (ekey, size, offset)) in entries.iter().enumerate() {
+            let at = (i / per_block) * block_size + (i % per_block) * entry_size;
+            out[at..at + 16].copy_from_slice(ekey);
+            out[at + 16..at + 20].copy_from_slice(&size.to_be_bytes());
+            out[at + 20..at + 24].copy_from_slice(&offset.to_be_bytes());
+        }
+        for b in 0..blocks {
+            let last = ((b + 1) * per_block - 1).min(entries.len().saturating_sub(1));
+            out.extend_from_slice(&entries.get(last).map_or([0u8; 16], |e| e.0));
+        }
+        out.extend(std::iter::repeat_n(0u8, blocks * 8));
+        let mut footer = vec![0u8; 8];
+        footer.extend_from_slice(&[1, 0, 0, (block_size / 1024) as u8, 4, 4, 16, 8]);
+        footer.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+        footer.extend_from_slice(&[0u8; 8]);
+        out.extend_from_slice(&footer);
+        super::super::archive::seal(&mut out);
+        out
+    }
+
+    fn file_index_bytes(entries: &[(EKey, u32)]) -> Vec<u8> {
+        let (block_size, entry_size) = (4096usize, 20usize);
+        let per_block = block_size / entry_size;
+        let blocks = entries.len().div_ceil(per_block).max(1);
+
+        let mut out = vec![0u8; blocks * block_size];
+        for (i, (ekey, size)) in entries.iter().enumerate() {
+            let at = (i / per_block) * block_size + (i % per_block) * entry_size;
+            out[at..at + 16].copy_from_slice(ekey);
+            out[at + 16..at + 20].copy_from_slice(&size.to_be_bytes());
+        }
+        for b in 0..blocks {
+            let last = ((b + 1) * per_block - 1).min(entries.len().saturating_sub(1));
+            out.extend_from_slice(&entries.get(last).map_or([0u8; 16], |e| e.0));
+        }
+        out.extend(std::iter::repeat_n(0u8, blocks * 8));
+        let mut footer = vec![0u8; 8];
+        footer.extend_from_slice(&[1, 0, 0, (block_size / 1024) as u8, 0, 4, 16, 8]);
+        footer.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+        footer.extend_from_slice(&[0u8; 8]);
+        out.extend_from_slice(&footer);
+        super::super::archive::seal(&mut out);
+        out
+    }
+
+    fn located(archive: &str, entries: &[(EKey, u32, u32)], wanted: &[EKey]) -> Locations {
+        let index = ArchiveIndex::parse(&index_bytes(entries), archive).unwrap();
+        let mut locations = Locations::default();
+        locations.absorb(&index, &wanted.iter().copied().collect());
+        locations
+    }
+
+    fn want(keys: &[EKey]) -> Vec<DownloadEntry> {
+        keys.iter().map(|k| DownloadEntry { ekey: *k, size: 0, priority: 0 }).collect()
+    }
+
+    fn no_loose() -> FileIndex {
+        FileIndex::parse(&file_index_bytes(&[(key(200), 1)])).unwrap()
+    }
+
+    #[test]
+    fn adjacent_files_become_one_request() {
+        let keys = [key(1), key(2), key(3)];
+        let locations = located("a", &[(key(1), 100, 0), (key(2), 100, 100), (key(3), 100, 200)], &keys);
+
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &HashMap::new(), |_| false, Options::default());
+
+        assert_eq!(plan.requests(), 1);
+        assert_eq!(plan.files(), 3);
+        assert_eq!(plan.runs[0].offset, 0);
+        assert_eq!(plan.runs[0].length, 300);
+        assert_eq!(plan.runs[0].padding(), 0);
+        assert_eq!(plan.runs[0].range().unwrap(), "bytes=0-299");
+        assert_eq!(
+            plan.runs[0].pieces.iter().map(|p| p.at).collect::<Vec<_>>(),
+            [0, 100, 200]
+        );
+    }
+
+    #[test]
+    fn a_piece_inside_another_does_not_shorten_the_run() {
+        // Sorted by offset: A spans 0..1000, B sits inside it at 10..30.
+        let keys = [key(1), key(2)];
+        let locations = located("a", &[(key(1), 1000, 0), (key(2), 20, 10)], &keys);
+
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &HashMap::new(), |_| false, Options::default());
+
+        assert_eq!(plan.requests(), 1);
+        assert_eq!(plan.runs[0].length, 1000, "cut back to B's end, A was never fetched whole");
+        let body = vec![0u8; 1000];
+        for piece in &plan.runs[0].pieces {
+            assert!(plan.runs[0].slice(&body, piece).is_some());
+        }
+    }
+
+    #[test]
+    fn overlapping_pieces_count_as_no_padding() {
+        // 1000 + 20 bytes of pieces in a 1000-byte run.
+        let keys = [key(1), key(2)];
+        let locations = located("a", &[(key(1), 1000, 0), (key(2), 20, 10)], &keys);
+
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &HashMap::new(), |_| false, Options::default());
+
+        assert_eq!(plan.padding(), 0);
+    }
+
+    #[test]
+    fn an_empty_run_has_no_range() {
+        let run = Run { archive: "a".into(), offset: 0, length: 0, pieces: Vec::new() };
+        assert_eq!(run.range(), None);
+    }
+
+    #[test]
+    fn a_gap_wider_than_the_threshold_splits_the_run() {
+        let keys = [key(1), key(2)];
+        let locations = located("a", &[(key(1), 100, 0), (key(2), 100, 1_000_000)], &keys);
+
+        let narrow = Options { max_gap: 1024, max_run: 8 << 20 };
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &HashMap::new(), |_| false, narrow);
+        assert_eq!(plan.requests(), 2);
+        assert_eq!(plan.padding(), 0);
+
+        // Widen the threshold past the gap and the two merge, paying for the
+        // bytes between them.
+        let wide = Options { max_gap: 2 << 20, max_run: 8 << 20 };
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &HashMap::new(), |_| false, wide);
+        assert_eq!(plan.requests(), 1);
+        assert_eq!(plan.runs[0].length, 1_000_100);
+        assert_eq!(plan.runs[0].padding(), 999_900);
+    }
+
+    #[test]
+    fn a_run_never_exceeds_its_cap() {
+        // Keys start at 1: an all-zero key is block padding, not an entry.
+        let entries: Vec<(EKey, u32, u32)> =
+            (1..=8u8).map(|n| (key(n), 1000, u32::from(n - 1) * 1000)).collect();
+        let keys: Vec<EKey> = entries.iter().map(|e| e.0).collect();
+        let locations = located("a", &entries, &keys);
+
+        let capped = Options { max_gap: 1 << 20, max_run: 2500 };
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &HashMap::new(), |_| false, capped);
+
+        assert!(plan.runs.iter().all(|r| r.length <= 2500));
+        assert_eq!(plan.files(), 8);
+        assert_eq!(plan.bytes(), 8000);
+    }
+
+    #[test]
+    fn files_in_different_archives_never_share_a_request() {
+        let keys = [key(1), key(2)];
+        let mut locations = located("a", &[(key(1), 100, 0)], &keys);
+        let second = ArchiveIndex::parse(&index_bytes(&[(key(2), 100, 100)]), "b").unwrap();
+        locations.absorb(&second, &keys.iter().copied().collect());
+
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &HashMap::new(), |_| false, Options::default());
+
+        assert_eq!(plan.requests(), 2);
+        let mut archives: Vec<&str> = plan.runs.iter().map(|r| r.archive.as_str()).collect();
+        archives.sort_unstable();
+        assert_eq!(archives, ["a", "b"]);
+    }
+
+    #[test]
+    fn a_loose_key_is_fetched_whole_and_an_unlocatable_one_is_reported() {
+        let keys = [key(1), key(50), key(99)];
+        let locations = located("a", &[(key(1), 100, 0)], &keys);
+        let loose = FileIndex::parse(&file_index_bytes(&[(key(50), 4096)])).unwrap();
+
+        let plan = Plan::build(&want(&keys), &locations, &loose, &HashMap::new(), |_| false, Options::default());
+
+        assert_eq!(plan.runs.len(), 1);
+        assert_eq!(plan.loose, [Loose { ekey: key(50), ckey: None, size: 4096 }]);
+        assert_eq!(plan.missing, [key(99)]);
+        assert!(!plan.is_complete());
+        assert_eq!(plan.bytes(), 100 + 4096);
+    }
+
+    #[test]
+    fn keys_already_in_the_store_are_not_planned_again() {
+        let keys = [key(1), key(2), key(3)];
+        let locations = located("a", &[(key(1), 100, 0), (key(2), 100, 100), (key(3), 100, 200)], &keys);
+
+        let plan = Plan::build(
+            &want(&keys),
+            &locations,
+            &no_loose(),
+            &HashMap::new(),
+            |k| *k == key(2),
+            Options::default(),
+        );
+
+        assert_eq!(plan.already_present, 1);
+        assert_eq!(plan.files(), 2);
+        // The hole left behind is bridged, not split, since the bytes
+        // in between are below the gap threshold.
+        assert_eq!(plan.requests(), 1);
+        assert_eq!(plan.runs[0].padding(), 100);
+    }
+
+    #[test]
+    fn a_piece_slices_out_of_its_run_and_a_short_response_does_not_panic() {
+        let keys = [key(1), key(2)];
+        let locations = located("a", &[(key(1), 4, 0), (key(2), 4, 4)], &keys);
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &HashMap::new(), |_| false, Options::default());
+
+        let run = &plan.runs[0];
+        let body = b"AAAABBBB";
+        assert_eq!(run.slice(body, &run.pieces[0]), Some(&body[0..4]));
+        assert_eq!(run.slice(body, &run.pieces[1]), Some(&body[4..8]));
+        assert_eq!(run.slice(b"AAAA", &run.pieces[1]), None);
+    }
+
+    #[test]
+    fn content_keys_are_attached_where_encoding_knows_them() {
+        let keys = [key(1), key(2)];
+        let locations = located("a", &[(key(1), 100, 0), (key(2), 100, 100)], &keys);
+        let ckeys: HashMap<EKey, CKey> = [(key(1), [0xAA; 16])].into_iter().collect();
+
+        let plan = Plan::build(&want(&keys), &locations, &no_loose(), &ckeys, |_| false, Options::default());
+
+        let pieces = &plan.runs[0].pieces;
+        assert_eq!(pieces[0].ckey, Some([0xAA; 16]));
+        // Storable but not verifiable, and the plan says so.
+        assert_eq!(pieces[1].ckey, None);
+    }
+
+    #[test]
+    fn an_empty_wanted_set_is_an_empty_plan() {
+        let plan = Plan::build(&[], &Locations::default(), &no_loose(), &HashMap::new(), |_| false, Options::default());
+
+        assert_eq!(plan.requests(), 0);
+        assert_eq!(plan.bytes(), 0);
+        assert!(plan.is_complete());
+    }
+}

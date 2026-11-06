@@ -14,3 +14,27 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m unittest discover -s tests -p 'test_clean_network.py' -v
+  native-worker:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/forever-casc-worker
+      - name: Test protocol, store, resumability and managed-root protection
+        run: cargo test --manifest-path tools/forever-casc-worker/Cargo.toml
+      - name: Build Windows native worker
+        if: runner.os == 'Windows'
+        run: cargo build --release --manifest-path tools/forever-casc-worker/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: Forever-CASC-Worker-Windows
+          path: |
+            tools/forever-casc-worker/target/release/forever-casc-worker.exe
+            tools/forever-casc-worker/Cargo.lock

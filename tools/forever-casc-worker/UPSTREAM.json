@@ -1,0 +1,153 @@
+{
+  "project": "Lightforge",
+  "repository": "https://github.com/LightforgeProject/lightforge",
+  "commit": "360ff4c8dce06b9cedbb863088fdfc8842a6c521",
+  "license": "GPL-3.0-or-later",
+  "files": [
+    {
+      "path": "net.rs",
+      "upstream_sha256": "ba606a1262c1419a34f5658b049bf660e6c077282c436d92a5e359436a657a7e",
+      "adapted_sha256": "ba606a1262c1419a34f5658b049bf660e6c077282c436d92a5e359436a657a7e"
+    },
+    {
+      "path": "buildinfo.rs",
+      "upstream_sha256": "71dd946f371c4341485976719646f622e4d47201993f3f52719f2cd05976aabc",
+      "adapted_sha256": "40d99797d1a236b2d07ed3fd1bd6ed5dda2abac5c375a15a808f4942948b0cde"
+    },
+    {
+      "path": "tact/archive.rs",
+      "upstream_sha256": "22d08214447ffb53cb475a82263b971d983d90fcb3ed5c2572e5da659b5b0f60",
+      "adapted_sha256": "22d08214447ffb53cb475a82263b971d983d90fcb3ed5c2572e5da659b5b0f60"
+    },
+    {
+      "path": "tact/blte.rs",
+      "upstream_sha256": "72d4adb68ec5be3a95008fea0ae4bb5399aa81940d26e420c1084527b6dbc5e5",
+      "adapted_sha256": "72d4adb68ec5be3a95008fea0ae4bb5399aa81940d26e420c1084527b6dbc5e5"
+    },
+    {
+      "path": "tact/cdn.rs",
+      "upstream_sha256": "b0a73c1f8715c1948bcf9a3e490bb4fb77670c1d9bee33faab95a37db0006a49",
+      "adapted_sha256": "49c7c9b2ae5d8b262aba89c40b0a5516cd3bb19ac0b76c0eac2ef38ad4f39908"
+    },
+    {
+      "path": "tact/config.rs",
+      "upstream_sha256": "74f1e25638f0aee1e041fc39771bcfd9a71b301548bcfec16c2c472f21517586",
+      "adapted_sha256": "74f1e25638f0aee1e041fc39771bcfd9a71b301548bcfec16c2c472f21517586"
+    },
+    {
+      "path": "tact/encoding.rs",
+      "upstream_sha256": "dc84d394c189e499afad0627bd4ec6a50f3f5b52484ddbd43d9500d93cb19489",
+      "adapted_sha256": "dc84d394c189e499afad0627bd4ec6a50f3f5b52484ddbd43d9500d93cb19489"
+    },
+    {
+      "path": "tact/entry.rs",
+      "upstream_sha256": "fa807335e7635ef878aa37f4e557f128179b54a22687b99d91d476c40d1bf921",
+      "adapted_sha256": "fa807335e7635ef878aa37f4e557f128179b54a22687b99d91d476c40d1bf921"
+    },
+    {
+      "path": "tact/idx.rs",
+      "upstream_sha256": "a44f3399542d2bf61ae3c69d619ed66ce1c8830bf93bcb1e4272c8ad85ebef9e",
+      "adapted_sha256": "a44f3399542d2bf61ae3c69d619ed66ce1c8830bf93bcb1e4272c8ad85ebef9e"
+    },
+    {
+      "path": "tact/indices.rs",
+      "upstream_sha256": "d9f51a77448be6e8a51bb9ea7db4e456d221588be89b29aaa652ffb64bb56551",
+      "adapted_sha256": "d9f51a77448be6e8a51bb9ea7db4e456d221588be89b29aaa652ffb64bb56551"
+    },
+    {
+      "path": "tact/manifest.rs",
+      "upstream_sha256": "90030c5bff5e392826350659183a5317d4e7457ec9ef2cd2c256400b4d443f36",
+      "adapted_sha256": "90030c5bff5e392826350659183a5317d4e7457ec9ef2cd2c256400b4d443f36"
+    },
+    {
+      "path": "tact/plan.rs",
+      "upstream_sha256": "884a003cf96e42956086881899e47b4bdcc016de05c796146b729ad5f111909a",
+      "adapted_sha256": "884a003cf96e42956086881899e47b4bdcc016de05c796146b729ad5f111909a"
+    },
+    {
+      "path": "tact/product_config.rs",
+      "upstream_sha256": "39fc03834a71bd5447ccd3523d6a8f986ed35b72951980eef18423f9b3b1829d",
+      "adapted_sha256": "a7262064e61d38b8382c27e46cc57c783d8ca53408641fde3396dd70fb8b83e3"
+    },
+    {
+      "path": "tact/staged.rs",
+      "upstream_sha256": "64ca3b7534a38c66314df6906e68aecd56d6dce49377692411c5c1753158ddd0",
+      "adapted_sha256": "64ca3b7534a38c66314df6906e68aecd56d6dce49377692411c5c1753158ddd0"
+    },
+    {
+      "path": "tact/storage.rs",
+      "upstream_sha256": "322bc003096d988b0722e3fa86a69559168c2a1d61609eb4ff425d0debd76c36",
+      "adapted_sha256": "322bc003096d988b0722e3fa86a69559168c2a1d61609eb4ff425d0debd76c36"
+    },
+    {
+      "path": "tact/version.rs",
+      "upstream_sha256": "ec73d3deeece774d300e15fa042240c2d5e369d380bd9657d9e321bcf8b5b67d",
+      "adapted_sha256": "ec73d3deeece774d300e15fa042240c2d5e369d380bd9657d9e321bcf8b5b67d"
+    },
+    {
+      "path": "tact/writer.rs",
+      "upstream_sha256": "df833724440593b62b8c3f565c8938747fa8812ee49b804f3c2e28511c723436",
+      "adapted_sha256": "5d0359fb0161e77d00ced7bbfa4d2c115aaacf77df41c6e379b9a08b572c9af9"
+    },
+    {
+      "path": "tact/verify.rs",
+      "upstream_sha256": "aca70a4af9e52c6ab30ca9309731c06a26f92557077cabd4aa19119b5ea53b1d",
+      "adapted_sha256": "3dcd9e4a988f804f88b787f84ba907b7a588f13d8b42b6d688295992f0f5d57d"
+    },
+    {
+      "path": "tact/download/downloader.rs",
+      "upstream_sha256": "b57d2de3acd4c57185435451b617b157ada999bec06af1966cf885b8d8bf87a7",
+      "adapted_sha256": "b57d2de3acd4c57185435451b617b157ada999bec06af1966cf885b8d8bf87a7"
+    },
+    {
+      "path": "tact/download/tests.rs",
+      "upstream_sha256": "4a547b28e5e732cbba7dd0637d17426cce5d2dbe0d60d6c4b833e13ec94f1539",
+      "adapted_sha256": "4a547b28e5e732cbba7dd0637d17426cce5d2dbe0d60d6c4b833e13ec94f1539"
+    },
+    {
+      "path": "tact/download/rate.rs",
+      "upstream_sha256": "d81d30ad70dc89beacc1fa34470b9572ef9c684937bcded42720517b4f2c39a6",
+      "adapted_sha256": "d81d30ad70dc89beacc1fa34470b9572ef9c684937bcded42720517b4f2c39a6"
+    },
+    {
+      "path": "tact/download/install_files.rs",
+      "upstream_sha256": "fdfb987f46fc066a30ce70a84ca423ef872cf7939fe9451803a4993d4f7a0e12",
+      "adapted_sha256": "fdfb987f46fc066a30ce70a84ca423ef872cf7939fe9451803a4993d4f7a0e12"
+    },
+    {
+      "path": "tact/download/guard.rs",
+      "upstream_sha256": "4f557e14645f2748247e6d3370cba4c0c2dba5d6dad7d76998dfdf923821a1e0",
+      "adapted_sha256": "4f557e14645f2748247e6d3370cba4c0c2dba5d6dad7d76998dfdf923821a1e0"
+    },
+    {
+      "path": "tact/download/mod.rs",
+      "upstream_sha256": "efab145de0230e281c714a4fd11f45fc49f0966aa3f77a4bd7aba26b72be29c8",
+      "adapted_sha256": "efab145de0230e281c714a4fd11f45fc49f0966aa3f77a4bd7aba26b72be29c8"
+    },
+    {
+      "path": "tact/install/execute.rs",
+      "upstream_sha256": "7a67818028939e2a7a706e996173bde51c1c25c2b2e11bada982d5989e280df8",
+      "adapted_sha256": "959d106d69687f8344d4cc2ff0880bc7500897aefce02f7905995a328fc4b71a"
+    },
+    {
+      "path": "tact/install/prepare.rs",
+      "upstream_sha256": "25c64ee7d3f61df6bfe06e41141cfae249a33f59aa6ba73111f8482c0806cba1",
+      "adapted_sha256": "4ea854c480ab402417d4f4cdc9aac530758bbe86e6431adea108dfa66f2c1633"
+    },
+    {
+      "path": "tact/install/locale.rs",
+      "upstream_sha256": "2c068b3b0d170fb51270aa238b524c85937bc3120aadcc9f50a533cda3fc1e71",
+      "adapted_sha256": "2c068b3b0d170fb51270aa238b524c85937bc3120aadcc9f50a533cda3fc1e71"
+    },
+    {
+      "path": "tact/install/tests.rs",
+      "upstream_sha256": "056078e899d074f43c65e09b114ca0cc16ca63b2fadcd11028c2350d8538aa33",
+      "adapted_sha256": "056078e899d074f43c65e09b114ca0cc16ca63b2fadcd11028c2350d8538aa33"
+    },
+    {
+      "path": "tact/install/mod.rs",
+      "upstream_sha256": "e5bcc0210ab524204a9c29908786533ccc1db51bedda9fb19ed9d3331600e89b",
+      "adapted_sha256": "e9f1983c502f23edbef2c392dbc76e852ac4d18b7fecc3c3d5a93d4421e9d814"
+    }
+  ]
+}
