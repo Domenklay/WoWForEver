@@ -2,10 +2,10 @@ name: Encyclopedia talents and mana review
 on:
   push:
     branches: [feature/encyclopedia-tooltip-mana-20261107]
-    paths: [mods/living-encyclopedia/**, .github/workflows/encyclopedia-talent-review.yml]
+    paths: [mods/living-encyclopedia/**, app/src-tauri/addons/forever-encyclopedia.json, app/src-tauri/src/addon.rs, scripts/clean-forever-server.py, scripts/enable-clean-gameplay.py, tests/test_clean_gameplay.py, .github/workflows/encyclopedia-talent-review.yml]
   pull_request:
     branches: [codex/native-cdn-70658-20261106]
-    paths: [mods/living-encyclopedia/**, .github/workflows/encyclopedia-talent-review.yml]
+    paths: [mods/living-encyclopedia/**, app/src-tauri/addons/forever-encyclopedia.json, app/src-tauri/src/addon.rs, scripts/clean-forever-server.py, scripts/enable-clean-gameplay.py, tests/test_clean_gameplay.py, .github/workflows/encyclopedia-talent-review.yml]
 permissions:
   contents: read
 jobs:
