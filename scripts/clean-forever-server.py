@@ -44,10 +44,12 @@ class CommandFailure(RuntimeError):
                          + '; use the status command for service logs')
 
 
-def run(command, *, capture=False, data=None):
+def run(command, *, capture=False, data=None, merge_log_streams=False):
+    if merge_log_streams and (command[:2] != ['docker', 'logs'] or not capture):
+        raise ValueError('Merged output is restricted to captured Docker logs')
     public_workload = command[:2] == ['docker', 'build'] or ('run' in command and 'extractor' in command)
     result = subprocess.run(command, input=data, stdout=subprocess.PIPE if capture else None,
-                            stderr=None if public_workload else subprocess.PIPE, text=True)
+                            stderr=subprocess.STDOUT if merge_log_streams else (None if public_workload else subprocess.PIPE), text=True)
     if result.returncode:
         # Resolved Compose files/configs contain private credentials. Never echo them.
         if 'run' in command and 'extractor' in command:

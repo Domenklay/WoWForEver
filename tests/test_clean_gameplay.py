@@ -117,15 +117,42 @@ class GameplayTests(unittest.TestCase):
 
     def test_readiness_requires_the_current_world_initialization_and_enabled_scaling(self):
         state = {'gameplay': {'scaling':'0.2.0'}}
-        live = {'Id':'current-world', 'State': {'StartedAt':'current-start'}}
+        live = {'Id':'current-world', 'State': {'StartedAt':'current-start','Running':True}}
         for logs, success in [('ForeverEncyclopedia ready:\nForeverScaling ready: personal-virtual-v0.2 (enabled=true, damageGuard=true)', True),
                               ('ForeverEncyclopedia ready:\nForeverScaling: personal-virtual-v0.2 registered (enabled=true', False),
                               ('ForeverEncyclopedia ready:\nForeverScaling ready: personal-virtual-v0.2 (enabled=false', False)]:
-            with patch.object(game.adv, 'wait_module'), patch.object(game.clean, 'container', return_value=live), patch.object(game.clean, 'run', return_value=logs) as command:
+            logs += '\n' + '\n'.join(game.adv.READY_PATTERNS)
+            report = dict(lines=logs.splitlines(),settings={},serverLogStatus='current-process-file')
+            with patch.object(game.clean, 'wait_world'), patch.object(game.clean, 'container', return_value=live), \
+                 patch.object(game.adv.module_readiness, 'snapshot', return_value=report) as probe, \
+                 patch.object(game.adv.module_readiness.time,'monotonic',side_effect=[0,181]):
                 if success: game.wait_module(state)
                 else:
                     with self.assertRaises(RuntimeError): game.wait_module(state)
-                self.assertIn('current-start',command.call_args.args[0]); self.assertEqual(command.call_args.args[0][-1], 'current-world')
+                self.assertEqual(probe.call_args.args[2]['Id'], 'current-world')
+
+    def test_a_matching_built_image_is_reused_without_compilation(self):
+        state = dict(core=game.clean.CORE)
+        labels = {'org.wowforever.core':game.clean.CORE,'org.wowforever.advancement':'1.11.0',
+                  'org.wowforever.advancement.source':game.adv.source_id(),
+                  'org.wowforever.gameplay.source':game.source_id(),
+                  'org.wowforever.encyclopedia':game.BOOK_VERSION,'org.wowforever.scaling':game.SCALING_VERSION}
+        with patch.object(game.adv,'image',return_value={'Config':{'Labels':labels}}), patch.object(game.clean,'run') as command:
+            self.assertEqual(game.build(state,2),'forever-trinitycore:gameplay-70658-'+game.source_id()[:12])
+            command.assert_not_called()
+        labels['org.wowforever.gameplay.source']='foreign-source'
+        with patch.object(game.adv,'image',return_value={'Config':{'Labels':labels}}), patch.object(game.clean,'run') as command:
+            with self.assertRaises(ValueError):game.build(state,2)
+            command.assert_not_called()
+
+    def test_retry_requires_the_built_image_and_cannot_silently_start_a_full_build(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);fixture(root)
+            with patch.object(game.clean,'wait_world'), patch.object(game,'built_candidate',side_effect=ValueError('unavailable')) as cached, \
+                 patch.object(game,'build') as build,patch.object(game.clean,'compose') as compose:
+                with self.assertRaisesRegex(ValueError,'unavailable'):game.install(root,2,reuse_built_image=True)
+                cached.assert_called_once();self.assertTrue(cached.call_args.kwargs['required'])
+                build.assert_not_called();compose.assert_not_called();self.assertFalse((root/game.MARKER).exists())
 
 
 if __name__ == '__main__': unittest.main()

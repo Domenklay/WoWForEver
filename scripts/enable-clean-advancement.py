@@ -12,6 +12,7 @@ import re
 import shutil
 import sys
 import time
+import module_readiness
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -115,13 +116,12 @@ def configure(before, model, candidate, directory):
     return state, model
 
 
+READY_PATTERNS = ('ForeverAdvancement ready:',
+                  'ForeverAdvancement custom rules: 1 canonical abilities; protocol=3; version=1.11.0')
+
+
 def wait_module(state, timeout=180):
-    clean.wait_world(state, timeout)
-    item = clean.container(state, 'worldserver')
-    logs = clean.run(['docker', 'logs', '--since', item['State']['StartedAt'], '--tail', '5000', item['Id']], capture=True)
-    if ('ForeverAdvancement ready:' not in logs or
-        'ForeverAdvancement custom rules: 1 canonical abilities; protocol=3; version=1.11.0' not in logs):
-        raise RuntimeError('World is listening but the current Advancement catalogue/protocol is not ready')
+    return module_readiness.wait(clean, state, READY_PATTERNS, timeout)
 
 
 def load_backup(root, path):

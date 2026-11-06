@@ -1,3 +1,21 @@
+Latest runtime evidence: user explicitly confirmed Forever Scaling. Before install
+state ready/pristine b4e7b940593f6402a822d4fbcdf31331d16f73b6, image
+forever-trinitycore:clean-b4e7b940593f, no Advancement/database_version.
+User successfully COMPILED AND LINKED the combined worldserver (1226s),
+image forever-trinitycore:gameplay-70658-4530bd4e14a1. Four-DB backup/migration
+completed; TCP/realm became ready, then old one-shot stdout-tail module check
+failed with missing Advancement catalogue/protocol. Automatic rollback verified
+pristine worldserver again (failed-recovered). Do not claim module activation.
+C++ AppenderConsole uses buffered fwrite to stdout; AppenderFile flushes each
+message. New module_readiness.py reads both Docker streams and fresh truncate-mode
+Server.log, waits for exact startup/protocol markers, rejects stale/restarted
+processes and explicit module failures. Failure diagnostics saved before rollback.
+Candidate fingerprints UNCHANGED: gameplay 4530bd4e14a1193236e18203ca3e8977680cbea01804afdcd77630647889b1e1;
+Advancement 5fca3dc2eb4de36967900718016add6fb0e6834f316edcdb2f1249e996632309.
+New build() fast path reuses only exact matching cached image, so no recompilation
+is needed for this retry. Keep server/DB/CA/client intact. Request resulting
+GAMEPLAY ACTIVE or bounded startup-diagnostics.json, not another blind rebuild.
+
 Combined gameplay delivery VERIFIED: server commit 46dc1f9a347a463fa9516607fca84f7c5e357995;
 checks run 42264029569 SUCCESS (413 Python tests, 28 skips; all 12 real
 CMake-flag translation units compile). This is syntax compilation, not full runtime

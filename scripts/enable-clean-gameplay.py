@@ -53,7 +53,22 @@ def check_image(item, state, candidate=False):
         raise ValueError('Active Advancement image differs from its saved identity')
 
 
+def built_candidate(state, required=False):
+    candidate = 'forever-trinitycore:gameplay-70658-' + source_id()[:12]
+    try: cached = adv.image(candidate)
+    except clean.CommandFailure:
+        if required: raise ValueError('The matching built gameplay image is unavailable; no compilation or service changes were started')
+        cached = None
+    if cached is not None:
+        check_image(cached, state, True)
+        print('Reusing the verified built gameplay image; compilation skipped: ' + candidate, flush=True)
+        return candidate
+    return None
+
+
 def build(state, jobs):
+    cached = built_candidate(state)
+    if cached: return cached
     old = adv.image(state['image']); check_image(old, state)
     runtime = 'forever-trinitycore:before-gameplay-' + old['Id'].split(':')[-1][:12]
     base = 'forever-trinitycore:gameplay-build-base-' + state['core'][:12]
@@ -81,13 +96,9 @@ def configure(before, model, candidate, folder, scaling=True):
 
 
 def wait_module(state, timeout=180):
-    adv.wait_module(state, timeout)
-    item = clean.container(state, 'worldserver')
-    logs = clean.run(['docker', 'logs', '--since', item['State']['StartedAt'], '--tail', '5000', item['Id']], capture=True)
-    if 'ForeverEncyclopedia ready:' not in logs:
-        raise RuntimeError('Encyclopedia schema/catalogue is not ready in the current process')
-    if state['gameplay'].get('scaling') and 'ForeverScaling ready: personal-virtual-v0.2 (enabled=true' not in logs:
-        raise RuntimeError('Personal scaling is not enabled in the current process')
+    patterns = list(adv.READY_PATTERNS) + ['ForeverEncyclopedia ready:']
+    if state['gameplay'].get('scaling'): patterns.append('ForeverScaling ready: personal-virtual-v0.2 (enabled=true')
+    return adv.module_readiness.wait(clean, state, patterns, timeout)
 
 
 def checkpoint(record, phase):
@@ -129,7 +140,7 @@ def rollback(record):
     marker.unlink(missing_ok=True); checkpoint(record, 'rolled-back')
 
 
-def install(root, jobs, scaling=True):
+def install(root, jobs, scaling=True, reuse_built_image=False):
     if any((root / name).exists() for name in (MARKER, adv.MARKER, '.upgrade-in-progress.json')):
         raise ValueError('Recover the interrupted server operation before installing modules')
     before = network.checked(root)
@@ -144,7 +155,7 @@ def install(root, jobs, scaling=True):
     if model.get('name') != before['project'] or world.get('image') != before['image'] or world.get('command') != ['worldserver']:
         raise ValueError('Unexpected owned worldserver configuration')
     clean.wait_world(before, 60)
-    candidate = build(before, jobs)
+    candidate = built_candidate(before, required=True) if reuse_built_image else build(before, jobs)
     if clean.load_state(root / 'state.json') != before or Path(before['compose']).read_text() != model_text:
         raise ValueError('Active installation changed during compilation')
     folder = root / 'advancement' / os.urandom(6).hex()
@@ -179,6 +190,18 @@ def install(root, jobs, scaling=True):
         print('GAMEPLAY ACTIVE: Ascension 1.11.0, Encyclopedia ' + BOOK_VERSION + ', Scaling ' + (SCALING_VERSION if scaling else 'disabled'))
         print('Backup/rollback record: ' + str(folder / 'install.json'))
     except Exception as original:
+        # Preserve candidate evidence before rollback recreates its container.
+        diagnostic = folder / 'startup-diagnostics.json'
+        try:
+            report = adv.module_readiness.snapshot(clean, target, clean.container(target, 'worldserver'), allow_stopped=True)
+            clean.write_private(diagnostic, report)
+            record['diagnostics'] = str(diagnostic)
+            print('Candidate module diagnostics saved: ' + str(diagnostic), flush=True)
+        except Exception as inspection:
+            record['diagnostics_error'] = type(inspection).__name__
+        record['failure'] = network.command_error(before, original)
+        try: checkpoint(record, 'failed-before-rollback')
+        except (OSError, ValueError): pass  # Reporting must never prevent recovery.
         try: rollback(record); checkpoint(record, 'failed-recovered')
         except Exception as recovery:
             raise RuntimeError(network.command_error(before, original) + '\nRecovery failed: ' + network.command_error(before, recovery)
@@ -193,6 +216,7 @@ def main():
     p.add_argument('--root', type=Path, default=Path.home() / 'WoWForEver-clean')
     p.add_argument('--jobs', type=int, choices=range(1, 9), default=2)
     p.add_argument('--scaling', action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument('--reuse-built-image', action='store_true', help='Require the matching cached image; never compile on this retry')
     p.add_argument('--backup', type=Path)
     args = p.parse_args(); os.umask(0o077); root = upgrade.direct(args.root); CURRENT_ROOT = root
     if args.action == 'status':
@@ -204,7 +228,7 @@ def main():
     with lock_path.open('a') as lock:
         try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError: raise ValueError('Another clean-server operation is running')
-        if args.action == 'install': install(root, args.jobs, args.scaling)
+        if args.action == 'install': install(root, args.jobs, args.scaling, args.reuse_built_image)
         elif args.backup: rollback(load_backup(root, args.backup))
         else: p.error('--backup is required for rollback')
 
