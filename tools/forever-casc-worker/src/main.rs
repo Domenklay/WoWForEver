@@ -78,7 +78,7 @@ async fn run(request:Request,cancel:Cancel)->Result<Value>{
    let bad=loose_damage(&prepared,root)?;
    let store=forever_casc_worker::tact::storage::Storage::open(root)?;
    let present:std::collections::HashSet<[u8;9]>=store.files().map(|e|e.key).collect();
-   let missing=prepared.wanted.iter().filter(|e|!present.contains(&e.ekey[..9].try_into().unwrap())).count();
+   let missing=prepared.wanted.iter().filter(|e|!present.contains::<[u8]>(&e.ekey[..9])).count();
    return Ok(json!({"complete":report.is_healthy()&&bad.is_empty()&&missing==0,"build":profile::BUILD,"checked":report.checked,"damaged":report.damaged.len(),"unverifiable":report.unverifiable,"missing":missing,"installFilesDamaged":bad,"directory":root,"gameDir":root.join("_forever_"),"readOnly":true,"runtimeTested":false}));
   }
  }
@@ -115,7 +115,7 @@ async fn main(){
  let mut first=String::new();if io::stdin().read_line(&mut first).is_err()||first.len()>65536{emit(json!({"kind":"error","detail":"Invalid request"}));std::process::exit(1);}
  let request:Request=match serde_json::from_str(&first){Ok(v)=>v,Err(e)=>{emit(json!({"kind":"error","detail":e.to_string()}));std::process::exit(1);}};
  let cancel=Cancel::new();let stop=cancel.clone();
- std::thread::spawn(move||{for line in io::stdin().lock().lines(){match line{Ok(s)if s.trim()=="cancel"=>{stop.cancel();break;},Err(_)=>{stop.cancel();break;},_=>{}}}});
+ std::thread::spawn(move||{for line in io::stdin().lock().lines(){match line{Ok(s)if s.trim()=="cancel"=>{stop.cancel();break;},Err(_)=>{stop.cancel();break;},_=>{}}}stop.cancel();});
  match run(request,cancel).await{Ok(report)=>emit(json!({"kind":"result","report":report})),Err(error)=>{emit(json!({"kind":"error","detail":format!("{error:#}")}));std::process::exit(1);}}
 }
 
