@@ -64,7 +64,7 @@ if (-not $SkipLauncherSettings) {
     }
 }
 
-$ref = 'feature/encyclopedia-tooltip-mana-20261107'
+$ref = 'testing/addons-70658'
 $filename = if ($Stable) { 'forever-encyclopedia.json' } else { 'forever-encyclopedia-test.json' }
 $manifestUrl = "https://raw.githubusercontent.com/Domenklay/WoWForEver/$ref/app/src-tauri/addons/$filename"
 $manifest = Invoke-RestMethod -Uri $manifestUrl -UseBasicParsing
