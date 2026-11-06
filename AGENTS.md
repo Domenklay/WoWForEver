@@ -1,3 +1,17 @@
+Latest crash: user fully downloaded managed E:\WoWForEver-work\clients\70658.
+Read-only native verification: complete=true, checked=1125135, missing=0,
+unverifiable=0, ruRU/highRes=true. Crash_16248 2026-11-06 19:34:36 Moscow is
+actual Wow.exe 70658 from that new root. It records 5 seconds in world, no AddOns
+loaded, no Lua errors, and 64 streaming errors (patch/*.index curl28/404 and bad
+expected CDN index sizes). Do not attribute the crash to Ascension AddOn, declare
+it fixed, reset the server, or demand an 84GiB redownload. Exact AV cause is not
+proven by the symbol-less text dump. Worker uses IN/DL for planning without
+explicitly storing their BLTE copies; existing full verification omits separate
+bootstrap coverage. New audit-managed-bootstrap.py is read-only/no network and
+checks local EN/IN/DL/SIZE/ROOT/VFS CKey reads, with bounded missing diagnostics.
+Await local audit output before changing client metadata or choosing a repair.
+See docs/BOOTSTRAP-AUDIT.ru.md. Client files protected, CA/DBs preserved.
+
 Multi 1.6.0 release verification: Windows run 42233852826 succeeded (56 launcher
 and 220 worker tests), artifact 13511325368 downloaded and ZIP/EXE hashes/public
 CA/GPL source checked. Server checks run 42234269575 on Ubuntu 24.04 succeeded:
