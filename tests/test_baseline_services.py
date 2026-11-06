@@ -145,6 +145,33 @@ class BaselineServiceTests(unittest.TestCase):
             self.assertEqual(t.data,root/'data')
             self.assertEqual(t.ca.stat().st_mode&0o777,0o644)
 
+    def test_mysql_detaches_none_before_joining_only_the_new_private_network(self):
+        with tempfile.TemporaryDirectory() as temp:
+            t=trial.ServicesTrial(manifest(),Path(temp),NONCE)
+            before={'NetworkSettings':{'Networks':{'none':{}}},'HostConfig':{}}
+            after={'NetworkSettings':{'Networks':{t.network:{}}},'HostConfig':{}}
+            with patch.object(t.db,'sql'), patch.object(t.db,'owned',side_effect=[before,after]), \
+                 patch.object(t,'owned',return_value={'Internal':True,'Driver':'bridge'}), \
+                 patch.object(trial.sql,'docker') as docker:
+                t.attach_database()
+                calls=[c.args for c in docker.call_args_list]
+                detach=('network','disconnect','none',t.db.name)
+                attach=('network','connect','--alias','mysql',t.network,t.db.name)
+                self.assertLess(calls.index(detach),calls.index(attach))
+                self.assertNotIn('working-clean',' '.join(str(c) for c in calls))
+
+    def test_network_missing_is_distinguished_from_inspection_permission_failure(self):
+        from types import SimpleNamespace
+        for stderr,missing in [('Error response from daemon: network trial-name not found',True),
+                               ('permission denied',False)]:
+            result=SimpleNamespace(returncode=1,stdout='',stderr=stderr)
+            with patch.object(trial.sql.subprocess,'run',return_value=result):
+                if missing:
+                    self.assertIsNone(trial.sql.docker('network','inspect','trial-name',missing=True))
+                else:
+                    with self.assertRaises(trial.sql.DockerFailure):
+                        trial.sql.docker('network','inspect','trial-name',missing=True)
+
     def test_incomplete_or_wrong_build_manifest_fails_before_start(self):
         for change in ({'client_build':70707},{'images':{}},{'core':'unknown'}):
             with self.subTest(change=change), self.assertRaises(ValueError):

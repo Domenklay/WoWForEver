@@ -207,7 +207,17 @@ class ServicesTrial:
         network = self.owned('network', self.network, 'network')
         if not network.get('Internal') or network.get('Driver') != 'bridge':
             raise ValueError('Trial network is not an internal bridge')
+        database = self.db.owned('container')
+        if set(database.get('NetworkSettings', {}).get('Networks', {})) != {'none'}:
+            raise ValueError('Trial MySQL already has an unexpected network')
+        # Docker refuses adding a bridge alongside its special `none` network.
+        # Detach only our new SQL trial; a failed connect is cleaned up normally.
+        sql.docker('network', 'disconnect', 'none', self.db.name)
         sql.docker('network', 'connect', '--alias', 'mysql', self.network, self.db.name)
+        database = self.db.owned('container')
+        if (set(database.get('NetworkSettings', {}).get('Networks', {})) != {self.network}
+                or database['HostConfig'].get('PortBindings')):
+            raise ValueError('Trial MySQL internal-network isolation check failed')
         for volume in self.volumes:
             sql.docker('volume', 'create', *self.labels('logs'), volume)
 
