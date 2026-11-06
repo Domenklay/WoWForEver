@@ -66,16 +66,20 @@ values, invalid-SQL rejection, cleanup and unchanged-source checks. The actual
 user-side four-database trial also PASSED on source 877b877, including count/schema
 comparison, ten module tables and removal of its trial container/volume. Report:
 `/mnt/e/WoWForEver-work/reports/restore-test-20261107-004340-520b852f5c8f/report.json`.
-Full worldserver/bnetserver/web startup and client login from restored archives
-remain untested; a successful SQL trial does not prove full server recovery.
-The next tool is test-baseline-services.py (guide BASELINE-SERVICES-RESTORE.ru.md):
-private extracted files, saved local image IDs, fresh SQL clone/internal network,
-no host ports/live mounts, current world module evidence and TLS/HTTP probes,
-label-checked cleanup. It does not test client login or archive image loading on
-a blank Docker. Its user-side result is pending. Synthetic fixture integration
+User ALSO confirmed RESTORED SERVICES VERIFIED on source b282fb2 for that fresh
+baseline: restored worldserver, all three module markers, online realm 70/build
+70658, login TCP/TLS with the saved CA, web health/status/public CA and cleanup.
+Report: `/home/Kayter/WoWForEver-restore-trials/forever-services-check-885b9c3e9bc2/report.json`.
+The tool test-baseline-services.py used private extracted files, saved local image
+IDs, a fresh SQL clone/internal network and no host ports/live mounts. All trial
+containers/volumes/network and private extracted files were removed on success.
+Client login into the restored world and image loading on a blank Docker remain
+untested; services startup success is not full end-to-end disaster recovery. Synthetic fixture integration
 CI 42301993948 PASSED on source 464c9313: real MySQL, internal network, generated
 TLS, HTTP, success/failure cleanup and unchanged source; 473 tests, 30 skips.
-These fixtures do not emulate TrinityCore or prove user-side service startup.
+These fixtures do not emulate TrinityCore; the actual private-baseline service
+startup was confirmed separately by the user above. Do not rerun passed backup,
+SQL or service trials without a new change or unresolved concern.
 
 ## Launcher
 
