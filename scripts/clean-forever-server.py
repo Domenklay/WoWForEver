@@ -213,6 +213,10 @@ def model(state, *, published=False):
         world = services['worldserver']
         world['environment'].update(FOREVER_ADVANCEMENT_ENABLED='1', FOREVER_RELEASE_MANAGED='1')
         world['volumes'] = [item for item in world['volumes'] if item.get('target') != '/usr/local/bin/forever-clean-entrypoint.py']
+    if state.get('gameplay'):
+        services['worldserver']['environment'].update(FOREVER_ENCYCLOPEDIA_ENABLED='1', FOREVER_RELEASE_MANAGED='1',
+            FOREVER_SCALING_ENABLED='1' if state['gameplay'].get('scaling') else '0',
+            FOREVER_SCALING_DAMAGE_GUARD='1', FOREVER_SCALING_MIN_OFFSET='-9', FOREVER_SCALING_CREATURE_MAX_LEVEL='70')
     if state.get('release'):
         # Database changes run explicitly on the isolated clone, never implicitly
         # through normal starts. Missing clone tables must not trigger fresh setup.
@@ -297,6 +301,11 @@ def wait_world(state, timeout):
         if (labels.get('org.wowforever.core') != state['core'] or labels.get('org.wowforever.advancement') != expected_module
                 or (advancement and labels.get('org.wowforever.advancement.source') != advancement.get('source_sha256'))):
             raise RuntimeError('Unexpected game server image; expected the pinned pristine core without Advancement')
+        gameplay = state.get('gameplay')
+        if gameplay and (labels.get('org.wowforever.gameplay.source') != gameplay['source_sha256']
+                or labels.get('org.wowforever.encyclopedia') != gameplay['encyclopedia']
+                or labels.get('org.wowforever.scaling') != '0.2.0'):
+            raise RuntimeError('Unexpected combined gameplay image identity')
         # A log tail is not a readiness signal: CLI prompts can evict the line,
         # and a previous process's ready message can survive a later restart.
         tcp = compose(state, 'exec', '-T', 'worldserver', 'python3', '-c', WORLD_TCP_PROBE, capture=True).strip()
@@ -596,6 +605,13 @@ def load_state(path):
         or not re.fullmatch('[0-9a-f]{64}', advancement.get('source_sha256', ''))
         or not re.fullmatch(re.escape(str(path.parent.resolve() / 'advancement')) + r'/[0-9a-f]{12}/install.json', advancement.get('backup', ''))):
         raise ValueError('Unsupported Advancement state identity')
+    gameplay = state.get('gameplay')
+    if gameplay and (not advancement or gameplay.get('version') != 1
+        or gameplay.get('encyclopedia') != '0.9.8-v2.1-smartai-abilities'
+        or gameplay.get('scaling') not in (None, '0.2.0')
+        or not re.fullmatch('[0-9a-f]{64}', gameplay.get('source_sha256', ''))
+        or gameplay.get('backup') != advancement['backup']):
+        raise ValueError('Unsupported combined gameplay state identity')
     return state
 
 
@@ -636,6 +652,8 @@ def purge_old(state):
 
 
 def execute(args):
+    if args.action != 'status' and (args.root / '.gameplay-in-progress.json').exists():
+        raise ValueError('Recover with enable-clean-gameplay.py rollback --backup before lifecycle commands')
     if args.action != 'status' and (args.root / '.advancement-in-progress.json').exists():
         raise ValueError('Recover the interrupted module install with enable-clean-advancement.py rollback --backup before lifecycle commands')
     if args.action != 'status' and (args.root / '.upgrade-in-progress.json').exists():
@@ -645,7 +663,7 @@ def execute(args):
     else:
         state = load_state(args.root.resolve(strict=True) / 'state.json')
         if args.action == 'status':
-            identity = 'core + Ascension' if state.get('advancement') else 'pristine core'
+            identity = 'core + Ascension + Encyclopedia' if state.get('gameplay') else ('core + Ascension' if state.get('advancement') else 'pristine core')
             print(f"Phase: {state['phase']}; {identity}: {state['core'][:12]}; EXE: {state['client']['exe_build']}")
             compose(state, '--profile', 'setup', 'ps', '-a')
             compose(state, 'logs', '--tail=70', 'initialize', 'worldserver', 'bnetserver', 'web')

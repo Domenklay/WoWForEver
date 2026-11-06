@@ -1,0 +1,49 @@
+{
+  "format": "forever-addon-v1",
+  "name": "ForeverEncyclopedia",
+  "version": "0.9.8-v2.1-smartai-abilities",
+  "protocol": 1,
+  "sourceCommit": "ed0ce9b9bed2ecd6ff13c36b49700b66ad979b52",
+  "files": [
+    {
+      "name": "ForeverEncyclopedia.toc",
+      "size": 600,
+      "sha256": "202b4fdbdb18d5cee78d8a5671490dd8aae464121953ceaa38c4917e260252bf"
+    },
+    {
+      "name": "ForeverEncyclopediaTalentData.lua",
+      "size": 14806,
+      "sha256": "014914ff90993a5409d75228fdfb403146824022f0efed3ac4a60814cd5b2aaa"
+    },
+    {
+      "name": "ForeverEncyclopediaTalentOverrides.lua",
+      "size": 2663,
+      "sha256": "0475bf94ffb7c1872af9998be31d4d510665d78320183649eb5fd338cf0342b3"
+    },
+    {
+      "name": "ForeverEncyclopediaV21.lua",
+      "size": 35929,
+      "sha256": "c81c6f30178129ed68e1fb32927373ae6edc9aa31f237b5f3180b35f7c1ca3c5"
+    },
+    {
+      "name": "ForeverEncyclopediaAbilities.lua",
+      "size": 10537,
+      "sha256": "db9e0d1aaad0b8fac52e2b632fc5aa1fad67446db5180a5b2932b68d35ab3cd6"
+    },
+    {
+      "name": "ForeverEncyclopediaSafeDock.lua",
+      "size": 13355,
+      "sha256": "4c66b061bc3ba84e7557231b989e3aee4226000872e767567644a15e26623793"
+    },
+    {
+      "name": "ForeverEncyclopediaMovableDock.lua",
+      "size": 8746,
+      "sha256": "e18937020106990e293fa607875d4b2c2440f20766e04b524cef320cb6dd2912"
+    },
+    {
+      "name": "ForeverEncyclopediaGuard.lua",
+      "size": 2434,
+      "sha256": "0a42e2ae73e0cd7f8955d959f4cac1ef706ef0076edf1fe79854baf9be52ef85"
+    }
+  ]
+}

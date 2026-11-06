@@ -50,6 +50,9 @@ def configuration(kind, environment):
         settings.update({'ForeverAdvancement.Enable': '1', 'ForeverAdvancement.MaxAbilities': '8',
                          'ForeverAdvancement.MaxTalentEssence': '71', 'Logger.scripts': '3,Console Server',
                          'Updates.EnableDatabases': '0', 'Updates.AutoSetup': '0'})
+    if kind == 'worldserver' and environment.get('FOREVER_ENCYCLOPEDIA_ENABLED') == '1':
+        settings.update({'ForeverEncyclopedia.Enable': '1', 'Logger.scripts': '3,Console Server',
+                         'Updates.EnableDatabases': '0', 'Updates.AutoSetup': '0'})
     return settings
 
 

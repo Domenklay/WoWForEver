@@ -165,6 +165,8 @@ def rollback(record):
 
 
 def install(root, jobs):
+    if (root / '.gameplay-in-progress.json').exists():
+        raise ValueError('Recover the interrupted gameplay install with enable-clean-gameplay.py first')
     if (root / MARKER).exists():
         raise ValueError('An interrupted Advancement install needs rollback; see ' + str(root / MARKER))
     before = network.checked(root)

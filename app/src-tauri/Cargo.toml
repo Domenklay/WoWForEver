@@ -1,6 +1,6 @@
 [package]
 name = "forever-launcher"
-version = "1.6.1"
+version = "1.7.0"
 description = "WoW Forever Multi - wowf and legacy beta clients"
 edition = "2021"
 publish = false

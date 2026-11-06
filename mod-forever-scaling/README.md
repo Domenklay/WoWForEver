@@ -1,5 +1,9 @@
 # WoW Forever Scaling v0.2.0
 
+The current ready 70658 server uses `scripts/enable-clean-gameplay.py` and the
+pinned b4e7b940593f core: see [combined installation](../docs/GAMEPLAY-70658.ru.md).
+The legacy installer below manages a different Compose project.
+
 Status: personal virtual-scaling integration candidate for the pinned TrinityCore Forever revision `91d49b230f89c3ab4719f5b2b2d1e70ed36613c4`. Policy tests pass; the server Docker build is the authoritative compile test for the pinned fork.
 
 ## Scope

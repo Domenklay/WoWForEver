@@ -1,3 +1,18 @@
+New active request: user confirms previous client launched without lag; wants our
+multiclass, companion book and autolevel on the ready server/client. This does NOT
+prove 1.6.1 repair was run or cured the crash. Imported living-encyclopedia
+ed0ce9b9bed2ecd6ff13c36b49700b66ad979b52 and scaling
+8661b88f65126e17f9208628a06b01b1ae76eeba (existing modules, do not replace core).
+Combined 70658 source compilation run 42261967654 SUCCEEDED on all 12 units;
+standalone book/scaling rules and 405 Python tests passed at source-import stage.
+Prepare enable-clean-gameplay.py for ready pristine OR already-Ascension state,
+keeping DBs, data, bnet/web, TLS and 70658. Multi 1.7.0 installs both pinned AddOns.
+User was asked whether autolevel means Forever Scaling and for filtered state;
+no response yet. Default package uses Scaling; --no-scaling is supported.
+RuntimeV5 companion uses standard template 1933, not a verified flying-book
+DisplayID. No cloud deployment to user PC or real gameplay test of modules yet.
+See docs/GAMEPLAY-70658.ru.md. Do not run legacy install-dev/Compose installers.
+
 Multi 1.6.1 VERIFIED build: source c4489d44ce983d103a6c02a19da489f62d01f98a;
 Windows run 42258301007 SUCCESS, artifact 13523878465 (9136636 bytes).
 ZIP SHA256 9221a55013d27ff7f88452811ab30d6af1670f84590841a8243f35447013776f.
