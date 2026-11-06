@@ -9,7 +9,8 @@ COPY docker/patches/0004-forever-subclass-server-addon-endpoint.patch /tmp/advan
 RUN git -C /src/TrinityCore apply /tmp/advancement-endpoint.patch \
     && python3 /tmp/inject-advancement.py /src/TrinityCore --module /advancement-module
 ARG BUILD_JOBS=2
-RUN cmake --build /src/TrinityCore/build -j "${BUILD_JOBS}" \
+RUN cmake -S /src/TrinityCore -B /src/TrinityCore/build \
+    && cmake --build /src/TrinityCore/build -j "${BUILD_JOBS}" \
     && cmake --install /src/TrinityCore/build
 
 FROM ${CLEAN_RUNTIME_IMAGE} AS runtime
