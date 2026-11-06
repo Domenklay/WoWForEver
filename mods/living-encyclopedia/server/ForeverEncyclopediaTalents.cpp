@@ -18,6 +18,7 @@ using ForeverEncyclopedia::Talents::All;
 using ForeverEncyclopedia::Talents::AppearanceThreshold;
 using ForeverEncyclopedia::Talents::Cost;
 using ForeverEncyclopedia::Talents::Find;
+using ForeverEncyclopedia::Talents::Implemented;
 using ForeverEncyclopedia::Talents::KnowledgeManaBonus;
 using ForeverEncyclopedia::Talents::TalentDef;
 
@@ -98,7 +99,7 @@ static uint32 AbilityMask(RankMap const& ranks)
     uint32 mask = 0;
     if (Rank(ranks, "aegis_unlock")) mask |= 1;
     if (Rank(ranks, "mend_unlock")) mask |= 2;
-    if (Rank(ranks, "insight_unlock")) mask |= 4;
+    // Support does not yet have a server-side cast; never advertise it as active.
     return mask;
 }
 
@@ -192,6 +193,12 @@ static void Buy(Player* player, std::string const& key)
     if (!def)
     {
         Error(player, "unknown talent");
+        return;
+    }
+
+    if (!Implemented(key))
+    {
+        Error(player, "talent not implemented");
         return;
     }
 
