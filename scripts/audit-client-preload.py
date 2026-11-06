@@ -34,7 +34,7 @@ def pair(config, name):
     return tuple(bytes.fromhex(value) for value in fields[:2])
 
 
-def install_manifest(body):
+def parse_install_manifest(body):
     """IN v1, big endian sizes and MSB-first tag masks. No unsafe path accepted."""
     if len(body) > 16 * 1024**2 or len(body) < 10 or body[:4] != b'IN\x01\x10':
         raise ValueError('Unsupported or truncated install manifest')
@@ -58,9 +58,9 @@ def install_manifest(body):
     for _ in range(tags_count):
         name = string(); kind = struct.unpack('>H', take(2))[0]
         tags.append((name, kind, take((count + 7) // 8)))
-    known = {name for name, _, _ in tags}
-    if not {'Windows', 'x86_64'} <= known:
-        raise ValueError('Windows/x86_64 tags must be explicitly present')
+    for wanted in ('Windows', 'x86_64'):
+        if sum(name == wanted for name, _, _ in tags) != 1:
+            raise ValueError('Exactly one Windows and x86_64 tag must be explicitly present')
     entries = []
     for index in range(count):
         name = string()
@@ -70,13 +70,32 @@ def install_manifest(body):
             raise ValueError('Unsafe install path')
         ckey = take(16); size = struct.unpack('>I', take(4))[0]
         covers = [(tag, kind) for tag, kind, mask in tags if mask[index // 8] & (0x80 >> (index % 8))]
-        selected = all(not any(k == kind for _, k in covers) or (wanted, kind) in covers
-                       for kind, wanted in ((1, 'Windows'), (2, 'x86_64')))
-        if selected:
-            entries.append(dict(path='/'.join(parts), ckey=ckey.hex(), bytes=size))
+        # Numeric tag categories vary between products. Select by the actual
+        # named masks, rather than assuming Windows=1 and architecture=2.
+        selected = {'Windows', 'x86_64'} <= {tag for tag, _ in covers}
+        entries.append(dict(path='/'.join(parts), ckey=ckey.hex(), bytes=size,
+                            tags=[dict(name=tag, kind=kind) for tag, kind in covers],
+                            selected_windows_x64=selected))
     if position != len(body):
         raise ValueError('Trailing install manifest bytes require review')
-    return entries
+    return dict(tags=[dict(name=name, kind=kind,
+                           entries=sum(bool(mask[i // 8] & (0x80 >> (i % 8))) for i in range(count)))
+                      for name, kind, mask in tags], entries=entries)
+
+
+def install_manifest(body):
+    return [dict(path=e['path'], ckey=e['ckey'], bytes=e['bytes'])
+            for e in parse_install_manifest(body)['entries'] if e['selected_windows_x64']]
+
+
+def manifest_diagnostics(parsed):
+    entries = parsed['entries']
+    candidates = [e for e in entries if e['path'].lower().endswith('.exe') or
+                  e['path'].rsplit('/', 1)[-1].lower() == 'wow_loader.dll']
+    return dict(tags=parsed['tags'], entries=len(entries),
+                windows_x64_entries=sum(e['selected_windows_x64'] for e in entries),
+                executable_candidates=candidates[:64], executable_candidates_total=len(candidates),
+                executable_candidates_truncated=len(candidates) > 64)
 
 
 def open_store(root):
@@ -120,7 +139,7 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707):
     active = [row for row in active if row.get('Product') == 'wowf' and row.get('Active') == '1']
     if len(active) != 1: raise ValueError('Expected one active wowf row')
     before = stamp(root)
-    report = dict(format='wowforever-preload-audit-v1', source=str(root), active_metadata_version=active[0].get('Version'),
+    report = dict(format='wowforever-preload-audit-v1', audit_revision=2, source=str(root), active_metadata_version=active[0].get('Version'),
                   active_build_key=active[0].get('Build Key'), preload_build=expected_build, preload_build_key=build_key,
                   comparison_only=True, activated=False, activation_ready=False,
                   protocol_build_verified=False, full_asset_integrity_verified=False, bootstrap=[])
@@ -129,11 +148,14 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707):
         store = open_store(root)
         print('READ ONLY: validating the target INSTALL manifest...', file=sys.stderr, flush=True)
         install_ckey, install_ekey = pair(config, 'install')
-        entries = install_manifest(store.read(install_ekey, install_ckey))
+        parsed = parse_install_manifest(store.read(install_ekey, install_ckey))
+        report['install_manifest'] = manifest_diagnostics(parsed)
+        entries = [dict(path=e['path'], ckey=e['ckey'], bytes=e['bytes'])
+                   for e in parsed['entries'] if e['selected_windows_x64']]
+        report['windows_install_entries'] = len(entries)
         wanted = [entry for entry in entries if entry['path'].lower() in ('wow.exe', 'wow_loader.dll')]
         if sum(entry['path'].lower() == 'wow.exe' for entry in wanted) != 1 or len(wanted) != len({e['path'].lower() for e in wanted}):
-            raise ValueError('Ambiguous or missing Windows x64 Wow.exe in install manifest')
-        report['windows_install_entries'] = len(entries)
+            raise ValueError('Cannot select one root Windows x64 Wow.exe; see install_manifest tags and executable_candidates. No path or tag substitution was performed.')
         print('READ ONLY: comparing active bootstrap files with the target manifest...', file=sys.stderr, flush=True)
         for entry in wanted:
             current = root / '_forever_' / entry['path']

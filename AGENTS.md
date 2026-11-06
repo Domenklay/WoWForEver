@@ -1,5 +1,13 @@
 # Instructions for AI coding assistants
 
+The user's first local preload audit read INSTALL successfully but failed to
+select a root Windows x64 Wow.exe (bootstrap empty). This is not proof that
+the payload is absent. Audit revision 2 selects named masks without assuming
+numeric tag categories and retains bounded executable/tag diagnostics on
+selection failure. Obtain this output before guessing a filename, product
+directory, architecture or activation procedure. No local 70707 EXE or
+protocol has yet been verified.
+
 Latest 2026-11-06 evidence: Multi settings still point to the v4 copy, with
 127.0.0.1/trinity.actual.battle.net:1119 and build 70658. The earlier requested
 original-install logs showed a Nvord login and cannot diagnose the latest v4

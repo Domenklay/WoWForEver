@@ -24,10 +24,12 @@ storelib = module('preload_fixture_store', 'update-casc-sandbox.py')
 lab = storelib.lab
 
 
-def manifest(entries):
-    mask = bytes([sum(0x80 >> i for i in range(len(entries)))])
+def manifest(entries, tag_kinds=(1, 2)):
+    mask = bytes(sum(0x80 >> (i % 8) for i in range(start, min(start + 8, len(entries))))
+                 for start in range(0, len(entries), 8))
     return (b'IN\x01\x10' + struct.pack('>HI', 2, len(entries)) +
-            b'Windows\0\x00\x01' + mask + b'x86_64\0\x00\x02' + mask +
+            b'Windows\0' + struct.pack('>H', tag_kinds[0]) + mask +
+            b'x86_64\0' + struct.pack('>H', tag_kinds[1]) + mask +
             b''.join(name.encode() + b'\0' + obj['ckey'] + struct.pack('>I', len(obj['content'])) for name, obj in entries))
 
 
@@ -36,7 +38,7 @@ def snapshot(root):
             for p in root.rglob('*') if p.is_file()}
 
 
-def source(directory, resident=True):
+def source(directory, resident=True, names=('Wow.exe', 'wow_loader.dll'), tag_kinds=(1, 2)):
     root = directory / 'owned'
     with patch.object(lab, 'PRODUCT', 'wowf'):
         lab.write_store(root)
@@ -45,7 +47,7 @@ def source(directory, resident=True):
     wow = lab.asset(b'MZ-owned-synthetic-wow-binary')
     loader = lab.asset(b'MZ-owned-synthetic-new-loader')
     encoding = lab.asset(extend_encoding(store.read(old_ek, old_ck), [wow, loader]))
-    install = lab.asset(manifest([('Wow.exe', wow), ('wow_loader.dll', loader)]))
+    install = lab.asset(manifest([(names[0], wow), (names[1], loader)], tag_kinds))
     additions = [encoding, install] + ([wow, loader] if resident else [])
     archive = bytearray((root / 'Data/data/data.000').read_bytes())
     records = {i: list(bucket['records']) for i, bucket in store.buckets.items()}
@@ -124,6 +126,54 @@ class PreloadAuditTests(unittest.TestCase):
         rows = audit.install_manifest(data)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['ckey'], win['ckey'].hex())
+
+    def test_named_platform_and_architecture_masks_ignore_numeric_category_order(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root, key = source(Path(temp), tag_kinds=(2, 1))
+            before = snapshot(root)
+            report = audit.audit(root, key)
+            self.assertEqual(report['status'], 'manifest-verified')
+            self.assertEqual(report['windows_install_entries'], 2)
+            self.assertTrue(all(e['verified_local_preload_copy'] for e in report['bootstrap']))
+            self.assertEqual(report['install_manifest']['tags'][0]['kind'], 2)
+            self.assertEqual(snapshot(root), before)
+
+    def test_missing_exact_wow_preserves_manifest_candidates_without_path_guessing(self):
+        for names in (('_forever_/Wow.exe', '_forever_/wow_loader.dll'),
+                      ('WowB.exe', 'wow_loader.dll'), ('Wow.exe', 'WOW.EXE')):
+            with self.subTest(names=names), tempfile.TemporaryDirectory() as temp:
+                root, key = source(Path(temp), names=names)
+                before = snapshot(root)
+                report = audit.audit(root, key)
+                self.assertEqual(report['status'], 'cannot-complete-local-audit')
+                self.assertIn('executable_candidates', report['detail'])
+                self.assertEqual([e['path'] for e in report['install_manifest']['executable_candidates']], list(names))
+                self.assertEqual(report['install_manifest']['windows_x64_entries'], 2)
+                self.assertEqual(report['bootstrap'], [])
+                self.assertFalse(report['activation_ready'])
+                self.assertEqual(snapshot(root), before)
+
+    def test_platform_masks_do_not_select_an_untagged_or_other_architecture_exe(self):
+        obj = lab.asset(b'MZ-owned-fixture')
+        data = b'IN\x01\x10' + struct.pack('>HI', 4, 3)
+        data += b'Windows\0\x00\x02\x80OSX\0\x00\x02\x40'
+        data += b'x86_64\0\x00\x01\x40x86\0\x00\x01\x80'
+        data += b''.join(b'Wow.exe\0' + obj['ckey'] + struct.pack('>I', len(obj['content'])) for _ in range(3))
+        parsed = audit.parse_install_manifest(data)
+        self.assertEqual(audit.install_manifest(data), [])
+        candidates = audit.manifest_diagnostics(parsed)['executable_candidates']
+        self.assertEqual(len(candidates), 3)
+        self.assertFalse(any(e['selected_windows_x64'] for e in candidates))
+        self.assertEqual(candidates[2]['tags'], [])
+
+    def test_candidate_diagnostics_are_bounded_but_include_total(self):
+        obj = lab.asset(b'MZ-owned-fixture')
+        parsed = audit.parse_install_manifest(manifest([(f'Bin{i}.exe', obj) for i in range(70)]))
+        details = audit.manifest_diagnostics(parsed)
+        self.assertEqual(details['executable_candidates_total'], 70)
+        self.assertEqual(len(details['executable_candidates']), 64)
+        self.assertTrue(details['executable_candidates_truncated'])
+        self.assertEqual(details['windows_x64_entries'], 70)
 
 
 if __name__ == '__main__': unittest.main()
