@@ -4,11 +4,23 @@
 проверку его целостности. Следующий отдельный тест проверяет импорт SQL, структуру
 и данные на контрольном MySQL, не заменяя рабочий сервер.
 
-Из актуального checkout инструментов в Ubuntu/WSL:
+Проверен на настоящем MySQL в [CI 42295336273](https://github.com/Domenklay/WoWForEver/actions/runs/42295336273):
+восстановление созданных тестовых четырёх баз, данных модулей и представления,
+отказ на ошибочном SQL, очистка и сохранность источника. Это не результат прогона
+на приватной копии пользователя — он ещё ожидается.
+
+Полный запуск в Ubuntu/WSL на ПК пользователя:
 
 ```bash
-python3 scripts/test-baseline-restore.py \
+(
+set -euo pipefail
+cd "$HOME/WoWForEver"
+git fetch origin codex/native-cdn-70658-20261106
+restore_tools=$(mktemp -d "$HOME/WoWForEver-restore-tools.XXXXXX")
+git worktree add --detach "$restore_tools" FETCH_HEAD
+python3 "$restore_tools/scripts/test-baseline-restore.py" \
   --backup /mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543
+)
 ```
 
 Инструмент:
