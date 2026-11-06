@@ -1,3 +1,17 @@
+Latest user explicitly authorizes restoring the existing multiclass system on
+ready 70658 and automatic missing-AddOn installation before play, while the native
+client download continues. This supersedes the earlier no-gameplay clean baseline
+only for Forever Ascension. Use enable-clean-advancement.py (not legacy Compose
+advancement-mod.sh). It builds a separate same-core image, privately backs up
+four DBs, adds owned module schema/bindings and replaces only worldserver. It
+preserves existing DB volumes, resource mounts, bnet, CA and client build. Rollback
+restores owned bindings/image/config and retains new progress tables. Multi 1.6
+installs the pinned seven-file AddOn before spawn, verifies sizes/SHA-256, backs
+up a replaced folder, leaves all other AddOns and CASC unchanged. Keep the running
+1.5.1 download until complete; the new build uses the same managed-root format.
+No deployment to the user's PC has been performed from this cloud workspace.
+See docs/ASCENSION-70658.ru.md and actual CI results before claiming compatibility.
+
 Latest user failure: native-1793971600150914800.json confirms insufficient disk
 space before game payload transfer (84.6 GiB selected). Multi 1.5.1 reports
 required/free/missing bytes and destination, reserves loose INSTALL output too,

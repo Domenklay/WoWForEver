@@ -169,6 +169,8 @@ def main():
             except BlockingIOError: raise ValueError('Another clean-server operation is running')
             # Revalidate while holding the lifecycle lock.
             state = checked(args.root)
+            if (Path(state['root']) / '.advancement-in-progress.json').exists():
+                raise ValueError('Recover the interrupted Advancement installation before network changes')
             try: report = repair(state)
             except clean.CommandFailure as error: raise RuntimeError(command_error(state, error)) from error
     print(json.dumps(report, ensure_ascii=False, indent=2))

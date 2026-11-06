@@ -1,0 +1,40 @@
+name: Ascension on pinned 70658
+on:
+  push:
+    branches: [codex/native-cdn-70658-20261106]
+    paths: [mods/forever-advancement/**, scripts/enable-clean-advancement.py, scripts/inject-advancement.py, scripts/check-advancement-core.py, scripts/clean-forever-server.py, docker/advancement/**, docker/clean/entrypoint.py, tests/test_clean_advancement.py, .github/workflows/ascension-70658.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -q
+  pinned-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install compiler and core dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cmake g++ libboost-all-dev libmysqlclient-dev libssl-dev libbz2-dev libreadline-dev libncurses-dev
+      - name: Fetch pinned source without SQL payloads
+        run: |
+          git init "$RUNNER_TEMP/core"
+          git -C "$RUNNER_TEMP/core" remote add origin https://github.com/advocaite/TrinityCore.git
+          git -C "$RUNNER_TEMP/core" sparse-checkout init --cone
+          git -C "$RUNNER_TEMP/core" sparse-checkout set src dep cmake
+          git -C "$RUNNER_TEMP/core" -c protocol.version=2 fetch --depth 1 --filter=blob:none origin b4e7b940593f6402a822d4fbcdf31331d16f73b6
+          git -C "$RUNNER_TEMP/core" checkout --detach FETCH_HEAD
+      - name: Inject reviewed module and self-whisper endpoint
+        run: |
+          git -C "$RUNNER_TEMP/core" apply "$GITHUB_WORKSPACE/docker/patches/0004-forever-subclass-server-addon-endpoint.patch"
+          python3 scripts/inject-advancement.py "$RUNNER_TEMP/core"
+          python3 scripts/inject-advancement.py "$RUNNER_TEMP/core"
+      - name: Generate real core compile commands
+        run: cmake -S "$RUNNER_TEMP/core" -B "$RUNNER_TEMP/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DTOOLS=0 -DSERVERS=1 -DUSE_COREPCH=0 -DUSE_SCRIPTPCH=0 -DWITH_WARNINGS=0
+      - name: Compile adapter and modified core units
+        run: python3 scripts/check-advancement-core.py --build "$RUNNER_TEMP/build"

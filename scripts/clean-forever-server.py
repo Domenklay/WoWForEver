@@ -209,6 +209,10 @@ def model(state, *, published=False):
         services['worldserver']['ports'] = ['127.0.0.1:8085:8085']
         services['bnetserver']['ports'] = ['127.0.0.1:1119:1119', '127.0.0.1:8081:8081']
         services['web']['ports'] = ['127.0.0.1:8088:8000']
+    if state.get('advancement'):
+        world = services['worldserver']
+        world['environment'].update(FOREVER_ADVANCEMENT_ENABLED='1', FOREVER_RELEASE_MANAGED='1')
+        world['volumes'] = [item for item in world['volumes'] if item.get('target') != '/usr/local/bin/forever-clean-entrypoint.py']
     if state.get('release'):
         # Database changes run explicitly on the isolated clone, never implicitly
         # through normal starts. Missing clone tables must not trigger fresh setup.
@@ -288,7 +292,10 @@ def wait_world(state, timeout):
         if not item or not item['State']['Running']:
             raise RuntimeError('Clean worldserver stopped; inspect status')
         labels = item['Config'].get('Labels', {})
-        if labels.get('org.wowforever.core') != state['core'] or labels.get('org.wowforever.advancement') != 'none':
+        advancement = state.get('advancement', {})
+        expected_module = advancement.get('version', 'none')
+        if (labels.get('org.wowforever.core') != state['core'] or labels.get('org.wowforever.advancement') != expected_module
+                or (advancement and labels.get('org.wowforever.advancement.source') != advancement.get('source_sha256'))):
             raise RuntimeError('Unexpected game server image; expected the pinned pristine core without Advancement')
         # A log tail is not a readiness signal: CLI prompts can evict the line,
         # and a previous process's ready message can survive a later restart.
@@ -299,7 +306,7 @@ def wait_world(state, timeout):
             if len(realm) != 4 or realm[:3] != expected:
                 raise RuntimeError('The running clean server did not retain one realm with the actual client build')
             if not int(realm[3]) & 2:  # REALM_FLAG_OFFLINE is cleared after StartNetwork succeeds.
-                print('Pristine worldserver ready: TCP 8085 and online realm 70 / build ' + expected[1] + ' verified.', flush=True)
+                print(('Advancement' if advancement else 'Pristine') + ' worldserver ready: TCP 8085 and online realm 70 / build ' + expected[1] + ' verified.', flush=True)
                 return
             reason = 'realm is still marked offline'
         else:
@@ -584,6 +591,11 @@ def load_state(path):
         raise ValueError('Clean state identity mismatch')
     if Path(state['compose']) != path.parent.resolve() / 'compose.private.json':
         raise ValueError('Unexpected Compose path')
+    advancement = state.get('advancement')
+    if advancement and (advancement.get('version') != '1.11.0' or advancement.get('protocol') != 3
+        or not re.fullmatch('[0-9a-f]{64}', advancement.get('source_sha256', ''))
+        or not re.fullmatch(re.escape(str(path.parent.resolve() / 'advancement')) + r'/[0-9a-f]{12}/install.json', advancement.get('backup', ''))):
+        raise ValueError('Unsupported Advancement state identity')
     return state
 
 
@@ -624,6 +636,8 @@ def purge_old(state):
 
 
 def execute(args):
+    if args.action != 'status' and (args.root / '.advancement-in-progress.json').exists():
+        raise ValueError('Recover the interrupted module install with enable-clean-advancement.py rollback --backup before lifecycle commands')
     if args.action != 'status' and (args.root / '.upgrade-in-progress.json').exists():
         raise ValueError('An upgrade was interrupted or is in progress. Use upgrade-forever-server.py rollback --plan before lifecycle commands')
     if args.action == 'install':
@@ -631,7 +645,8 @@ def execute(args):
     else:
         state = load_state(args.root.resolve(strict=True) / 'state.json')
         if args.action == 'status':
-            print(f"Phase: {state['phase']}; pristine core: {state['core'][:12]}; EXE: {state['client']['exe_build']}")
+            identity = 'core + Ascension' if state.get('advancement') else 'pristine core'
+            print(f"Phase: {state['phase']}; {identity}: {state['core'][:12]}; EXE: {state['client']['exe_build']}")
             compose(state, '--profile', 'setup', 'ps', '-a')
             compose(state, 'logs', '--tail=70', 'initialize', 'worldserver', 'bnetserver', 'web')
         elif args.action == 'purge-old':

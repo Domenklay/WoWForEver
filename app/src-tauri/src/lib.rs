@@ -1,4 +1,5 @@
 mod api;
+mod addon;
 mod config;
 mod packages;
 mod client;
@@ -341,6 +342,7 @@ async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
     };
 
     emit(app, "step", t("step_preparing"));
+    addon::ensure(std::path::Path::new(&settings.game_dir), |message| emit(app, "log", message)).await?;
     let s = settings.clone();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         game::write_wtf(&s)?;

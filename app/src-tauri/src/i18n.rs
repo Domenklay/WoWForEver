@@ -56,6 +56,12 @@ type Texts = [&'static str; 4];
 
 #[rustfmt::skip]
 const MESSAGES: &[(&str, Texts)] = &[
+    ("addon_checking", ["Vérification de Forever Ascension…", "Checking Forever Ascension…", "Comprobando Forever Ascension…", "Verificando Forever Ascension…"]),
+    ("addon_ready", ["Forever Ascension est installé et vérifié.", "Forever Ascension is installed and verified.", "Forever Ascension instalado y verificado.", "Forever Ascension instalado e verificado."]),
+    ("addon_downloading", ["Téléchargement de Forever Ascension : {}", "Downloading Forever Ascension: {}", "Descargando Forever Ascension: {}", "Baixando Forever Ascension: {}"]),
+    ("addon_backup", ["Ancien addon sauvegardé : {}", "Previous AddOn backed up: {}", "Copia del addon anterior: {}", "Backup do addon anterior: {}"]),
+    ("addon_failed", ["Installation de Forever Ascension impossible : {}", "Could not install Forever Ascension: {}", "No se pudo instalar Forever Ascension: {}", "Não foi possível instalar Forever Ascension: {}"]),
+    ("addon_link", ["Le chemin de l’addon contient un lien.", "The AddOn path contains a link or reparse point.", "La ruta del addon contiene un enlace.", "O caminho do addon contém um link."]),
     ("official_managed_incomplete", ["Le téléchargement géré est incomplet. Reprenez le téléchargement ou la réparation dans Téléchargement du jeu.", "This managed client is incomplete. Resume downloading or repair it in Game downloads.", "Este cliente administrado está incompleto. Continúa la descarga o repáralo en Descarga del juego.", "Este cliente gerenciado está incompleto. Continue o download ou repare em Download do jogo."]),
     ("official_ready", ["La version correspond au profil du serveur. Vous pouvez connecter ce client.", "The version matches the server profile. You can connect this client.", "La versión coincide con el perfil del servidor. Puedes conectar este cliente.", "A versão corresponde ao perfil do servidor. Você pode conectar este cliente."]),
     ("official_unknown_version", ["Impossible de lire FileVersion dans l’EXE. Terminez l’installation dans le launcher source.", "Could not read the EXE FileVersion. Finish installation in the source launcher.", "No se pudo leer FileVersion del EXE. Termina la instalación en el launcher de origen.", "Não foi possível ler FileVersion do EXE. Conclua a instalação no launcher de origem."]),
@@ -164,6 +170,12 @@ const MESSAGES: &[(&str, Texts)] = &[
 
 #[rustfmt::skip]
 const RUSSIAN: &[(&str,&str)] = &[
+    ("addon_checking", "Проверяем аддон Forever Ascension…"),
+    ("addon_ready", "Аддон Forever Ascension установлен и проверен."),
+    ("addon_downloading", "Скачиваем Forever Ascension: {}"),
+    ("addon_backup", "Резервная копия прежнего аддона: {}"),
+    ("addon_failed", "Не удалось установить Forever Ascension: {}"),
+    ("addon_link", "Папка аддона содержит ссылку или точку перенаправления."),
     ("official_managed_incomplete", "Загрузка управляемого клиента не завершена. Продолжите скачивание или восстановление в разделе «Загрузка игры»."),
     ("official_ready", "Версия совпадает с профилем сервера. Можно подключать клиент."),
     ("official_unknown_version", "Не удалось прочитать FileVersion EXE. Завершите установку в исходном лаунчере."),

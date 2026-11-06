@@ -46,6 +46,10 @@ def configuration(kind, environment):
                          'Logger.sql.sql': '5,DBErrors'})
     if environment.get('FOREVER_RELEASE_MANAGED') == '1':
         settings.update({'Updates.EnableDatabases': '0', 'Updates.AutoSetup': '0'})
+    if kind == 'worldserver' and environment.get('FOREVER_ADVANCEMENT_ENABLED') == '1':
+        settings.update({'ForeverAdvancement.Enable': '1', 'ForeverAdvancement.MaxAbilities': '8',
+                         'ForeverAdvancement.MaxTalentEssence': '71', 'Logger.scripts': '3,Console Server',
+                         'Updates.EnableDatabases': '0', 'Updates.AutoSetup': '0'})
     return settings
 
 
