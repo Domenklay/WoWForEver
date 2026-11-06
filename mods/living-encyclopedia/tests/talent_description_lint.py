@@ -96,8 +96,13 @@ for item in manifest["files"]:
     assert len(body) == item["size"], item["name"]
     assert hashlib.sha256(body).hexdigest() == item["sha256"], item["name"]
 addon = (repo / "app/src-tauri/src/addon.rs").read_text(encoding="utf-8")
-assert f'"{toc_version}"' in addon and f'"{stable["version"]}"' in addon
-assert "forever-encyclopedia-test.json" in addon
+assert "TEST_CATALOG_URL" in addon and "fetch_testing_catalog" in addon
+testing = json.loads((repo / "app/src-tauri/addons/testing-catalog.json").read_text(encoding="utf-8"))
+assert testing["channel"] == "testing"
+assert {item["manifest"]["name"] for item in testing["addons"]} >= {"ForeverAscension", "ForeverEncyclopedia"}
+book = next(item["manifest"] for item in testing["addons"] if item["manifest"]["name"] == "ForeverEncyclopedia")
+assert book["version"] == toc_version
+assert book["sourceCommit"] == manifest["sourceCommit"]
 assert f"BOOK_VERSION = '{toc_version}'" in (repo / "scripts/enable-clean-gameplay.py").read_text(encoding="utf-8")
 
 print(f"Encyclopedia tooltip/server policy synced: {len(server_rows)} talents, "
