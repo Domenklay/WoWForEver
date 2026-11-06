@@ -55,7 +55,7 @@ def docker(*args, data=None, missing=False):
     result = subprocess.run(['docker', *args], input=data, text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode:
-        if missing and re.search(r'no such (container|volume)', result.stderr, re.I):
+        if missing and re.search(r'no such (container|volume|network)', result.stderr, re.I):
             return None
         # Docker output can contain env/config values. Only report the operation.
         raise DockerFailure('Docker ' + ' '.join(args[:2]) + f' failed (exit {result.returncode})')

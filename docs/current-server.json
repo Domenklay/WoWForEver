@@ -181,7 +181,10 @@
     "created_with_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
     "database_restore_user_report_wsl": "/mnt/e/WoWForEver-work/reports/restore-test-20261107-004340-520b852f5c8f/report.json",
     "database_restore_user_source_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
-    "database_restore_trial_cleanup_verified": true
+    "database_restore_trial_cleanup_verified": true,
+    "services_restore_trial_prepared": true,
+    "services_restore_user_verified": false,
+    "services_restore_guide": "docs/BASELINE-SERVICES-RESTORE.ru.md"
   },
   "checks": {
     "launcher_windows": 61,

@@ -2,7 +2,7 @@ name: Server baseline backup
 on:
   push:
     branches: [codex/native-cdn-70658-20261106]
-    paths: [scripts/backup-clean-baseline.py, scripts/docker_archive_identity.py, scripts/test-baseline-restore.py, tests/test_baseline_backup.py, tests/test_docker_archive_identity.py, tests/test_baseline_restore.py, tests/test_baseline_restore_integration.py, .github/workflows/baseline-backup.yml]
+    paths: [scripts/backup-clean-baseline.py, scripts/docker_archive_identity.py, scripts/test-baseline-restore.py, scripts/test-baseline-services.py, tests/test_baseline_backup.py, tests/test_docker_archive_identity.py, tests/test_baseline_restore.py, tests/test_baseline_restore_integration.py, tests/test_baseline_services.py, tests/test_baseline_services_integration.py, .github/workflows/baseline-backup.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,3 +24,16 @@ jobs:
         env:
           FOREVER_RESTORE_INTEGRATION: '1'
         run: python3 -m unittest discover -s tests -p test_baseline_restore_integration.py -v
+  restored-service-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch official MySQL and Python test images
+        run: |
+          docker pull mysql:8.0
+          docker pull python:3.12-slim
+      - name: Test restored files, private service network, TLS, SQL and failure cleanup
+        env:
+          FOREVER_SERVICES_INTEGRATION: '1'
+        run: python3 -m unittest discover -s tests -p test_baseline_services_integration.py -v

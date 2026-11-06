@@ -68,6 +68,11 @@ comparison, ten module tables and removal of its trial container/volume. Report:
 `/mnt/e/WoWForEver-work/reports/restore-test-20261107-004340-520b852f5c8f/report.json`.
 Full worldserver/bnetserver/web startup and client login from restored archives
 remain untested; a successful SQL trial does not prove full server recovery.
+The next tool is test-baseline-services.py (guide BASELINE-SERVICES-RESTORE.ru.md):
+private extracted files, saved local image IDs, fresh SQL clone/internal network,
+no host ports/live mounts, current world module evidence and TLS/HTTP probes,
+label-checked cleanup. It does not test client login or archive image loading on
+a blank Docker. Its user-side result is pending; synthetic fixture CI is separate.
 
 ## Launcher
 
