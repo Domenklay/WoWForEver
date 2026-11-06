@@ -34,7 +34,7 @@ Forever Encyclopedia и Forever Scaling 0.2.0. Для нового
 закройте WoW и лаунчер, затем выполните в PowerShell:
 
 ```powershell
-$p="$env:TEMP\update-test-addons.ps1"; Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/Domenklay/WoWForEver/feature/encyclopedia-tooltip-mana-20261107/scripts/update-test-addons.ps1" -OutFile $p -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p -GameDirectory "E:\WoWForEver-work\clients\70658\_forever_"
+$p="$env:TEMP\update-test-addons.ps1"; Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/Domenklay/WoWForEver/testing/addons-70658/scripts/update-test-addons.ps1" -OutFile $p -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p -GameDirectory "E:\WoWForEver-work\clients\70658\_forever_"
 ```
 
 Для возврата к стабильной ветке используйте тот же скрипт с `-Stable`.
