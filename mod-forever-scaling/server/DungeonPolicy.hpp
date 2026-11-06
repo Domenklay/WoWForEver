@@ -65,7 +65,14 @@ public:
         // Preserve at least one point for positive HP/damage, never exceed
         // the unscaled value, and avoid float -> uint64_t overflow.
         double safe = std::isfinite(multiplier) ? std::clamp(multiplier, 0.0, 1.0) : 1.0;
-        long double scaled = std::ceil(static_cast<long double>(original) * safe);
+        long double product = static_cast<long double>(original) * safe;
+        // Double interpolation can make exact integer results slightly larger
+        // (e.g. 1000 * 0.4 becomes 400.00000000000002).
+        // Snap only machine-precision noise; keep genuine fractions rounded up.
+        long double nearest = std::round(product);
+        long double tolerance = 4.0L * std::numeric_limits<double>::epsilon() *
+            std::max(1.0L, std::abs(product));
+        long double scaled = std::ceil(std::abs(product - nearest) <= tolerance ? nearest : product);
         if (scaled >= static_cast<long double>(std::numeric_limits<std::uint64_t>::max()))
             return original;
         return std::min(original, std::max<std::uint64_t>(1, static_cast<std::uint64_t>(scaled)));
