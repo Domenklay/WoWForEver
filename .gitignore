@@ -10,3 +10,7 @@ overrides/*.conf
 backups/
 __pycache__/
 *.pyc
+app/src-tauri/binaries/*.exe
+app/src-tauri/binaries/*.zip
+app/src-tauri/binaries/worker-LICENSE.txt
+tools/forever-casc-worker/target/

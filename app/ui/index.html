@@ -26,7 +26,7 @@
   </aside>
   <header class="topbar">
     <div class="workspace-label"><span class="tiny-orbit" aria-hidden="true">✧</span><span data-i18n="wWorkspace">THE ASTRAL WORKSHOP</span><span class="workspace-divider">/</span><span id="page-name" data-i18n="wHome">Sanctuary</span></div>
-    <div class="top-actions"><div class="account" id="account" hidden><div class="avatar" id="avatar">?</div><div class="account-text"><strong id="account-email"></strong><span class="online" data-i18n="connected">Logged in</span></div><button class="btn ghost small" id="logout" data-i18n="logout">Log out</button></div><span class="edition-label">MULTI <b>1.2</b></span></div>
+    <div class="top-actions"><div class="account" id="account" hidden><div class="avatar" id="avatar">?</div><div class="account-text"><strong id="account-email"></strong><span class="online" data-i18n="connected">Logged in</span></div><button class="btn ghost small" id="logout" data-i18n="logout">Log out</button></div><span class="edition-label">MULTI <b>1.5</b></span></div>
   </header>
   <div class="banner" id="setup-notice" hidden><div><strong data-i18n="setupNeeded">PC setup needed</strong><p id="setup-detail"></p></div><button class="btn light" id="setup-fix" data-i18n="setupFix">Set up</button></div>
   <main class="stage">
@@ -64,6 +64,21 @@
         <div class="workshop-buttons"><button class="btn primary" id="w-download"><span class="sprite download" aria-hidden="true"></span><span data-i18n="wInstall">Install / download</span></button><button class="btn" id="w-verify"><span class="sprite shield" aria-hidden="true"></span><span data-i18n="wVerify">Verify files</span></button><button class="btn" id="w-repair"><span class="sprite wrench" aria-hidden="true"></span><span data-i18n="wRepair">Restore files</span></button></div>
         <p class="small muted" data-i18n="wScope">Checks cover installation files against the selected baseline. Your settings, addons and extra files are kept.</p>
       </section><aside class="workshop-status panel" id="w-status-panel"><span class="label" data-i18n="wActivity">ACTIVITY</span><span class="sprite compass status-emblem" aria-hidden="true"></span><h2 id="w-status-title" data-i18n="wReady">Ready when you are.</h2><p id="w-status" class="muted" aria-live="polite" data-i18n="wReadyHint">Choose a source, then verify your copy. No server login is needed.</p><progress id="w-progress" data-i18n-title="wActivity" max="100" value="0" aria-label="File operation progress"></progress><div class="transfer-stats"><span id="w-count">—</span><span id="w-speed"></span></div><code id="w-current"></code><button class="btn small" id="w-cancel" data-i18n="wCancel" disabled>Pause operation</button><button class="btn small" id="w-recover" data-i18n="wRecover" hidden>Recover interrupted operation</button><button class="btn ghost small" id="w-copy-report" data-i18n="wCopyReport" hidden>Copy report path</button><details id="w-report" hidden><summary data-i18n="wDetails">File details</summary><pre id="w-report-text"></pre></details></aside></div>
+    </section>
+    <section id="native-page" class="workshop-page" hidden>
+      <header class="workshop-heading"><div><p class="eyebrow">FOREVER · 1.60.1.70658</p><h1 data-i18n="nTitle">Game downloads</h1><p class="muted" data-i18n="nIntro">Download the complete selected client from Nvord CDN sources.</p></div><span class="sprite download large" aria-hidden="true"></span></header>
+      <div class="workshop-grid"><section class="panel workshop-config">
+        <label><span data-i18n="nFolder">New managed installation folder</span><span class="row"><input id="n-dir" type="text" spellcheck="false" placeholder="E:\WoWForEver-work\clients\70658"><button id="n-pick" class="btn small" data-i18n="browse">Browse</button></span></label>
+        <p class="small muted" data-i18n="nFolderHint">Choose a new empty folder. Original installations and previous copies are protected.</p>
+        <label><span data-i18n="gameLocale">Game language</span><select id="n-locale"><option value="ruRU">Русский</option><option value="enUS">English</option><option value="deDE">Deutsch</option><option value="frFR">Français</option><option value="esES">Español</option><option value="esMX">Español (Latinoamérica)</option><option value="ptBR">Português</option><option value="itIT">Italiano</option><option value="koKR">한국어</option><option value="zhCN">简体中文</option><option value="zhTW">繁體中文</option></select></label>
+        <label class="row"><input id="n-hd" type="checkbox"><span data-i18n="nHD">Download high-resolution models and textures</span></label>
+        <p class="small muted" data-i18n="nScope">Game files: Nvord CDN. Login: your configured server, certificate and public key.</p>
+        <div class="workshop-buttons"><button id="n-download" class="btn primary" data-i18n="nDownload">Download / resume 70658</button><button id="n-verify" class="btn" data-i18n="nVerify">Full verification</button><button id="n-repair" class="btn" data-i18n="nRepair">Repair managed client</button></div>
+      </section><section class="panel workshop-config" aria-live="polite">
+        <h2 id="n-status" data-i18n="nInitial">Ready to download</h2><p id="n-detail" class="small muted"></p><progress id="n-progress" max="100" value="0"></progress><p id="n-count" class="small muted"></p>
+        <div class="workshop-buttons"><button id="n-cancel" class="btn" data-i18n="nStop" disabled>Pause</button><button id="n-connect" class="btn primary" data-i18n="nConnect" disabled>Connect this client</button></div>
+        <pre id="n-report" class="layout-hint"></pre>
+      </section></div>
     </section>
     <section class="log" id="log-box" hidden><div class="log-head"><strong data-i18n="journal">Log</strong><button class="icon-btn" id="close-log" data-i18n-title="close" aria-label="Close">✕</button></div><pre id="log"></pre></section>
     <footer class="app-footer"><span>FOREVER MULTI <i>✧</i> <span data-i18n="wFooter">Crafted for your own adventures.</span></span><span>© 2026 · FM</span></footer>

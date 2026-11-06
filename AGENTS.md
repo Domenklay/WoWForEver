@@ -1,5 +1,15 @@
 # Instructions for AI coding assistants
 
+Multi 1.5 adds a separate managed 70658 CDN installation screen and standalone
+GPL worker, with sources/pins from the supplied Nvord journal and source metadata.
+See docs/NATIVE-CDN.ru.md. Downloads require a NEW empty root or this worker's
+matching ownership marker; never adopt original/v4/staged70707 folders. The
+server/CA/key/session are not passed to the worker. Connecting a completed
+download preserves the server profile and requires actual native EXE version
+matching its clientBuild. Protocol/store worker tests passed on Windows and
+Linux; end-to-end CDN availability and actual game login on the user's PC still
+need testing. Do not claim the character-screen hang fixed from unit tests.
+
 Latest user steering: keep/restore a working 70658 client/server while retaining
 70707 separately, and implement CDN downloading in Multi using the sources in
 Nvord ForeverLauncher 2.0 logs, with our own login address/TLS/key. User status

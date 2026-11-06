@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "resources": [
+      "binaries/forever-casc-worker.exe",
+      "binaries/worker-LICENSE.txt",
+      "binaries/worker-source.zip"
+    ]
+  }
+}

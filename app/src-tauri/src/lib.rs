@@ -2,6 +2,7 @@ mod api;
 mod config;
 mod packages;
 mod client;
+mod native;
 // macOS: only the entropy is used (see macos.rs); the rest is kept for its tests
 #[cfg_attr(target_os = "macos", allow(dead_code))]
 mod dpapi;
@@ -250,6 +251,23 @@ fn cancel_client_work(state: State<AppState>) {
 }
 
 #[tauri::command]
+async fn native_client_work(app:AppHandle,state:State<'_,AppState>,request:native::Request)->Result<serde_json::Value,String>{
+    if state.playing.swap(true,Ordering::SeqCst){return Err(t("already_running").into());}
+    let _guard=PackageGuard(&state.playing);
+    #[cfg(not(target_os="macos"))]
+    if patcher::find_client().is_some(){return Err(t("already_running").into());}
+    #[cfg(not(windows))]
+    {let _=(app,request);return Err("Native CDN downloads currently require Windows".into());}
+    #[cfg(windows)]
+    {
+        use tauri::Manager;
+        let worker=native::worker_path(app.path().resource_dir().ok())?;
+        state.client_cancel.store(false,Ordering::SeqCst);let cancel=state.client_cancel.clone();
+        tokio::task::spawn_blocking(move||native::run(&worker,request,&cancel,|value|{let _=app.emit("native-progress",value);})).await.map_err(|e|e.to_string())?
+    }
+}
+
+#[tauri::command]
 fn inspect_client_locations(game_dir:String,reference_dir:String)->Result<client::Locations,client::Error> {
     client::locations(&game_dir,&reference_dir)
 }
@@ -444,7 +462,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_state, save_settings, set_language, detect_locale, inspect_official_client, login, logout, server_status, news, checks, repair, play,
             content_catalog, content_status, inspect_content, install_content, rollback_content
-            , client_work, cancel_client_work, inspect_client_locations
+            , client_work, native_client_work, cancel_client_work, inspect_client_locations
         ])
         .run(tauri::generate_context!())
         .expect("error while running Forever Launcher");

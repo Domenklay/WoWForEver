@@ -8,6 +8,8 @@ let draft = null;      // settings being edited in the drawer
 let toastTimer = 0;
 let contentBusy = false;
 let workshopBusy = false;
+let nativeBusy = false;
+let nativeReport = null;
 let workshopReport = null;
 let layoutTimer = 0;
 let layoutRequest = 0;
@@ -69,14 +71,14 @@ async function refresh() {
 function updatePlayButton() {
   const play = $('play');
   const incompatible = state.settings.protectClientFiles && state.officialClient && !state.officialClient.ready;
-  play.disabled = contentBusy || state.playing || !state.gameFound || !!incompatible;
+  play.disabled = nativeBusy || contentBusy || state.playing || !state.gameFound || !!incompatible;
   play.classList.toggle('running', state.playing);
   play.textContent = workshopBusy ? t('working') : state.playing ? t('inGame') : t('play');
   updateContentActions();
   updateWorkshopActions();
   if (!state.gameFound && !state.playing) setStep(t('chooseGameDir'), 'err');
   else if (incompatible && !state.playing) setStep(officialMessage(state.officialClient), 'err');
-  for (const id of ['quick-download', 'quick-repair']) $(id).hidden = !!state.settings.protectClientFiles;
+  for (const id of ['quick-download', 'quick-repair']) $(id).hidden = false;
 }
 
 async function refreshStatus() {
@@ -305,7 +307,7 @@ function closeSettings() {
 }
 
 function updateContentActions() {
-  const busy = contentBusy || !!state?.playing;
+  const busy = nativeBusy || contentBusy || !!state?.playing;
   const gameDir = $('s-game-dir').value.trim();
   $('content-choose').disabled = busy || !gameDir;
   $('content-install').disabled = busy || !!state?.settings.protectClientFiles || !contentSelection?.preview.ready || contentSelection.gameDir !== gameDir;
@@ -499,9 +501,12 @@ async function refreshNews() {
 function page(name) {
   $('home-page').hidden = name !== 'home';
   $('workshop-page').hidden = name !== 'workshop';
+  $('native-page').hidden = name !== 'downloads';
   $('nav-home').classList.toggle('selected', name === 'home');
   $('nav-workshop').classList.toggle('selected', name === 'workshop');
-  $('page-name').textContent = t(name === 'home' ? 'wHome' : 'wLibrary');
+  $('nav-downloads').classList.toggle('selected', name === 'downloads');
+  $('page-name').textContent = t(name === 'home' ? 'wHome' : name === 'downloads' ? 'nTitle' : 'wLibrary');
+  if (name === 'downloads') fillNative();
   updateWorkshopActions();
 }
 function workshopSource() {
@@ -536,7 +541,7 @@ async function refreshWorkshopLayout() {
   }
 }
 function updateWorkshopActions() {
-  const busy = workshopBusy || contentBusy || !!state?.playing;
+  const busy = nativeBusy || workshopBusy || contentBusy || !!state?.playing;
   for (const id of ['w-download','w-verify','w-repair','w-recover']) $(id).disabled = busy;
   for (const id of ['w-download','w-repair','w-recover']) {
     $(id).hidden = !!state?.settings.protectClientFiles;
@@ -634,9 +639,10 @@ listen('client-progress', ({ payload: p }) => {
 $('nav-home').addEventListener('click', () => page('home'));
 $('brand-home').addEventListener('click', e => { e.preventDefault(); page('home'); });
 $('nav-workshop').addEventListener('click', () => page('workshop'));
-$('nav-downloads').addEventListener('click', () => page('workshop'));
+$('nav-downloads').addEventListener('click', () => page('downloads'));
 $('nav-journal').addEventListener('click', () => { $('log-box').hidden = !$('log-box').hidden; });
-for (const [id, action] of [['quick-download','download'],['quick-verify','verify'],['quick-repair','repair'],['w-download','download'],['w-verify','verify'],['w-repair','repair'],['w-recover','recover']]) $(id).addEventListener('click', () => runWorkshop(action));
+for (const id of ['quick-download','quick-repair']) $(id).addEventListener('click', () => page('downloads'));
+for (const [id, action] of [['quick-verify','verify'],['w-download','download'],['w-verify','verify'],['w-repair','repair'],['w-recover','recover']]) $(id).addEventListener('click', () => runWorkshop(action));
 for (const name of ['target','reference','manifest']) {
   $(`w-${name}`).addEventListener('input', sourceState);
   $(`w-pick-${name}`).addEventListener('click', async () => {
@@ -650,6 +656,70 @@ $('w-copy-report').addEventListener('click', async () => {
   if (!workshopReport) return;
   try { await navigator.clipboard.writeText(workshopReport.reportPath); toast(t('wCopied')); }
   catch { $('w-current').textContent = workshopReport.reportPath; }
+});
+
+// Native content downloads. Authentication stays in the existing server profile.
+function fillNative() {
+  if (nativeBusy || !state) return;
+  if (!$('n-dir').value) $('n-dir').value = state.settings.nativeClientDir || '';
+  if (!$('n-locale').value) $('n-locale').value = state.settings.locale || 'ruRU';
+}
+function nativeWorking(value) {
+  nativeBusy = value;
+  for (const id of ['n-dir','n-pick','n-locale','n-hd','n-download','n-verify','n-repair']) $(id).disabled = value;
+  $('n-cancel').disabled = !value;
+  $('n-connect').disabled = value || !nativeReport?.complete;
+  updatePlayButton();
+}
+async function runNative(action) {
+  if (nativeBusy || workshopBusy || contentBusy || state?.playing) { toast(t('wErr_busy')); return; }
+  const directory = $('n-dir').value.trim();
+  if (!directory) { $('n-status').textContent = t('nNeedFolder'); return; }
+  nativeReport = null; $('n-report').textContent = ''; $('n-status').textContent = t('nMetadata');
+  nativeWorking(true);
+  try {
+    const result = await invoke('native_client_work', { request: { action, directory, locale: $('n-locale').value || 'ruRU', highRes: !!$('n-hd').checked } });
+    nativeReport = result;
+    $('n-status').textContent = t(result.complete ? 'nComplete' : 'nIncomplete');
+    $('n-detail').textContent = (result.reasons || []).join('\n');
+    $('n-report').textContent = t('nReport', { path: result.reportPath || '' });
+    const settings = structuredClone(state.settings); settings.nativeClientDir = directory;
+    await invoke('save_settings', { settings });
+    state.settings.nativeClientDir = directory;
+    if (result.complete) $('n-progress').value = 100;
+    log(t(result.complete ? 'nComplete' : 'nIncomplete'));
+  } catch (error) {
+    $('n-status').textContent = t('nIncomplete'); $('n-detail').textContent = String(error); log(String(error));
+  } finally { nativeWorking(false); }
+}
+$('n-pick').addEventListener('click', async () => {
+  const folder = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: t('nFolder') });
+  if (folder) { $('n-dir').value = folder; nativeReport = null; $('n-connect').disabled = true; }
+});
+$('n-dir').addEventListener('input', () => { nativeReport = null; $('n-connect').disabled = true; });
+for (const action of ['download','verify','repair']) $(`n-${action}`).addEventListener('click', () => runNative(action));
+$('n-cancel').addEventListener('click', async () => {
+  await invoke('cancel_client_work'); $('n-cancel').disabled = true; $('n-status').textContent = t('wPausing');
+});
+listen('native-progress', ({ payload: p }) => {
+  if (!nativeBusy) return;
+  const names = { metadata:'nMetadata', indices:'nIndices', plan:'nPlan', download:'nDownloading', install:'nInstalling', verify:'nVerifying' };
+  $('n-status').textContent = t(names[p.phase] || 'working'); $('n-detail').textContent = p.detail || '';
+  $('n-count').textContent = `${p.done || 0} / ${p.total || 0} · ${bytes(p.bytes || 0)} / ${bytes(p.bytesTotal || 0)}`;
+  if (p.bytesTotal) $('n-progress').value = Math.min(100, p.bytes / p.bytesTotal * 100);
+  else if (p.total) $('n-progress').value = p.done / p.total * 100;
+});
+$('n-connect').addEventListener('click', async () => {
+  if (!nativeReport?.complete || nativeBusy) return;
+  if (state.settings.server.clientBuild !== 70658) { $('n-detail').textContent = t('nServerMismatch'); return; }
+  try {
+    const inspection = await invoke('inspect_official_client', { gameDir: nativeReport.gameDir, serverBuild: state.settings.server.clientBuild });
+    if (!inspection.ready) { $('n-detail').textContent = officialMessage(inspection); return; }
+    const settings = structuredClone(state.settings);
+    settings.gameDir = inspection.gameDir; settings.locale = $('n-locale').value || 'ruRU'; settings.protectClientFiles = true;
+    await invoke('save_settings', { settings });
+    await refresh(); page('home');
+  } catch (error) { $('n-detail').textContent = String(error); }
 });
 
 // ------------------------------------------------------------------------------------------------ background

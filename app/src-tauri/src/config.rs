@@ -93,13 +93,15 @@ pub struct Settings {
     pub workshop: crate::client::Settings,
     /// Official installations stay under Battle.net's file management.
     pub protect_client_files: bool,
+    /// Separate managed CDN installation; never replaces the active/original path.
+    pub native_client_dir: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self { server: Server::default(), game_dir: String::new(), locale: String::new(),
             language: String::new(), linux: LinuxSettings::default(), workshop: crate::client::Settings::default(),
-            protect_client_files: true }
+            protect_client_files: true, native_client_dir: String::new() }
     }
 }
 

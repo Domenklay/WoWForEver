@@ -29,6 +29,7 @@ async function invoke(cmd,args){
   if(cmd==='install_content')return {installed:'Owned zone 1',recoveryNeeded:false,backup:'E:/backup'};
   if(cmd==='rollback_content')return {installed:null,recoveryNeeded:false,backup:null};
   if(cmd==='inspect_client_locations')return {targetRoot:'E:/copy',targetData:'E:/copy/Data',referenceRoot:'E:/original',referenceData:'E:/original/Data'};
+  if(cmd==='native_client_work')return {complete:true,build:70658,gameDir:'E:/managed/_forever_',reportPath:'E:/reports/native.json',checked:20000};
   if(cmd==='client_work') {
     if(args.request.source.manifestSource==='bad.json')throw {code:'manifest',detail:'unsupported format'};
     if(workshopReply==='extras' || workshopReply==='quarantined')return {action:workshopReply==='extras'?'verify':'repair',sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:1661,verified:1661,different:18,resourceDifferent:0,storageDifferent:18,remaining:workshopReply==='extras'?18:0,repaired:workshopReply==='extras'?0:18,quarantined:workshopReply==='extras'?0:18,extraStorageFiles:Array.from({length:18},(_,i)=>`Data/data/extra-${i}.idx`),bytes:400,differences:['Data/data/RepairMarker.psv'],reportPath:'E:/reports/client.json',backup:workshopReply==='extras'?null:'E:/copy/.forever-multi/operations/test'};
@@ -120,7 +121,7 @@ vm.runInContext(fs.readFileSync(path.join(root,'app/ui/app.js'),'utf8'),context)
   assert.equal(connected.gameDir,officialReply.gameDir);
   assert.equal(connected.server.address,'127.0.0.1');
   assert.equal(get('w-repair').disabled,true); assert.equal(get('w-download').disabled,true);
-  assert.equal(get('quick-repair').hidden,true);
+  assert.equal(get('quick-repair').hidden,false,'separate managed-client downloads remain available');
   const writesBefore=calls.filter(c=>['client_work','install_content','rollback_content'].includes(c.cmd)).length;
   await get('w-repair').handlers.click(); await get('w-download').handlers.click();
   await get('w-recover').handlers.click(); await get('content-install').handlers.click(); await get('content-rollback').handlers.click();
@@ -129,5 +130,29 @@ vm.runInContext(fs.readFileSync(path.join(root,'app/ui/app.js'),'utf8'),context)
   await vm.runInContext('refresh()',context);
   assert.equal(get('play').disabled,true,'incompatible official build must block Play');
   vm.runInContext(`for(const key of Object.keys(TEXTS.en).filter(k=>k.startsWith('official')))for(const locale of Object.keys(TEXTS))if(!TEXTS[locale][key])throw Error(locale+':'+key)`,context);
+  vm.runInContext(`for(const key of Object.keys(TEXTS.en).filter(k=>k.startsWith('n') && k!=='news' && k!=='newsTag' && k!=='noAccount'))for(const locale of Object.keys(TEXTS))if(!TEXTS[locale][key])throw Error(locale+':'+key)`,context);
+  await get('nav-downloads').handlers.click();
+  assert.equal(get('native-page').hidden,false);
+  get('n-dir').value='';
+  const nativeBefore=calls.filter(c=>c.cmd==='native_client_work').length;
+  await get('n-download').handlers.click();
+  assert.equal(calls.filter(c=>c.cmd==='native_client_work').length,nativeBefore);
+  get('n-dir').value='E:/managed';get('n-locale').value='ruRU';get('n-hd').checked=true;
+  const oldServer=structuredClone(state.settings.server),oldDir=state.settings.gameDir;
+  await get('n-download').handlers.click();
+  const native=calls.find(c=>c.cmd==='native_client_work');
+  assert.deepEqual(JSON.parse(JSON.stringify(native.args.request)),{action:'download',directory:'E:/managed',locale:'ruRU',highRes:true});
+  assert.deepEqual(state.settings.server,oldServer,'content sources cannot replace the login profile');
+  assert.equal(state.settings.gameDir,oldDir,'download completion does not silently switch the active client');
+  assert.equal(get('n-connect').disabled,false);
+  state.settings.server.clientBuild=70658;
+  officialReply={...officialReply,gameDir:'E:/managed/_forever_',ready:true,status:'official_ready',version:'1.60.1.70658'};
+  await get('n-connect').handlers.click();
+  const nativeConnected=calls.filter(c=>c.cmd==='save_settings').at(-1).args.settings;
+  assert.equal(nativeConnected.gameDir,'E:/managed/_forever_');
+  assert.equal(nativeConnected.locale,'ruRU');
+  assert.equal(nativeConnected.protectClientFiles,true);
+  assert.equal(nativeConnected.server.portal,oldServer.portal);
+  assert.equal(nativeConnected.server.address,oldServer.address);
   console.log('Launcher UI: five languages, official EXE mismatch, protected installation, legacy workshop and busy-game gates passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});
