@@ -60,6 +60,7 @@ local function value(key, rank, ranks, maxMana)
     local shield = math.min(30, 12 + math.min(10, 2*r("aegis_strength"))
         + math.min(5, r("aegis_efficiency")) + math.min(4, r("aegis_overcharge")))
     if key:sub(1,6) == "aegis_" then
+        if key == "aegis_unlock" and rank == 0 then return "Способность закрыта" end
         if key == "aegis_reflex" then
             return (30 - math.min(10, 2*rank)) .. " сек. КД щита"
         end
@@ -67,6 +68,7 @@ local function value(key, rank, ranks, maxMana)
         return shield .. "% HP — предел щита"
     end
     if key:sub(1,5) == "mend_" then
+        if key == "mend_unlock" and rank == 0 then return "Способность закрыта" end
         if key == "mend_reflex" then return (25 - math.min(10, 2*rank)) .. " сек. КД лечения" end
         if key == "mend_power" then return (100 + math.min(5, rank)*10) .. "% силы исходного лечения" end
         if key == "mend_efficiency" then return math.min(80, 50 + 4*rank) .. "% HP — порог по умолчанию" end
@@ -87,7 +89,7 @@ local function value(key, rank, ranks, maxMana)
         local amount = math.floor((tonumber(maxMana) or 100) * pct / 100)
         return pct .. "% (" .. amount .. " маны) только для щита"
     end
-    if key:sub(1,8) == "identify_" then
+    if key:sub(1,9) == "identify_" then
         return rank > 0 and "Раздел открыт" or "Раздел закрыт"
     end
     return "Не реализовано"
