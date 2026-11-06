@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+import subprocess
+import tempfile
+from pathlib import Path
+
+module = Path(__file__).resolve().parents[1]
+with tempfile.TemporaryDirectory() as td:
+    core = Path(td) / "core"
+
+    custom = core / "src/server/scripts/Custom"
+    custom.mkdir(parents=True)
+    loader = custom / "custom_script_loader.cpp"
+    loader.write_text("void AddCustomScripts()\n{\n}\n")
+
+    handlers = core / "src/server/game/Handlers"
+    handlers.mkdir(parents=True)
+    chat = handlers / "ChatHandler.cpp"
+    chat.write_text(
+        "void WorldSession::HandleChatAddonMessage()\n"
+        "{\n"
+        "    Player* sender = GetPlayer();\n"
+        "    if (text.length() > 255)\n"
+        "        return;\n\n"
+        "    switch (type) { }\n"
+        "}\n"
+    )
+
+    cmd = ["python3", str(module / "server/inject.py"), str(core), "--module", str(module)]
+    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True)
+
+    loader_text = loader.read_text()
+    chat_text = chat.read_text()
+    for name in ("forever_encyclopedia", "forever_encyclopedia_talents", "forever_encyclopedia_runtime", "forever_encyclopedia_abilities"):
+        assert loader_text.count(f"void AddSC_{name}();") == 1
+        assert loader_text.count(f"    AddSC_{name}();") == 1
+    for prefix in ("FEC1", "FET1", "FEB1"):
+        assert chat_text.count(f'prefix == "{prefix}"') == 1
+    assert chat_text.count('text.length() > 255') == 1
+    assert (custom / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").is_file()
+    assert (custom / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").is_file()
+    assert (custom / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").is_file()
+    assert (custom / "ForeverEncyclopedia/ForeverEncyclopediaAbilities.cpp").is_file()
+    assert (custom / "ForeverEncyclopedia/TalentRules.h").is_file()
+print("Encyclopedia injector test passed")

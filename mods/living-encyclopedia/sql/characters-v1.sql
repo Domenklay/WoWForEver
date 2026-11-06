@@ -1,0 +1,66 @@
+CREATE TABLE IF NOT EXISTS `forever_encyclopedia_discovery` (
+  `account_id` INT UNSIGNED NOT NULL,
+  `kind` TINYINT UNSIGNED NOT NULL,
+  `entry` INT UNSIGNED NOT NULL,
+  `first_map` INT UNSIGNED NOT NULL DEFAULT 0,
+  `first_zone` INT UNSIGNED NOT NULL DEFAULT 0,
+  `first_seen` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`account_id`,`kind`,`entry`),
+  KEY `idx_forever_ency_account_kind` (`account_id`,`kind`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `forever_encyclopedia_account` (
+  `account_id` INT UNSIGNED NOT NULL,
+  `knowledge_total` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `knowledge_spent` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `discoveries` INT UNSIGNED NOT NULL DEFAULT 0,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`account_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `forever_encyclopedia_talent` (
+  `account_id` INT UNSIGNED NOT NULL,
+  `talent_key` VARCHAR(64) NOT NULL,
+  `rank` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (`account_id`,`talent_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `forever_encyclopedia_character` (
+  `character_guid` BIGINT UNSIGNED NOT NULL,
+  `mana` INT UNSIGNED NOT NULL DEFAULT 0,
+  `shield_enabled` TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  `heal_enabled` TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  `shield_threshold` TINYINT UNSIGNED NOT NULL DEFAULT 80,
+  `heal_threshold` TINYINT UNSIGNED NOT NULL DEFAULT 50,
+  `mana_reserve` INT UNSIGNED NOT NULL DEFAULT 0,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`character_guid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `forever_encyclopedia_appearance_selection` (
+  `character_guid` BIGINT UNSIGNED NOT NULL,
+  `appearance_key` VARCHAR(32) NOT NULL DEFAULT 'living_book',
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`character_guid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Idempotent historical backfill. Accounts that opened records before knowledge
+-- rewards were enabled receive the same baseline they would receive now.
+-- Re-running installation is safe because GREATEST never adds the baseline twice.
+INSERT INTO `forever_encyclopedia_account`
+    (`account_id`,`knowledge_total`,`knowledge_spent`,`discoveries`)
+SELECT
+    `account_id`,
+    SUM(CASE `kind`
+        WHEN 1 THEN 1
+        WHEN 2 THEN 1
+        WHEN 3 THEN 3
+        ELSE 0
+    END),
+    0,
+    COUNT(*)
+FROM `forever_encyclopedia_discovery`
+GROUP BY `account_id`
+ON DUPLICATE KEY UPDATE
+    `knowledge_total` = GREATEST(`knowledge_total`, VALUES(`knowledge_total`)),
+    `discoveries` = GREATEST(`discoveries`, VALUES(`discoveries`));
