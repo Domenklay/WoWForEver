@@ -22,7 +22,7 @@ function Assert-NotLink([string]$Path) {
     }
 }
 
-$game = [IO.Path]::GetFullPath($GameDirectory.TrimEnd('\','/'))
+$game = [IO.Path]::GetFullPath($GameDirectory.TrimEnd([char[]]@('\','/')))
 if (-not (Test-Path -LiteralPath (Join-Path $game 'Wow.exe') -PathType Leaf) -and
     -not (Test-Path -LiteralPath (Join-Path $game 'WowB.exe') -PathType Leaf)) {
     throw "Wow.exe/WowB.exe not found: $game"
@@ -35,7 +35,15 @@ foreach ($name in @('Wow','WowB','forever-launcher','WoWForeverMulti')) {
 
 $addons = Join-Path $game 'Interface\AddOns'
 $target = Join-Path $addons 'ForeverEncyclopedia'
-foreach ($item in @($game, (Join-Path $game 'Interface'), $addons, $target)) {
+# Reject junctions/symlinks anywhere in the destination ancestry.
+$current = $game
+while (-not [string]::IsNullOrWhiteSpace($current)) {
+    Assert-NotLink $current
+    $parent = Split-Path -Parent $current
+    if ($parent -eq $current -or [string]::IsNullOrEmpty($parent)) { break }
+    $current = $parent
+}
+foreach ($item in @((Join-Path $game 'Interface'), $addons, $target, (Join-Path $game '.forever-multi'), (Join-Path $game '.forever-multi\addon-backups'))) {
     Assert-NotLink $item
 }
 if ((Test-Path -LiteralPath $target) -and -not (Test-Path -LiteralPath $target -PathType Container)) {
@@ -50,7 +58,7 @@ if (-not $SkipLauncherSettings) {
     }
     Assert-NotLink $settingsPath
     $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    $selected = [IO.Path]::GetFullPath(([string]$settings.gameDir).TrimEnd('\','/'))
+    $selected = [IO.Path]::GetFullPath(([string]$settings.gameDir).TrimEnd([char[]]@('\','/')))
     if ($selected -ine $game) {
         throw "Multi selected another game folder: $selected. Save the intended game folder in Multi first."
     }
