@@ -1,7 +1,8 @@
 #requires -Version 5.1
 <#
-Read-only inspection of an owned installation after Battle.net preloading.
-No game payloads are opened, hashed or changed. Only a new report outside the
+Read-only inspection of an owned installation after source-launcher preloading.
+No CASC archives are opened or changed. EXE version resources are read, never executed.
+Only a new report outside the
 installation is written. Metadata mentions do not prove an active EXE upgrade
 or a complete download. Compatible protocol and server data need separate checks.
 #>
@@ -10,6 +11,7 @@ param(
     [Parameter(Mandatory = $true)][string]$GameDirectory,
     [ValidateRange(1, 999999)][int]$ExpectedBuild = 70707,
     [ValidateRange(1, 999999)][int]$ServerBuild = 70658,
+    [switch]$FindStagedExecutables,
     [string]$OutputPath = (Join-Path ([IO.Path]::GetTempPath()) ('Forever-installation-' + [guid]::NewGuid().ToString('N') + '.json'))
 )
 $ErrorActionPreference = 'Stop'
@@ -77,13 +79,51 @@ foreach ($folder in $folders) {
         }
     }
 }
+$staged = @()
+$visited = 0
+$scanErrors = @()
+$scanLimited = $false
+if ($FindStagedExecutables) {
+    # Bounded walk of installer/staging directories only. Never walk Data or
+    # game caches, and never follow junctions. A directory name is not a version.
+    $pending = New-Object 'System.Collections.Generic.Stack[object]'
+    foreach ($folder in Get-ChildItem -LiteralPath $root -Directory -Force) {
+        if ($folder.Name -match '^(\.forever([._-].*)?|preload([._-].*)?|staging([._-].*)?|builds)$' -and
+            ($folder.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
+            $pending.Push(@{ path = $folder.FullName; depth = 0 })
+        }
+    }
+    while ($pending.Count -gt 0 -and $visited -lt 512) {
+        $current = $pending.Pop()
+        $visited++
+        foreach ($exe in Get-ChildItem -LiteralPath $current.path -File -Force -Filter 'Wow*.exe' -ErrorAction SilentlyContinue -ErrorVariable +scanErrors) {
+            if ($exe.Name -notin @('Wow.exe', 'WowB.exe') -or ($exe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+            Assert-Unlinked $exe.FullName
+            $version = $exe.VersionInfo.FileVersion
+            $build = $null
+            if ($version -match '^\s*(?:Version\s+)?1[.,]60[.,]1[.,](\d+)\b') { $build = [int]$Matches[1] }
+            $staged += [ordered]@{
+                path = $exe.FullName; fileVersion = $version; actualForeverBuild = $build
+                matchesExpectedBuild = ($build -eq $ExpectedBuild); activated = $false
+            }
+        }
+        $children = @(Get-ChildItem -LiteralPath $current.path -Directory -Force -ErrorAction SilentlyContinue -ErrorVariable +scanErrors |
+            Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and $_.Name -ne 'Data' })
+        if ($current.depth -ge 7) { if ($children.Count -gt 0) { $scanLimited = $true }; continue }
+        foreach ($child in $children) { $pending.Push(@{ path = $child.FullName; depth = $current.depth + 1 }) }
+    }
+    if ($pending.Count -gt 0 -or $scanErrors.Count -gt 0) { $scanLimited = $true }
+}
 $report = [ordered]@{
     format = 'wowforever-owned-installation-v1'; root = $root
     expectedBuild = $ExpectedBuild; serverBuild = $ServerBuild
     executables = @($binaries); metadata = @($metadata)
+    stagedExecutables = @($staged)
+    stagedScan = [ordered]@{ requested = [bool]$FindStagedExecutables; directories = $visited; limited = $scanLimited }
+    known70707BuildConfigPresent = (Test-Path -LiteralPath (Join-Path $root 'Data\config\7f\eb\7feb61f3c994bcb168526b8db521514a') -PathType Leaf)
     storageDirectoryPresent = (Test-Path -LiteralPath (Join-Path $root 'Data\data') -PathType Container)
     downloadCompletenessVerified = $false
-    note = 'Preloading is not activation. Confirm complete download in Battle.net, then inspect the actual EXE. Server protocol and extracted data must match separately. No game files were changed.'
+    note = 'Preloading is not activation. Finish installation in the source launcher, then inspect the actual EXE. Cached configs and staged files do not establish a complete installation. Server protocol and extracted data must match separately. No game files were changed.'
 }
 $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($report | ConvertTo-Json -Depth 8))
 $stream = [IO.File]::Open($output, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
@@ -91,4 +131,10 @@ try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
 Write-Host ('Report saved: ' + $output)
 Write-Host ('Expected client: ' + $ExpectedBuild + '; current server profile: ' + $ServerBuild)
 $binaries | ForEach-Object { [pscustomobject]$_ } | Format-Table path, fileVersion, matchesExpectedBuild, matchesServerBuild -AutoSize
+if ($FindStagedExecutables) {
+    Write-Host 'Staged EXEs (not activated; cached archives are not searched):'
+    $staged | ForEach-Object { [pscustomobject]$_ } | Format-List path, fileVersion, actualForeverBuild, matchesExpectedBuild
+    if ($staged.Count -eq 0) { Write-Host 'No unpacked staged Wow.exe/WowB.exe found in the bounded installer-folder scan.' }
+    if ($scanLimited) { Write-Host 'Scan was limited or some directories were unreadable; see the JSON report.' }
+}
 Write-Host 'Game files unchanged. Full download and server compatibility are not certified by this report.'
