@@ -1,3 +1,16 @@
+Current authorized followup after user asked what next: isolated SQL restore trial.
+scripts/test-baseline-restore.py verifies the existing completed baseline, then
+restores four DBs into a fresh labelled MySQL container/volume using saved local
+image ID, no network/ports/binds, 1 CPU/1GiB, random temporary credentials.
+No live Compose/state, service stop, pull/build/load, or live DB restore occurs.
+Snapshot counts/schema and ten module tables are checked; only nonce-labelled
+trial resources are cleaned up. --cleanup-report handles interrupted trials with
+strict name/path/label checks. Reports are safe; raw import errors stay private.
+This tests DATABASE restoration, not the full worldserver/client recovery path.
+See docs/BASELINE-RESTORE.ru.md. CI adds a real MySQL roundtrip with generated
+four-DB/module/view data plus invalid-SQL rejection and untouched-source checks.
+User-side trial output and full-server isolated restore remain pending.
+
 User CONFIRMED BASELINE BACKUP VERIFIED after offline finalize at c9d3442:
 /mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543.
 Current DB/resource/image archive integrity is verified on user's PC. Isolated

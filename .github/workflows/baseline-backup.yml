@@ -2,7 +2,7 @@ name: Server baseline backup
 on:
   push:
     branches: [codex/native-cdn-70658-20261106]
-    paths: [scripts/backup-clean-baseline.py, scripts/docker_archive_identity.py, tests/test_baseline_backup.py, tests/test_docker_archive_identity.py, .github/workflows/baseline-backup.yml]
+    paths: [scripts/backup-clean-baseline.py, scripts/docker_archive_identity.py, scripts/test-baseline-restore.py, tests/test_baseline_backup.py, tests/test_docker_archive_identity.py, tests/test_baseline_restore.py, tests/test_baseline_restore_integration.py, .github/workflows/baseline-backup.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,3 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m unittest discover -s tests -q
+  mysql-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the official MySQL test image
+        run: docker pull mysql:8.0
+      - name: Restore generated four-database fixture in an isolated disposable MySQL
+        env:
+          FOREVER_RESTORE_INTEGRATION: '1'
+        run: python3 -m unittest discover -s tests -p test_baseline_restore_integration.py -v
