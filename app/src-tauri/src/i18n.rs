@@ -56,6 +56,7 @@ type Texts = [&'static str; 4];
 
 #[rustfmt::skip]
 const MESSAGES: &[(&str, Texts)] = &[
+    ("official_managed_incomplete", ["Le téléchargement géré est incomplet. Reprenez le téléchargement ou la réparation dans Téléchargement du jeu.", "This managed client is incomplete. Resume downloading or repair it in Game downloads.", "Este cliente administrado está incompleto. Continúa la descarga o repáralo en Descarga del juego.", "Este cliente gerenciado está incompleto. Continue o download ou repare em Download do jogo."]),
     ("official_ready", ["La version correspond au profil du serveur. Vous pouvez connecter ce client.", "The version matches the server profile. You can connect this client.", "La versión coincide con el perfil del servidor. Puedes conectar este cliente.", "A versão corresponde ao perfil do servidor. Você pode conectar este cliente."]),
     ("official_unknown_version", ["Impossible de lire FileVersion dans l’EXE. Terminez l’installation dans le launcher source.", "Could not read the EXE FileVersion. Finish installation in the source launcher.", "No se pudo leer FileVersion del EXE. Termina la instalación en el launcher de origen.", "Não foi possível ler FileVersion do EXE. Conclua a instalação no launcher de origem."]),
     ("official_unsupported", ["Cette branche n’est pas compatible avec un serveur Forever 1.60.1. Changer l’adresse ne convertit pas Retail ou Classic Era.", "This branch is not supported by a Forever 1.60.1 server. Changing the address does not convert Retail or Classic Era.", "Esta rama no es compatible con un servidor Forever 1.60.1. Cambiar la dirección no convierte Retail ni Classic Era.", "Esta versão não é compatível com um servidor Forever 1.60.1. Alterar o endereço não converte Retail ou Classic Era."]),
@@ -163,6 +164,7 @@ const MESSAGES: &[(&str, Texts)] = &[
 
 #[rustfmt::skip]
 const RUSSIAN: &[(&str,&str)] = &[
+    ("official_managed_incomplete", "Загрузка управляемого клиента не завершена. Продолжите скачивание или восстановление в разделе «Загрузка игры»."),
     ("official_ready", "Версия совпадает с профилем сервера. Можно подключать клиент."),
     ("official_unknown_version", "Не удалось прочитать FileVersion EXE. Завершите установку в исходном лаунчере."),
     ("official_unsupported", "Эта ветка не поддерживается сервером Forever 1.60.1. Смена адреса не конвертирует Retail или Classic Era."),

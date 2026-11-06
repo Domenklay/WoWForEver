@@ -21,6 +21,11 @@ fn direct(path:&Path)->Result<()> {
 }
 fn claim(root:&Path,write:bool)->Result<()> {
  if !root.is_absolute(){bail!("Choose an absolute installation directory");}direct(root)?;
+ for parent in root.ancestors().skip(1) {
+  if parent.join(".build.info").is_file() || parent.join("Wow.exe").is_file() || parent.join("WowB.exe").is_file() {
+   bail!("Choose a separate installation root outside the original game and staging folders");
+  }
+ }
  if root.exists(){
   if !root.is_dir(){bail!("Installation destination is not a directory");}
   let marker=root.join(MARKER);direct(&marker)?;
@@ -121,6 +126,7 @@ async fn main(){
 
 #[cfg(test)]mod tests{
  use super::*;
+ #[test]fn a_new_client_must_not_be_nested_inside_the_original(){let parent=tempfile::tempdir().unwrap();let source=parent.path().join("original");fs::create_dir(&source).unwrap();fs::write(source.join(".build.info"),b"owned original").unwrap();let nested=source.join("new-empty-client");assert!(claim(&nested,true).is_err());assert!(!nested.exists());assert_eq!(fs::read(source.join(".build.info")).unwrap(),b"owned original");}
  #[test]fn an_original_installation_can_never_be_adopted_or_changed(){let parent=tempfile::tempdir().unwrap();let root=parent.path().join("original");fs::create_dir(&root).unwrap();fs::write(root.join(".build.info"),b"owned original").unwrap();assert!(claim(&root,true).is_err());assert_eq!(fs::read(root.join(".build.info")).unwrap(),b"owned original");assert!(!root.join(MARKER).exists());}
  #[test]fn a_new_directory_is_pinned_and_can_resume_only_the_same_build(){let parent=tempfile::tempdir().unwrap();let root=parent.path().join("managed");claim(&root,true).unwrap();claim(&root,true).unwrap();let mut wrong=ownership();wrong.build=70707;write_owned(&root,&wrong).unwrap();assert!(claim(&root,true).is_err());}
  #[test]fn transport_rejects_login_and_certificate_fields(){let value=json!({"action":"download","directory":"C:/new","portal":"logon.nvord.com","caFile":"other.crt"});assert!(serde_json::from_value::<Request>(value).is_err());}

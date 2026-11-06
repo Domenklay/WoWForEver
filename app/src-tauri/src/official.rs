@@ -37,6 +37,14 @@ pub fn classify(product: Option<&str>, version: Option<&str>, storage: bool, exp
     "official_ready"
 }
 
+fn managed_ready(root:&Path,expected:u32)->bool {
+    let path=root.join(".forever-multi-managed.json");
+    if !path.exists() && !path.is_symlink(){return true;}
+    if path.is_symlink(){return false;}
+    std::fs::read(path).ok().and_then(|bytes|serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .is_some_and(|v|v["format"]=="forever-multi-cdn-v1" && v["complete"]==true && v["build"].as_u64()==Some(expected as u64))
+}
+
 pub fn inspect(selected: &Path, server_build: u32) -> Inspection {
     let game = config::normalize_game_dir(selected);
     let settings = config::Settings { game_dir: game.to_string_lossy().into_owned(), ..Default::default() };
@@ -45,8 +53,9 @@ pub fn inspect(selected: &Path, server_build: u32) -> Inspection {
     let product = config::installed_product(&game);
     let root = if game.join(".build.info").is_file() { game.clone() }
         else { game.parent().unwrap_or(&game).to_path_buf() };
-    let status = if !executable.is_file() { "official_no_exe" }
+    let mut status = if !executable.is_file() { "official_no_exe" }
         else { classify(product.as_deref(), version.as_deref(), root.join("Data/data").is_dir(), server_build) };
+    if status=="official_ready" && !managed_ready(&root,server_build){status="official_managed_incomplete";}
     let message = if status == "official_mismatch" {
         tf(status, &[&version.as_deref().unwrap_or("?"), &server_build])
     } else { t(status).to_string() };
@@ -115,6 +124,19 @@ pub fn executable_version(_path: &Path) -> Option<String> { None }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn interrupted_managed_downloads_cannot_be_connected_as_complete_clients(){
+        let parent=std::env::temp_dir().join(format!("multi-managed-ready-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&parent).unwrap();
+        assert!(managed_ready(&parent,70658));
+        let path=parent.join(".forever-multi-managed.json");
+        for (build,complete,ready) in [(70658,false,false),(70707,true,false),(70658,true,true)]{
+            std::fs::write(&path,serde_json::to_vec(&serde_json::json!({"format":"forever-multi-cdn-v1","build":build,"complete":complete})).unwrap()).unwrap();
+            assert_eq!(managed_ready(&parent,70658),ready);
+        }
+        std::fs::write(&path,b"interrupted marker").unwrap();assert!(!managed_ready(&parent,70658));
+        std::fs::remove_dir_all(parent).unwrap();
+    }
     #[test]
     fn actual_exe_build_not_metadata_selects_compatibility() {
         assert_eq!(numeric_version("Version 1.60.1.70658"), Some([1,60,1,70658]));

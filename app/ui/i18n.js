@@ -1300,3 +1300,8 @@ Object.assign(TEXTS.pt, {
   "nReport": "Relatório: {path}",
   "nServerMismatch": "Este cliente exige um servidor 70658. Confira a versão nas configurações."
 });
+TEXTS.ru.official_managed_incomplete = "Загрузка управляемого клиента не завершена. Продолжите скачивание или восстановление в разделе «Загрузка игры».";
+TEXTS.en.official_managed_incomplete = "This managed client is incomplete. Resume downloading or repair it in Game downloads.";
+TEXTS.fr.official_managed_incomplete = "Le téléchargement géré est incomplet. Reprenez le téléchargement ou la réparation dans Téléchargement du jeu.";
+TEXTS.es.official_managed_incomplete = "Este cliente administrado está incompleto. Continúa la descarga o repáralo en Descarga del juego.";
+TEXTS.pt.official_managed_incomplete = "Este cliente gerenciado está incompleto. Continue o download ou repare em Download do jogo.";
