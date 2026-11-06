@@ -1,5 +1,11 @@
 # Instructions for AI coding assistants
 
+On 2026-11-06 the user selected a 70707 preload. See docs/CLIENT-70707.ru.md.
+Preload metadata is not an activated EXE. The 70707/70755 upstream PR 271
+was open, not merged when inspected. Do not apply its whole SQL (it switches
+realms to 70755), change launcher profile numbers as a server migration,
+or reset the existing 70658 clean installation. Keep client files protected.
+
 On 2026-11-06 the user explicitly requested preparing Multi for a fresh owned
 Battle.net installation and confirmed Forever branch 1.60. Multi 1.3 adds
 read-only native EXE version inspection and protected connection preparation;

@@ -32,6 +32,8 @@ jobs:
           node-version: 22
       - name: Test client workshop and content UI
         run: node tests/fixtures/launcher-content-ui.js .
+      - name: Test read-only preload inspection in Windows PowerShell 5.1
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/fixtures/official-installation.ps1 -Repository .
       - name: Test launcher and Windows process selection
         working-directory: app/src-tauri
         run: cargo test --locked --lib
@@ -48,14 +50,16 @@ jobs:
             [System.IO.File]::WriteAllText("$pwd/dist/forever_root_ca.crt", $env:FOREVER_CA_CERT)
           }
           $readme = [System.IO.File]::ReadAllText("$pwd/app/README-MULTI.ru.md")
-          $readme = $readme.Replace("../docs/CLIENT-WORKSHOP.ru.md", "CLIENT-WORKSHOP.ru.md").Replace("../docs/screenshots/", "https://raw.githubusercontent.com/Domenklay/WoWForEver/codex/launcher-forever-multi-20261105/docs/screenshots/")
+          $readme = $readme.Replace("../docs/CLIENT-WORKSHOP.ru.md", "CLIENT-WORKSHOP.ru.md").Replace("../docs/CLIENT-70707.ru.md", "CLIENT-70707.ru.md").Replace("../docs/screenshots/", "https://raw.githubusercontent.com/Domenklay/WoWForEver/codex/launcher-forever-multi-20261105/docs/screenshots/")
           [System.IO.File]::WriteAllText("$pwd/dist/README.ru.md", $readme)
           $guide = [System.IO.File]::ReadAllText("$pwd/docs/CLIENT-WORKSHOP.ru.md").Replace("../content/client-manifest.schema.json", "client-manifest.schema.json")
           [System.IO.File]::WriteAllText("$pwd/dist/CLIENT-WORKSHOP.ru.md", $guide)
           Copy-Item docs/OFFICIAL-CLIENT.ru.md dist/OFFICIAL-CLIENT.ru.md
+          Copy-Item docs/CLIENT-70707.ru.md dist/CLIENT-70707.ru.md
           Copy-Item docs/CLIENT-STARTUP-DIAGNOSTICS.ru.md dist/CLIENT-STARTUP-DIAGNOSTICS.ru.md
           New-Item -ItemType Directory -Path dist/scripts -Force | Out-Null
           Copy-Item scripts/collect-client-startup.ps1 dist/scripts/collect-client-startup.ps1
+          Copy-Item scripts/inspect-forever-installation.ps1 dist/scripts/inspect-forever-installation.ps1
           Copy-Item content/client-manifest.schema.json dist/client-manifest.schema.json
           Get-ChildItem dist -Filter *.exe | Get-FileHash -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash)  $([System.IO.Path]::GetFileName($_.Path))" } |

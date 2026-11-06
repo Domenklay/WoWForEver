@@ -120,6 +120,9 @@ mod tests {
         assert_eq!(numeric_version("Version 1.60.1.70658"), Some([1,60,1,70658]));
         assert_eq!(numeric_version("10.0.26100.8410 (WinBuild.160101.0800)"), Some([10,0,26100,8410]));
         assert_eq!(classify(Some("wowf"), Some("1.60.1.70658"), true, 70658), "official_ready");
+        assert_eq!(classify(Some("wowf"), Some("1.60.1.70707"), true, 70658), "official_mismatch");
+        assert_eq!(classify(Some("wowf"), Some("1.60.1.70707"), true, 70707), "official_ready");
+        assert_eq!(classify(Some("wow_classic_beta"), Some("1.60.1.70707"), true, 70707), "official_ready");
         assert_eq!(classify(Some("wowf"), Some("1.60.1.70790"), true, 70658), "official_mismatch");
         assert_eq!(classify(Some("wowf"), None, true, 70658), "official_unknown_version");
         assert_eq!(classify(Some("wow"), Some("12.0.1.70658"), true, 70658), "official_unsupported");
