@@ -125,13 +125,16 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707):
                   comparison_only=True, activated=False, activation_ready=False,
                   protocol_build_verified=False, full_asset_integrity_verified=False, bootstrap=[])
     try:
+        print('READ ONLY: loading local CASC index generations...', file=sys.stderr, flush=True)
         store = open_store(root)
+        print('READ ONLY: validating the target INSTALL manifest...', file=sys.stderr, flush=True)
         install_ckey, install_ekey = pair(config, 'install')
         entries = install_manifest(store.read(install_ekey, install_ckey))
         wanted = [entry for entry in entries if entry['path'].lower() in ('wow.exe', 'wow_loader.dll')]
         if sum(entry['path'].lower() == 'wow.exe' for entry in wanted) != 1 or len(wanted) != len({e['path'].lower() for e in wanted}):
             raise ValueError('Ambiguous or missing Windows x64 Wow.exe in install manifest')
         report['windows_install_entries'] = len(entries)
+        print('READ ONLY: comparing active bootstrap files with the target manifest...', file=sys.stderr, flush=True)
         for entry in wanted:
             current = root / '_forever_' / entry['path']
             if current.exists(): current = direct(current)
@@ -139,6 +142,7 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707):
                        verified_local_preload_copy=False, local_read_errors=[])
             report['bootstrap'].append(row)
         ck, ek = pair(config, 'encoding')
+        print('READ ONLY: validating target ENCODING (this package declares ' + config.get('encoding-size', '?') + ' bytes)...', file=sys.stderr, flush=True)
         encoding = Encoding(store.read(ek, ck))
         missing = {bytes.fromhex(entry['ckey']): entry for entry in report['bootstrap']}
         for key, entry in encoding.rows('c'):
@@ -156,6 +160,7 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707):
                     continue
             if not missing: break
         report['status'] = 'manifest-verified'
+        print('READ ONLY: bootstrap audit finished; no client files changed.', file=sys.stderr, flush=True)
         report['note'] = 'Bootstrap hashes are from the target manifest. A matching old EXE does not imply a new protocol version. No activation or download was performed.'
     except (OSError, ValueError, KeyError) as error:
         report['status'] = 'cannot-complete-local-audit'
