@@ -115,5 +115,17 @@ class GameplayTests(unittest.TestCase):
             body = (folder / f['name']).read_bytes()
             self.assertEqual(len(body), f['size']); self.assertEqual(hashlib.sha256(body).hexdigest(), f['sha256'])
 
+    def test_readiness_requires_the_current_world_initialization_and_enabled_scaling(self):
+        state = {'gameplay': {'scaling':'0.2.0'}}
+        live = {'Id':'current-world', 'State': {'StartedAt':'current-start'}}
+        for logs, success in [('ForeverEncyclopedia ready:\nForeverScaling ready: personal-virtual-v0.2 (enabled=true, damageGuard=true)', True),
+                              ('ForeverEncyclopedia ready:\nForeverScaling: personal-virtual-v0.2 registered (enabled=true', False),
+                              ('ForeverEncyclopedia ready:\nForeverScaling ready: personal-virtual-v0.2 (enabled=false', False)]:
+            with patch.object(game.adv, 'wait_module'), patch.object(game.clean, 'container', return_value=live), patch.object(game.clean, 'run', return_value=logs) as command:
+                if success: game.wait_module(state)
+                else:
+                    with self.assertRaises(RuntimeError): game.wait_module(state)
+                self.assertIn('current-start',command.call_args.args[0]); self.assertEqual(command.call_args.args[0][-1], 'current-world')
+
 
 if __name__ == '__main__': unittest.main()

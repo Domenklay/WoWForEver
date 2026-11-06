@@ -86,7 +86,7 @@ def wait_module(state, timeout=180):
     logs = clean.run(['docker', 'logs', '--since', item['State']['StartedAt'], '--tail', '5000', item['Id']], capture=True)
     if 'ForeverEncyclopedia ready:' not in logs:
         raise RuntimeError('Encyclopedia schema/catalogue is not ready in the current process')
-    if state['gameplay'].get('scaling') and 'ForeverScaling: personal-virtual-v0.2 registered (enabled=true' not in logs:
+    if state['gameplay'].get('scaling') and 'ForeverScaling ready: personal-virtual-v0.2 (enabled=true' not in logs:
         raise RuntimeError('Personal scaling is not enabled in the current process')
 
 
