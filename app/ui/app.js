@@ -55,7 +55,8 @@ async function refresh() {
   $('view-login').hidden = logged;
   $('view-play').hidden = !logged;
   $('account').hidden = !logged;
-  $('game-field').textContent = `WoW Forever${state.gameVersion ? ` ${state.gameVersion}` : ''}`;
+  const actualVersion = state.officialClient?.version || state.gameVersion;
+  $('game-field').textContent = `WoW Forever${actualVersion ? ` ${actualVersion}` : ''}`;
   $('game-login-mode').textContent = t(state.gameAutoLogin ? 'automaticGameLogin' : 'manualGameLogin');
   if (logged) {
     $('account-email').textContent = state.email;
@@ -67,12 +68,15 @@ async function refresh() {
 
 function updatePlayButton() {
   const play = $('play');
-  play.disabled = contentBusy || state.playing || !state.gameFound;
+  const incompatible = state.settings.protectClientFiles && state.officialClient && !state.officialClient.ready;
+  play.disabled = contentBusy || state.playing || !state.gameFound || !!incompatible;
   play.classList.toggle('running', state.playing);
   play.textContent = workshopBusy ? t('working') : state.playing ? t('inGame') : t('play');
   updateContentActions();
   updateWorkshopActions();
   if (!state.gameFound && !state.playing) setStep(t('chooseGameDir'), 'err');
+  else if (incompatible && !state.playing) setStep(officialMessage(state.officialClient), 'err');
+  for (const id of ['quick-download', 'quick-repair']) $(id).hidden = !!state.settings.protectClientFiles;
 }
 
 async function refreshStatus() {
@@ -236,8 +240,48 @@ function fillSettings() {
   $('s-portal').value = draft.server.portal;
   $('s-bnet-port').value = draft.server.bnetPort;
   $('s-ca-file').value = draft.server.caFile || '';
+  $('s-client-build').value = draft.server.clientBuild || 70658;
+  $('official-result').textContent = state.officialClient ? officialDetails(state.officialClient) : '';
+  $('official-connect').disabled = !!state.playing;
   gameDirState();
 }
+
+function officialMessage(report) {
+  return t(report.status, { version: report.version || '—', build: report.serverBuild });
+}
+function officialDetails(report) {
+  return [officialMessage(report), t('officialDetails', {
+    version: report.version || '—', metadata: report.metadataVersion || '—',
+    product: report.product || '—', build: report.serverBuild
+  }), report.executable, t('officialCompleteness')].join('\n');
+}
+$('official-connect').addEventListener('click', async () => {
+  if (state.playing || contentBusy || workshopBusy) { toast(t('wErr_running')); return; }
+  const button = $('official-connect'); button.disabled = true;
+  try {
+    const selectedPath = $('s-game-dir').value.trim();
+    const selectedBuild = Number($('s-client-build').value);
+    const report = await invoke('inspect_official_client', { gameDir: selectedPath, serverBuild: selectedBuild });
+    if (selectedPath !== $('s-game-dir').value.trim() || selectedBuild !== Number($('s-client-build').value)) return;
+    $('official-result').textContent = officialDetails(report);
+    if (!report.ready) return;
+    const settings = settingsFromForm();
+    settings.gameDir = report.gameDir;
+    settings.protectClientFiles = true;
+    settings.server.clientBuild = Number($('s-client-build').value);
+    settings.locale = $('s-locale').value;
+    settings.language = $('s-language').value;
+    await invoke('save_settings', { settings });
+    await refresh();
+    draft = structuredClone(state.settings);
+    $('s-game-dir').value = report.gameDir;
+    gameDirState();
+    toast(t('officialConnected'));
+    $('official-result').textContent = officialDetails(report) + '\n' + t('officialConnected');
+  } catch (e) {
+    $('official-result').textContent = String(e);
+  } finally { button.disabled = !!state.playing; }
+});
 
 function gameDirState() {
   const el = $('game-dir-state');
@@ -264,8 +308,8 @@ function updateContentActions() {
   const busy = contentBusy || !!state?.playing;
   const gameDir = $('s-game-dir').value.trim();
   $('content-choose').disabled = busy || !gameDir;
-  $('content-install').disabled = busy || !contentSelection?.preview.ready || contentSelection.gameDir !== gameDir;
-  $('content-rollback').disabled = busy || !contentState?.installed;
+  $('content-install').disabled = busy || !!state?.settings.protectClientFiles || !contentSelection?.preview.ready || contentSelection.gameDir !== gameDir;
+  $('content-rollback').disabled = busy || !!state?.settings.protectClientFiles || !contentState?.installed;
 }
 function resetContent() {
   contentSelection = null; contentState = null;
@@ -312,6 +356,7 @@ $('content-choose').addEventListener('click', async () => {
   finally { contentWorking(false); }
 });
 $('content-install').addEventListener('click', async () => {
+  if (state?.settings.protectClientFiles) { toast(t('official_protected')); return; }
   if (!contentSelection?.preview.ready || contentSelection.gameDir !== $('s-game-dir').value.trim()) return;
   const selected = contentSelection;
   contentWorking(true);
@@ -322,6 +367,7 @@ $('content-install').addEventListener('click', async () => {
   finally { contentWorking(false); await refresh(); }
 });
 $('content-rollback').addEventListener('click', async () => {
+  if (state?.settings.protectClientFiles) { toast(t('official_protected')); return; }
   contentWorking(true);
   try {
     showContentStatus(await invoke('rollback_content', { gameDir: $('s-game-dir').value.trim() }));
@@ -359,23 +405,30 @@ $('pick-ca').addEventListener('click', async () => {
 $('s-game-dir').addEventListener('input', gameDirState);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('settings').hidden) closeSettings(); });
 
-$('save-settings').addEventListener('click', async () => {
-  draft.gameDir = $('s-game-dir').value.trim();
-  draft.locale = $('s-locale').value;
-  draft.language = $('s-language').value;
+function settingsFromForm() {
+  const settings = structuredClone(draft || state.settings);
+  settings.gameDir = $('s-game-dir').value.trim();
+  settings.locale = $('s-locale').value;
+  settings.language = $('s-language').value;
   if (state.platform === 'linux') {
-    draft.linux.runner = $('s-runner').value;
-    draft.linux.prefix = $('s-prefix').value.trim();
-    draft.linux.gamescope = $('s-gamescope').checked;
-    draft.linux.gamescopeArgs = $('s-gamescope-args').value.trim();
-    draft.linux.keyboard = $('s-keyboard').value.trim();
+    settings.linux.runner = $('s-runner').value;
+    settings.linux.prefix = $('s-prefix').value.trim();
+    settings.linux.gamescope = $('s-gamescope').checked;
+    settings.linux.gamescopeArgs = $('s-gamescope-args').value.trim();
+    settings.linux.keyboard = $('s-keyboard').value.trim();
   }
-  draft.server.address = $('s-address').value.trim();
-  draft.server.website = $('s-website').value.trim();
-  draft.server.portal = $('s-portal').value.trim();
-  draft.server.bnetPort = Number($('s-bnet-port').value);
-  draft.server.caFile = $('s-ca-file').value.trim();
-  draft.workshop = workshopSource();
+  settings.server.address = $('s-address').value.trim();
+  settings.server.website = $('s-website').value.trim();
+  settings.server.portal = $('s-portal').value.trim();
+  settings.server.bnetPort = Number($('s-bnet-port').value);
+  settings.server.caFile = $('s-ca-file').value.trim();
+  settings.server.clientBuild = Number($('s-client-build').value);
+  settings.workshop = workshopSource();
+  return settings;
+}
+
+$('save-settings').addEventListener('click', async () => {
+  draft = settingsFromForm();
   try {
     await invoke('save_settings', { settings: draft });
     closeSettings();
@@ -484,6 +537,10 @@ async function refreshWorkshopLayout() {
 function updateWorkshopActions() {
   const busy = workshopBusy || contentBusy || !!state?.playing;
   for (const id of ['w-download','w-verify','w-repair','w-recover']) $(id).disabled = busy;
+  for (const id of ['w-download','w-repair','w-recover']) {
+    $(id).hidden = !!state?.settings.protectClientFiles;
+    if (state?.settings.protectClientFiles) $(id).disabled = true;
+  }
   $('w-blocked').hidden = !(state?.playing || (contentBusy && !workshopBusy));
   $('w-blocked').textContent = t(state?.playing ? 'wErr_running' : 'wErr_busy');
 }
@@ -500,6 +557,9 @@ function workshopWorking(value) {
   $('w-status-panel').dataset.busy = String(value);
 }
 async function runWorkshop(action) {
+  if (state?.settings.protectClientFiles && action !== 'verify') {
+    toast(t('official_protected')); return;
+  }
   page('workshop');
   if (workshopBusy || contentBusy) { toast(t('wErr_busy')); return; }
   if (state.playing) { toast(t('wErr_running')); return; }

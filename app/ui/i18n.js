@@ -995,6 +995,101 @@ Object.assign(TEXTS.ru, {
   "wScope": "Файлы сравниваются с выбранным оригиналом. Лишние индексы CASC, LRU и маркеры ремонта сохраняются в резервной копии. Остальные дополнительные файлы, настройки и аддоны сохраняются."
 });
 
+Object.assign(TEXTS.ru, {
+  "officialTitle": "Подключить клиент из Battle.net",
+  "officialIntro": "Завершите полную загрузку Forever в Battle.net, затем выберите папку. Multi подготовит подключение к вашему серверу.",
+  "officialConnect": "Проверить и подключить установку",
+  "officialScope": "Архивами, индексами и EXE управляет Battle.net. Multi использует отдельный профиль подключения и серверный ключ в памяти процесса.",
+  "officialServerBuild": "Сборка клиента, настроенная на сервере",
+  "officialBuildHint": "Укажите сборку из статуса сервера. Это поле не меняет протокол сервера.",
+  "officialDetails": "Версия EXE: {version}\nМетаданные установки: {metadata}\nПродукт: {product}\nПрофиль сервера: 1.60.1.{build}",
+  "officialCompleteness": "Проверка версии и папки не подтверждает полноту игровых ресурсов. Дождитесь окончания загрузки в Battle.net.",
+  "officialConnected": "Установка подключена. Закройте настройки и нажмите «Играть».",
+  "official_ready": "Версия совпадает с профилем сервера. Можно подключать клиент.",
+  "official_unknown_version": "Не удалось прочитать FileVersion EXE. Дождитесь завершения установки в Battle.net.",
+  "official_unsupported": "Эта ветка не поддерживается сервером Forever 1.60.1. Смена адреса не конвертирует Retail или Classic Era.",
+  "official_missing_storage": "Не найдено общее хранилище Data/data. Выберите установку целиком и завершите загрузку в Battle.net.",
+  "official_mismatch": "Клиент {version}. Профиль сервера: 1.60.1.{build}. Для подключения требуется совместимая сборка сервера.",
+  "official_no_exe": "Выберите папку установленного клиента или корень World of Warcraft.",
+  "official_protected": "Этой установкой управляет Battle.net. Скачивание, восстановление и экспериментальные пакеты в Multi отключены."
+});
+
+Object.assign(TEXTS.en, {
+  "officialTitle": "Connect a Battle.net installation",
+  "officialIntro": "Finish the full Forever download in Battle.net, then choose the folder. Multi prepares the connection to your server.",
+  "officialConnect": "Check and connect this installation",
+  "officialScope": "Battle.net manages the archives, indices and EXE. Multi uses a separate connection profile and a server key in process memory.",
+  "officialServerBuild": "Client build configured on your server",
+  "officialBuildHint": "Use the build shown by your server. This field does not change the server protocol.",
+  "officialDetails": "EXE version: {version}\nInstallation metadata: {metadata}\nProduct: {product}\nServer profile: 1.60.1.{build}",
+  "officialCompleteness": "Version and folder checks do not certify all game resources. Wait for Battle.net to finish downloading.",
+  "officialConnected": "Installation connected. Close settings and press Play.",
+  "official_ready": "The version matches the server profile. You can connect this client.",
+  "official_unknown_version": "Could not read the EXE FileVersion. Wait for Battle.net to finish installing.",
+  "official_unsupported": "This branch is not supported by a Forever 1.60.1 server. Changing the address does not convert Retail or Classic Era.",
+  "official_missing_storage": "The shared Data/data storage is missing. Select the complete installation and finish downloading in Battle.net.",
+  "official_mismatch": "Client {version}. Server profile: 1.60.1.{build}. A compatible server build is required to connect.",
+  "official_no_exe": "Choose the installed game folder or the World of Warcraft root.",
+  "official_protected": "Battle.net manages this installation. Downloads, recovery and experimental packages in Multi are disabled."
+});
+
+Object.assign(TEXTS.fr, {
+  "officialTitle": "Connecter une installation Battle.net",
+  "officialIntro": "Terminez le téléchargement complet de Forever dans Battle.net, puis choisissez le dossier. Multi prépare la connexion à votre serveur.",
+  "officialConnect": "Vérifier et connecter cette installation",
+  "officialScope": "Battle.net gère les archives, index et EXE. Multi utilise un profil de connexion séparé et une clé serveur en mémoire.",
+  "officialServerBuild": "Version client configurée sur le serveur",
+  "officialBuildHint": "Utilisez la version indiquée par le serveur. Ce champ ne modifie pas son protocole.",
+  "officialDetails": "Version EXE : {version}\nMétadonnées : {metadata}\nProduit : {product}\nProfil serveur : 1.60.1.{build}",
+  "officialCompleteness": "La version et le dossier ne garantissent pas tous les fichiers du jeu. Attendez la fin du téléchargement Battle.net.",
+  "officialConnected": "Installation connectée. Fermez les paramètres et cliquez sur Jouer.",
+  "official_ready": "La version correspond au profil du serveur. Vous pouvez connecter ce client.",
+  "official_unknown_version": "Impossible de lire FileVersion dans l’EXE. Attendez la fin de l’installation Battle.net.",
+  "official_unsupported": "Cette branche n’est pas compatible avec un serveur Forever 1.60.1. Changer l’adresse ne convertit pas Retail ou Classic Era.",
+  "official_missing_storage": "Le stockage partagé Data/data est absent. Choisissez l’installation complète et terminez le téléchargement Battle.net.",
+  "official_mismatch": "Client {version}. Profil du serveur : 1.60.1.{build}. Une version serveur compatible est nécessaire.",
+  "official_no_exe": "Choisissez le dossier du jeu installé ou la racine World of Warcraft.",
+  "official_protected": "Battle.net gère cette installation. Les téléchargements, réparations et paquets expérimentaux de Multi sont désactivés."
+});
+
+Object.assign(TEXTS.es, {
+  "officialTitle": "Conectar una instalación de Battle.net",
+  "officialIntro": "Termina la descarga completa de Forever en Battle.net y elige la carpeta. Multi prepara la conexión a tu servidor.",
+  "officialConnect": "Comprobar y conectar esta instalación",
+  "officialScope": "Battle.net administra los archivos, índices y EXE. Multi usa un perfil de conexión separado y una clave del servidor en memoria.",
+  "officialServerBuild": "Compilación del cliente configurada en el servidor",
+  "officialBuildHint": "Usa la compilación indicada por tu servidor. Este campo no cambia su protocolo.",
+  "officialDetails": "Versión del EXE: {version}\nMetadatos: {metadata}\nProducto: {product}\nPerfil del servidor: 1.60.1.{build}",
+  "officialCompleteness": "La versión y la carpeta no garantizan todos los recursos del juego. Espera al final de la descarga en Battle.net.",
+  "officialConnected": "Instalación conectada. Cierra los ajustes y pulsa Jugar.",
+  "official_ready": "La versión coincide con el perfil del servidor. Puedes conectar este cliente.",
+  "official_unknown_version": "No se pudo leer FileVersion del EXE. Espera a que Battle.net termine la instalación.",
+  "official_unsupported": "Esta rama no es compatible con un servidor Forever 1.60.1. Cambiar la dirección no convierte Retail ni Classic Era.",
+  "official_missing_storage": "Falta el almacenamiento compartido Data/data. Elige la instalación completa y termina la descarga en Battle.net.",
+  "official_mismatch": "Cliente {version}. Perfil del servidor: 1.60.1.{build}. Se necesita una compilación compatible del servidor.",
+  "official_no_exe": "Elige la carpeta del juego instalado o la raíz de World of Warcraft.",
+  "official_protected": "Battle.net administra esta instalación. Las descargas, restauraciones y paquetes experimentales de Multi están desactivados."
+});
+
+Object.assign(TEXTS.pt, {
+  "officialTitle": "Conectar uma instalação do Battle.net",
+  "officialIntro": "Conclua o download completo do Forever no Battle.net e escolha a pasta. O Multi prepara a conexão ao seu servidor.",
+  "officialConnect": "Verificar e conectar esta instalação",
+  "officialScope": "O Battle.net gerencia os arquivos, índices e EXE. O Multi usa um perfil de conexão separado e uma chave do servidor na memória.",
+  "officialServerBuild": "Compilação do cliente configurada no servidor",
+  "officialBuildHint": "Use a compilação indicada pelo servidor. Este campo não altera o protocolo do servidor.",
+  "officialDetails": "Versão do EXE: {version}\nMetadados: {metadata}\nProduto: {product}\nPerfil do servidor: 1.60.1.{build}",
+  "officialCompleteness": "A versão e a pasta não garantem todos os recursos do jogo. Aguarde o fim do download no Battle.net.",
+  "officialConnected": "Instalação conectada. Feche as configurações e clique em Jogar.",
+  "official_ready": "A versão corresponde ao perfil do servidor. Você pode conectar este cliente.",
+  "official_unknown_version": "Não foi possível ler FileVersion do EXE. Aguarde o fim da instalação no Battle.net.",
+  "official_unsupported": "Esta versão não é compatível com um servidor Forever 1.60.1. Alterar o endereço não converte Retail ou Classic Era.",
+  "official_missing_storage": "O armazenamento compartilhado Data/data está ausente. Escolha a instalação completa e conclua o download no Battle.net.",
+  "official_mismatch": "Cliente {version}. Perfil do servidor: 1.60.1.{build}. É necessária uma compilação compatível do servidor.",
+  "official_no_exe": "Escolha a pasta do jogo instalado ou a raiz de World of Warcraft.",
+  "official_protected": "O Battle.net gerencia esta instalação. Downloads, recuperação e pacotes experimentais do Multi estão desativados."
+});
+
 let lang = 'en';
 
 /// ru, fr, en, es or pt from a setting ('' = system language) or a browser language tag.

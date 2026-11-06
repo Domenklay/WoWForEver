@@ -6,6 +6,7 @@ mod client;
 #[cfg_attr(target_os = "macos", allow(dead_code))]
 mod dpapi;
 mod game;
+mod official;
 mod i18n;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -49,6 +50,7 @@ struct Snapshot {
     game_executable: String,
     game_auto_login: bool,
     playing: bool,
+    official_client: Option<official::Inspection>,
 }
 
 #[derive(Clone, Serialize)]
@@ -77,6 +79,9 @@ fn runners() -> Vec<(String, String)> {
 fn get_state(state: State<AppState>) -> Snapshot {
     let settings = state.settings.lock().unwrap().clone();
     Snapshot {
+        official_client: if cfg!(windows) && !settings.game_dir.is_empty() {
+            Some(official::inspect(std::path::Path::new(&settings.game_dir), settings.server.client_build))
+        } else { None },
         game_found: settings.game_found(),
         game_version: config::installed_version(std::path::Path::new(&settings.game_dir)),
         game_executable: settings.exe().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
@@ -114,6 +119,12 @@ fn set_language(language: String) {
 #[tauri::command]
 fn detect_locale(game_dir: String) -> Option<String> {
     config::installed_locale(std::path::Path::new(&game_dir))
+}
+
+#[tauri::command]
+async fn inspect_official_client(game_dir: String, server_build: u32) -> Result<official::Inspection, String> {
+    tokio::task::spawn_blocking(move || official::inspect(std::path::Path::new(&game_dir), server_build))
+        .await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -217,6 +228,7 @@ async fn inspect_content(game_dir: String,package_dir: String) -> Result<package
 }
 #[tauri::command]
 async fn install_content(state:State<'_,AppState>,game_dir:String,package_dir:String) -> Result<packages::Status,String> {
+    official::allow_file_operation(state.settings.lock().unwrap().protect_client_files, "install_content")?;
     let _guard=package_guard(&state)?;
     tokio::task::spawn_blocking(move|| {
         let game=std::path::Path::new(&game_dir);
@@ -226,6 +238,7 @@ async fn install_content(state:State<'_,AppState>,game_dir:String,package_dir:St
 }
 #[tauri::command]
 async fn rollback_content(state:State<'_,AppState>,game_dir:String) -> Result<packages::Status,String> {
+    official::allow_file_operation(state.settings.lock().unwrap().protect_client_files, "rollback_content")?;
     let _guard=package_guard(&state)?;
     tokio::task::spawn_blocking(move||packages::rollback(std::path::Path::new(&game_dir)).map_err(package_error))
         .await.map_err(|e|e.to_string())?
@@ -243,6 +256,8 @@ fn inspect_client_locations(game_dir:String,reference_dir:String)->Result<client
 
 #[tauri::command]
 async fn client_work(app: AppHandle, state: State<'_, AppState>, request: client::Request) -> Result<client::Report, client::Error> {
+    official::allow_file_operation(state.settings.lock().unwrap().protect_client_files, &request.action)
+        .map_err(|detail| client::Error { code:"protected", detail })?;
     if state.playing.swap(true, Ordering::SeqCst) { return Err(client::Error { code:"busy", detail:String::new() }); }
     let _guard=PackageGuard(&state.playing);
     #[cfg(not(target_os="macos"))]
@@ -281,6 +296,12 @@ async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
         return Err(t("game_not_found").into());
     }
     settings.server.validate()?;
+    #[cfg(windows)]
+    if settings.protect_client_files {
+        let inspection = official::inspect(std::path::Path::new(&settings.game_dir), settings.server.client_build);
+        official::require_ready(&inspection)?;
+        emit(app, "log", inspection.message);
+    }
     #[cfg(not(target_os = "macos"))]
     if patcher::find_client_for(&settings.exe()).is_some() { return Err(t("already_running").into()); }
     let game = std::path::Path::new(&settings.game_dir);
@@ -421,7 +442,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState { settings: Mutex::new(Settings::load()), playing: AtomicBool::new(false), client_cancel: std::sync::Arc::new(AtomicBool::new(false)) })
         .invoke_handler(tauri::generate_handler![
-            get_state, save_settings, set_language, detect_locale, login, logout, server_status, news, checks, repair, play,
+            get_state, save_settings, set_language, detect_locale, inspect_official_client, login, logout, server_status, news, checks, repair, play,
             content_catalog, content_status, inspect_content, install_content, rollback_content
             , client_work, cancel_client_work, inspect_client_locations
         ])

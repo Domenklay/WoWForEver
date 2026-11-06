@@ -78,11 +78,15 @@
     </header>
     <div class="drawer-body">
       <fieldset>
-        <legend data-i18n="game">Game</legend>
+        <legend data-i18n="officialTitle">Connect a Battle.net installation</legend>
+        <p class="small muted" data-i18n="officialIntro">Finish installing Forever in Battle.net, then choose its folder here. Multi prepares the local connection.</p>
         <label><span><span data-i18n="gameDir">Game folder</span> <span class="muted small" data-i18n="gameDirHint">· _forever_ / Wow.exe or _classic_beta_ / WowB.exe</span></span>
           <span class="row"><input id="s-game-dir" type="text" spellcheck="false"><button class="btn small" id="pick-game" data-i18n="browse">Browse</button></span>
         </label>
         <p class="small" id="game-dir-state"></p>
+        <button class="btn primary" id="official-connect" data-i18n="officialConnect">Check and connect this installation</button>
+        <pre id="official-result" class="layout-hint" aria-live="polite"></pre>
+        <p class="small muted" data-i18n="officialScope">Game archives, indices and executables stay managed by Battle.net. Multi uses a separate connection profile and a server key in process memory.</p>
         <label><span data-i18n="gameLocale">Game language</span><select id="s-locale"></select></label>
         <label><span data-i18n="language">Launcher language</span><select id="s-language"></select></label>
       </fieldset>
@@ -126,6 +130,8 @@
         <label><span data-i18n="portal">Portal</span><input id="s-portal" type="text" spellcheck="false"></label>
         <p class="small muted" data-i18n="portalHint">Certificate hostname, for example trinity.actual.battle.net. Put the IP in Server address.</p>
         <label><span data-i18n="loginPort">Login port</span><input id="s-bnet-port" type="number" min="1" max="65535"></label>
+        <label><span data-i18n="officialServerBuild">Client build configured on your server</span><input id="s-client-build" type="number" min="1" max="999999"></label>
+        <p class="small muted" data-i18n="officialBuildHint">Use the build shown by your server. This value does not change the server protocol.</p>
         <label><span data-i18n="caFile">Public server CA certificate</span><span class="row"><input id="s-ca-file" type="text" spellcheck="false"><button class="btn small" id="pick-ca" data-i18n="browse">Browse</button></span></label>
         <p class="small muted" data-i18n="caFileHint">Optional when a CA is included in the launcher. Choose the public .crt or .pem file.</p>
       </details>

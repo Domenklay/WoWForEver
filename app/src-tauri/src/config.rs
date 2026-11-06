@@ -27,6 +27,8 @@ pub struct Server {
     pub website: String,
     /// Optional public CA file; an embedded CA remains the default.
     pub ca_file: String,
+    /// Actual client build configured on the server, not a client conversion.
+    pub client_build: u32,
 }
 
 /// A build-time setting (FOREVER_SERVER_ADDRESS...), set by GitHub Actions from the repository variables.
@@ -49,6 +51,7 @@ impl Default for Server {
             region_group: 8,
             website: built_in(option_env!("FOREVER_WEBSITE"), ""),
             ca_file: String::new(),
+            client_build: 70658,
         }
     }
 }
@@ -76,7 +79,7 @@ impl Default for LinuxSettings {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     pub server: Server,
@@ -88,6 +91,16 @@ pub struct Settings {
     pub language: String,
     pub linux: LinuxSettings,
     pub workshop: crate::client::Settings,
+    /// Official installations stay under Battle.net's file management.
+    pub protect_client_files: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { server: Server::default(), game_dir: String::new(), locale: String::new(),
+            language: String::new(), linux: LinuxSettings::default(), workshop: crate::client::Settings::default(),
+            protect_client_files: true }
+    }
 }
 
 /// Login kept between launches: the 30-day launcher token of the bnetserver, never the password.
@@ -298,7 +311,7 @@ impl Server {
     pub fn validate(&self) -> Result<(), String> {
         if !valid_portal(&self.portal) { return Err(t("bad_portal").into()); }
         if self.address.trim().is_empty() || self.address.contains([';', '/', '\\', '"', '\'']) ||
-            self.bnet_port == 0 || self.rest_port == 0 || self.world_port == 0 {
+            self.bnet_port == 0 || self.rest_port == 0 || self.world_port == 0 || self.client_build == 0 {
             return Err(t("bad_server_address").into());
         }
         if !self.ca_file.is_empty() { server_ca_pem(self)?; }
@@ -357,6 +370,11 @@ pub fn installed_version(game_dir: &Path) -> Option<String> {
     row.get(header.iter().position(|c| c == "Version")?).filter(|v| !v.is_empty()).cloned()
 }
 
+pub fn installed_product(game_dir: &Path) -> Option<String> {
+    let (header, row) = build_row(game_dir)?;
+    row.get(header.iter().position(|c| c == "Product")?).cloned()
+}
+
 fn build_row(game_dir: &Path) -> Option<(Vec<String>, Vec<String>)> {
     let game_dir = normalize_game_dir(game_dir);
     let info_path = if game_dir.join(".build.info").is_file() { game_dir.join(".build.info") }
@@ -385,7 +403,7 @@ pub fn normalize_game_dir(path: &Path) -> PathBuf {
         return path.parent().unwrap_or(path).to_path_buf();
     }
     if path.join("Wow.exe").is_file() || path.join("WowB.exe").is_file() { return path.to_path_buf(); }
-    for name in ["_forever_", "_classic_beta_"] {
+    for name in ["_forever_", "_classic_beta_", "_classic_era_", "_classic_", "_retail_"] {
         let game = path.join(name);
         if game.join("Wow.exe").is_file() || game.join("WowB.exe").is_file() { return game; }
         #[cfg(target_os = "macos")]
@@ -430,7 +448,8 @@ fn game_binary(dir: &Path) -> PathBuf {
 fn detect_game_dir() -> Option<String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     #[cfg(windows)]
-    for game in [r"E:\WoWForEver-work\experiments\Forever-client-v3\_forever_",
+    for game in [r"E:\WoWForEver-work\experiments\Forever-client-v4\_forever_",
+                 r"E:\WoWForEver-work\experiments\Forever-client-v3\_forever_",
                  r"E:\WoWForEver-work\experiments\Forever-client-v2\_forever_",
                  r"E:\WoW_Forever\_forever_"] {
         candidates.push(game.into());

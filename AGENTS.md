@@ -1,5 +1,13 @@
 # Instructions for AI coding assistants
 
+On 2026-11-06 the user explicitly requested preparing Multi for a fresh owned
+Battle.net installation and confirmed Forever branch 1.60. Multi 1.3 adds
+read-only native EXE version inspection and protected connection preparation;
+see docs/OFFICIAL-CLIENT.ru.md. Keep CASC/EXE/indices managed by Battle.net.
+Protect old settings by default, block mismatched client/server profile builds,
+and keep source downloads, official conversion and server protocol support distinct.
+Do not redeploy the current clean server just to build this launcher.
+
 On 2026-11-06 the user reported that launcher recovery again preceded an
 "installation files are corrupted" error and explicitly requested a plain copy
 without our transformations. Follow docs/CLIENT-PRISTINE-COPY.ru.md: use the

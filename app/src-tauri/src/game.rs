@@ -49,6 +49,28 @@ fn launch_args(settings: &Settings) -> Vec<&'static str> {
 mod tests {
     use super::*;
     #[test]
+    fn preparing_connection_preserves_exe_casc_and_original_settings() {
+        let root = std::env::temp_dir().join(format!("multi-official-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let game = root.join("_forever_");
+        std::fs::create_dir_all(game.join("WTF")).unwrap();
+        std::fs::create_dir_all(root.join("Data/data")).unwrap();
+        let originals = [
+            (game.join("Wow.exe"), b"owned synthetic EXE fixture".to_vec()),
+            (root.join(".build.info"), b"owned metadata fixture".to_vec()),
+            (root.join("Data/data/shmem"), b"owned local-state fixture".to_vec()),
+            (root.join("Data/data/0000000001.idx"), b"owned index fixture".to_vec()),
+            (root.join("Data/data/data.000"), b"owned archive fixture".to_vec()),
+            (game.join("WTF/Config.wtf"), b"SET portal \"EU\"\nSET gxApi \"D3D12\"\n".to_vec()),
+        ];
+        for (path, bytes) in &originals { std::fs::write(path, bytes).unwrap(); }
+        let settings = Settings { game_dir: game.to_string_lossy().into_owned(), locale: "ruRU".into(), ..Default::default() };
+        write_wtf(&settings).unwrap();
+        for (path, bytes) in &originals { assert_eq!(std::fs::read(path).unwrap(), *bytes); }
+        assert!(std::fs::read_to_string(game.join("WTF").join(WTF_NAME)).unwrap().contains("trinity.actual.battle.net:1119"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     #[cfg(not(target_os = "macos"))]
     fn wowf_uses_explicit_config_without_beta_registry_login() {
         let settings = Settings { game_dir: "missing-client/_forever_".into(), ..Default::default() };

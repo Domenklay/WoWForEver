@@ -14,10 +14,12 @@ function get(id){if(!elements.has(id))elements.set(id,element());return elements
 let selected={id:'legion-dalaran',name:'Dalaran',version:'1',ready:false,reason:'unverified',files:0};
 const calls=[];
 let workshopReply="match";
+let officialReply={gameDir:'E:/Battle.net/World of Warcraft/_forever_',executable:'E:/Battle.net/World of Warcraft/_forever_/Wow.exe',product:'wowf',version:'1.60.1.70790',metadataVersion:'1.60.1.70658',serverBuild:70658,ready:false,status:'official_mismatch'};
 const state={settings:{gameDir:'E:/client/_classic_beta_',language:'en',locale:'ruRU',server:{website:'',name:'Forever'}},gameFound:true,gameVersion:'1.60.1.70532',email:null,platform:'windows',version:'test',locales:['ruRU'],runners:[],playing:false};
 async function invoke(cmd,args){
   calls.push({cmd,args});
   if(cmd==='get_state')return structuredClone(state);
+  if(cmd==='inspect_official_client')return structuredClone(officialReply);
   if(cmd==='server_status')return {online:true,login:true};
   if(cmd==='news')return [];
   if(cmd==='checks')return {hosts:true,certificate:true};
@@ -34,7 +36,7 @@ async function invoke(cmd,args){
     if(workshopReply==='restored')return {action:'repair',sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:1661,verified:1661,different:92,resourceDifferent:4,storageDifferent:88,remaining:0,repaired:92,bytes:400,differences:['Data/data/shmem'],reportPath:'E:/reports/client.json'};
     return {action:args.request.action,sourceKind:'reference',profile:{product:'wowf',version:'1.60.1.70658'},files:4,verified:4,different:0,repaired:0,bytes:400,differences:[],reportPath:'E:/reports/client.json'};
   }
-  if(cmd==='save_settings'){Object.assign(state.settings,args.settings);return;}
+  if(cmd==='save_settings'){Object.assign(state.settings,args.settings);if(args.settings.protectClientFiles)state.officialClient=structuredClone(officialReply);return;}
 
 }
 const context=vm.createContext({console,structuredClone,Date,Math,navigator:{languages:['en']},
@@ -103,5 +105,29 @@ vm.runInContext(fs.readFileSync(path.join(root,'app/ui/app.js'),'utf8'),context)
   assert.equal(get('w-download').disabled,false);
   vm.runInContext(`for(const key of Object.keys(TEXTS.en).filter(k=>k.startsWith('w')))for(const locale of Object.keys(TEXTS))if(!TEXTS[locale][key])throw Error(locale+':'+key)`,context);
   vm.runInContext(`for(const key of Object.keys(TEXTS.en)){if(!TEXTS.ru[key])throw Error('missing Russian: '+key);const placeholders=s=>[...s.matchAll(/\\{(\\w+)\\}/g)].map(v=>v[1]).sort().join(',');if(placeholders(TEXTS.en[key])!==placeholders(TEXTS.ru[key]))throw Error('Russian placeholders: '+key);}if(resolveLanguage('ru-RU')!=='ru')throw Error('Russian locale not selected')`,context);
-  console.log('Launcher UI: five languages, resolved roots, CASC-only differences, restored counts, busy-game feedback and package gates passed');
+  vm.runInContext('openSettings()',context);
+  get('s-game-dir').value='E:/Battle.net/World of Warcraft';
+  const savesBefore=calls.filter(c=>c.cmd==='save_settings').length;
+  await get('official-connect').handlers.click();
+  assert.match(get('official-result').textContent,/70790/);
+  assert.match(get('official-result').textContent,/70658/);
+  assert.equal(calls.filter(c=>c.cmd==='save_settings').length,savesBefore,'incompatible EXE must not be connected');
+  officialReply={...officialReply,version:'1.60.1.70658',ready:true,status:'official_ready'};
+  get('s-address').value='127.0.0.1'; get('s-portal').value='trinity.actual.battle.net';
+  await get('official-connect').handlers.click();
+  const connected=calls.filter(c=>c.cmd==='save_settings').at(-1).args.settings;
+  assert.equal(connected.protectClientFiles,true);
+  assert.equal(connected.gameDir,officialReply.gameDir);
+  assert.equal(connected.server.address,'127.0.0.1');
+  assert.equal(get('w-repair').disabled,true); assert.equal(get('w-download').disabled,true);
+  assert.equal(get('quick-repair').hidden,true);
+  const writesBefore=calls.filter(c=>['client_work','install_content','rollback_content'].includes(c.cmd)).length;
+  await get('w-repair').handlers.click(); await get('w-download').handlers.click();
+  await get('w-recover').handlers.click(); await get('content-install').handlers.click(); await get('content-rollback').handlers.click();
+  assert.equal(calls.filter(c=>['client_work','install_content','rollback_content'].includes(c.cmd)).length,writesBefore,'official mode must not invoke mutations');
+  state.officialClient={...officialReply,ready:false,status:'official_mismatch',version:'1.60.1.70790'};
+  await vm.runInContext('refresh()',context);
+  assert.equal(get('play').disabled,true,'incompatible official build must block Play');
+  vm.runInContext(`for(const key of Object.keys(TEXTS.en).filter(k=>k.startsWith('official')))for(const locale of Object.keys(TEXTS))if(!TEXTS[locale][key])throw Error(locale+':'+key)`,context);
+  console.log('Launcher UI: five languages, official EXE mismatch, protected installation, legacy workshop and busy-game gates passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});

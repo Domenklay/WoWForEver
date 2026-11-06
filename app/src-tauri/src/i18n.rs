@@ -56,6 +56,13 @@ type Texts = [&'static str; 4];
 
 #[rustfmt::skip]
 const MESSAGES: &[(&str, Texts)] = &[
+    ("official_ready", ["La version correspond au profil du serveur. Vous pouvez connecter ce client.", "The version matches the server profile. You can connect this client.", "La versión coincide con el perfil del servidor. Puedes conectar este cliente.", "A versão corresponde ao perfil do servidor. Você pode conectar este cliente."]),
+    ("official_unknown_version", ["Impossible de lire FileVersion dans l’EXE. Attendez la fin de l’installation Battle.net.", "Could not read the EXE FileVersion. Wait for Battle.net to finish installing.", "No se pudo leer FileVersion del EXE. Espera a que Battle.net termine la instalación.", "Não foi possível ler FileVersion do EXE. Aguarde o fim da instalação no Battle.net."]),
+    ("official_unsupported", ["Cette branche n’est pas compatible avec un serveur Forever 1.60.1. Changer l’adresse ne convertit pas Retail ou Classic Era.", "This branch is not supported by a Forever 1.60.1 server. Changing the address does not convert Retail or Classic Era.", "Esta rama no es compatible con un servidor Forever 1.60.1. Cambiar la dirección no convierte Retail ni Classic Era.", "Esta versão não é compatível com um servidor Forever 1.60.1. Alterar o endereço não converte Retail ou Classic Era."]),
+    ("official_missing_storage", ["Le stockage partagé Data/data est absent. Choisissez l’installation complète et terminez le téléchargement Battle.net.", "The shared Data/data storage is missing. Select the complete installation and finish downloading in Battle.net.", "Falta el almacenamiento compartido Data/data. Elige la instalación completa y termina la descarga en Battle.net.", "O armazenamento compartilhado Data/data está ausente. Escolha a instalação completa e conclua o download no Battle.net."]),
+    ("official_mismatch", ["Client {}. Profil du serveur : 1.60.1.{}. Une version serveur compatible est nécessaire.", "Client {}. Server profile: 1.60.1.{}. A compatible server build is required to connect.", "Cliente {}. Perfil del servidor: 1.60.1.{}. Se necesita una compilación compatible del servidor.", "Cliente {}. Perfil do servidor: 1.60.1.{}. É necessária uma compilação compatível do servidor."]),
+    ("official_no_exe", ["Choisissez le dossier du jeu installé ou la racine World of Warcraft.", "Choose the installed game folder or the World of Warcraft root.", "Elige la carpeta del juego instalado o la raíz de World of Warcraft.", "Escolha a pasta do jogo instalado ou a raiz de World of Warcraft."]),
+    ("official_protected", ["Battle.net gère cette installation. Les téléchargements, réparations et paquets expérimentaux de Multi sont désactivés.", "Battle.net manages this installation. Downloads, recovery and experimental packages in Multi are disabled.", "Battle.net administra esta instalación. Las descargas, restauraciones y paquetes experimentales de Multi están desactivados.", "O Battle.net gerencia esta instalação. Downloads, recuperação e pacotes experimentais do Multi estão desativados."]),
     ("bad_server_address", ["Adresse ou ports du serveur invalides.", "Invalid server address or ports.", "Dirección o puertos del servidor no válidos.", "Endereço ou portas do servidor inválidos."]),
     ("ca_invalid", ["Choisissez un certificat CA public PEM valide, jamais une clé privée.", "Choose a valid public PEM CA certificate, never a private key.", "Elige un certificado CA público PEM válido, nunca una clave privada.", "Escolha um certificado CA público PEM válido, nunca uma chave privada."]),
     ("ca_missing", ["Choisissez le certificat CA public dans les paramètres du serveur.", "Choose the public server CA certificate in Server settings.", "Elige el certificado CA público en los ajustes del servidor.", "Escolha o certificado CA público nas configurações do servidor."]),
@@ -156,6 +163,13 @@ const MESSAGES: &[(&str, Texts)] = &[
 
 #[rustfmt::skip]
 const RUSSIAN: &[(&str,&str)] = &[
+    ("official_ready", "Версия совпадает с профилем сервера. Можно подключать клиент."),
+    ("official_unknown_version", "Не удалось прочитать FileVersion EXE. Дождитесь завершения установки в Battle.net."),
+    ("official_unsupported", "Эта ветка не поддерживается сервером Forever 1.60.1. Смена адреса не конвертирует Retail или Classic Era."),
+    ("official_missing_storage", "Не найдено общее хранилище Data/data. Выберите установку целиком и завершите загрузку в Battle.net."),
+    ("official_mismatch", "Клиент {}. Профиль сервера: 1.60.1.{}. Для подключения требуется совместимая сборка сервера."),
+    ("official_no_exe", "Выберите папку установленного клиента или корень World of Warcraft."),
+    ("official_protected", "Этой установкой управляет Battle.net. Скачивание, восстановление и экспериментальные пакеты в Multi отключены."),
     ("bad_server_address", "Некорректный адрес или порты сервера."),
     ("ca_invalid", "Выберите публичный CA-сертификат PEM, а не приватный ключ."),
     ("ca_missing", "Выберите публичный CA-сертификат в параметрах сервера."),
