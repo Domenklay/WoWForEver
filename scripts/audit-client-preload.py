@@ -132,8 +132,8 @@ def md5_file(path):
     return md5.hexdigest()
 
 
-def audit(selected, build_key=TARGET_KEY, expected_build=70707, region='EU'):
-    if region not in REGIONS: raise ValueError('Unsupported install region')
+def load_source(selected, build_key=TARGET_KEY, expected_build=70707):
+    """Validate metadata without modifying the installation or reading payloads."""
     root = direct(selected)
     if root.is_file(): root = root.parent
     if root.name == '_forever_': root = root.parent
@@ -148,15 +148,30 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707, region='EU'):
     if not match or int(match[1]) != expected_build:
         raise ValueError('Cached config is not the requested Forever package build')
     if config.get('build-uid') != 'wowf': raise ValueError('Preload product is not wowf')
-    rows = list(csv.reader(direct(root / '.build.info').read_text(encoding='utf-8-sig').splitlines(), delimiter='|'))
+    info = direct(root / '.build.info').read_bytes()
+    rows = list(csv.reader(info.decode('utf-8-sig').splitlines(), delimiter='|'))
     if not rows or any(len(row) != len(rows[0]) for row in rows[1:]): raise ValueError('Malformed .build.info')
     header = [k.split('!')[0] for k in rows[0]]
     active = [dict(zip(header, row)) for row in rows[1:]]
     active = [row for row in active if row.get('Product') == 'wowf' and row.get('Active') == '1']
     if len(active) != 1: raise ValueError('Expected one active wowf row')
     before = stamp(root)
-    report = dict(format='wowforever-preload-audit-v1', audit_revision=3, source=str(root), active_metadata_version=active[0].get('Version'),
-                  active_build_key=active[0].get('Build Key'), preload_build=expected_build, preload_build_key=build_key,
+    if before[0] != info: raise ValueError('Client metadata changed during inspection')
+    return root, config_file, raw, config, active[0], before
+
+
+def unchanged(root, config_file, raw, before):
+    if stamp(root) != before:
+        raise ValueError('Client storage changed during inspection; close the game/source launcher and retry')
+    if config_file.read_bytes() != raw:
+        raise ValueError('Preload config changed during inspection')
+
+
+def audit(selected, build_key=TARGET_KEY, expected_build=70707, region='EU'):
+    if region not in REGIONS: raise ValueError('Unsupported install region')
+    root, config_file, raw, config, active, before = load_source(selected, build_key, expected_build)
+    report = dict(format='wowforever-preload-audit-v1', audit_revision=3, source=str(root), active_metadata_version=active.get('Version'),
+                  active_build_key=active.get('Build Key'), preload_build=expected_build, preload_build_key=build_key,
                   selected_install_tags=['Windows', 'x86_64', region],
                   comparison_only=True, activated=False, activation_ready=False,
                   protocol_build_verified=False, full_asset_integrity_verified=False, bootstrap=[])
@@ -205,10 +220,7 @@ def audit(selected, build_key=TARGET_KEY, expected_build=70707, region='EU'):
     except (OSError, ValueError, KeyError) as error:
         report['status'] = 'cannot-complete-local-audit'
         report['detail'] = str(error)
-    if stamp(root) != before:
-        raise ValueError('Client storage changed during audit; close the game/source launcher and retry')
-    if config_file.read_bytes() != raw:
-        raise ValueError('Preload config changed during audit')
+    unchanged(root, config_file, raw, before)
     return report
 
 

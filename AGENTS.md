@@ -1,5 +1,14 @@
 # Instructions for AI coding assistants
 
+The user's revision-3 local audit succeeded: EU Wow.exe and wow_loader.dll
+both have verified_local_preload_copy=true, matches_active_file=false and
+no local read errors. INSTALL selected 39 EU Windows x64 files. Source
+active metadata remains 70658. Stage them via stage-client-preload.py into
+a NEW separate directory only; native Windows string-version confirmation
+and all selected INSTALL hashes must succeed. This exports original files
+but does not create/activate a CASC installation or switch any server.
+Do not tell the user to select the staging folder in Multi or run its EXE.
+
 The user's revision-2 report establishes the actual ambiguity: the 70707
 INSTALL has two Windows x86_64 root Wow.exe entries, CN-only CKey
 606df11c09fe22c9456b951a89848329 (109949136 bytes) and EU/KR/TW/US CKey

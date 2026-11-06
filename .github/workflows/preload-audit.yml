@@ -1,9 +1,9 @@
-name: Read-only preload audit checks
+name: Preload audit and staging checks
 on:
   workflow_dispatch:
   push:
     branches: [codex/preload-audit-20261106]
-    paths: [scripts/audit-client-preload.py, tests/test_client_preload_audit.py, .github/workflows/preload-audit.yml]
+    paths: [scripts/audit-client-preload.py, scripts/stage-client-preload.py, tests/test_client_preload_audit.py, tests/test_client_preload_stage.py, .github/workflows/preload-audit.yml]
 permissions:
   contents: read
 jobs:
@@ -15,4 +15,34 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m unittest discover -s tests -p 'test_client_preload_audit.py' -v
+      - run: python3 -m unittest discover -s tests -p 'test_client_preload_stage.py' -v
       - run: python3 -m unittest discover -s tests -p 'test_clean_game_tables.py' -v
+  native-windows-version:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Read a native string version without executing the selected binary
+        shell: pwsh
+        run: |
+          $env:PRELOAD_VERSION_FIXTURE = Join-Path $env:WINDIR 'System32\kernel32.dll'
+          @'
+          import importlib.util, os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path('scripts').resolve()))
+          spec = importlib.util.spec_from_file_location('stage_native', 'scripts/stage-client-preload.py')
+          stage = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(stage)
+          versions = stage.windows_version(Path(os.environ['PRELOAD_VERSION_FIXTURE']))
+          assert all(isinstance(versions[k], str) and versions[k] for k in ('file', 'product'))
+          try:
+              stage.require_build(versions, 70707)
+          except ValueError:
+              pass
+          else:
+              raise AssertionError('An OS DLL must never be accepted as the requested Forever build')
+          print('Native Windows string version query verified; wrong product refused.')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
