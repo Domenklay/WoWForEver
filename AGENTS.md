@@ -1,52 +1,40 @@
-Latest runtime evidence: user explicitly confirmed Forever Scaling. Before install
-state ready/pristine b4e7b940593f6402a822d4fbcdf31331d16f73b6, image
-forever-trinitycore:clean-b4e7b940593f, no Advancement/database_version.
-User successfully COMPILED AND LINKED the combined worldserver (1226s),
-image forever-trinitycore:gameplay-70658-4530bd4e14a1. Four-DB backup/migration
-completed; TCP/realm became ready, then old one-shot stdout-tail module check
-failed with missing Advancement catalogue/protocol. Automatic rollback verified
-pristine worldserver again (failed-recovered). Do not claim module activation.
-C++ AppenderConsole uses buffered fwrite to stdout; AppenderFile flushes each
-message. New module_readiness.py reads both Docker streams and fresh truncate-mode
-Server.log, waits for exact startup/protocol markers, rejects stale/restarted
-processes and explicit module failures. Failure diagnostics saved before rollback.
-Candidate fingerprints UNCHANGED: gameplay 4530bd4e14a1193236e18203ca3e8977680cbea01804afdcd77630647889b1e1;
+Latest user-side deployment VERIFIED on 2026-11-06: corrected installer f7ac66d
+completed GAMEPLAY ACTIVE for Ascension 1.11.0 / protocol 3, Encyclopedia
+0.9.8-v2.1-smartai-abilities and Forever Scaling 0.2.0. User explicitly confirmed
+that autolevel means Forever Scaling. Cached image
+forever-trinitycore:gameplay-70658-4530bd4e14a1 was verified and REUSED with
+--reuse-built-image; no new compilation. Fresh private four-database backup,
+migration, TCP 8085, online realm 70 / build 70658 and exact current-process
+module startup markers succeeded. Backup record on user's PC:
+~/WoWForEver-clean/advancement/4bae99119c86/install.json.
+Keep the successful WoWForEver-gameplay-tools.* checkout: server.sh references it.
+Do not repeat install/rollback/rebuild/reset on this active installation.
+
+The first user attempt had fully compiled and linked the combined worldserver,
+then rolled back because the old stdout-only startup check missed module markers.
+New module_readiness.py merges both Docker streams and fresh truncate-mode
+Server.log, waits for exact version/protocol markers and preserves diagnostics
+before rollback. Portable probe followup 245cec87b7721b756afcbc254080636f31268d2e
+passed Combined run 42276786686 (424 Python tests, 28 conditional skips;
+12 real CMake-flag translation units compile), Ascension 42276786805 and
+native CDN 42276786734. Controller-only changes leave source fingerprints:
+gameplay 4530bd4e14a1193236e18203ca3e8977680cbea01804afdcd77630647889b1e1;
 Advancement 5fca3dc2eb4de36967900718016add6fb0e6834f316edcdb2f1249e996632309.
-New build() fast path reuses only exact matching cached image, so no recompilation
-is needed for this retry. Keep server/DB/CA/client intact. Request resulting
-GAMEPLAY ACTIVE or bounded startup-diagnostics.json, not another blind rebuild.
 
-Combined gameplay delivery VERIFIED: server commit 46dc1f9a347a463fa9516607fca84f7c5e357995;
-checks run 42264029569 SUCCESS (413 Python tests, 28 skips; all 12 real
-CMake-flag translation units compile). This is syntax compilation, not full runtime
-linking; enable-clean-gameplay.py performs the full user-side build before downtime.
-Multi 1.7.0 commit 2dc905787dc7a525bf12bee8967d341e9d6655f7, Windows run
-42263618311 SUCCESS: 58 launcher tests, 224 worker tests, 5-language UI, PS5.1,
-NSIS/portable. Artifact 13526931172 (9141650 bytes), ZIP SHA256
+Client delivery VERIFIED: Multi 1.7.0 source
+2dc905787dc7a525bf12bee8967d341e9d6655f7; Windows run 42263618311 SUCCESS:
+58 launcher tests, 224 worker tests, five-language UI, PS5.1, NSIS/portable.
+Artifact 13526931172 (9141650 bytes), ZIP SHA256
 6ec0890042da3533ed94eb3471e38391241be6dd493f5454af4e1664b2ee6d35.
-ZIP/EXE hashes/PE architecture/GPL source/book guide/unchanged CA checked.
-User received fetch + persistent gameplay-tools worktree +
-enable-clean-gameplay.py install --jobs 2 command. Await installation output.
-Optional questions about Scaling vs character autolevel and filtered state
-remain unanswered; package defaults to the existing NPC Scaling, --no-scaling
-is available. Do NOT claim deployed server, working new AddOns on 70658, or
-verified flying-book model. Current companion is diagnostic creature 1933.
-See mods/living-encyclopedia/validation-70658.json and docs/GAMEPLAY-70658.ru.md.
-
-New active request: user confirms previous client launched without lag; wants our
-multiclass, companion book and autolevel on the ready server/client. This does NOT
-prove 1.6.1 repair was run or cured the crash. Imported living-encyclopedia
-ed0ce9b9bed2ecd6ff13c36b49700b66ad979b52 and scaling
-8661b88f65126e17f9208628a06b01b1ae76eeba (existing modules, do not replace core).
-Combined 70658 source compilation run 42261967654 SUCCEEDED on all 12 units;
-standalone book/scaling rules and 405 Python tests passed at source-import stage.
-Prepare enable-clean-gameplay.py for ready pristine OR already-Ascension state,
-keeping DBs, data, bnet/web, TLS and 70658. Multi 1.7.0 installs both pinned AddOns.
-User was asked whether autolevel means Forever Scaling and for filtered state;
-no response yet. Default package uses Scaling; --no-scaling is supported.
-RuntimeV5 companion uses standard template 1933, not a verified flying-book
-DisplayID. No cloud deployment to user PC or real gameplay test of modules yet.
-See docs/GAMEPLAY-70658.ru.md. Do not run legacy install-dev/Compose installers.
+Archive/EXE hashes/architecture/GPL worker source/public CA were checked.
+Multi installs both pinned AddOns before game spawn. Select the existing working
+70658 client; no game redownload is required. Commands /fa or /ascension, /ency.
+Actual AddOn UI, multiclass transactions, discoveries, companion and persistence
+on 70658 still need user gameplay verification. Companion uses diagnostic
+creature template 1933; flying-book DisplayID remains unverified. Do not claim
+that the earlier crash was cured by managed bootstrap repair: user only confirmed
+a previous client launched without lag. Keep DBs, CA and working client intact.
+See docs/GAMEPLAY-70658.ru.md and mods/living-encyclopedia/validation-70658.json.
 
 Multi 1.6.1 VERIFIED build: source c4489d44ce983d103a6c02a19da489f62d01f98a;
 Windows run 42258301007 SUCCESS, artifact 13523878465 (9136636 bytes).

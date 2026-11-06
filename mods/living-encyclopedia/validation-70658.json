@@ -8,7 +8,7 @@
   "artifact": 13526931172,
   "zip_sha256": "6ec0890042da3533ed94eb3471e38391241be6dd493f5454af4e1664b2ee6d35",
   "tests": {
-    "python": 413,
+    "python": 424,
     "python_skipped": 28,
     "launcher_windows": 58,
     "worker_windows": 224,
@@ -16,7 +16,26 @@
   },
   "source_sha256": "4530bd4e14a1193236e18203ca3e8977680cbea01804afdcd77630647889b1e1",
   "advancement_source_sha256": "5fca3dc2eb4de36967900718016add6fb0e6834f316edcdb2f1249e996632309",
-  "user_server_deployed": false,
+  "user_server_deployed": true,
   "gameplay_verified": false,
-  "companion_model": "diagnostic creature template 1933; flying book DisplayID unverified"
+  "companion_model": "diagnostic creature template 1933; flying book DisplayID unverified",
+  "installer_commit": "f7ac66dff9fd540ae889654c0a359ed0815cb01b",
+  "readiness_checks_commit": "245cec87b7721b756afcbc254080636f31268d2e",
+  "readiness_checks_run": 42276786686,
+  "addon_runtime_verified_on_70658": false,
+  "user_deployment": {
+    "date": "2026-11-06",
+    "evidence": "user-supplied installer output: GAMEPLAY ACTIVE",
+    "image": "forever-trinitycore:gameplay-70658-4530bd4e14a1",
+    "compilation_skipped_on_retry": true,
+    "world_tcp_port": 8085,
+    "realm": 70,
+    "build": 70658,
+    "backup_record": "~/WoWForEver-clean/advancement/4bae99119c86/install.json",
+    "modules": {
+      "ascension": "1.11.0",
+      "encyclopedia": "0.9.8-v2.1-smartai-abilities",
+      "scaling": "0.2.0"
+    }
+  }
 }
