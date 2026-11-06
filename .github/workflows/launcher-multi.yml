@@ -3,8 +3,8 @@ name: WoW Forever Multi Windows
 on:
   workflow_dispatch:
   push:
-    branches: [codex/launcher-forever-multi-20261105, codex/launcher-official-20261106, codex/forever-upgrades-70707-20261106, codex/native-cdn-70658-20261106]
-    paths: [app/**, tools/forever-casc-worker/**, scripts/inspect-forever-installation.ps1, tests/fixtures/official-installation.ps1, tests/fixtures/launcher-content-ui.js, docs/CLIENT-70707.ru.md, docs/SERVER-UPGRADES.ru.md, .github/workflows/launcher-multi.yml]
+    branches: [codex/launcher-forever-multi-20261105, codex/launcher-official-20261106, codex/forever-upgrades-70707-20261106, codex/native-cdn-70658-20261106, feature/encyclopedia-tooltip-mana-20261107]
+    paths: [app/**, tools/forever-casc-worker/**, scripts/inspect-forever-installation.ps1, scripts/update-encyclopedia-addon.ps1, tests/fixtures/official-installation.ps1, tests/fixtures/encyclopedia-addon.ps1, tests/fixtures/launcher-content-ui.js, docs/CLIENT-70707.ru.md, docs/SERVER-UPGRADES.ru.md, .github/workflows/launcher-multi.yml]
 
 permissions:
   contents: read
@@ -55,6 +55,8 @@ jobs:
         run: node tests/fixtures/launcher-content-ui.js .
       - name: Test read-only preload inspection in Windows PowerShell 5.1
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/fixtures/official-installation.ps1 -Repository .
+      - name: Test experimental Encyclopedia AddOn download and stable rollback
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/fixtures/encyclopedia-addon.ps1 -Repository .
       - name: Test launcher and Windows process selection
         working-directory: app/src-tauri
         run: cargo test --locked --lib
@@ -89,13 +91,14 @@ jobs:
           New-Item -ItemType Directory -Path dist/scripts -Force | Out-Null
           Copy-Item scripts/collect-client-startup.ps1 dist/scripts/collect-client-startup.ps1
           Copy-Item scripts/inspect-forever-installation.ps1 dist/scripts/inspect-forever-installation.ps1
+          Copy-Item scripts/update-encyclopedia-addon.ps1 dist/scripts/update-encyclopedia-addon.ps1
           Copy-Item content/client-manifest.schema.json dist/client-manifest.schema.json
           Get-ChildItem dist -Filter *.exe | Get-FileHash -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash)  $([System.IO.Path]::GetFileName($_.Path))" } |
             Set-Content dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: WoW-Forever-Multi-Windows-1.7.1
+          name: WoW-Forever-Multi-Windows-1.7.2-test-addon
           path: dist/*
           if-no-files-found: error
           retention-days: 14
