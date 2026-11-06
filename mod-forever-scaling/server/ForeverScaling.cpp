@@ -55,6 +55,12 @@ static bool DamageGuardEnabled()
     return value;
 }
 
+static bool DungeonScalingEnabled()
+{
+    static bool const value = Enabled() && EnvBool("FOREVER_DUNGEON_SCALING_ENABLED", false);
+    return value;
+}
+
 static Rank RankOf(Creature const* creature)
 {
     if (creature->IsDungeonBoss() || creature->isWorldBoss())
@@ -115,8 +121,8 @@ public:
     Startup() : WorldScript("forever_scaling_startup") { }
     void OnWorldInitialized() override
     {
-        TC_LOG_INFO("scripts", "ForeverScaling ready: personal-virtual-v0.3 (enabled={}, damageGuard={})",
-            Enabled(), DamageGuardEnabled());
+        TC_LOG_INFO("scripts", "ForeverScaling ready: personal-virtual-v0.3 (enabled={}, damageGuard={}, dungeonScaling={})",
+            Enabled(), DamageGuardEnabled(), DungeonScalingEnabled());
     }
 };
 } // namespace ForeverScaling
@@ -125,6 +131,6 @@ void AddSC_forever_scaling()
 {
     new ForeverScaling::DamageGuard();
     new ForeverScaling::Startup();
-    TC_LOG_INFO("server.loading", "ForeverScaling: personal-virtual-v0.3 registered (enabled={}, damageGuard={})",
-        ForeverScaling::Enabled(), ForeverScaling::DamageGuardEnabled());
+    TC_LOG_INFO("server.loading", "ForeverScaling: personal-virtual-v0.3 registered (enabled={}, damageGuard={}, dungeonScaling={})",
+        ForeverScaling::Enabled(), ForeverScaling::DamageGuardEnabled(), ForeverScaling::DungeonScalingEnabled());
 }
