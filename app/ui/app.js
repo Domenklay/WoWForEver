@@ -8,6 +8,7 @@ let draft = null;      // settings being edited in the drawer
 let toastTimer = 0;
 let contentBusy = false;
 let addonChannelBusy = false;
+let addonChannelReport = "";
 let workshopBusy = false;
 let nativeBusy = false;
 let nativeReport = null;
@@ -258,11 +259,11 @@ function updateAddonChannelUI() {
   const gameDir = $('s-game-dir').value.trim();
   const selectedIsSaved = gameDir === state.settings.gameDir;
   const blocked = !selectedIsSaved || !state.gameFound || state.playing || addonChannelBusy;
-  $('addon-test-install').disabled = blocked || !!state.settings.addonTestMode;
+  $('addon-test-install').disabled = blocked;
   $('addon-test-stable').disabled = blocked || !state.settings.addonTestMode;
   const text = !selectedIsSaved ? t('addonTestSavePath') :
     state.settings.addonTestMode ? t('addonTestSelected') : t('addonStableSelected');
-  $('addon-test-status').textContent = text;
+  $('addon-test-status').textContent = text + (addonChannelReport ? '\n' + addonChannelReport : '');
 }
 
 async function installAddonChannel(testMode) {
@@ -275,10 +276,13 @@ async function installAddonChannel(testMode) {
   updateAddonChannelUI();
   $('addon-test-status').textContent = t('addonTestWorking');
   try {
-    const version = await invoke('install_encyclopedia_channel', { testMode });
+    const result = await invoke('install_addon_channel', { testMode });
     state.settings.addonTestMode = testMode;
     if (draft) draft.addonTestMode = testMode;
-    const message = t('addonTestComplete', { version });
+    const installed = (result.clientAddons || []).map(a => a.name + ': ' + a.version);
+    const server = (result.serverModules || []).map(m => m.name + ': ' + m.testVersion + ' — ' + t('addonServerOnly'));
+    addonChannelReport = [t('addonClientUpdated'), ...installed, ...(server.length ? [t('addonServerHeading'), ...server] : [])].join('\n');
+    const message = t('addonTestComplete', { count: installed.length });
     toast(message); log(message);
   } catch (error) {
     const message = String(error);
