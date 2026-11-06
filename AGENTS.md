@@ -3,9 +3,17 @@ space before game payload transfer (84.6 GiB selected). Multi 1.5.1 reports
 required/free/missing bytes and destination, reserves loose INSTALL output too,
 and keeps incomplete clients disconnected. Do not delete original/v4/70707
 staging to make space without a concrete scoped user instruction. The network
-repair failed with a formerly opaque Compose error; cause is NOT yet known.
-Current tool exposes redacted stderr/operation and reports rollback failures;
-status is read-only. Await actual user Docker diagnostic before claiming fixed.
+failure is now diagnosed: worldserver remained Created because Windows mangosd
+PID 17144 held 127.0.0.1:8085 (Established/bound sockets, missed by Listen-only
+inspection). Docker reported /forwards/expose 500, then Windows address-in-use.
+User explicitly authorized stopping mangosd to free 8085. A PID/name-guarded
+Stop-Process and clean/server.sh start were supplied; await resulting docker ps
+and Windows TCP8085 test before claiming server recovery. No port migration,
+DB reset, TLS replacement or server upgrade is required for this conflict.
+Current repair tool exposes redacted stderr/operation and rollback failures.
+Multi 1.5.1 Windows run 42226932170 and worker checks 42226932169 succeeded;
+artifact 13506033275 ZIP/hash/source/license/EXE architecture/public CA checked.
+Actual full CDN download and game login are still unverified.
 
 # Instructions for AI coding assistants
 

@@ -52,3 +52,21 @@ CHECK_SELECTION оставляет установленную сборку 70658
 
 Не публикуйте содержимое `compose.private.json`, `state.json`, `.env` или
 вывод `docker compose config` без `-q`: они содержат пароли.
+
+
+### Windows сообщает, что 8085 занят
+
+На ПК пользователя контейнер worldserver остался в `Created`; Docker Desktop
+сначала сообщал `/forwards/expose ... 500`, затем `Only one usage of each socket
+address ... is normally permitted`. Проверка только `-State Listen` не нашла
+конфликт. Полный `Get-NetTCPConnection -LocalPort 8085` обнаружил другой игровой
+сервер Windows — `mangosd` — с Established/привязанными сокетами на 8085.
+Перезапуск Docker Desktop сам по себе этот процесс не устранил.
+
+Проверяйте владельца порта на Windows, а не только контейнеры и WSL. Отдельный
+сервер останавливается только после согласования с владельцем; перед остановкой
+по PID повторно проверяется имя процесса. После освобождения порта используется
+`~/WoWForEver-clean/server.sh start`. В `docker ps` worldserver должен быть Up
+с `127.0.0.1:8085->8085/tcp`; `Test-NetConnection 127.0.0.1 -Port 8085` выполняется
+на Windows после готовности сервера. Это проверка TCP, а не успешного входа
+клиента. Остановка mangosd не требует удаления баз, клиента или сертификатов.
