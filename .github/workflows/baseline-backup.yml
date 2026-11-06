@@ -1,0 +1,15 @@
+name: Server baseline backup
+on:
+  push:
+    branches: [codex/native-cdn-70658-20261106]
+    paths: [scripts/backup-clean-baseline.py, tests/test_baseline_backup.py, .github/workflows/baseline-backup.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup-and-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -q

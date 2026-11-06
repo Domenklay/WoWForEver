@@ -1,3 +1,17 @@
+Next authorized task: preserve a fresh post-install baseline before launcher AddOn
+development mode. scripts/backup-clean-baseline.py is prepared with create/verify.
+It checks current gameplay/image identity, space and real /mnt/e mount before
+pausing runtime writers, dumps four current DBs, resumes original services in
+finally, then saves bind resources/TLS/settings/controller sources and exact
+running image IDs. Offline verification checks hashes, gzip/tar and image config
+hashes. No restore/build/migration action. Backup remains PRIVATE, no uploads.
+User-side create output and an isolated restore test are still pending. See
+docs/BASELINE-BACKUP.ru.md. Fourteen focused tests cover source selection,
+corruption, image mismatch, stop/dump/interrupt/resume failure and low space.
+The accepted baseline branch baseline/70658-working-20261106 stays at 80f6beb5;
+new tools continue on codex/native-cdn-70658-20261106. AddOn development mode is
+next and has not been implemented or built yet.
+
 Working baseline accepted by user on 2026-11-06: user reports "Супер все работает"
 after successful combined gameplay activation. Treat current 70658 + Multi 1.7.0
 as the working reference, preserve it while doing future fixes. This is a general
