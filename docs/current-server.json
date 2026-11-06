@@ -1,0 +1,204 @@
+{
+  "format": "forever-current-server-v1",
+  "updated_on": "2026-11-07",
+  "timezone": "Europe/Moscow",
+  "repository": "Domenklay/WoWForEver",
+  "working_branch": "codex/native-cdn-70658-20261106",
+  "baseline_branch": "baseline/70658-working-20261106",
+  "evidence": {
+    "runtime": "user-supplied filtered state, Compose mounts and controller on 2026-11-07",
+    "gameplay": "user confirmed general working gameplay; detailed acceptance incomplete"
+  },
+  "server": {
+    "phase": "ready",
+    "compose_project": "forever-clean",
+    "core_repository": "advocaite/TrinityCore",
+    "core_branch": "forever",
+    "core_commit": "b4e7b940593f6402a822d4fbcdf31331d16f73b6",
+    "image": "forever-trinitycore:gameplay-70658-4530bd4e14a1",
+    "database_version": "gameplay-1@pristine-b4e7b940593f",
+    "realm_id": 70,
+    "content_set_id": 137,
+    "region_group": 8,
+    "mmap_pathfinding_enabled": false,
+    "upstream_database_revision_verified": false
+  },
+  "modules": {
+    "ascension": {
+      "version": "1.11.0",
+      "protocol": 3,
+      "source_sha256": "5fca3dc2eb4de36967900718016add6fb0e6834f316edcdb2f1249e996632309",
+      "max_abilities": 8,
+      "max_talent_essence_config": 71
+    },
+    "encyclopedia": {
+      "version": "0.9.8-v2.1-smartai-abilities",
+      "source_commit": "ed0ce9b9bed2ecd6ff13c36b49700b66ad979b52",
+      "companion_template": 1933,
+      "flying_book_model_verified": false
+    },
+    "scaling": {
+      "version": "0.2.0",
+      "source_commit": "8661b88f65126e17f9208628a06b01b1ae76eeba",
+      "rule": "clamp(max(max(1,original_npc_level),min(70,max(1,player_effective_level-9))),1,255)",
+      "character_autolevel": false,
+      "preserves_higher_original_level": true,
+      "uses_effective_player_level": true
+    },
+    "combined_source_sha256": "4530bd4e14a1193236e18203ca3e8977680cbea01804afdcd77630647889b1e1"
+  },
+  "paths": {
+    "repository_wsl": "/home/Kayter/WoWForEver",
+    "server_root_wsl": "/home/Kayter/WoWForEver-clean",
+    "state_wsl": "/home/Kayter/WoWForEver-clean/state.json",
+    "compose_wsl": "/home/Kayter/WoWForEver-clean/compose.private.json",
+    "controller_wsl": "/home/Kayter/WoWForEver-clean/server.sh",
+    "controller_source_wsl": "/home/Kayter/WoWForEver-gameplay-tools.hReuvj/scripts/clean-forever-server.py",
+    "active_gameplay_tools_wsl": "/home/Kayter/WoWForEver-gameplay-tools.hReuvj",
+    "active_clean_tools_wsl": "/home/Kayter/WoWForEver-clean-tools.ZbyhNF",
+    "data_wsl": "/home/Kayter/WoWForEver-clean/data",
+    "state_data_directory_value": null,
+    "certificates_wsl": "/home/Kayter/WoWForEver/certs",
+    "last_known_client_windows": "E:\\WoWForEver-work\\clients\\70658\\_forever_",
+    "last_known_client_wsl": "/mnt/e/WoWForEver-work/clients/70658/_forever_",
+    "client_data_windows": "E:\\WoWForEver-work\\clients\\70658\\Data",
+    "reports_windows": "E:\\WoWForEver-work\\reports",
+    "reports_wsl": "/mnt/e/WoWForEver-work/reports",
+    "launcher_settings_windows": "%APPDATA%\\forever-launcher-app\\settings.json",
+    "launcher_private_session_windows": "%APPDATA%\\forever-launcher-app\\session.json",
+    "launcher_reports_windows": "%APPDATA%\\forever-launcher-app\\workshop\\reports"
+  },
+  "services": {
+    "mysql": {
+      "image": "mysql:8.0",
+      "published_ports": [],
+      "binds": [
+        {
+          "source": "/home/Kayter/WoWForEver-clean-tools.ZbyhNF/docker/clean/mysql-init.sh",
+          "target": "/docker-entrypoint-initdb.d/01-clean.sh"
+        }
+      ]
+    },
+    "worldserver": {
+      "image": "forever-trinitycore:gameplay-70658-4530bd4e14a1",
+      "published_ports": [
+        "127.0.0.1:8085:8085"
+      ],
+      "binds": [
+        {
+          "source": "/home/Kayter/WoWForEver-clean/data",
+          "target": "/opt/trinitycore/data"
+        }
+      ]
+    },
+    "bnetserver": {
+      "image": "forever-trinitycore:clean-b4e7b940593f",
+      "published_ports": [
+        "127.0.0.1:1119:1119",
+        "127.0.0.1:8081:8081"
+      ],
+      "binds": [
+        {
+          "source": "/home/Kayter/WoWForEver-clean-tools.ZbyhNF/docker/clean/entrypoint.py",
+          "target": "/usr/local/bin/forever-clean-entrypoint.py"
+        },
+        {
+          "source": "/home/Kayter/WoWForEver/certs",
+          "target": "/opt/trinitycore/certs"
+        }
+      ]
+    },
+    "web": {
+      "image": "forever-clean-web:local",
+      "published_ports": [
+        "127.0.0.1:8088:8000"
+      ],
+      "binds": [
+        {
+          "source": "/home/Kayter/WoWForEver/certs/ca/forever_root_ca.crt",
+          "target": "/certs/ca/forever_root_ca.crt"
+        }
+      ]
+    }
+  },
+  "databases": [
+    "auth",
+    "world",
+    "characters",
+    "hotfixes"
+  ],
+  "docker_volume_keys": [
+    "mysql-data",
+    "logs"
+  ],
+  "actual_docker_volume_names_verified": false,
+  "mysql_patch_version_verified": false,
+  "connection": {
+    "address": "127.0.0.1",
+    "portal": "trinity.actual.battle.net",
+    "bnet_port": 1119,
+    "rest_port": 8081,
+    "world_port": 8085,
+    "website": "http://127.0.0.1:8088",
+    "public_ca_sha256": "d2a887dfe8e07191b7cb1d6fa8801bc4c59f4b87668ef4f6973f39d287bb799c"
+  },
+  "client": {
+    "product": "wowf",
+    "build": 70658,
+    "version": "1.60.1.70658",
+    "last_known_locale": "ruRU",
+    "staged_70707_active": false
+  },
+  "launcher": {
+    "working_baseline": "1.7.0",
+    "latest_verified_release": "1.7.1",
+    "latest_user_install_confirmed": false,
+    "source_commit": "87edd5aa6bdf0168dd25714c17b5815df82f6c68",
+    "workflow_run": 42291254078,
+    "artifact": 13540302260,
+    "download_url": "https://github.com/Domenklay/WoWForEver/actions/runs/42291254078/artifacts/13540302260",
+    "zip_sha256": "a9254f60a896d7e029dc78cc7a6e1b39d16875224ec9e446b233b5e86f5c8d29",
+    "addon_development_default": false
+  },
+  "backup": {
+    "directory_windows": "E:\\WoWForEver-work\\reports\\baseline-70658-20261106-231543",
+    "directory_wsl": "/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543",
+    "user_integrity_verified": true,
+    "verifier_commit": "c9d344269739a974dfb2abb1de37a557716b2578",
+    "module_rollback_record": "/home/Kayter/WoWForEver-clean/advancement/4bae99119c86/install.json",
+    "database_restore_ci_verified": true,
+    "database_restore_ci_run": 42295336273,
+    "database_restore_user_verified": false,
+    "full_server_restore_verified": false
+  },
+  "checks": {
+    "launcher_windows": 61,
+    "worker_windows": 224,
+    "combined_core_units": 12,
+    "combined_check_run": 42291253941,
+    "restore_unit_suite_total": 461,
+    "restore_unit_suite_skipped": 29,
+    "restore_real_mysql_fixture_verified": true
+  },
+  "known_limits": [
+    "Ability Essence economy is incomplete; purchase limit is used",
+    "Mana-forged Barrier 701463 effects are unimplemented and blocked",
+    "Full talent/proc/pet catalogue is not supported",
+    "Companion uses diagnostic template 1933; flying-book model unverified",
+    "Scaling damage guard is per event, not a rolling window",
+    "Party-size dungeon and loot scaling are not implemented",
+    "Previous client ACCESS_VIOLATION root cause remains unproven",
+    "Detailed gameplay acceptance, Multi 1.7.1 user test and full-server restore remain pending"
+  ],
+  "privacy": {
+    "snapshot_contains_secrets": false,
+    "never_publish": [
+      "state.json contents",
+      "compose.private.json contents",
+      "session.json",
+      "SQL dumps",
+      "server backup archives",
+      "private certificate keys"
+    ]
+  }
+}

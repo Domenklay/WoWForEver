@@ -1,67 +1,117 @@
-# Instructions for AI coding assistants
+# Instructions for assistants — current WoWForEver
 
-This repository runs a private server for the **World of Warcraft Forever** beta, client build **1.60.1.70450**,
-based on the [`forever` branch of TrinityCore](https://github.com/advocaite/TrinityCore/tree/forever). Read
-`README.md` first; this file adds what an assistant needs to help someone set it up.
-The user intentionally runs **1.60.1.70532** in this fork; see the compatibility
-limits in README.md. This is not a claim of full compatibility with that client.
+Updated 2026-11-07, Europe/Moscow. Start with:
 
-## Layout
+1. [Current server handoff](https://github.com/Domenklay/WoWForEver/blob/main/docs/CURRENT-SERVER.ru.md).
+2. [Machine-readable state](https://github.com/Domenklay/WoWForEver/blob/main/docs/current-server.json).
+3. The component guide linked from the handoff.
 
-| Path | What it is |
-|---|---|
-| `Dockerfile`, `docker/` | Builds TrinityCore from the forever branch, applies `docker/patches/*.patch`, writes the configs at start (`docker/entrypoint.sh`). |
-| `docker-compose.yml` | mysql, worldserver, bnetserver, web (website), extractor (profile `tools`). `docker-compose.traefik.yml` publishes the website through Traefik. |
-| `web/` | Website (FastAPI + Jinja): account sign-up through worldserver SOAP, status, launcher downloads, 4 languages (`web/app/i18n.py`). |
-| `app/` | Launcher (Tauri 2: Rust in `app/src-tauri/src`, UI in `app/ui`), 4 languages (`i18n.rs`, `ui/i18n.js`). |
-| `scripts/` | `gen-certs.sh` (CA + server certificate), `upload-dokploy.sh`, `pkt-dump.py` (packet log reader). |
-| `docs/` | `DOKPLOY.md` (deployment), `MACOS.md` (how the macOS launcher works). |
-| `mods/forever-subclass/` | Experimental server adapter and AddOn for the user-supplied subclass prototype. Installation, backup and rollback: `README.ru.md` in that directory. Disabled by default; core revision is pinned in the Docker build. |
+**Working code: `codex/native-cdn-70658-20261106`.** Main also publishes these
+entry points; its legacy code is not the deployed implementation. Use a separate
+checkout/worktree of the working branch. Historical 70450/70532, root Compose and
+old install-dev instructions do not describe the active ready generation.
 
-## Helping someone run their server
+## Confirmed state
 
-1. Linux server with Docker. `cp .env.example .env`: set the three passwords, `PUBLIC_ADDRESS` (public IP or DNS
-   name), `WOW_DIR` (the "World of Warcraft" folder of a 1.60.1.70450 client, for the data extraction).
-2. `./scripts/gen-certs.sh`, `docker compose build`, `docker compose run --rm extractor`, `docker compose up -d`.
-3. Ports: TCP 1119, 8081, 8085 forwarded to the server; 80/443 for the website through Traefik or Dokploy.
-4. Dokploy: follow `docs/DOKPLOY.md` (data and certificates go to `/etc/dokploy/compose/<app>/files/`).
+- User PC: Windows + Ubuntu/WSL + Docker Desktop. A cloud workspace or Git access
+  does not give access to that PC. Never claim user deployment from cloud tests.
+- Client wowf 1.60.1.70658; last known gameDir is
+  `E:\WoWForEver-work\clients\70658\_forever_`. Read current settings when needed.
+- Core advocaite/TrinityCore forever at exact
+  `b4e7b940593f6402a822d4fbcdf31331d16f73b6`.
+- Project `forever-clean`, root `/home/Kayter/WoWForEver-clean`, state phase ready.
+- World image `forever-trinitycore:gameplay-70658-4530bd4e14a1`.
+- Ascension 1.11.0/protocol 3, Encyclopedia 0.9.8-v2.1-smartai-abilities,
+  Forever Scaling 0.2.0. Autolevel means NPC Scaling, not character leveling.
+- State DB label `gameplay-1@pristine-b4e7b940593f` is not an independently queried
+  upstream world-schema revision. Realm 70, content set 137, region group 8.
+- Loopback ports 1119/8081/8085, web 8088. MySQL is not host-published.
+- General working gameplay confirmed by user; detailed acceptance is incomplete.
 
-## Publishing their launcher (GitHub Actions)
+## Active files and operations
 
-Explain the steps of "Publish the launcher for your server" in `README.md`: fork (and enable Actions in it), repository **variables**
-`FOREVER_CA_CERT` (text of `certs/ca/forever_root_ca.crt`) and `FOREVER_SERVER_ADDRESS` (optional
-`FOREVER_WEBSITE`, `FOREVER_SERVER_NAME`), then Actions > Launcher > Run workflow with a version. With the GitHub CLI:
+`~/WoWForEver-clean/server.sh` calls
+`/home/Kayter/WoWForEver-gameplay-tools.hReuvj/scripts/clean-forever-server.py`.
+Keep that worktree AND `/home/Kayter/WoWForEver-clean-tools.ZbyhNF`: the latter
+provides active mysql-init.sh and bnet entrypoint bind files. Confirmed mounts
+are documented in the handoff and JSON. Certificates: `~/WoWForEver/certs`;
+server resources: `~/WoWForEver-clean/data`. The filtered data_directory is unset and
+uses that confirmed default. Do not guess dependencies from folder age.
 
-```sh
-gh variable set FOREVER_CA_CERT < certs/ca/forever_root_ca.crt
-gh variable set FOREVER_SERVER_ADDRESS --body "play.example.com"
-gh variable set FOREVER_WEBSITE --body "https://play.example.com"
-gh workflow run launcher.yml -f version=1.0.0
-```
+Use `~/WoWForEver-clean/server.sh status|start|stop|restart` for normal lifecycle.
+Stop leaves MySQL running. New tool worktrees do not automatically replace the
+active controller. Verify references before moving/deleting any worktree.
+Worldserver has its entrypoint in the image. Configs are generated under
+`/opt/trinitycore/etc`; legacy host overrides are not mounted into this worldserver.
+Source extraction and selected launcher client path are independent.
 
-Then `LAUNCHER_REPO=<owner>/<repo>` in the server's `.env` so the website offers the downloads.
+## Backup and validation status
 
-## Rules
+User confirmed BASELINE BACKUP VERIFIED for
+`/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543` on verifier c9d3442.
+This contains current four-DB SQL, resources/TLS/settings/controller sources and
+exact images, not the WoW client. Module rollback record:
+`~/WoWForEver-clean/advancement/4bae99119c86/install.json`; its databases-before
+dump predates installation and is not the fresh databases-current dump.
 
-- **Never** commit, upload or paste `certs/ca/forever_root_ca.key`, `certs/forever.key.pem`, `.env` or passwords.
-  `forever_root_ca.crt` is public and is what the launcher needs.
-- Do not add Blizzard files: no game client, game data, artwork, logos or download links to the client.
-- The upstream documented client is 1.60.1.70450; the user's explicit 70532 experiment is described above. Do not suggest ways to get the beta without access.
-- Do not redeploy or restart the worldserver during its first database import (an interrupted import leaves a
-  half-filled `world` database).
-- If the build stops at "applying /patches/...", the forever branch probably merged that fix: check upstream and
-  delete the patch rather than forcing it.
-- Keep the 4 languages in sync when changing texts (FR, EN, ES, PT); `cargo test --lib` checks the Rust messages.
+Offline verification supports classic config IDs, containerd OCI root IDs and
+non-runnable OCI-empty artifact configs. Never edit expected hashes to pass.
+`test-baseline-restore.py` uses a NEW labelled MySQL and volume, no network/ports/
+live binds, 1 CPU/1GiB, and temporary credentials. It compares counts/schema and
+ten module tables; cleanup removes only nonce-owned resources. No live Compose
+or state is a restore target. `--cleanup-report` validates identity/path/labels.
+Real MySQL integration CI 42295336273 passed with generated data, views, module
+values, invalid-SQL rejection, cleanup and unchanged-source checks. User-side SQL
+trial result and full worldserver/client recovery are still pending.
+
+## Launcher
+
+Verified Multi 1.7.1 source `87edd5aa6bdf0168dd25714c17b5815df82f6c68`:
+Windows run 42291254078, artifact 13540302260. 61 launcher and 224 worker tests,
+five-language UI, PS5.1, NSIS/portable passed; archive/EXE hashes, GPL worker
+source and unchanged CA checked. Download/hash are in the handoff. User test of
+1.7.1 has not been reported; working baseline launcher is 1.7.0.
+
+Opt-in addonDevelopmentMode preserves existing Ascension/Encyclopedia folders,
+even incomplete ones. Missing folders still get pinned verified installation.
+Default false; turning off restores normal checks/backups at next launch. UI
+checkbox/home notice are translated in RU/FR/EN/ES/PT. Junctions/symlinks remain
+unsupported. SavedVariables, other AddOns and CASC are outside AddOn replacement.
+
+## Rules and known limits
+
+- Preserve current DBs, accounts/characters/progress, TLS, clients and staged
+  70707. Old reset authorization does not authorize deleting this later baseline.
+- Do authorized work without unnecessary repeated confirmations. Gather bounded,
+  filtered runtime facts only when missing information matters. Do not request
+  full private state/Compose/session files, SQL dumps or private backup archives.
+- Never publish private keys, passwords/tokens or game client/data. Public CA,
+  sources and filtered version/path facts are allowed. Keep source/license notices.
+- Do not use down -v, prune, purge-old, legacy install-dev/root Compose, reinstall
+  or reset as routine fixes for this ready server. Do not restart first DB import.
+- Installer install is not a universal arbitrary-source upgrade. Do not rollback
+  just to bypass its active fingerprint check. Prepare separate transitions,
+  isolated DB clones, full build before downtime and precise rollback scope.
+- A profile/build/.build.info change is not protocol or data migration. Preserve
+  pinned 70658 until actual compatible client/core/data are prepared and verified.
+- Distinguish user smoke confirmation, CI compilation, trial DB restore and full
+  recovery. Previous client ACCESS_VIOLATION root cause is still unproven.
+- Barrier 701463 is unimplemented/blocked; Ability Essence economy is incomplete;
+  complex procs/pets/full talents are partial. Companion template 1933 is diagnostic;
+  flying-book appearance unverified. Scaling guard is per-event, without full
+  party/loot scaling. Mmap pathfinding is disabled.
+- After confirmed changes update CURRENT-SERVER.ru.md and current-server.json and
+  keep main's entry point current. Release availability is not user installation.
 
 ## Checks
 
-For the content/CASC/subclass tools, run `python3 -m unittest discover -s tests -q`.
-The subclass checks compile the original C++ rules when g++ is installed and
-exercise the AddOn against a Lua API double when liblua5.4 is available. They
-do not launch the actual game client. Do not claim a deployment to the user's
-Windows/WSL machine from cloud-only tests.
-
-```sh
-docker compose config -q                                    # compose files
-cd app/src-tauri && FOREVER_CA_CERT="$(cat ../../certs/ca/forever_root_ca.crt)" cargo test --lib
-```
+Use component-appropriate tests; never use a live install/reset as a test.
+`python3 -m unittest discover -s tests -q`; UI:
+`node tests/fixtures/launcher-content-ui.js .`. Launcher:
+`cargo test --locked --lib` in app/src-tauri with a PUBLIC CA, or Windows CI when
+that toolchain is unavailable. Keep all five launcher languages synchronized.
+Real restore integration is opt-in FOREVER_RESTORE_INTEGRATION=1 with generated
+Docker/MySQL data, as configured in baseline-backup.yml. Native worker license
+and matching source must accompany binary delivery. Core changes compile against
+the exact pinned headers/CMake flags; syntax checks alone do not prove linking
+or gameplay. Follow the current user's authorization over historical guidelines.
