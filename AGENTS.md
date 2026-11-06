@@ -1,5 +1,17 @@
 # Instructions for AI coding assistants
 
+Latest user steering: keep/restore a working 70658 client/server while retaining
+70707 separately, and implement CDN downloading in Multi using the sources in
+Nvord ForeverLauncher 2.0 logs, with our own login address/TLS/key. User status
+confirms clean ready 70658; no DB rollback is needed. worldserver shows only
+8085/tcp, without host publication. repair-clean-network.py repairs only that
+loopback binding on the existing ready generation, preserving all DB volumes.
+The source launcher log verifies only 1991 Critical objects despite All selected;
+never equate that bootstrap check with full model/map availability. The separate
+70707 staging report confirms all 39 files and native versions 1.60.1.70707 at
+E:\WoWForEver-work\staging\client-70707-20261106-145529; do not delete it or
+activate it over the 70658 original. Continue the native downloader task.
+
 The user's revision-3 local audit succeeded: EU Wow.exe and wow_loader.dll
 both have verified_local_preload_copy=true, matches_active_file=false and
 no local read errors. INSTALL selected 39 EU Windows x64 files. Source
