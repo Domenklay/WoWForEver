@@ -121,7 +121,7 @@ class GameplayTests(unittest.TestCase):
                 game.clean.execute(SimpleNamespace(action='start', root=root))
 
     def test_book_manifest_covers_exactly_the_toc_and_all_loaded_lua_files(self):
-        manifest = json.loads((ROOT / 'app/src-tauri/addons/forever-encyclopedia.json').read_text())
+        manifest = json.loads((ROOT / 'app/src-tauri/addons/forever-encyclopedia-test.json').read_text())
         folder = ROOT / 'mods/living-encyclopedia/addon/ForeverEncyclopedia'
         names = {line.strip() for line in (folder / 'ForeverEncyclopedia.toc').read_text().splitlines() if line.strip() and not line.startswith('#')}
         names.add('ForeverEncyclopedia.toc')
