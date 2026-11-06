@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $repo = 'Domenklay/WoWForEver'
-$branch = 'feature/encyclopedia-tooltip-mana-20261107'
+$branch = 'testing/addons-70658'
 $rootUrl = "https://raw.githubusercontent.com/$repo/$branch"
 $game = [IO.Path]::GetFullPath($GameDirectory.TrimEnd([char[]]@('\','/')))
 $addons = Join-Path $game 'Interface\AddOns'
