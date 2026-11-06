@@ -111,6 +111,12 @@
         <legend data-i18n="addonSettings">Game AddOns</legend>
         <label class="row"><input id="s-addon-development" type="checkbox" aria-describedby="addon-dev-hint"><span data-i18n="addonDevMode">AddOn development</span></label>
         <p class="small muted" id="addon-dev-hint" data-i18n="addonDevHint">Keep existing Ascension and Encyclopedia folders unchanged. Missing folders are installed automatically. Turn this off to return to published versions; replaced folders are backed up.</p>
+        <div class="workshop-buttons">
+          <button class="btn small" id="addon-test-install" type="button" data-i18n="addonTestInstall">Download test Encyclopedia 0.9.9</button>
+          <button class="btn small ghost" id="addon-test-stable" type="button" data-i18n="addonTestStable">Return to stable 0.9.8</button>
+        </div>
+        <p class="small muted" id="addon-test-status" aria-live="polite"></p>
+        <p class="small muted" data-i18n="addonTestWarning">Only the AddOn files change. New server-side pet talents require a matching worldserver update.</p>
       </fieldset>
 
       <fieldset id="content-packages">
