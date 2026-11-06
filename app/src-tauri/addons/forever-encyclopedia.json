@@ -1,14 +1,14 @@
 {
   "format": "forever-addon-v1",
   "name": "ForeverEncyclopedia",
-  "version": "0.9.8-v2.1-smartai-abilities",
+  "version": "0.9.9-v2.1-talent-mana",
   "protocol": 1,
-  "sourceCommit": "ed0ce9b9bed2ecd6ff13c36b49700b66ad979b52",
+  "sourceCommit": "98fd76913dcaee527c392ea74cf3152a95ed91d2",
   "files": [
     {
       "name": "ForeverEncyclopedia.toc",
-      "size": 600,
-      "sha256": "202b4fdbdb18d5cee78d8a5671490dd8aae464121953ceaa38c4917e260252bf"
+      "size": 594,
+      "sha256": "6f91cad792a4bcdfd3f34d4be0a48e2d05ee89384916875a4df7905f2774db40"
     },
     {
       "name": "ForeverEncyclopediaTalentData.lua",
@@ -17,13 +17,13 @@
     },
     {
       "name": "ForeverEncyclopediaTalentOverrides.lua",
-      "size": 2663,
-      "sha256": "0475bf94ffb7c1872af9998be31d4d510665d78320183649eb5fd338cf0342b3"
+      "size": 7672,
+      "sha256": "ab51d8a75d9dc5debf28a90319ce6885818b52b5b992dabeb173319c77090249"
     },
     {
       "name": "ForeverEncyclopediaV21.lua",
-      "size": 35929,
-      "sha256": "c81c6f30178129ed68e1fb32927373ae6edc9aa31f237b5f3180b35f7c1ca3c5"
+      "size": 37829,
+      "sha256": "6fc206b494c2063d46de251d89b3b69a9032ac97b361e262878e74351568cf09"
     },
     {
       "name": "ForeverEncyclopediaAbilities.lua",
@@ -32,8 +32,8 @@
     },
     {
       "name": "ForeverEncyclopediaSafeDock.lua",
-      "size": 13355,
-      "sha256": "4c66b061bc3ba84e7557231b989e3aee4226000872e767567644a15e26623793"
+      "size": 13823,
+      "sha256": "bcba97645bd0055e0fe59e6d765242acd9b01776833d2003b0c9cda8701a22e8"
     },
     {
       "name": "ForeverEncyclopediaMovableDock.lua",
