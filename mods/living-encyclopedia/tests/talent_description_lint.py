@@ -81,9 +81,12 @@ assert "uint32 amount = std::min(state.mana, cap);" in runtime
 assert "uint32 amount = std::min(state.pendingShieldAmount, state.mana);" in runtime
 assert "uint32 spendable = SpendableMana(*state);" in runtime
 assert "Talents::AmplifiedHeal" in runtime
-# Launcher pins must refer to this exact pack, not the previous 0.9.8 release.
+# The stable channel keeps 0.9.8, while the explicit test channel pins this pack.
 repo = root.parents[1]
-manifest = json.loads((repo / "app/src-tauri/addons/forever-encyclopedia.json").read_text(encoding="utf-8"))
+stable = json.loads((repo / "app/src-tauri/addons/forever-encyclopedia.json").read_text(encoding="utf-8"))
+manifest = json.loads((repo / "app/src-tauri/addons/forever-encyclopedia-test.json").read_text(encoding="utf-8"))
+assert stable["version"] == "0.9.8-v2.1-smartai-abilities"
+assert manifest["sourceCommit"] != stable["sourceCommit"]
 toc_version = re.search(r"^## Version: (.+)$", (
     root / "addon/ForeverEncyclopedia/ForeverEncyclopedia.toc"
 ).read_text(encoding="utf-8"), re.MULTILINE).group(1)
@@ -92,7 +95,9 @@ for item in manifest["files"]:
     body = (root / "addon/ForeverEncyclopedia" / item["name"]).read_bytes()
     assert len(body) == item["size"], item["name"]
     assert hashlib.sha256(body).hexdigest() == item["sha256"], item["name"]
-assert f'm.version=="{toc_version}"' in (repo / "app/src-tauri/src/addon.rs").read_text(encoding="utf-8")
+addon = (repo / "app/src-tauri/src/addon.rs").read_text(encoding="utf-8")
+assert f'"{toc_version}"' in addon and f'"{stable["version"]}"' in addon
+assert "forever-encyclopedia-test.json" in addon
 assert f"BOOK_VERSION = '{toc_version}'" in (repo / "scripts/enable-clean-gameplay.py").read_text(encoding="utf-8")
 
 print(f"Encyclopedia tooltip/server policy synced: {len(server_rows)} talents, "
