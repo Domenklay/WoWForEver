@@ -1,14 +1,15 @@
 //! Install the pinned project AddOns before the game is spawned.
 //! No client archives, settings, SavedVariables or other AddOns are modified.
 use std::{fs, path::{Path, PathBuf}, time::Duration};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use crate::i18n::{t, tf};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 struct Manifest {format:String, name:String, version:String, protocol:u32, source_commit:String, files:Vec<Entry>}
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Entry {name:String, size:u64, sha256:String}
 fn manifest()->Result<Manifest,String>{
@@ -16,10 +17,19 @@ fn manifest()->Result<Manifest,String>{
 }
 fn parse_manifest(text:&str)->Result<Manifest,String>{
  let m:Manifest=serde_json::from_str(text).map_err(|e|e.to_string())?;
- let valid_version=match m.name.as_str(){"ForeverAscension"=>m.version=="1.11.0"&&m.protocol==3,"ForeverEncyclopedia"=>matches!(m.version.as_str(), "0.9.8-v2.1-smartai-abilities"|"0.9.9-v2.1-talent-mana")&&m.protocol==1,_=>false};
- if m.format!="forever-addon-v1" || !valid_version || m.source_commit.len()!=40 || !m.source_commit.bytes().all(|c|c.is_ascii_hexdigit()) || m.files.is_empty(){return Err("Invalid bundled AddOn manifest".into());}
+ let valid_name=m.name.starts_with("Forever") && m.name.len()<=80 && m.name.bytes().all(|b|b.is_ascii_alphanumeric());
+ let valid_version=!m.version.is_empty() && m.version.len()<=96 && m.version.bytes().all(|b|b.is_ascii_alphanumeric() || matches!(b,b'.'|b'-'|b'_'));
+ let valid_protocol=match m.name.as_str(){"ForeverAscension"=>m.protocol==3,"ForeverEncyclopedia"=>m.protocol==1,_=>(1..=10).contains(&m.protocol)};
+ if m.format!="forever-addon-v1" || !valid_name || !valid_version || !valid_protocol || m.source_commit.len()!=40 || !m.source_commit.bytes().all(|c|c.is_ascii_hexdigit()) || m.files.is_empty() || m.files.len()>100{return Err("Invalid bundled AddOn manifest".into());}
  let mut seen=std::collections::HashSet::new();
- for f in &m.files {if f.name.is_empty() || f.name.chars().any(|c|matches!(c, '/'|'\\'|':')) || f.name.starts_with('.') || !seen.insert(&f.name) || f.size>32*1024*1024 || f.sha256.len()!=64 || !f.sha256.bytes().all(|c|c.is_ascii_hexdigit()){return Err("Unsafe AddOn file manifest".into());}}
+ for f in &m.files {
+  if f.name.is_empty() || f.name.len()>128 || !f.name.bytes().all(|c|c.is_ascii_alphanumeric() || matches!(c,b'.'|b'-'|b'_'))
+    || f.name.starts_with('.') || !seen.insert(&f.name) || f.size>32*1024*1024
+    || f.sha256.len()!=64 || !f.sha256.bytes().all(|c|c.is_ascii_hexdigit()) {
+    return Err("Unsafe AddOn file manifest".into());
+  }
+ }
+ if !seen.contains(&format!("{}.toc",m.name)){return Err("AddOn manifest lacks a .toc file".into());}
  Ok(m)
 }
 fn test_manifest()->Result<Manifest,String>{parse_manifest(include_str!("../addons/forever-encyclopedia-test.json"))}
