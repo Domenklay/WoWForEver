@@ -29,6 +29,21 @@ class GameplayTests(unittest.TestCase):
             self.assertEqual(target['client'], state['client'])
             game.clean.save(target); self.assertEqual(game.clean.load_state(root / 'state.json'), target)
 
+    def test_preupgrade_encyclopedia_state_is_still_readable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); state, model = fixture(root)
+            target, _ = game.configure(state, model, 'candidate', root / 'advancement/abcdef123456')
+            target['gameplay']['encyclopedia'] = '0.9.8-v2.1-smartai-abilities'
+            game.clean.save(target)
+            self.assertEqual(game.clean.load_state(root / 'state.json'), target)
+            target['gameplay']['encyclopedia'] = '0.9.9-v2.1-talent-mana'
+            game.clean.save(target)
+            self.assertEqual(game.clean.load_state(root / 'state.json'), target)
+            target['gameplay']['encyclopedia'] = 'unrecognized-build'
+            game.clean.save(target)
+            with self.assertRaisesRegex(ValueError, 'Unsupported combined gameplay'):
+                game.clean.load_state(root / 'state.json')
+
     def test_scaling_can_be_left_disabled_without_removing_book_or_ascension(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); state, model = fixture(root)
