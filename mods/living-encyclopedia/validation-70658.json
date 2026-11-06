@@ -54,8 +54,14 @@
     "database_restore_verified": true,
     "database_restore_report_wsl": "/mnt/e/WoWForEver-work/reports/restore-test-20261107-004340-520b852f5c8f/report.json",
     "database_restore_trial_cleanup_verified": true,
-    "isolated_restore_scope": "Full server startup remains untested; isolated SQL restoration passed",
-    "full_server_restore_verified": false
+    "isolated_restore_scope": "Actual user SQL restoration and world/modules/login TLS/web startup passed; client login and image import on blank Docker remain untested",
+    "full_server_restore_verified": false,
+    "services_restore_verified": true,
+    "services_restore_report_wsl": "/home/Kayter/WoWForEver-restore-trials/forever-services-check-885b9c3e9bc2/report.json",
+    "services_restore_source_commit": "b282fb2a4bd534a2e541b9314d48a94f513e2ade",
+    "services_restore_trial_cleanup_verified": true,
+    "client_login_to_restored_server_verified": false,
+    "image_import_on_blank_docker_verified": false
   },
   "launcher_development_release": {
     "version": "1.7.1",

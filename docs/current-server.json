@@ -8,7 +8,8 @@
   "evidence": {
     "runtime": "user-supplied filtered state, Compose mounts and controller on 2026-11-07",
     "gameplay": "user confirmed general working gameplay; detailed acceptance incomplete",
-    "backup_and_database_restore": "user-supplied BASELINE BACKUP VERIFIED and DATABASE RESTORE VERIFIED output on 2026-11-07; source 877b877"
+    "backup_and_database_restore": "user-supplied BASELINE BACKUP VERIFIED and DATABASE RESTORE VERIFIED output on 2026-11-07; source 877b877",
+    "restored_services": "user-supplied RESTORED SERVICES VERIFIED output on source b282fb2; world/modules, login TCP/TLS, web, SQL clone and cleanup passed"
   },
   "server": {
     "phase": "ready",
@@ -183,8 +184,16 @@
     "database_restore_user_source_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
     "database_restore_trial_cleanup_verified": true,
     "services_restore_trial_prepared": true,
-    "services_restore_user_verified": false,
-    "services_restore_guide": "docs/BASELINE-SERVICES-RESTORE.ru.md"
+    "services_restore_user_verified": true,
+    "services_restore_guide": "docs/BASELINE-SERVICES-RESTORE.ru.md",
+    "services_restore_user_report_wsl": "/home/Kayter/WoWForEver-restore-trials/forever-services-check-885b9c3e9bc2/report.json",
+    "services_restore_user_source_commit": "b282fb2a4bd534a2e541b9314d48a94f513e2ade",
+    "services_restore_trial_cleanup_verified": true,
+    "restored_world_modules_verified": true,
+    "restored_login_tls_verified": true,
+    "restored_web_verified": true,
+    "client_login_to_restored_server_verified": false,
+    "image_archive_load_on_blank_docker_verified": false
   },
   "checks": {
     "launcher_windows": 61,
