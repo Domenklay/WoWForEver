@@ -7,6 +7,7 @@ let state = null;      // snapshot from get_state
 let draft = null;      // settings being edited in the drawer
 let toastTimer = 0;
 let contentBusy = false;
+let addonChannelBusy = false;
 let workshopBusy = false;
 let nativeBusy = false;
 let nativeReport = null;
@@ -61,6 +62,7 @@ async function refresh() {
   $('game-field').textContent = `WoW Forever${actualVersion ? ` ${actualVersion}` : ''}`;
   $('game-login-mode').textContent = t(state.gameAutoLogin ? 'automaticGameLogin' : 'manualGameLogin');
   $('addon-dev-notice').hidden = !state.settings.addonDevelopmentMode;
+  if ($('settings') && !$('settings').hidden) updateAddonChannelUI();
   if (logged) {
     $('account-email').textContent = state.email;
     $('avatar').textContent = state.email[0].toUpperCase();
@@ -72,7 +74,7 @@ async function refresh() {
 function updatePlayButton() {
   const play = $('play');
   const incompatible = state.settings.protectClientFiles && state.officialClient && !state.officialClient.ready;
-  play.disabled = nativeBusy || contentBusy || state.playing || !state.gameFound || !!incompatible;
+  play.disabled = nativeBusy || contentBusy || addonChannelBusy || state.playing || !state.gameFound || !!incompatible;
   play.classList.toggle('running', state.playing);
   play.textContent = workshopBusy ? t('working') : state.playing ? t('inGame') : t('play');
   updateContentActions();
@@ -218,6 +220,7 @@ function fillSettings() {
   draft = structuredClone(state.settings);
   $('s-game-dir').value = draft.gameDir;
   $('s-addon-development').checked = !!draft.addonDevelopmentMode;
+  updateAddonChannelUI();
   const loc = $('s-locale');
   loc.replaceChildren();
   state.locales.forEach((l) => option(loc, l, l));
@@ -249,6 +252,47 @@ function fillSettings() {
   $('official-connect').disabled = !!state.playing;
   gameDirState();
 }
+
+function updateAddonChannelUI() {
+  if (!state) return;
+  const gameDir = $('s-game-dir').value.trim();
+  const selectedIsSaved = gameDir === state.settings.gameDir;
+  const blocked = !selectedIsSaved || !state.gameFound || state.playing || addonChannelBusy;
+  $('addon-test-install').disabled = blocked || !!state.settings.addonTestMode;
+  $('addon-test-stable').disabled = blocked || !state.settings.addonTestMode;
+  const text = !selectedIsSaved ? t('addonTestSavePath') :
+    state.settings.addonTestMode ? t('addonTestSelected') : t('addonStableSelected');
+  $('addon-test-status').textContent = text;
+}
+
+async function installAddonChannel(testMode) {
+  if (addonChannelBusy || state?.playing) return;
+  if ($('s-game-dir').value.trim() !== state.settings.gameDir) {
+    toast(t('addonTestSavePath'));
+    return;
+  }
+  addonChannelBusy = true;
+  updateAddonChannelUI();
+  $('addon-test-status').textContent = t('addonTestWorking');
+  try {
+    const version = await invoke('install_encyclopedia_channel', { testMode });
+    state.settings.addonTestMode = testMode;
+    if (draft) draft.addonTestMode = testMode;
+    const message = t('addonTestComplete', { version });
+    toast(message); log(message);
+  } catch (error) {
+    const message = String(error);
+    $('addon-test-status').textContent = message;
+    log(message); toast(message);
+  } finally {
+    addonChannelBusy = false;
+    updateAddonChannelUI();
+  }
+}
+
+$('addon-test-install').addEventListener('click', () => installAddonChannel(true));
+$('addon-test-stable').addEventListener('click', () => installAddonChannel(false));
+$('s-game-dir').addEventListener('input', updateAddonChannelUI);
 
 function officialMessage(report) {
   return t(report.status, { version: report.version || '—', build: report.serverBuild });
@@ -433,6 +477,7 @@ function settingsFromForm() {
 }
 
 $('save-settings').addEventListener('click', async () => {
+  if (addonChannelBusy) return;
   draft = settingsFromForm();
   try {
     await invoke('save_settings', { settings: draft });
