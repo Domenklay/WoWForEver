@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -29,6 +30,61 @@ inline uint16_t Rank(RankMapT const& ranks, std::string_view key)
 {
     auto it = ranks.find(std::string(key));
     return it == ranks.end() ? 0 : uint16_t(it->second);
+}
+
+// A talent with no server-side effect must not consume knowledge. Previously
+// purchased ranks are preserved; this gate only applies to NEW purchases.
+inline bool Implemented(std::string_view key)
+{
+    for (std::string_view working : {
+        "aegis_unlock", "aegis_strength", "aegis_efficiency", "aegis_reflex", "aegis_overcharge",
+        "mend_unlock", "mend_power", "mend_efficiency", "mend_reflex", "mend_deep",
+        "mana_capacity", "mana_combat_regen", "mana_rest_regen", "mana_reserve",
+        "mana_overflow", "wisdom_mastery",
+        "identify_name", "identify_rank", "identify_stats", "identify_abilities"
+    })
+        if (key == working)
+            return true;
+    return false;
+}
+
+inline uint32_t ShieldPercent(uint16_t strength, uint16_t efficiency, uint16_t overcharge)
+{
+    return std::min<uint32_t>(30, 12 + std::min<uint32_t>(10, uint32_t(strength) * 2)
+        + std::min<uint32_t>(5, efficiency) + std::min<uint32_t>(4, overcharge));
+}
+
+inline uint32_t HealPercent(uint16_t deep)
+{
+    return std::min<uint32_t>(40, 25 + std::min<uint32_t>(15, uint32_t(deep) * 5));
+}
+
+inline uint32_t HealTriggerPercent(uint32_t configuredThreshold, uint16_t efficiency)
+{
+    return std::min<uint32_t>(80, configuredThreshold + uint32_t(efficiency) * 4);
+}
+
+inline uint32_t ShieldCooldownSeconds(uint16_t reflex)
+{
+    return std::max<uint32_t>(20, 30 - std::min<uint32_t>(10, uint32_t(reflex) * 2));
+}
+
+inline uint32_t HealCooldownSeconds(uint16_t reflex)
+{
+    return std::max<uint32_t>(15, 25 - std::min<uint32_t>(10, uint32_t(reflex) * 2));
+}
+
+// Healing strength improves the *native* heal before the 25-40% HP and mana caps.
+// The final cost is still precisely the effective healed amount.
+inline uint32_t AmplifiedHeal(uint32_t rawHeal, uint16_t powerRank)
+{
+    uint64_t amount = uint64_t(rawHeal) * (100 + std::min<uint32_t>(5, powerRank) * 10) / 100;
+    return uint32_t(std::min<uint64_t>(amount, UINT32_MAX));
+}
+
+inline uint32_t ReservePercent(uint16_t rank)
+{
+    return std::min<uint32_t>(25, uint32_t(rank) * 5);
 }
 
 inline uint64_t KnowledgeManaBonus(uint64_t totalKnowledge)
@@ -80,7 +136,7 @@ inline std::vector<TalentDef> const& All()
         {"mana_rest_regen", "wisdom", 5, 3, 3, 0, "mana_capacity", 2},
         {"mana_reserve", "wisdom", 5, 10, 8, 1, "mana_capacity", 5},
         {"mana_conservation", "wisdom", 5, 20, 15, 2, "mana_reserve", 3},
-        {"mana_overflow", "wisdom", 5, 60, 30, 3, "mana_conservation", 5},
+        {"mana_overflow", "wisdom", 5, 60, 30, 3, "mana_capacity", 10},
         {"wisdom_mastery", "wisdom", 15, 100, 20, 1, "mana_overflow", 5},
 
         // Knowledge / bestiary information. First benefit costs a single point.
