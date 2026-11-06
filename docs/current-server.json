@@ -181,16 +181,22 @@
     "created_with_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
     "database_restore_user_report_wsl": "/mnt/e/WoWForEver-work/reports/restore-test-20261107-004340-520b852f5c8f/report.json",
     "database_restore_user_source_commit": "877b87778c878c2dc4af92df3dcf3c8f6104d7bc",
-    "database_restore_trial_cleanup_verified": true
+    "database_restore_trial_cleanup_verified": true,
+    "services_restore_trial_prepared": true,
+    "services_restore_user_verified": false,
+    "services_restore_guide": "docs/BASELINE-SERVICES-RESTORE.ru.md"
   },
   "checks": {
     "launcher_windows": 61,
     "worker_windows": 224,
     "combined_core_units": 12,
     "combined_check_run": 42291253941,
-    "restore_unit_suite_total": 461,
-    "restore_unit_suite_skipped": 29,
-    "restore_real_mysql_fixture_verified": true
+    "restore_unit_suite_total": 473,
+    "restore_unit_suite_skipped": 30,
+    "restore_real_mysql_fixture_verified": true,
+    "services_restore_fixture_ci_run": 42301993948,
+    "services_restore_fixture_verified": true,
+    "services_restore_test_source": "464c9313d2f4a44aae19b08dee41d262714a2d97"
   },
   "known_limits": [
     "Ability Essence economy is incomplete; purchase limit is used",
