@@ -40,6 +40,7 @@
           <strong id="game-field">WoW Forever</strong><div class="realm-row"><span class="realm-dot"></span><span id="realm-field">Realm Forever</span></div>
           <p class="small muted" id="game-login-mode"></p>
           <div class="play-group"><button class="btn play" id="play" disabled>Play</button><button class="btn play-gear" id="play-settings" data-i18n-title="gameSettings" title="Game settings" aria-label="Game settings"><span class="sprite gear" aria-hidden="true"></span></button></div>
+          <p class="small" id="addon-dev-notice" data-i18n="addonDevActive" hidden>AddOn development is enabled — local changes are preserved.</p>
           <p class="step" id="step" aria-live="polite"></p><a class="small log-link" href="#" id="toggle-log" data-i18n="journal">Log</a>
         </section>
         <section class="launch-card login-card" id="view-login" hidden>
@@ -104,6 +105,12 @@
         <p class="small muted" data-i18n="officialScope">Game archives, indices and executables stay managed by Battle.net. Multi uses a separate connection profile and a server key in process memory.</p>
         <label><span data-i18n="gameLocale">Game language</span><select id="s-locale"></select></label>
         <label><span data-i18n="language">Launcher language</span><select id="s-language"></select></label>
+      </fieldset>
+
+      <fieldset>
+        <legend data-i18n="addonSettings">Game AddOns</legend>
+        <label class="row"><input id="s-addon-development" type="checkbox" aria-describedby="addon-dev-hint"><span data-i18n="addonDevMode">AddOn development</span></label>
+        <p class="small muted" id="addon-dev-hint" data-i18n="addonDevHint">Keep existing Ascension and Encyclopedia folders unchanged. Missing folders are installed automatically. Turn this off to return to published versions; replaced folders are backed up.</p>
       </fieldset>
 
       <fieldset id="content-packages">

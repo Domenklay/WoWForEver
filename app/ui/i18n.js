@@ -1315,3 +1315,35 @@ Object.assign(TEXTS.fr, {"nLowSpace": "Espace insuffisant sur le disque choisi",
 Object.assign(TEXTS.es, {"nLowSpace": "Espacio insuficiente en la unidad elegida", "nSpaceDetail": "Carpeta: {path}\nEspacio libre necesario: {required}; disponible: {available}; falta: {missing}. Elige una carpeta nueva en otra unidad o libera espacio y continúa."});
 
 Object.assign(TEXTS.pt, {"nLowSpace": "Espaço insuficiente na unidade escolhida", "nSpaceDetail": "Pasta: {path}\nEspaço livre necessário: {required}; disponível: {available}; faltam: {missing}. Escolha uma pasta nova em outra unidade ou libere espaço e continue."});
+
+// Local AddOn development; existing folders remain untouched.
+Object.assign(TEXTS.ru, {
+  "addonSettings": "Игровые аддоны",
+  "addonDevMode": "Разработка аддонов",
+  "addonDevActive": "Разработка аддонов включена — локальные изменения сохраняются.",
+  "addonDevHint": "Существующие папки Ascension и Encyclopedia сохраняются без изменений. Отсутствующие устанавливаются автоматически. При выключении вернутся опубликованные версии; заменяемые папки сохранятся в резервной копии."
+});
+Object.assign(TEXTS.en, {
+  "addonSettings": "Game AddOns",
+  "addonDevMode": "AddOn development",
+  "addonDevActive": "AddOn development is enabled — local changes are preserved.",
+  "addonDevHint": "Keep existing Ascension and Encyclopedia folders unchanged. Missing folders are installed automatically. Turn this off to return to published versions; replaced folders are backed up."
+});
+Object.assign(TEXTS.fr, {
+  "addonSettings": "Extensions de jeu",
+  "addonDevMode": "Développement des addons",
+  "addonDevActive": "Développement des addons actif — les modifications locales sont conservées.",
+  "addonDevHint": "Les dossiers Ascension et Encyclopedia existants restent inchangés. Les dossiers absents sont installés automatiquement. Désactivez cette option pour revenir aux versions publiées ; les dossiers remplacés sont sauvegardés."
+});
+Object.assign(TEXTS.es, {
+  "addonSettings": "Complementos del juego",
+  "addonDevMode": "Desarrollo de addons",
+  "addonDevActive": "Desarrollo de addons activado — se conservan los cambios locales.",
+  "addonDevHint": "Las carpetas existentes de Ascension y Encyclopedia se conservan sin cambios. Las que falten se instalan automáticamente. Desactiva esta opción para volver a las versiones publicadas; las carpetas reemplazadas se guardan en una copia de seguridad."
+});
+Object.assign(TEXTS.pt, {
+  "addonSettings": "Addons do jogo",
+  "addonDevMode": "Desenvolvimento de addons",
+  "addonDevActive": "Desenvolvimento de addons ativado — as alterações locais são preservadas.",
+  "addonDevHint": "As pastas existentes de Ascension e Encyclopedia permanecem intactas. As ausentes são instaladas automaticamente. Desative para voltar às versões publicadas; as pastas substituídas são guardadas em backup."
+});

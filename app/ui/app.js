@@ -60,6 +60,7 @@ async function refresh() {
   const actualVersion = state.officialClient?.version || state.gameVersion;
   $('game-field').textContent = `WoW Forever${actualVersion ? ` ${actualVersion}` : ''}`;
   $('game-login-mode').textContent = t(state.gameAutoLogin ? 'automaticGameLogin' : 'manualGameLogin');
+  $('addon-dev-notice').hidden = !state.settings.addonDevelopmentMode;
   if (logged) {
     $('account-email').textContent = state.email;
     $('avatar').textContent = state.email[0].toUpperCase();
@@ -216,6 +217,7 @@ function option(select, value, label) {
 function fillSettings() {
   draft = structuredClone(state.settings);
   $('s-game-dir').value = draft.gameDir;
+  $('s-addon-development').checked = !!draft.addonDevelopmentMode;
   const loc = $('s-locale');
   loc.replaceChildren();
   state.locales.forEach((l) => option(loc, l, l));
@@ -412,6 +414,7 @@ function settingsFromForm() {
   settings.gameDir = $('s-game-dir').value.trim();
   settings.locale = $('s-locale').value;
   settings.language = $('s-language').value;
+  settings.addonDevelopmentMode = $('s-addon-development').checked;
   if (state.platform === 'linux') {
     settings.linux.runner = $('s-runner').value;
     settings.linux.prefix = $('s-prefix').value.trim();

@@ -54,14 +54,26 @@ fn commit(game:&Path,stage:&Path,target:&Path,id:&str)->Result<Option<PathBuf>,S
   return Err(e.to_string());
  }Ok(previous.then_some(backup))
 }
-pub async fn ensure(game:&Path,mut log:impl FnMut(String))->Result<(),String>{
- for m in manifests()? {ensure_one(game,&m,&mut log).await?;}
+fn preserve_development_folder(target:&Path,development_mode:bool)->Result<bool,String>{
+ if !development_mode {return Ok(false);}
+ direct(target)?;
+ if !target.exists(){return Ok(false);}
+ if !target.is_dir(){return Err("AddOn destination is not a directory".into());}
+ Ok(true)
+}
+pub async fn ensure(game:&Path,development_mode:bool,mut log:impl FnMut(String))->Result<(),String>{
+ if development_mode {log(t("addon_dev_mode").into());}
+ for m in manifests()? {ensure_one(game,&m,development_mode,&mut log).await?;}
  Ok(())
 }
-async fn ensure_one(game:&Path,m:&Manifest,log:&mut impl FnMut(String))->Result<(),String>{
+async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl FnMut(String))->Result<(),String>{
  direct(game)?;
  if !game.join("Wow.exe").is_file()&&!game.join("WowB.exe").is_file(){return Err(t("game_not_found").into());}
  let addons=game.join("Interface/AddOns");let target=addons.join(&m.name);direct(&addons)?;
+ if preserve_development_folder(&target,development_mode)? {
+  log(tf("addon_dev_preserved",&[&m.name]));
+  return Ok(());
+ }
  log(format!("{} ({})",t("addon_checking"),m.name));
  if current(&target,m)? {log(format!("{} ({})",t("addon_ready"),m.name));return Ok(());}
  // Download and verify the entire new folder before touching an existing one.
@@ -90,6 +102,36 @@ async fn ensure_one(game:&Path,m:&Manifest,log:&mut impl FnMut(String))->Result<
 
 #[cfg(test)]mod tests{
  use super::*;
+ #[tokio::test]
+ async fn development_preserves_changed_and_incomplete_addons_without_network_or_backups(){
+  let temp=Temp::new();fs::write(temp.0.join("Wow.exe"),b"fixture").unwrap();
+  let ascension=temp.0.join("Interface/AddOns/ForeverAscension");
+  let book=temp.0.join("Interface/AddOns/ForeverEncyclopedia");
+  fs::create_dir_all(&ascension).unwrap();fs::create_dir_all(&book).unwrap();
+  fs::write(ascension.join("Catalog.lua"),b"local development edits").unwrap();
+  fs::write(book.join("unfinished.lua"),b"work in progress without a TOC").unwrap();
+  let mut logs=Vec::new();ensure(&temp.0,true,|line|logs.push(line)).await.unwrap();
+  assert_eq!(fs::read(ascension.join("Catalog.lua")).unwrap(),b"local development edits");
+  assert_eq!(fs::read(book.join("unfinished.lua")).unwrap(),b"work in progress without a TOC");
+  assert_eq!(fs::read_dir(&ascension).unwrap().count(),1);assert_eq!(fs::read_dir(&book).unwrap().count(),1);
+  assert!(!temp.0.join(".forever-multi").exists());
+  assert_eq!(logs.len(),3);assert!(logs[1].contains("ForeverAscension"));assert!(logs[2].contains("ForeverEncyclopedia"));
+ }
+ #[test]
+ fn absent_addons_and_normal_mode_still_use_the_verified_installer(){
+  let temp=Temp::new();let target=temp.0.join("ForeverEncyclopedia");
+  assert!(!preserve_development_folder(&target,true).unwrap());
+  fs::create_dir(&target).unwrap();fs::write(target.join("local.lua"),b"edited").unwrap();
+  assert!(preserve_development_folder(&target,true).unwrap());
+  assert!(!preserve_development_folder(&target,false).unwrap());
+  assert!(!current(&target,&manifests().unwrap()[1]).unwrap());
+ }
+ #[cfg(unix)]#[test]
+ fn development_does_not_follow_a_linked_addon_folder(){
+  let temp=Temp::new();let outside=Temp::new();let linked=temp.0.join("ForeverAscension");
+  std::os::unix::fs::symlink(&outside.0,&linked).unwrap();
+  assert!(preserve_development_folder(&linked,true).is_err());
+ }
  #[test]fn both_project_addons_have_independent_pins_and_source_directories(){let values=manifests().unwrap();assert_eq!(values.len(),2);assert_eq!(values[1].name,"ForeverEncyclopedia");assert_eq!(values[1].files.len(),8);assert_ne!(source_path(&values[0]).unwrap(),source_path(&values[1]).unwrap());assert_ne!(values[0].source_commit,values[1].source_commit);}
  #[test]fn encyclopedia_replacement_cannot_overwrite_the_ascension_backup(){let temp=Temp::new();let target=temp.0.join("Interface/AddOns/ForeverEncyclopedia");fs::create_dir_all(&target).unwrap();fs::write(target.join("old.lua"),b"previous book").unwrap();let stage=temp.0.join(".new-book");fs::create_dir(&stage).unwrap();let backup=commit(&temp.0,&stage,&target,"same-run").unwrap().unwrap();assert!(backup.ends_with("ForeverEncyclopedia"));assert_eq!(fs::read(backup.join("old.lua")).unwrap(),b"previous book");assert!(!temp.0.join(".forever-multi/addon-backups/same-run/ForeverAscension").exists());}
  struct Temp(PathBuf);impl Temp{fn new()->Self{let p=std::env::temp_dir().join(format!("forever-addon-test-{:032x}",rand::random::<u128>()));fs::create_dir(&p).unwrap();Self(p)}}impl Drop for Temp{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}

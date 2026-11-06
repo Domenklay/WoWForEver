@@ -44,5 +44,12 @@
     "verified": true,
     "scope": "general user-reported working installation; individual acceptance cases not enumerated"
   },
-  "detailed_acceptance_verified": false
+  "detailed_acceptance_verified": false,
+  "user_server_backup": {
+    "verified": true,
+    "evidence": "user-supplied BASELINE BACKUP VERIFIED output",
+    "directory": "/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543",
+    "verifier_commit": "c9d344269739a974dfb2abb1de37a557716b2578",
+    "isolated_restore_verified": false
+  }
 }

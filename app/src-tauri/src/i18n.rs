@@ -56,6 +56,8 @@ type Texts = [&'static str; 4];
 
 #[rustfmt::skip]
 const MESSAGES: &[(&str, Texts)] = &[
+    ("addon_dev_mode", ["Développement des addons actif : les fichiers locaux sont conservés.", "AddOn development is enabled: local files are preserved.", "Desarrollo de addons activado: se conservan los archivos locales.", "Desenvolvimento de addons ativado: os arquivos locais são preservados."]),
+    ("addon_dev_preserved", ["Dossier local {} conservé sans mise à jour.", "Keeping local folder {} without updating it.", "Se conserva la carpeta local {} sin actualizarla.", "Pasta local {} preservada sem atualização."]),
     ("addon_checking", ["Vérification des extensions de jeu…", "Checking game AddOns…", "Comprobando complementos del juego…", "Verificando addons do jogo…"]),
     ("addon_ready", ["Extension installée et vérifiée.", "AddOn is installed and verified.", "Complemento instalado y verificado.", "Addon instalado e verificado."]),
     ("addon_downloading", ["Téléchargement de Forever Ascension : {}", "Downloading Forever Ascension: {}", "Descargando Forever Ascension: {}", "Baixando Forever Ascension: {}"]),
@@ -170,6 +172,8 @@ const MESSAGES: &[(&str, Texts)] = &[
 
 #[rustfmt::skip]
 const RUSSIAN: &[(&str,&str)] = &[
+    ("addon_dev_mode", "Режим разработки аддонов включён: локальные файлы сохраняются."),
+    ("addon_dev_preserved", "Оставляем локальную папку {} без обновления."),
     ("addon_checking", "Проверяем игровые дополнения…"),
     ("addon_ready", "Дополнение установлено и проверено."),
     ("addon_downloading", "Скачиваем Forever Ascension: {}"),

@@ -1,3 +1,15 @@
+User CONFIRMED BASELINE BACKUP VERIFIED after offline finalize at c9d3442:
+/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543.
+Current DB/resource/image archive integrity is verified on user's PC. Isolated
+restore remains untested. Do not repeat backup creation, dump, export or stop.
+Multi 1.7.1 adds opt-in addonDevelopmentMode: existing Ascension/Encyclopedia
+folders are preserved (even incomplete); absent folders still use pinned verified
+installation. Normal mode remains the default; turning development off restores
+published-file verification and existing replacement backups. UI has a settings
+checkbox and visible home notice, all five languages. Direct folder/junction
+restrictions remain. Windows build/artifact verification still pending this change.
+Do not change the working server or gameplay module source for launcher delivery.
+
 Second user finalization at 61ff871 failed Invalid OCI config type, with no
 server changes or archive rewrites. Bounded diagnostic CONFIRMS four runnable
 application/vnd.oci.image.config.v1+json configs plus THREE non-runnable
