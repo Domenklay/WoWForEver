@@ -142,18 +142,48 @@ fn preserve_development_folder(target:&Path,development_mode:bool)->Result<bool,
 }
 pub async fn ensure(game:&Path,development_mode:bool,test_mode:bool,mut log:impl FnMut(String))->Result<(),String>{
  if development_mode {log(t("addon_dev_mode").into());}
- for m in channel_manifests(test_mode)? {ensure_one(game,&m,development_mode,&mut log).await?;}
+ if test_mode{
+  match fetch_testing_catalog().await{
+   Ok(catalog)=>{
+    for entry in &catalog.addons{
+     ensure_one(game,&entry.manifest,&entry.source_path,development_mode,&mut log).await?;
+    }
+   }
+   Err(err)=>{
+    // Do not downgrade test AddOns and do not block game launch if GitHub is down.
+    log(format!("Testing catalog unavailable; keeping existing AddOns: {err}"));
+   }
+  }
+ }else{
+  for manifest in manifests()?{
+   ensure_one(game,&manifest,source_path(&manifest)?,development_mode,&mut log).await?;
+  }
+ }
  Ok(())
 }
-// Explicit channel switch updates only ForeverEncyclopedia. Ascension and other
-// AddOns are never touched; ensure_one stages, hashes and backs up the old folder.
-pub async fn install_encyclopedia(game:&Path,test_mode:bool,mut log:impl FnMut(String))->Result<String,String>{
- let m=if test_mode {test_manifest()?} else {manifests()?.remove(1)};
- let version=m.version.clone();
- ensure_one(game,&m,false,&mut log).await?;
- Ok(version)
+
+// A user-triggered switch updates every registered client AddOn. Scaling and
+// all other server-only modules are reported, not written to the game directory.
+pub async fn install_channel(game:&Path,test_mode:bool,mut log:impl FnMut(String))->Result<Value,String>{
+ let mut installed=Vec::new();
+ let mut server_modules=Vec::new();
+ if test_mode{
+  let catalog=fetch_testing_catalog().await?;
+  for entry in &catalog.addons{
+   ensure_one(game,&entry.manifest,&entry.source_path,false,&mut log).await?;
+   installed.push(json!({"name":entry.manifest.name,"version":entry.manifest.version}));
+  }
+  server_modules=catalog.server_modules;
+ }else{
+  for manifest in manifests()?{
+   ensure_one(game,&manifest,source_path(&manifest)?,false,&mut log).await?;
+   installed.push(json!({"name":manifest.name,"version":manifest.version}));
+  }
+ }
+ Ok(json!({"channel":if test_mode{"testing"}else{"stable"},
+  "clientAddons":installed,"serverModules":server_modules}))
 }
-async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl FnMut(String))->Result<(),String>{
+async fn ensure_one(game:&Path,m:&Manifest,source_directory:&str,development_mode:bool,log:&mut impl FnMut(String))->Result<(),String>{
  direct(game)?;
  if !game.join("Wow.exe").is_file()&&!game.join("WowB.exe").is_file(){return Err(t("game_not_found").into());}
  let addons=game.join("Interface/AddOns");let target=addons.join(&m.name);direct(&addons)?;
@@ -172,7 +202,7 @@ async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl F
   let client=reqwest::Client::builder().connect_timeout(Duration::from_secs(10)).timeout(Duration::from_secs(180)).user_agent("WoWForeverMulti-AddOns").build().map_err(|e|e.to_string())?;
   for f in &m.files {
    log(tf("addon_downloading", &[&f.name]));
-   let url=format!("https://raw.githubusercontent.com/Domenklay/WoWForEver/{}/{}/{}",m.source_commit,source_path(m)?,f.name);
+   let url=format!("https://raw.githubusercontent.com/Domenklay/WoWForEver/{}/{}/{}",m.source_commit,source_directory,f.name);
    let mut response=client.get(url).send().await.map_err(|e|e.to_string())?.error_for_status().map_err(|e|e.to_string())?;
    let mut body=Vec::new();
    while let Some(chunk)=response.chunk().await.map_err(|e|e.to_string())? {if body.len().saturating_add(chunk.len())as u64>f.size{return Err("AddOn response exceeds manifest size".into());}body.extend_from_slice(&chunk);}
@@ -219,15 +249,22 @@ async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl F
   std::os::unix::fs::symlink(&outside.0,&linked).unwrap();
   assert!(preserve_development_folder(&linked,true).is_err());
  }
- #[test]fn test_encyclopedia_is_a_separate_explicit_channel(){
-  let stable=channel_manifests(false).unwrap();
-  let testing=channel_manifests(true).unwrap();
-  assert_eq!(stable[1].version,"0.9.8-v2.1-smartai-abilities");
-  assert_eq!(testing[1].version,"0.9.9-v2.1-talent-mana");
-  assert_eq!(stable[0].version,testing[0].version);
-  assert_eq!(stable[0].source_commit,testing[0].source_commit);
-  assert_ne!(stable[1].source_commit,testing[1].source_commit);
-  assert_eq!(stable[1].files.len(),testing[1].files.len());
+ #[test]fn test_catalog_lists_all_client_addons_and_server_only_scaling(){
+  let catalog=parse_testing_catalog(include_str!("../addons/testing-catalog.json")).unwrap();
+  assert_eq!(catalog.addons.len(),2);
+  assert_eq!(catalog.addons[0].manifest.name,"ForeverAscension");
+  assert_eq!(catalog.addons[1].manifest.name,"ForeverEncyclopedia");
+  assert_eq!(catalog.addons[1].manifest.version,"0.9.9-v2.1-talent-mana");
+  assert!(catalog.server_modules.iter().any(|m|m.name=="Forever Scaling"&&m.status=="server-only"));
+  assert!(validate_source("mods/living-encyclopedia/addon/ForeverEncyclopedia","ForeverEncyclopedia").is_ok());
+ }
+ #[test]fn test_catalog_rejects_untrusted_or_invalid_sources(){
+  let mut data:Value=serde_json::from_str(include_str!("../addons/testing-catalog.json")).unwrap();
+  data["addons"][0]["sourcePath"]=json!("mods/../../addon/ForeverAscension");
+  assert!(parse_testing_catalog(&data.to_string()).is_err());
+  data["addons"][0]["sourcePath"]=json!("mods/forever-advancement/addon/ForeverAscension");
+  data["addons"][1]["manifest"]["files"][0]["name"]=json!("../escape.lua");
+  assert!(parse_testing_catalog(&data.to_string()).is_err());
  }
  #[test]fn both_project_addons_have_independent_pins_and_source_directories(){let values=manifests().unwrap();assert_eq!(values.len(),2);assert_eq!(values[1].name,"ForeverEncyclopedia");assert_eq!(values[1].files.len(),8);assert_ne!(source_path(&values[0]).unwrap(),source_path(&values[1]).unwrap());assert_ne!(values[0].source_commit,values[1].source_commit);}
  #[test]fn encyclopedia_replacement_cannot_overwrite_the_ascension_backup(){let temp=Temp::new();let target=temp.0.join("Interface/AddOns/ForeverEncyclopedia");fs::create_dir_all(&target).unwrap();fs::write(target.join("old.lua"),b"previous book").unwrap();let stage=temp.0.join(".new-book");fs::create_dir(&stage).unwrap();let backup=commit(&temp.0,&stage,&target,"same-run").unwrap().unwrap();assert!(backup.ends_with("ForeverEncyclopedia"));assert_eq!(fs::read(backup.join("old.lua")).unwrap(),b"previous book");assert!(!temp.0.join(".forever-multi/addon-backups/same-run/ForeverAscension").exists());}
