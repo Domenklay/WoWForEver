@@ -1,3 +1,21 @@
+Latest user backup result: create at 716662d saved current databases, resumed
+world/login/web successfully, saved resources and exported images, then failed
+only at old config-digest identity verification. Existing folder:
+/mnt/e/WoWForEver-work/reports/baseline-70658-20261106-231543.
+User's bounded diagnostic CONFIRMS all four expected IDs equal OCI index.json
+root digests (mysql manifest; world/bnet/web indices), while config digests differ.
+This is a verifier bug, not evidence of lost data or failed server startup.
+Do not repeat create, dump, image export, service stop, rebuild or restore.
+New docker_archive_identity.py supports classic config IDs and containerd OCI
+root IDs with hashed metadata chains to exported runnable configs/layers.
+New offline finalize action rechecks ORIGINAL saved artifact hashes and gzip/tar,
+keeps manifest-before-finalize.json, then marks complete. No Docker/SQL calls;
+partial exports, checksum errors and pending resume markers must fail closed.
+Seventeen backup tests plus six image-archive tests pass, including one manifest
+and three index roots, changed/missing blobs, and offline/idempotent finalization.
+User-side finalization output and isolated restore test are still pending.
+Next task remains AddOn development mode after this backup is finalized.
+
 Next authorized task: preserve a fresh post-install baseline before launcher AddOn
 development mode. scripts/backup-clean-baseline.py is prepared with create/verify.
 It checks current gameplay/image identity, space and real /mnt/e mount before

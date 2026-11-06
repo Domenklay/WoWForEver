@@ -2,7 +2,7 @@ name: Server baseline backup
 on:
   push:
     branches: [codex/native-cdn-70658-20261106]
-    paths: [scripts/backup-clean-baseline.py, tests/test_baseline_backup.py, .github/workflows/baseline-backup.yml]
+    paths: [scripts/backup-clean-baseline.py, scripts/docker_archive_identity.py, tests/test_baseline_backup.py, tests/test_docker_archive_identity.py, .github/workflows/baseline-backup.yml]
   workflow_dispatch:
 permissions:
   contents: read

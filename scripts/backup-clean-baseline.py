@@ -8,7 +8,6 @@ import argparse
 from datetime import datetime, timezone
 import fcntl
 import gzip
-import hashlib
 import importlib.util
 import json
 import os
@@ -22,6 +21,7 @@ import tarfile
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
+from docker_archive_identity import verify_image_ids
 spec = importlib.util.spec_from_file_location('baseline_gameplay', SCRIPTS / 'enable-clean-gameplay.py')
 game = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(game)
@@ -160,10 +160,11 @@ def artifact(path):
     return {'bytes': path.stat().st_size, 'sha256': clean.sha_file(path)}
 
 
-def verify(folder):
+def verify(folder, allow_incomplete=False):
     folder = direct(folder)
     manifest = json.loads((folder / 'manifest.json').read_text())
-    if manifest.get('format') != FORMAT or manifest.get('complete') is not True:
+    if (manifest.get('format') != FORMAT
+            or manifest.get('complete') is not True and not allow_incomplete):
         raise ValueError('Backup is incomplete')
     expected = {'databases-current.sql.gz', 'server-files.tar.gz', 'docker-images.tar', 'RESTORE.ru.txt'}
     if set(manifest.get('artifacts', {})) != expected:
@@ -185,16 +186,41 @@ def verify(folder):
             stream = archive.extractfile(item)
             while stream.read(1024 * 1024):
                 pass
-    # Config hashes prove the exported archive contains the exact running images.
-    with tarfile.open(folder / 'docker-images.tar', 'r:') as archive:
-        entries = json.load(archive.extractfile('manifest.json'))
-        found = set()
-        for entry in entries:
-            config = archive.extractfile(entry['Config']).read(8 * 1024 * 1024)
-            found.add('sha256:' + hashlib.sha256(config).hexdigest())
-        if found != {v['id'] for v in manifest['images'].values()}:
-            raise ValueError('Exported Docker image identities differ')
+    verify_image_ids(folder / 'docker-images.tar', {v['id'] for v in manifest['images'].values()})
     return manifest
+
+
+def finalize(folder):
+    """Finish an existing fully exported bundle; never talk to Docker/SQL.
+
+    Artifact identities MUST already be present and are never recalculated into
+    the manifest. A failed original export cannot be promoted by this action.
+    """
+    folder = direct(folder)
+    with (folder / 'manifest.json').open('r+') as stream:
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError('Another verification is finalizing this backup')
+        if (folder / 'resume-required.json').exists():
+            raise ValueError('Service recovery is pending; backup cannot be finalized')
+        original = stream.read()
+        manifest = verify(folder, allow_incomplete=True)
+        if (folder / 'manifest.json').read_text() != original:
+            raise ValueError('Backup manifest changed during verification')
+        if manifest.get('complete') is not True:
+            previous = folder / 'manifest-before-finalize.json'
+            if previous.exists():
+                if previous.read_text() != original:
+                    raise ValueError('Previous finalization record differs; retained unchanged')
+            else:
+                with previous.open('x') as saved:
+                    saved.write(original)
+            manifest['complete'] = True
+            manifest['verified_utc'] = datetime.now(timezone.utc).isoformat()
+            manifest['image_identity_verifier'] = 'docker-config-or-oci-root-v2'
+            clean.write_private(folder / 'manifest.json', manifest)
+    print('BASELINE BACKUP VERIFIED: ' + str(folder), flush=True)
 
 
 RESTORE = '''Приватный снимок активного сервера 70658.
@@ -291,17 +317,20 @@ def create(root, output):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=('create', 'verify'))
+    p.add_argument('action', choices=('create', 'verify', 'finalize'))
     p.add_argument('--root', type=Path, default=Path.home() / 'WoWForEver-clean')
     p.add_argument('--output', type=Path)
     p.add_argument('--backup', type=Path)
     args = p.parse_args()
     os.umask(0o077)
-    if args.action == 'verify':
+    if args.action in ('verify', 'finalize'):
         if not args.backup:
             p.error('--backup is required')
-        verify(args.backup)
-        print('BASELINE BACKUP VERIFIED: ' + str(args.backup))
+        if args.action == 'finalize':
+            finalize(args.backup)
+        else:
+            verify(args.backup)
+            print('BASELINE BACKUP VERIFIED: ' + str(args.backup))
         return
     if not args.output:
         p.error('--output is required; use a new directory')

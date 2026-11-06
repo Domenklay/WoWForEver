@@ -276,5 +276,62 @@ class BackupRecoveryTests(unittest.TestCase):
             checked.assert_not_called()
 
 
+class BackupFinalizeTests(unittest.TestCase):
+    def test_finalization_reuses_existing_hashes_and_never_calls_docker_or_sql(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp) / 'backup'
+            manifest = bundle(folder)
+            manifest['complete'] = False
+            original = json.dumps(manifest)
+            (folder / 'manifest.json').write_text(original)
+            identities = {name: (backup.artifact(folder / name), (folder / name).stat().st_mtime_ns)
+                          for name in manifest['artifacts']}
+            with patch.object(backup.clean, 'run') as run, \
+                 patch.object(backup.clean, 'compose') as compose, \
+                 patch.object(backup.upgrade, 'dump_databases') as dump:
+                backup.finalize(folder)
+                backup.finalize(folder)
+                run.assert_not_called()
+                compose.assert_not_called()
+                dump.assert_not_called()
+            self.assertTrue(backup.verify(folder)['complete'])
+            self.assertEqual((folder / 'manifest-before-finalize.json').read_text(), original)
+            for name, identity in identities.items():
+                self.assertEqual((backup.artifact(folder / name), (folder / name).stat().st_mtime_ns), identity)
+
+    def test_oci_root_bundle_from_original_failed_check_can_be_finalized_without_resaving(self):
+        from test_docker_archive_identity import SavedImage
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp) / 'backup'
+            manifest = bundle(folder)
+            saved = SavedImage()
+            saved.write(folder / 'docker-images.tar', [saved.index])
+            manifest.update(complete=False, images={'worldserver': {'id':saved.index['digest']}})
+            manifest['artifacts']['docker-images.tar'] = backup.artifact(folder / 'docker-images.tar')
+            (folder / 'manifest.json').write_text(json.dumps(manifest))
+            backup.finalize(folder)
+            self.assertTrue(backup.verify(folder)['complete'])
+
+    def test_corruption_partial_export_and_pending_resume_never_promote_a_failed_bundle(self):
+        for reason in ('corrupt', 'partial', 'resume'):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as temp:
+                folder = Path(temp) / 'backup'
+                manifest = bundle(folder)
+                manifest['complete'] = False
+                if reason == 'corrupt':
+                    with (folder / 'docker-images.tar').open('ab') as stream:
+                        stream.write(b'changed')
+                elif reason == 'partial':
+                    del manifest['artifacts']['docker-images.tar']
+                else:
+                    (folder / 'resume-required.json').write_text('{}')
+                original = json.dumps(manifest)
+                (folder / 'manifest.json').write_text(original)
+                with self.assertRaises(ValueError):
+                    backup.finalize(folder)
+                self.assertEqual((folder / 'manifest.json').read_text(), original)
+                self.assertFalse((folder / 'manifest-before-finalize.json').exists())
+
+
 if __name__ == '__main__':
     unittest.main()
