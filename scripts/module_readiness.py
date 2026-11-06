@@ -18,9 +18,11 @@ if config.is_file():
 keys = ('ForeverAdvancement.Enable','ForeverEncyclopedia.Enable','Logger.scripts')
 settings = {k:values.get(k) for k in keys}
 base = values.get('LogsDir','').strip('"')
-cwd = Path('/proc/1/cwd').resolve()
-path = (Path(base) if base else cwd) / 'Server.log'
-if not path.is_absolute(): path = cwd / path
+path = Path(base) / 'Server.log' if base else Path('Server.log')
+if not path.is_absolute():
+    try: cwd = Path('/proc/1/cwd').resolve()
+    except OSError: cwd = Path.cwd()
+    path = cwd / path
 appender = [v.strip() for v in values.get('Appender.Server','').split(',')]
 status = 'missing'; lines = collections.deque(maxlen=256)
 if len(appender) >= 5 and appender[3] == 'Server.log' and appender[4] == 'w':

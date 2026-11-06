@@ -19,14 +19,16 @@ START_SECONDS = 1793998800
 
 
 class ModuleReadinessTests(unittest.TestCase):
-    def file_probe(self, root, append=False, stale=False):
+    def file_probe(self, root, append=False, stale=False, denied_cwd=False):
         config=root/'worldserver.conf'; log=root/'Server.log'
         config.write_text('ForeverAdvancement.Enable = 1\nLogger.scripts = 3,Console Server\n'
-                          +'LogsDir = "'+str(root)+'"\nAppender.Server = 2,2,0,Server.log,'+('a' if append else 'w')
+                          +'LogsDir = "'+('' if denied_cwd else str(root))+'"\nAppender.Server = 2,2,0,Server.log,'+('a' if append else 'w')
                           +'\nLoginDatabaseInfo = "mysql;password-that-must-not-leave"\n')
         log.write_text('ForeverAdvancement ready: fixture\n'+'irrelevant startup line\n'*6000)
         os.utime(log,(START_SECONDS+(2 if not stale else -20),)*2)
-        out=subprocess.check_output([sys.executable,'-c',ready.PROBE,str(config),START],text=True)
+        code=ready.PROBE
+        if denied_cwd: code='from pathlib import Path\nPath.resolve=lambda self: (_ for _ in ()).throw(PermissionError("fixture"))\n'+code
+        out=subprocess.check_output([sys.executable,'-c',code,str(config),START],text=True,cwd=root)
         self.assertNotIn('password-that-must-not-leave',out);self.assertNotIn('LoginDatabaseInfo',out)
         return json.loads(out)
 
@@ -41,6 +43,12 @@ class ModuleReadinessTests(unittest.TestCase):
             for kwargs,status in [({'stale':True},'older-than-current-process'),({'append':True},'not-truncate-mode')]:
                 result=self.file_probe(Path(temp),**kwargs)
                 self.assertEqual(result['serverLogStatus'],status);self.assertEqual(result['lines'],[])
+
+    def test_default_working_directory_is_used_when_proc_cwd_is_unreadable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result=self.file_probe(Path(temp),denied_cwd=True)
+            self.assertEqual(result['serverLogStatus'],'current-process-file')
+            self.assertEqual(result['lines'],['ForeverAdvancement ready: fixture'])
 
     def test_stderr_is_merged_only_for_docker_log_reads(self):
         with patch.object(clean.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='module error from stderr',stderr=None)) as run:
