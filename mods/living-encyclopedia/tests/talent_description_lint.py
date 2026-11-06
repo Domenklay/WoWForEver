@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Ensure the client catalogue cannot silently drift from server talent costs/gates."""
 from pathlib import Path
+import hashlib
+import json
 import re
 
 root = Path(__file__).resolve().parents[1]
@@ -79,5 +81,19 @@ assert "uint32 amount = std::min(state.mana, cap);" in runtime
 assert "uint32 amount = std::min(state.pendingShieldAmount, state.mana);" in runtime
 assert "uint32 spendable = SpendableMana(*state);" in runtime
 assert "Talents::AmplifiedHeal" in runtime
+# Launcher pins must refer to this exact pack, not the previous 0.9.8 release.
+repo = root.parents[1]
+manifest = json.loads((repo / "app/src-tauri/addons/forever-encyclopedia.json").read_text(encoding="utf-8"))
+toc_version = re.search(r"^## Version: (.+)$", (
+    root / "addon/ForeverEncyclopedia/ForeverEncyclopedia.toc"
+).read_text(encoding="utf-8"), re.MULTILINE).group(1)
+assert manifest["version"] == toc_version == "0.9.9-v2.1-talent-mana"
+for item in manifest["files"]:
+    body = (root / "addon/ForeverEncyclopedia" / item["name"]).read_bytes()
+    assert len(body) == item["size"], item["name"]
+    assert hashlib.sha256(body).hexdigest() == item["sha256"], item["name"]
+assert f'm.version=="{toc_version}"' in (repo / "app/src-tauri/src/addon.rs").read_text(encoding="utf-8")
+assert f"BOOK_VERSION = '{toc_version}'" in (repo / "scripts/enable-clean-gameplay.py").read_text(encoding="utf-8")
+
 print(f"Encyclopedia tooltip/server policy synced: {len(server_rows)} talents, "
       f"{len(server_implemented)} active")
