@@ -1,7 +1,0 @@
-## Interface: 16001
-## Title: Forever Dungeon Finder
-## Notes: Solo and premade party dungeon teleport with Group Finder tab for WoW Forever
-## Author: WoW Forever
-## Version: 0.2.0
-
-Core.lua
