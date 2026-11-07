@@ -88,7 +88,7 @@ inline uint32_t AmplifiedHeal(uint32_t rawHeal, uint16_t powerRank)
 inline uint32_t AffordableNativeHeal(uint32_t raw, uint32_t missing, uint32_t cap,
     uint32_t spendableMana, uint16_t powerRank)
 {
-    return std::min({ AmplifiedHeal(raw, powerRank), missing, cap, spendableMana });
+    return std::min({ AmplifiedHeal(raw, powerRank), missing, cap, spendableMana, uint32_t(INT32_MAX) });
 }
 
 inline uint32_t ReservePercent(uint16_t rank)
