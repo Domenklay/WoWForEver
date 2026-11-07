@@ -92,7 +92,7 @@ local function button(parent,x,y,w,h,text,selected,fn)
     b:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y)
     local bg=solid(b,"BACKGROUND",selected and {0.29,0.16,0.043,1} or BROWN)
     bg:SetAllPoints()
-    local borders=edge(b,selected and {0.94,0.68,0.19} or GOLD)
+    edge(b,selected and {0.94,0.68,0.19} or GOLD)
     local word=font(b,0,math.floor((h-18)/2),w,text,"GameFontHighlight",PALE,"CENTER")
     b:SetScript("OnEnter",function()
         bg:SetVertexColor(0.22,0.14,0.07,1)
@@ -194,7 +194,7 @@ local function node(parent,x,y,n)
     icon:SetTexCoord(0.08,0.92,0.08,0.92)
     icon:SetDesaturated(not eligible and rank==0)
     icon:SetAlpha((eligible or rank>0) and 1 or 0.36)
-    local counter=font(b,23,32,42,rank.."/"..n.max,"GameFontNormalSmall",
+    font(b,23,32,42,rank.."/"..n.max,"GameFontNormalSmall",
                        (eligible or rank>0) and PALE or MUTED,"CENTER")
     if chosen then
         local glow=b:CreateTexture(nil,"OVERLAY")
@@ -337,7 +337,7 @@ local function drawTalentView()
     for i,key in ipairs(catalog.order) do
         local d=catalog.branches[key]
         local x=9+(i-1)*108
-        local b=button(left,x,61,103,52,d.name,key==branch,function()
+        local b=button(left,x,61,103,52,"",key==branch,function()
             branch=key
             selectedNode=nil
             pendingBuy=false
@@ -346,14 +346,14 @@ local function drawTalentView()
         local icon=b:CreateTexture(nil,"ARTWORK")
         icon:SetSize(27,27); icon:SetPoint("TOP",b,"TOP",0,-2)
         icon:SetTexture(d.icon)
-        local caption=b:GetRegions()
+        font(b,0,31,103,d.name,"GameFontNormalSmall",PALE,"CENTER")
         -- The top icon is visual; click target is the full 103x52 tab.
     end
     local xPositions={102,276,450}
     local positions={}
     for _,n in ipairs(catalog.nodes) do
         if n.branch==branch then
-            positions[n.key]={x=xPositions[n.col],y=177+(n.tier-1)*71}
+            positions[n.key]={x=xPositions[n.col],y=151+(n.tier-1)*60}
         end
     end
     for _,n in ipairs(catalog.nodes) do
@@ -488,21 +488,21 @@ local function drawAppearanceView()
         local col=(i-1)%2
         local row=math.floor((i-1)/2)
         local x=16+col*427
-        local y=86+row*151
+        local y=86+row*111
         local unlocked=state.appearances[a.key] and state.appearances[a.key].unlocked
-        local b=frame(base,x,y,408,138,unlocked and BROWN or DEEP)
-        emblem(b,13,12,85,85,"Interface\\Icons\\INV_Misc_Book_09")
+        local b=frame(base,x,y,408,101,unlocked and BROWN or DEEP)
+        emblem(b,13,10,76,76,"Interface\\Icons\\INV_Misc_Book_09")
         label(b,114,19,274,a.name,"GameFontHighlight",unlocked and PALE or MUTED)
         label(b,114,47,274,unlocked and "Открыт" or ("Требуется знаний: "..a.threshold),
               "GameFontNormalSmall",unlocked and GREEN or MUTED)
         if state.selectedAppearance==a.key then
-            label(b,114,91,270,"Используется","GameFontNormalSmall",GREEN)
+            label(b,114,72,270,"Используется","GameFontNormalSmall",GREEN)
         elseif unlocked then
-            button(b,116,87,190,32,"Выбрать облик",false,function()
+            button(b,116,66,190,30,"Выбрать облик",false,function()
                 bridge.SelectAppearance(a.key)
             end)
         else
-            label(b,114,91,274,"Недоступен","GameFontNormalSmall",MUTED)
+            label(b,114,72,274,"Недоступен","GameFontNormalSmall",MUTED)
         end
     end
 end
@@ -510,11 +510,10 @@ end
 local function render()
     if not page or not page:IsShown() then return end
     wipeView()
-    local shell=solid(page,"BACKGROUND",{0.053,0.033,0.020,1})
-    shell:SetAllPoints()
-    -- Shell texture is reused; only the content panel gets recreated.
-    if ui.shell and ui.shell~=shell then ui.shell:Hide() end
-    ui.shell=shell
+    if not ui.shell then
+        ui.shell=solid(page,"BACKGROUND",{0.053,0.033,0.020,1})
+        ui.shell:SetAllPoints()
+    end
     local header=frame(page,13,6,874,48,BROWN)
     label(header,14,8,266,"Живая энциклопедия","GameFontNormalLarge",PALE)
     label(header,280,12,277,"Знания: "..(state.knowledgeAvailable or 0)..
@@ -551,11 +550,15 @@ local function install()
     tab.tooltipText="Живая энциклопедия"
     tab.iconTexture="Interface\\Icons\\INV_Misc_Book_09"
     if tab.Icon then tab.Icon:SetTexture(tab.iconTexture) end
-    tab:SetCustomOnMouseUpHandler(function(_,mouse,inside)
-        if mouse=="LeftButton" and inside then
-            host:SelectPage(4)
-        end
-    end)
+    if tab.SetCustomOnMouseUpHandler then
+        tab:SetCustomOnMouseUpHandler(function(_,mouse,inside)
+            if mouse=="LeftButton" and inside then host:SelectPage(4) end
+        end)
+    else
+        tab:SetScript("OnMouseUp",function(_,mouse)
+            if mouse=="LeftButton" then host:SelectPage(4) end
+        end)
+    end
     page=CreateFrame("Frame","ForeverEncyclopediaLegacyPage",host)
     page:SetPoint("TOPLEFT",host,"TOPLEFT",5,-36)
     page:SetPoint("BOTTOMRIGHT",host,"BOTTOMRIGHT",-5,5)
@@ -608,7 +611,7 @@ _G.ForeverEncyclopediaLegacy = {
                 end)
             end
         else
-            if kind=="talents" or kind=="view" then pendingBuy=false end
+            if kind=="talents" then pendingBuy=false end
             render()
         end
     end,
