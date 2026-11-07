@@ -248,7 +248,7 @@ static void Archive(Player* p, uint32 page)
             uint32 entry=f[0].GetUInt32();
             uint32 map=f[1].GetUInt32(),zone=f[2].GetUInt32();
             CreatureTemplate const* t=sObjectMgr->GetCreatureTemplate(entry);
-            uint32 type=t?t->type:0,classification=t?t->Classification:0;
+            uint32 type=t?t->type:0,classification=t?uint32(t->Classification):0;
             // Do not send fake names or records from other accounts.
             std::string name=t?ProtocolText(t->Name):std::string();
             Send(p,Trinity::StringFormat("AR|{}|{}|{}|{}|{}|{}",
