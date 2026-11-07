@@ -65,6 +65,36 @@ PREPARED GAMEPLAY UPGRADE: .../advancement/<12hex>/transition.json
 не удалять:** скрипт управления `server.sh` будет ссылаться
 на исходники нового контроллера.
 
+## Если после CANDIDATE SERVICES VERIFIED возник FileNotFoundError
+
+В первоначальном сценарии `prepare` была ошибка: папка новой записи
+проверялась `resolve(strict=True)` до её создания. Она возникала
+**после** сборки и полностью успешного изолированного испытания.
+Рабочие worldserver/MySQL при этом не переключались.
+
+Для уже проверенного кандидата исправленный скрипт может безопасно
+использовать существующий отчёт **того же образа** без повторной сборки
+и без нового развёртывания копии базы:
+
+```bash
+git -C "$HOME/WoWForEver-dungeon-upgrade-70658" fetch origin feature/dungeon-gameplay-upgrade-70658
+git -C "$HOME/WoWForEver-dungeon-upgrade-70658" switch --detach FETCH_HEAD
+python3 "$HOME/WoWForEver-dungeon-upgrade-70658/scripts/upgrade-clean-gameplay.py" prepare \
+  --root "$HOME/WoWForEver-clean" \
+  --baseline "/mnt/e/WoWForEver-work/reports/baseline-70658-20261107-003902" \
+  --reuse-built-image \
+  --verified-trial "/home/Kayter/WoWForEver-restore-trials/forever-services-check-5cf7880e2e3a/report.json"
+```
+
+Эта возможность *не* доверяет только строке успеха: она сверяет
+точный Docker image ID, путь и идентификатор отчёта, исходный baseline,
+состояния `database_verified`/`services_verified`/
+`cleanup_verified`, TLS и запись о работающих серверных модулях.
+Она не запускает второй сервер, не компилирует ядро и не меняет
+активное состояние. При несоответствии скрипт прервётся до
+создания записи. Ожидаемый результат теперь —
+`PREPARED GAMEPLAY UPGRADE`. До него `apply` запрещён.
+
 ## Шаг 2 — переключение после успешной проверки
 
 Скопировать **точный** путь `transition.json`, который вывел `prepare`.
