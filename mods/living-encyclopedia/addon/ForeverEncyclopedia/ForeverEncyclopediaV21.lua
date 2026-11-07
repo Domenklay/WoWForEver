@@ -23,6 +23,7 @@ local pendingCreatureInfo
 local infoQueue = {}
 local talentBatch = false
 local Draw
+local notifyNative
 
 local state = {
     online=false,
@@ -441,7 +442,7 @@ _G.ForeverEncyclopediaUIBridge = {
     ToggleFallback=toggleEncyclopedia,
     AreaName=areaName,
 }
-local function notifyNative(kind)
+notifyNative=function(kind)
     local native=_G.ForeverEncyclopediaLegacy
     if native and native.Refresh then native.Refresh(kind) end
 end
