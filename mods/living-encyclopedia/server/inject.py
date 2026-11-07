@@ -85,11 +85,14 @@ def extend_preheal_hook(core: Path) -> None:
             raise ValueError(f"{path.name}: pre-heal hook anchor mismatch ({text.count(old)})")
         path.write_text(text.replace(old, new))
 
-    decl = "void OnHeal(Unit* healer, Unit* reciever, uint32& gain);"
-    patch(header, decl,
-          "void OnHealBefore(Unit* healer, Unit* reciever, uint32& gain);\n"
-          "        " + decl,
-          occurrences=2)
+    patch(header,
+          "virtual void OnHeal(Unit* healer, Unit* reciever, uint32& gain);",
+          "virtual void OnHealBefore(Unit* healer, Unit* reciever, uint32& gain);\n"
+          "        virtual void OnHeal(Unit* healer, Unit* reciever, uint32& gain);")
+    patch(header,
+          "        void OnHeal(Unit* healer, Unit* reciever, uint32& gain);",
+          "        void OnHealBefore(Unit* healer, Unit* reciever, uint32& gain);\n"
+          "        void OnHeal(Unit* healer, Unit* reciever, uint32& gain);")
 
     patch(manager,
           "// Unit\nvoid ScriptMgr::OnHeal(",
