@@ -39,6 +39,7 @@ local state = {
     ranks={}, abilityMask=0, mana=0, maxMana=100, infoLevel=0,
     appearances={}, selectedAppearance="living_book",
     creatureInfo={},
+    lootSupported=false,lootByCreature={},lootRequestEntry=0,
 }
 
 local CREATURE_TYPES={
@@ -96,6 +97,8 @@ local catalogAllSeen={}
 local archiveSeen={}
 local catalogRequestPage=0
 local archiveRequestPage=0
+local lootGeneration=0
+local lootRequestPage=0
 
 local function requestFullCatalog()
     catalogAllGeneration=catalogAllGeneration+1
@@ -147,6 +150,32 @@ local function scheduleArchivePage(page,generation)
             and page==archiveRequestPage
     end)
 end
+
+local function requestCreatureLoot(entry)
+    entry=tonumber(entry)
+    if not state.lootSupported or not entry or entry<1 then return false end
+    local prior=state.lootByCreature[entry]
+    if prior and (prior.loaded or prior.loading) then return false end
+    lootGeneration=lootGeneration+1
+    local gen=lootGeneration
+    lootRequestPage=1
+    state.lootRequestEntry=entry
+    state.lootByCreature[entry]={items={},loaded=false,loading=true,total=0}
+    queueCatalogRequest("loot "..entry.." 1",function()
+        return gen==lootGeneration and state.lootRequestEntry==entry
+            and state.lootByCreature[entry] and state.lootByCreature[entry].loading
+    end)
+    return true
+end
+
+local function scheduleLootPage(entry,page,gen)
+    queueCatalogRequest("loot "..entry.." "..page,function()
+        local item=state.lootByCreature[entry]
+        return gen==lootGeneration and state.lootRequestEntry==entry
+            and item and item.loading and lootRequestPage==page
+    end)
+end
+
 local function requestZones() state.recentZones={}; state.recentZonesLoaded=false; send(BASE_REQ,"recent 3") end
 local function requestItems() state.recentItems={}; state.recentItemsLoaded=false; send(BASE_REQ,"recent 2") end
 
@@ -458,7 +487,45 @@ local function updateDock()
 end
 
 local function parseBase(msg)
-    if msg:sub(1,7)=="ARHEAD|" then
+    if msg:sub(1,6)=="LHEAD|" then
+        local _,entry,page,pages,total,lootId=strsplit("|",msg)
+        local id=tonumber(entry) or 0
+        local rec=state.lootByCreature[id]
+        if rec and rec.loading and state.lootRequestEntry==id then
+            rec.page=tonumber(page) or 1
+            rec.pages=tonumber(pages) or 1
+            rec.total=tonumber(total) or 0
+            rec.lootId=tonumber(lootId) or 0
+        end
+    elseif msg:sub(1,6)=="LITEM|" then
+        local _,creature,item,chance,quest,lootMode,group,minCount,maxCount=strsplit("|",msg)
+        local id=tonumber(creature) or 0
+        local rec=state.lootByCreature[id]
+        local itemId=tonumber(item) or 0
+        if rec and rec.loading and state.lootRequestEntry==id and itemId>0 then
+            rec.items[#rec.items+1]={
+                entry=itemId, chance=tonumber(chance) or 0,
+                quest=tonumber(quest)==1, lootMode=tonumber(lootMode) or 1,
+                group=tonumber(group) or 0,
+                minCount=tonumber(minCount) or 1,
+                maxCount=tonumber(maxCount) or 1
+            }
+        end
+    elseif msg:sub(1,5)=="LEND|" then
+        local id=tonumber(msg:sub(6)) or 0
+        local rec=state.lootByCreature[id]
+        if rec and rec.loading and state.lootRequestEntry==id
+            and rec.page==lootRequestPage then
+            if rec.page<rec.pages and #rec.items<4000 then
+                lootRequestPage=rec.page+1
+                scheduleLootPage(id,lootRequestPage,lootGeneration)
+            else
+                rec.loading=false
+                rec.loaded=true
+            end
+            if rec.loaded or rec.page%3==0 then notifyNative("loot") end
+        end
+    elseif msg:sub(1,7)=="ARHEAD|" then
         local _,page,pages,total=strsplit("|",msg)
         state.archivePage=tonumber(page) or 1
         state.archivePages=tonumber(pages) or 1
@@ -526,6 +593,11 @@ local function parseBase(msg)
             if previousCreatures~=state.creatures then state.archiveLoaded=false end
         elseif tag=="KNOW" then state.knowledgeTotal=tonumber(a) or 0; state.knowledgeSpent=tonumber(b) or 0; state.knowledgeAvailable=tonumber(c) or 0
         elseif tag=="CURRENT" then state.map=tonumber(a) or 0; state.zone=tonumber(b) or 0; state.area=tonumber(c) or 0
+        elseif tag=="CAPS" and a=="LOOT1" then
+            if not state.lootSupported then
+                state.lootSupported=true
+                notifyNative("loot-capability")
+            end
         elseif tag=="CAPS" and a=="ARCHIVE1" then
             if not state.archiveSupported then
                 state.archiveSupported=true
@@ -589,6 +661,7 @@ _G.ForeverEncyclopediaUIBridge = {
     RequestZones=requestZones,
     RequestItems=requestItems,
     RequestCreatureInfo=requestCreatureInfo,
+    RequestCreatureLoot=requestCreatureLoot,
     BuyTalent=function(key) if type(key)=="string" then send(TAL_REQ,"buy "..key) end end,
     SelectAppearance=function(key) if type(key)=="string" then send(TAL_REQ,"appearance "..key) end end,
     ToggleFallback=toggleEncyclopedia,
@@ -610,6 +683,8 @@ events:SetScript("OnEvent",function(_,event,...)
     if event=="GET_ITEM_INFO_RECEIVED" then notifyNative("items"); return end
     if event=="ZONE_CHANGED_NEW_AREA" then
         state.catalog={}; state.catalogLoaded=false; state.catalogPage=1; selectedCreature=1
+        lootGeneration=lootGeneration+1
+        state.lootRequestEntry=0
         catalogAllGeneration=catalogAllGeneration+1
         state.catalogAll={}; state.catalogAllLoaded=false; state.catalogAllLoading=false
         notifyNative("zone")
