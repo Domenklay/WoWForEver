@@ -20,10 +20,10 @@ old install-dev instructions do not describe the active ready generation.
 - Core advocaite/TrinityCore forever at exact
   `b4e7b940593f6402a822d4fbcdf31331d16f73b6`.
 - Project `forever-clean`, root `/home/Kayter/WoWForEver-clean`, state phase ready.
-- World image `forever-trinitycore:gameplay-70658-4530bd4e14a1`.
-- Ascension 1.11.0/protocol 3, Encyclopedia 0.9.8-v2.1-smartai-abilities,
-  Forever Scaling 0.2.0. Autolevel means NPC Scaling, not character leveling.
-- State DB label `gameplay-1@pristine-b4e7b940593f` is not an independently queried
+- World image `forever-trinitycore:gameplay-70658-54f07b4ce9ca`.
+- Ascension 1.13.0/protocol 3, Encyclopedia 0.9.8-v2.1-smartai-abilities,
+  Forever Scaling 0.4.0, DungeonFinder 0.2.0 (solo+group enabled). Autolevel means NPC Scaling, not character leveling.
+- State DB label `gameplay-1.13@pristine-b4e7b940593f` is not an independently queried
   upstream world-schema revision. Realm 70, content set 137, region group 8.
 - Loopback ports 1119/8081/8085, web 8088. MySQL is not host-published.
 - General working gameplay confirmed by user; detailed acceptance is incomplete.
@@ -31,7 +31,7 @@ old install-dev instructions do not describe the active ready generation.
 ## Active files and operations
 
 `~/WoWForEver-clean/server.sh` calls
-`/home/Kayter/WoWForEver-gameplay-tools.hReuvj/scripts/clean-forever-server.py`.
+`/home/Kayter/WoWForEver-dungeon-upgrade-70658/scripts/clean-forever-server.py`.
 Keep that worktree AND `/home/Kayter/WoWForEver-clean-tools.ZbyhNF`: the latter
 provides active mysql-init.sh and bnet entrypoint bind files. Confirmed mounts
 are documented in the handoff and JSON. Certificates: `~/WoWForEver/certs`;
@@ -50,8 +50,9 @@ Source extraction and selected launcher client path are independent.
 User confirmed BASELINE BACKUP VERIFIED for the fresh snapshot
 `/mnt/e/WoWForEver-work/reports/baseline-70658-20261107-003902` created on source 877b877.
 Keep the previous verified `baseline-70658-20261106-231543` as an older reference.
-This contains current four-DB SQL, resources/TLS/settings/controller sources and
-exact images, not the WoW client. Module rollback record:
+This snapshot contains the four-DB SQL, resources/TLS/settings/controller sources and
+exact images captured at its creation, not the WoW client. It predates the current
+1.13 / Scaling 0.4 / Finder 0.2 upgrade; it is not a fresh snapshot of that generation. Module rollback record:
 `~/WoWForEver-clean/advancement/4bae99119c86/install.json`; its databases-before
 dump predates installation and is not the fresh databases-current dump.
 
@@ -92,7 +93,7 @@ working baseline launcher remains 1.7.0, with previous verified release 1.7.1.
 
 Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
 catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
-sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.13.2 and Encyclopedia 0.9.22-v2.1-loot-preview; server candidate remains Ascension 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
+sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.14.0 and Encyclopedia 0.9.23-v2.1-fdf-diagnostics; server candidate is Ascension 1.14.0, active server remains 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
 and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
 synchronize the working branch. Catalogue CI 42359312577 checked the actual pinned
 Git payloads. Metadata-only catalogue edits need no launcher rebuild. Old
@@ -133,8 +134,8 @@ Do not claim actual game login or channel user verification from CI tests.
   recovery. Previous client ACCESS_VIOLATION root cause is still unproven.
 - Barrier 701463 is unimplemented/blocked; Ability Essence economy is incomplete;
   complex procs/pets/full talents are partial. Companion template 1933 is diagnostic;
-  flying-book appearance unverified. Scaling guard is per-event, without full
-  party/loot scaling. Mmap pathfinding is disabled.
+  flying-book appearance unverified. Scaling guard is per-event; five-player dungeon HP/damage scaling is active,
+  with loot scaling and detailed gameplay acceptance incomplete. Mmap pathfinding is disabled.
 - After confirmed changes update CURRENT-SERVER.ru.md and current-server.json and
   keep main's entry point current. Release availability is not user installation.
 
@@ -151,45 +152,34 @@ and matching source must accompany binary delivery. Core changes compile against
 the exact pinned headers/CMake flags; syntax checks alone do not prove linking
 or gameplay. Follow the current user's authorization over historical guidelines.
 
-## Prepared native multiclass candidate
+## Current native multiclass work
 
-Active user server is still confirmed 1.11.0. Development source 1.13.0:
-90/10 XP with per-character opt-out and capped-subclass refunds; native class
-spell catalogue; scrolling abilities; IDs 12/13 removed; Hunter native basics;
-transient weapon/armor/dual-wield grants from active subclass with ownership tracking.
-Native talent branches/grid/edges/ranks use TraitMgr::ValidateConfig for allocation
-and refund. Complex unsupported effects/resources remain blocked. Do not bypass
-native conditions/choices/currencies. Old purchases/ranks remain stored.
+User confirmed active Ascension 1.13, Scaling 0.4, DungeonFinder 0.2; controller
+/home/Kayter/WoWForEver-dungeon-upgrade-70658 at a1bc54e3aed2aa2d08e4c0c41213b295cf01d987.
+Combined fingerprint 54f07b4ce9cadef8561096e6074d400d2a80a9d983fc5e7815e74c18157a9f52
+and advancement 53c704ac9d98823769614008101390981bc9260fa879de87e6f512b285870520
+were reproduced before changes. Keep this active checkout. Source includes the
+same Scaling 0.4 and DungeonFinder 0.2 modules. Do not use the old 1.11/Scaling0.2
+installer as an upgrade or silently downgrade these working modules.
 
-User screenshot confirmed the initial 1.13 AddNamedTab adapter FAILED in-game:
-it selected a hidden retail page but created no tab in the visible talent window.
-The copied diagnostic report distinguishes TWO TabSystems. The visible loadout
-strip is PlayerSpellsFrame.TalentsFrame.TabSystem (301x32). The outer
-PlayerSpellsFrame.TabSystem is hidden. ButtonsParent (1212x641) is a clipped,
-high-level node canvas, NEVER the tab's parent. AddOn-only 1.13.1 anchors a sibling
-tab after the INNER strip, keeps that strip visible, and restores native trees
-when selecting Primary/Secondary or closing the page. /fa selects the same native
-TalentsFrame page. Do not add a hidden outer tab or revive a separate window.
-User screenshot then confirmed 1.13.1 tab was visible, but its presentation was
-rejected: tiny tab, nested gold dialog, scaled-down text and an empty black pane.
-AddOn 1.13.2 uses the SAME TabSystemButtonArtTemplate and dimensions as native
-loadout tabs. Presentation.lua fills the native content at scale 1, shares the
-Encyclopedia/Dungeon Finder palette, uses readable names, and offers a link to
-native primary talents when the old server cannot supply subclass trees. Never
-restore the nested standalone dialog or shrink all text to fit fixed 1020x690.
-TOC now loads SIX files including Presentation.lua. Preserve this required file
-when pinning the payload. Source: 2622aa788142f1b26b5b78e74f3fc78b981f6b3c. Protocol remains 3.
-No server rebuild is needed for either UI fix; server 1.11 still lacks the new trees
-and other 1.13 mechanics. Keep Encyclopedia's independent pin unchanged.
-Guide: docs/MULTICLASS-1.13.ru.md. Server source ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2.
-Server CI 42380875759/42380875788/42380875760 passed. Full local suite: 492 tests,
-30 skips; UI suite: 29 tests. 1.13.1 visibility was confirmed; the redesigned
-1.13.2 presentation still needs user confirmation in-game. User server remains 1.11 until an actual apply result.
+Native tab is now CONFIRMED visible/working. Exact host: inner
+PlayerSpellsFrame.TalentsFrame.TabSystem (301x32), NOT outer PlayerSpellsFrame.TabSystem.
+ButtonsParent is a clipped node canvas. User rejected brown flat presentation,
+mounts in class abilities, duplicate schools, and empty trees. Copied live node
+coordinates were GridX 50..53. Candidate 1.14 filters real player schools (pet and
+collection skill-lines are also category CLASS), rejects mount/generic quest
+spells, uses one native talent source per class, native school IDs and relative
+branch coordinates. Startup requires three schools for each classic class.
+Artwork uses actual talents-background-<class>-<spec> atlases and native tabs/panels.
+TOC has SEVEN files including TalentSchools.lua. Don't substitute pet trees or
+invent abilities by matching translated names. Keep native TraitMgr validation.
 
-Use upgrade-clean-gameplay.py prepare for a full build + isolated restored-baseline
-candidate trial, then its exact record and same checkout for apply/rollback. Accepts
-prior active 1.11/1.12. SQL is additive preferences only. Rollback restores runtime
-without importing old databases; cancelling a merely prepared candidate must never
-stop live services. User trial and installation remain pending. Keep controller worktrees.
-Multi 1.9 moves channel/update/development controls to the AddOns page and reads
-installed TOC versions plus receipt hashes. Journal is a full page with an empty state.
+Candidate source c13cdbff6cc0623e24a8667d42f343b80f8005a8, protocol3.
+CI 42398310341/42398310377/42398310367 passed; local 499 tests, 30 skips; UI 31.
+Guide docs/MULTICLASS-1.14.ru.md. Active server is still 1.13, NOT 1.14.
+Native real-catalogue audit/full linking/user gameplay verification are pending
+in prepare; don't claim CI compilation as deployment. New profile check accepts
+the confirmed active 13/Scaling04/Finder02 generation. Current world environment
+values and other services remain exact; SQL is preferences-only and rollback
+never imports old SQL. Use successful prepare's exact record and same checkout
+for apply/rollback. Preserve the existing transition 347c815174f8 as historical.
