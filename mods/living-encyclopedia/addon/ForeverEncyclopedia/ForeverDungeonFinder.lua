@@ -208,11 +208,12 @@ local function install()
     -- For clients exposing the sidebar buttons, attach to the LAST one.
     -- Check actual geometry: a similarly named bottom tab is not acceptable.
     local candidates = {
-        _G.PVEFrameTab3, _G.LFGParentFrameTab3, _G.GroupFinderFrameTab3,
-        _G.LFGFrameTab3, _G.PVEFrameTab4, _G.LFGParentFrameTab4,
+        "PVEFrameTab3", "LFGParentFrameTab3", "GroupFinderFrameTab3",
+        "LFGFrameTab3", "PVEFrameTab4", "LFGParentFrameTab4",
     }
     local anchored = false
-    for _, native in ipairs(candidates) do
+    for _, name in ipairs(candidates) do
+        local native = _G[name]
         if native and native.GetLeft and native.GetWidth and host.GetRight then
             local left, right = native:GetLeft(), host:GetRight()
             local width, height = native:GetWidth(), native:GetHeight()
