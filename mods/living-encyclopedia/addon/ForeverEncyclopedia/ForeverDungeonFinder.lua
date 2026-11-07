@@ -125,6 +125,19 @@ local function font(parent, text, style, x, y, width, color)
     return obj
 end
 
+-- Lua 5.1 string.lower only handles ASCII in WoW; fold Russian UTF-8
+-- as well so searching "зул" matches "Зул'Фаррак".
+local function foldRu(text)
+    local result = string.lower(text or "")
+    result = result:gsub("\208([\144-\159])", function(b)
+        return "\208" .. string.char(string.byte(b) + 32)
+    end)
+    result = result:gsub("\208([\160-\175])", function(b)
+        return "\209" .. string.char(string.byte(b) - 32)
+    end)
+    return result:gsub("Ё", "ё")
+end
+
 local GOLD = {1, 0.82, 0.19}
 local IVORY = {0.93, 0.88, 0.76}
 local MUTED = {0.69, 0.71, 0.74}
@@ -293,9 +306,9 @@ local function install()
 
     local function refreshRows()
         wipe(visible)
-        local needle = string.lower(filterText)
+        local needle = foldRu(filterText)
         for _, entry in ipairs(DUNGEONS) do
-            if needle == "" or string.find(string.lower(entry.name .. " " .. entry.zone), needle, 1, true) then
+            if needle == "" or string.find(foldRu(entry.name .. " " .. entry.zone), needle, 1, true) then
                 table.insert(visible, entry)
             end
         end
