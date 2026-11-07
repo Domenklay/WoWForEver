@@ -12,7 +12,7 @@ source = (ADDON / "ForeverEncyclopediaTalentData.lua").read_text(encoding="utf-8
 overrides = (ADDON / "ForeverEncyclopediaTalentOverrides.lua").read_text(encoding="utf-8")
 
 version = re.search(r"^## Version: (.+)$", toc, re.MULTILINE)
-assert version and version.group(1) == "0.9.22-v2.1-loot-preview", version
+assert version and version.group(1) == "0.9.23-v2.1-fdf-diagnostics", version
 assert "## Interface: 16001" in toc
 entries = [line for line in toc.splitlines() if line and not line.startswith("#")]
 assert len(entries) == len(set(entries)), "Duplicate TOC file"
