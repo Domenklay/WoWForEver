@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107-legacy-ux-10",
+  "revision": "70658-20261107-native-scroll-11",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,7 +102,7 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-10",
+      "release": "testing-70658-20261107-11",
       "clientBuild": 70658,
       "addons": [
         {
@@ -141,20 +141,20 @@
         },
         {
           "name": "ForeverEncyclopedia",
-          "version": "0.9.17-v2.1-legacy-ux",
+          "version": "0.9.18-v2.1-dungeon-scroll",
           "protocol": 1,
-          "sourceCommit": "55d20b3af5bf20c902310ab759977325a743fdb6",
+          "sourceCommit": "e00e7d31f5c762ba36f1e2aee2fab29b9b2d7ebb",
           "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia",
           "files": [
             {
               "name": "ForeverDungeonFinder.lua",
-              "size": 22271,
-              "sha256": "bac83af15b3330e66afee1b22a9e470d968c408178b752bf53fffb960f559dd2"
+              "size": 23017,
+              "sha256": "1b5dd9ce8dac18bbf5bcad98b50ee557fd3cac19e2941c3168f97cec00130a29"
             },
             {
               "name": "ForeverEncyclopedia.toc",
-              "size": 648,
-              "sha256": "a693652400eea5e4ea165a90b75e6df8a30579d2fb95914cd464bfc41ee8f7a7"
+              "size": 653,
+              "sha256": "26af378a23c34b5521595ea1e7167edd01735c055b49ea9938656a9b489bc952"
             },
             {
               "name": "ForeverEncyclopediaAbilities.lua",
