@@ -100,7 +100,7 @@ function PanelTemplates_SetTab(frame,index) frame.selectedTab=index end
 
 GameTooltip={SetOwner=noop,AddLine=noop,Show=noop,Hide=noop}
 local notices={}
-DEFAULT_CHAT_FRAME={AddMessage=function(msg) table.insert(notices,msg) end}
+DEFAULT_CHAT_FRAME={AddMessage=function(_,msg) table.insert(notices,msg) end}
 SlashCmdList={}
 function UnitName() return "TestHero" end
 function IsInGroup() return false end
