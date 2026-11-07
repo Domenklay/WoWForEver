@@ -153,14 +153,29 @@
   },
   "launcher": {
     "working_baseline": "1.7.0",
-    "latest_verified_release": "1.7.1",
+    "latest_verified_release": "1.8.0",
     "latest_user_install_confirmed": false,
-    "source_commit": "87edd5aa6bdf0168dd25714c17b5815df82f6c68",
-    "workflow_run": 42291254078,
-    "artifact": 13540302260,
-    "download_url": "https://github.com/Domenklay/WoWForEver/actions/runs/42291254078/artifacts/13540302260",
-    "zip_sha256": "a9254f60a896d7e029dc78cc7a6e1b39d16875224ec9e446b233b5e86f5c8d29",
-    "addon_development_default": false
+    "source_commit": "d55f1662aa8ba8ef8b6e6bac54b39462adec7fa0",
+    "workflow_run": 42358676742,
+    "artifact": 13568828528,
+    "download_url": "https://github.com/Domenklay/WoWForEver/actions/runs/42358676742/artifacts/13568828528",
+    "zip_sha256": "f55aed4ff7f8b141ffa3289b4254b24caffd4c7b090dcd75bd5401a3543d1b96",
+    "addon_development_default": false,
+    "addon_channel_default": "stable",
+    "addon_updates_default": true,
+    "client_updates_default": true,
+    "automatic_game_login_default": true,
+    "automatic_game_login_user_verified": false,
+    "addon_channels_user_verified": false,
+    "addon_channel_catalog": "https://raw.githubusercontent.com/Domenklay/WoWForEver/main/addons/channels.json",
+    "addon_channel_guide": "https://github.com/Domenklay/WoWForEver/blob/main/docs/ADDON-CHANNELS.ru.md",
+    "previous_verified_release": {
+      "latest_verified_release": "1.7.1",
+      "source_commit": "87edd5aa6bdf0168dd25714c17b5815df82f6c68",
+      "workflow_run": 42291254078,
+      "artifact": 13540302260,
+      "zip_sha256": "a9254f60a896d7e029dc78cc7a6e1b39d16875224ec9e446b233b5e86f5c8d29"
+    }
   },
   "backup": {
     "directory_windows": "E:\\WoWForEver-work\\reports\\baseline-70658-20261107-003902",
@@ -196,7 +211,7 @@
     "image_archive_load_on_blank_docker_verified": false
   },
   "checks": {
-    "launcher_windows": 61,
+    "launcher_windows": 80,
     "worker_windows": 224,
     "combined_core_units": 12,
     "combined_check_run": 42291253941,
@@ -205,7 +220,10 @@
     "restore_real_mysql_fixture_verified": true,
     "services_restore_fixture_ci_run": 42301993948,
     "services_restore_fixture_verified": true,
-    "services_restore_test_source": "464c9313d2f4a44aae19b08dee41d262714a2d97"
+    "services_restore_test_source": "464c9313d2f4a44aae19b08dee41d262714a2d97",
+    "addon_catalog_ci_run": 42359312577,
+    "addon_catalog_pinned_payloads_verified": true,
+    "launcher_browser_ui_verified": true
   },
   "known_limits": [
     "Ability Essence economy is incomplete; purchase limit is used",
@@ -215,7 +233,7 @@
     "Scaling damage guard is per event, not a rolling window",
     "Party-size dungeon and loot scaling are not implemented",
     "Previous client ACCESS_VIOLATION root cause remains unproven",
-    "Detailed gameplay acceptance, Multi 1.7.1 user test and full-server restore remain pending"
+    "Detailed gameplay acceptance, Multi 1.8.0 channel/autologin user test and full-server restore remain pending"
   ],
   "privacy": {
     "snapshot_contains_secrets": false,
