@@ -125,6 +125,7 @@ static void Snapshot(Player* p)
     Send(p, Trinity::StringFormat("KNOW {} {} {} {}", v.total,v.spent,available,v.discoveries));
     Send(p, Trinity::StringFormat("CURRENT {} {} {}", p->GetMapId(),p->GetZoneId(),p->GetAreaId()));
     Send(p,"CAPS ARCHIVE1"); // optional, older clients ignore this safe extra status line
+    Send(p,"CAPS LOOT1"); // optional, direct item loot with raw database chance
     Send(p, Trinity::StringFormat("BOOK {} {} 0 0 0 0", std::min(LoadMana(p),BaseMaxMana),BaseMaxMana));
     Send(p,"END");
 }
@@ -258,6 +259,73 @@ static void Archive(Player* p, uint32 page)
     Send(p,"AREND");
 }
 
+/*
+ * Read only direct item records from the creature loot template used in
+ * the CURRENT difficulty. All percentages are raw DB values, never the
+ * effective post-rate/post-group chance. Reference tables, currencies and
+ * conditional loot are not presented as misleading exact probabilities.
+ * This is exposed only after this account has discovered the creature.
+ */
+static void LootPreview(Player* p, uint32 entry, uint32 page)
+{
+    uint32 account = Account(p);
+    if (!account || !entry || !page || page > 10000) { Error(p,"invalid loot request"); return; }
+    if (!sObjectMgr->GetCreatureTemplate(entry)) { Error(p,"unknown creature"); return; }
+    if (!CharacterDatabase.PQuery(
+            "SELECT 1 FROM forever_encyclopedia_discovery "
+            "WHERE account_id={} AND kind={} AND entry={} LIMIT 1",
+            account,uint32(KIND_CREATURE),entry))
+    {
+        Error(p,"creature not discovered");
+        return;
+    }
+
+    uint32 difficulty = p->GetMap() ? uint32(p->GetMap()->GetDifficultyID()) : 0;
+    uint32 lootId = 0;
+    if (QueryResult row=WorldDatabase.PQuery(
+            "SELECT LootID FROM creature_template_difficulty "
+            "WHERE Entry={} AND DifficultyID={} LIMIT 1",entry,difficulty))
+        lootId=row->Fetch()[0].GetUInt32();
+    if (!lootId && difficulty != 0)
+        if (QueryResult row=WorldDatabase.PQuery(
+                "SELECT LootID FROM creature_template_difficulty "
+                "WHERE Entry={} AND DifficultyID=0 LIMIT 1",entry))
+            lootId=row->Fetch()[0].GetUInt32();
+
+    uint32 total=0;
+    if (lootId)
+        if (QueryResult row=WorldDatabase.PQuery(
+                "SELECT COUNT(*) FROM creature_loot_template "
+                "WHERE Entry={} AND ItemType=0 AND Item<>0",lootId))
+            total=row->Fetch()[0].GetUInt32();
+
+    constexpr uint32 PageSize = 8;
+    uint32 pages=std::max<uint32>(1,(total+PageSize-1)/PageSize);
+    page=std::min(page,pages);
+    Send(p,Trinity::StringFormat("LHEAD|{}|{}|{}|{}|{}",entry,page,pages,total,lootId));
+    if (lootId)
+        if (QueryResult rows=WorldDatabase.PQuery(
+                "SELECT Item,Chance,QuestRequired,LootMode,GroupId,MinCount,MaxCount "
+                "FROM creature_loot_template "
+                "WHERE Entry={} AND ItemType=0 AND Item<>0 "
+                "ORDER BY Chance DESC,Item ASC LIMIT {},{}",
+                lootId,(page-1)*PageSize,PageSize))
+        {
+            do
+            {
+                Field* f=rows->Fetch();
+                uint32 item=f[0].GetUInt32();
+                if (!sObjectMgr->GetItemTemplate(item)) continue;
+                // Chance is the database column, NOT the final drop probability.
+                Send(p,Trinity::StringFormat("LITEM|{}|{}|{:.3f}|{}|{}|{}|{}|{}",
+                    entry,item,f[1].GetFloat(),f[2].GetUInt32(),
+                    f[3].GetUInt32(),f[4].GetUInt32(),
+                    f[5].GetUInt32(),f[6].GetUInt32()));
+            } while (rows->NextRow());
+        }
+    Send(p,Trinity::StringFormat("LEND|{}",entry));
+}
+
 static void Request(Player* p,std::string const& text)
 {
     if (!Ready) { Error(p,"module disabled"); return; } if (text.size()>96) return;
@@ -265,6 +333,12 @@ static void Request(Player* p,std::string const& text)
     std::istringstream in(text); std::string cmd; in>>cmd;
     if (cmd.empty() || cmd=="status") { Snapshot(p); return; }
     if (cmd=="recent") { uint32 kind=0; std::string extra; if (!(in>>kind)||(in>>extra)) { Error(p,"invalid recent request"); return; } Recent(p,kind); return; }
+    if (cmd=="loot")
+    {
+        uint32 entry=0,page=0; std::string extra;
+        if (!(in>>entry>>page) || (in>>extra)) { Error(p,"invalid loot request"); return; }
+        LootPreview(p,entry,page); return;
+    }
     if (cmd=="archive")
     {
         uint32 page=0; std::string extra;

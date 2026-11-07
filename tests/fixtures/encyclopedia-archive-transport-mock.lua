@@ -47,6 +47,7 @@ local function incoming(message)
 end
 local sentCatalog={}
 local sentArchive={}
+local sentLoot={}
 local function handleOutgoing(payload)
     if payload:match("^catalog ") then
         local page=tonumber(payload:match("^catalog (%d+)"))
@@ -59,6 +60,19 @@ local function handleOutgoing(payload)
         }
         for _,line in ipairs(data[page] or {}) do incoming(line) end
         incoming("CATEND")
+    elseif payload:match("^loot ") then
+        local entry,page=payload:match("^loot (%d+) (%d+)")
+        entry=tonumber(entry)
+        page=tonumber(page)
+        sentLoot[#sentLoot+1]=entry..":"..page
+        incoming(("LHEAD|%d|%d|2|3|999"):format(entry,page))
+        if page==1 then
+            incoming(("LITEM|%d|1001|12.500|0|1|0|1|2"):format(entry))
+            incoming(("LITEM|%d|1002|0.000|0|1|1|1|1"):format(entry))
+        else
+            incoming(("LITEM|%d|1003|3.250|1|2|0|1|1"):format(entry))
+        end
+        incoming("LEND|"..entry)
     elseif payload:match("^archive ") then
         local page=tonumber(payload:match("^archive (%d+)"))
         sentArchive[#sentArchive+1]=page
@@ -76,10 +90,13 @@ end
 
 incoming("CURRENT 0 7 7")
 incoming("CAPS ARCHIVE1")
+incoming("CAPS LOOT1")
 assert(state.archiveSupported)
+assert(state.lootSupported)
 assert(not state.archiveLoading,"Do not fetch all account discoveries during login")
 bridge.RequestFullArchive()
 bridge.RequestFullCatalog()
+assert(bridge.RequestCreatureLoot(33))
 
 local steps=0
 while #pending>0 or #outgoing>0 do
@@ -95,6 +112,13 @@ while #pending>0 or #outgoing>0 do
 end
 
 assert(state.catalogAllLoaded and not state.catalogAllLoading)
+assert(state.lootByCreature[33].loaded and not state.lootByCreature[33].loading)
+assert(#state.lootByCreature[33].items==3)
+assert(table.concat(sentLoot,",")=="33:1,33:2")
+assert(state.lootByCreature[33].items[2].group==1)
+assert(state.lootByCreature[33].items[2].chance==0)
+assert(state.lootByCreature[33].items[3].quest==true)
+assert(not bridge.RequestCreatureLoot(33),"Do not re-request cached creature loot")
 assert(state.archiveLoaded and not state.archiveLoading)
 assert(#state.catalogAll==5,"Zone catalogue must combine all three server pages")
 assert(#state.archiveAll==3,"Account archive must combine both server pages")
@@ -112,4 +136,4 @@ for _=1,5 do
     if callback then callback() end
 end
 assert(#sentCatalog==count,"Abandoned zone requests must not leak into the next zone")
-print("ENCYCLOPEDIA PAGED CATALOGUE / GLOBAL ARCHIVE PROTOCOL MOCK PASSED")
+print("ENCYCLOPEDIA CATALOGUE + 2-PAGE LOOT / RATE LIMIT MOCK PASSED")

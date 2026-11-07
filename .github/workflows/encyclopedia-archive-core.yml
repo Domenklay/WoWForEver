@@ -1,7 +1,7 @@
 name: Encyclopedia global archive protocol (70658)
 on:
   push:
-    branches: [feature/encyclopedia-archive-filters-70658]
+    branches: [feature/encyclopedia-archive-filters-70658, feature/encyclopedia-loot-panel-70658]
     paths:
       - 'mods/living-encyclopedia/server/ForeverEncyclopedia.cpp'
       - 'mods/living-encyclopedia/addon/**'

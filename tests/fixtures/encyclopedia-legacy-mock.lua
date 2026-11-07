@@ -35,6 +35,9 @@ function Frame:SetHeight(h) self.h=h end
 function Frame:GetHeight() return self.h or 0 end
 function Frame:GetWidth() return self.w or 0 end
 function Frame:SetFrameLevel(n) self.level=n end
+function Frame:SetBackdrop(v) self.backdrop=v end
+function Frame:SetBackdropBorderColor(...) self.borderColor={...} end
+function Frame:SetBackdropColor(...) self.backdropColor={...} end
 function Frame:GetFrameLevel() return self.level or 100 end
 function Frame:RegisterEvent() end
 function Frame:EnableMouse() end
@@ -98,6 +101,12 @@ function GameTooltip:SetOwner() end
 function GameTooltip:AddLine() end
 function GameTooltip:Show() end
 function GameTooltip:Hide() end
+function GameTooltip:SetHyperlink(link) self.lastLink=link end
+function GameTooltip:ClearLines() self.lastLink=nil end
+C_Item={
+  GetItemInfo=function(entry) return entry==1001 and "Древнее перо" or "Редкий предмет" end,
+  GetItemIconByID=function() return "Interface\\Icons\\INV_Feather_01" end,
+}
 function ShowUIPanel(f) f:Show() end
 function HideUIPanel(f) f:Hide() end
 InCombatLockdown=function() return false end
@@ -115,11 +124,17 @@ local state={
     selectedAppearance="living_book",
     catalogPage=1,catalogPages=2,catalogTotal=42,catalogKnown=9,catalogLoaded=true,
     infoLevel=2,creatureInfo={},recentZones={{entry=7}},recentZonesLoaded=true,
+    lootSupported=true,lootByCreature={
+      [33]={items={
+        {entry=1001,chance=12.5,quest=false,lootMode=1,group=0,minCount=1,maxCount=1},
+        {entry=1002,chance=0,quest=false,lootMode=1,group=1,minCount=1,maxCount=1}
+      },loaded=true,loading=false}
+    },
     recentItems={{entry=19019,map=0,zone=7}},recentItemsLoaded=true,
     catalog={{entry=33,known=true,name="Волк",creatureType=1,class=0},
              {entry=42,known=false,name="",creatureType=0,class=0}},
 }
-local calls={status=0,catalog=0,zones=0,items=0,buy={},info={},appearance={}}
+local calls={status=0,catalog=0,zones=0,items=0,buy={},info={},appearance={},loot={}}
 ForeverEncyclopediaUIBridge={
     state=state,catalog=catalog,
     RequestStatus=function()calls.status=calls.status+1 end,
@@ -127,6 +142,7 @@ ForeverEncyclopediaUIBridge={
     RequestZones=function()calls.zones=calls.zones+1 end,
     RequestItems=function()calls.items=calls.items+1 end,
     RequestCreatureInfo=function(n)calls.info[#calls.info+1]=n end,
+    RequestCreatureLoot=function(n)calls.loot[#calls.loot+1]=n end,
     BuyTalent=function(key)calls.buy[#calls.buy+1]=key end,
     SelectAppearance=function(key)calls.appearance[#calls.appearance+1]=key end,
     AreaName=function(id)return "Зона "..id end,
@@ -236,6 +252,24 @@ for _,child in ipairs(archiveScroll.scrollChild.children or {}) do
 end
 assert(rowWidgets>=10 and rowWidgets<=12,
        "Archive should reuse 10-11 small row widgets, not show just 4")
+assert(click("Волк"),"Known creature row missing")
+local lootButtons=0
+for _,f in ipairs(Frames) do
+    if currentlyVisible(f) and f.scripts.OnEnter then
+        for _,region in ipairs(f.regions) do
+            if region.text=="Древнее перо" then
+                lootButtons=lootButtons+1
+                f.scripts.OnEnter(f)
+                assert(GameTooltip.lastLink=="item:1001","Native item hyperlink tooltip did not open")
+                f.scripts.OnLeave(f)
+            end
+        end
+    end
+end
+assert(lootButtons>=1,"Visible loot item with real name is missing")
+local creatureModels=visibleModels()
+assert(creatureModels[#creatureModels].parent:GetWidth()==182,
+       "Creature 3D plate must be smaller to fit the loot list")
 assert(click("Волк"),"Known creature row missing")
 assert(not click("Далее"),"Archive must no longer have pagination Next")
 assert(not click("Назад"),"Archive must no longer have pagination Back")
