@@ -39,6 +39,10 @@ function Frame:GetFrameLevel() return self.level or 100 end
 function Frame:RegisterEvent() end
 function Frame:EnableMouse() end
 function Frame:EnableMouseWheel() end
+function Frame:SetAutoFocus(b) self.autoFocus=b end
+function Frame:SetText(s) self.text=s end
+function Frame:GetText() return self.text or "" end
+function Frame:ClearFocus() self.focused=false end
 function Frame:SetScrollChild(child) self.scrollChild=child end
 function Frame:GetScrollChild() return self.scrollChild end
 function Frame:SetVerticalScroll(n) self.scrollOffset=n end
@@ -217,6 +221,13 @@ assert(click("Коллекция"),"Collection subtab is missing")
 assert(click("Существа"),"Clickable collected-knowledge category missing")
 assert(calls.catalog>=1,"Creature category must request the real catalog")
 assert(click("Волк"),"Known creature row missing")
+assert(not click("Далее"),"Archive must no longer have pagination Next")
+assert(not click("Назад"),"Archive must no longer have pagination Back")
+assert(click("Все типы  ▾"),"Creature type dropdown missing")
+assert(click("Звери"),"Creature type option missing")
+assert(not click("???"),"Unknown type should not match a Beast filter")
+assert(click("Звери  ▾"),"Selected creature filter must be visible")
+assert(click("Все типы"),"Reset to all creature types missing")
 local preview=visibleModels()
 assert(#preview>=1,"Creature 3D PlayerModel preview missing")
 assert(preview[#preview].modelId==33,"Creature model must use the server entry, not a placeholder")
@@ -224,6 +235,28 @@ assert(preview[#preview].scripts.OnMouseWheel,"Mouse wheel zoom missing")
 preview[#preview].scripts.OnMouseWheel(preview[#preview],1)
 assert(preview[#preview].zoom,"Creature zoom must update camera")
 assert(calls.info[#calls.info]==33,"Clicked creature must request server-backed data")
+-- Full account archive on new server: additional zones are selectable and no
+-- page controls appear even when the returned list exceeds one server page.
+state.archiveSupported=true
+state.archiveLoaded=true
+state.archiveAll={
+  {entry=33,known=true,name="Волк",creatureType=1,classification=0,map=1,zone=7},
+  {entry=500,known=true,name="Повелитель пепла",creatureType=3,classification=1,map=1,zone=88},
+}
+state.zone=7
+state.catalogAll={
+  {entry=33,known=true,name="Волк",creatureType=1,map=1,zone=7},
+  {entry=42,known=false,name="",creatureType=0,map=1,zone=7},
+}
+state.catalogAllLoaded=true
+api.Refresh("archive")
+assert(click("Все доступные зоны  ▾"),"Location selection menu missing")
+assert(click("Зона 88"),"Other discovered zone should be an option")
+assert(click("Повелитель пепла"),"A creature from another zone must appear after filtering")
+local otherZoneModel=visibleModels()
+assert(otherZoneModel[#otherZoneModel].modelId==500,"Wrong model after location filtering")
+assert(click("Зона 88  ▾"),"Location selection should show chosen zone")
+assert(click("Все доступные зоны"),"Unable to reset zone filter")
 assert(click("Назад к коллекции"),"The in-window archive back button is missing")
 assert(click("Локации"),"Zone category missing")
 assert(calls.zones>=1)
