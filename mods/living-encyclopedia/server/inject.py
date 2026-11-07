@@ -61,6 +61,55 @@ def extend_addon_transport(core: Path) -> None:
     chat.write_text(text)
 
 
+
+
+def extend_preheal_hook(core: Path) -> None:
+    """Add an isolated *pre-application* healing hook to pinned 70658 core.
+
+    Vanilla UnitScript::OnHeal is called AFTER ModifyHealth and cannot
+    prevent free/over-cap heals. Keep its existing behavior untouched for
+    unrelated modules; introduce OnHealBefore for our companion budget.
+    """
+    header = core / "src/server/game/Scripting/ScriptMgr.h"
+    manager = core / "src/server/game/Scripting/ScriptMgr.cpp"
+    unit = core / "src/server/game/Entities/Unit/Unit.cpp"
+    paths = (header, manager, unit)
+    if all("OnHealBefore" in p.read_text() for p in paths):
+        return
+    if any("OnHealBefore" in p.read_text() for p in paths):
+        raise ValueError("partial encyclopedia OnHealBefore core patch")
+
+    def patch(path: Path, old: str, new: str, occurrences: int = 1) -> None:
+        text = path.read_text()
+        if text.count(old) != occurrences:
+            raise ValueError(f"{path.name}: pre-heal hook anchor mismatch ({text.count(old)})")
+        path.write_text(text.replace(old, new))
+
+    decl = "void OnHeal(Unit* healer, Unit* reciever, uint32& gain);"
+    patch(header, decl,
+          "void OnHealBefore(Unit* healer, Unit* reciever, uint32& gain);\n"
+          "        " + decl,
+          occurrences=2)
+
+    patch(manager,
+          "// Unit\nvoid ScriptMgr::OnHeal(",
+          "// Unit\nvoid ScriptMgr::OnHealBefore(Unit* healer, Unit* receiver, uint32& gain)\n"
+          "{\n    FOREACH_SCRIPT(UnitScript)->OnHealBefore(healer, receiver, gain);\n}\n\n"
+          "void ScriptMgr::OnHeal(")
+    patch(manager,
+          "void UnitScript::OnHeal(Unit* /*healer*/, Unit* /*reciever*/, uint32& /*gain*/)\n{\n}",
+          "void UnitScript::OnHealBefore(Unit* /*healer*/, Unit* /*receiver*/, uint32& /*gain*/)\n{\n}\n\n"
+          "void UnitScript::OnHeal(Unit* /*healer*/, Unit* /*reciever*/, uint32& /*gain*/)\n{\n}")
+
+    patch(unit,
+          "    if (addhealth)\n        gain = victim->ModifyHealth(int32(addhealth));\n\n"
+          "    // Hook for OnHeal Event",
+          "    // Encyclopedia mana must be checked BEFORE health is granted.\n"
+          "    sScriptMgr->OnHealBefore(healer, victim, addhealth);\n"
+          "    if (addhealth)\n        gain = victim->ModifyHealth(int32(addhealth));\n\n"
+          "    // Hook for OnHeal Event")
+
+
 def ensure_loader_registration(text: str, declaration: str, call: str) -> str:
     if declaration not in text:
         pattern = r"(^void AddCustomScripts\(\)\s*\{)"
@@ -80,6 +129,7 @@ def ensure_loader_registration(text: str, declaration: str, call: str) -> str:
 
 def inject(core: Path, module: Path) -> None:
     extend_addon_transport(core)
+    extend_preheal_hook(core)
 
     loader = core / "src/server/scripts/Custom/custom_script_loader.cpp"
     text = loader.read_text()
@@ -126,6 +176,18 @@ def self_test() -> None:
             '}\n'
         )
 
+        # Tiny pinned-core fixtures for both declaration sites + the real call order.
+        scriptmgr_h = core / "src/server/game/Scripting/ScriptMgr.h"
+        scriptmgr_h.parent.mkdir(parents=True, exist_ok=True)
+        scriptmgr_h.write_text("class UnitScript {\n        virtual void OnHeal(Unit* healer, Unit* reciever, uint32& gain);\n};\nclass ScriptMgr {\n        void OnHeal(Unit* healer, Unit* reciever, uint32& gain);\n};\n")
+        scriptmgr_cpp = scriptmgr_h.with_suffix(".cpp")
+        scriptmgr_cpp.write_text("// Unit\nvoid ScriptMgr::OnHeal(Unit* healer, Unit* receiver, uint32& gain) {}\n"
+                                "void UnitScript::OnHeal(Unit* /*healer*/, Unit* /*reciever*/, uint32& /*gain*/)\n{\n}\n")
+        unit_cpp = core / "src/server/game/Entities/Unit/Unit.cpp"
+        unit_cpp.parent.mkdir(parents=True, exist_ok=True)
+        unit_cpp.write_text("    if (addhealth)\n        gain = victim->ModifyHealth(int32(addhealth));\n\n"
+                            "    // Hook for OnHeal Event\n")
+
         server = module / "server"
         server.mkdir(parents=True)
         server.joinpath("ForeverEncyclopedia.cpp").write_text("// main test\n")
@@ -145,6 +207,10 @@ def self_test() -> None:
         for prefix in PREFIXES:
             assert chat_text.count(f'prefix == "{prefix}"') == 1
         assert chat_text.count('text.length() > 255') == 1
+        assert (scriptmgr_h.read_text().count("OnHealBefore(")) == 2
+        assert (scriptmgr_cpp.read_text().count("OnHealBefore(")) == 3
+        assert "sScriptMgr->OnHealBefore(healer, victim, addhealth);" in unit_cpp.read_text()
+        assert unit_cpp.read_text().index("OnHealBefore(") < unit_cpp.read_text().index("ModifyHealth(")
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopedia.cpp").read_text() == "// main test\n"
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaTalents.cpp").read_text() == "// talent test\n"
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").read_text() == "// runtime v5 test\n"
