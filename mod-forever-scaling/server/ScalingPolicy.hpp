@@ -7,7 +7,7 @@
 namespace forever_scaling {
 enum class Rank { Normal, Elite, RareElite, Boss };
 struct Config {
-    int minOffset = -9;
+    int minOffset = -3;
     int maxCreatureLevel = 70;
     double normalCap = .20;
     double eliteCap = .30;
