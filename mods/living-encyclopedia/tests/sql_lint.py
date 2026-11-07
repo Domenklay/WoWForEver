@@ -63,8 +63,10 @@ required_runtime = [
     "sSpellMgr->GetSpellInfo(spellId, difficulty)",
     "SPELL_AURA_SCHOOL_ABSORB",
     "CastSpellExtraArgs args(CompanionCastFlags())",
-    "void OnHeal(Unit* healer, Unit* receiver, uint32& gain) override",
-    "state->mana -= allowed; // strict 1 mana == 1 actually healed HP",
+    "void OnHealBefore(Unit* healer, Unit* receiver, uint32& gain) override",
+    "state->mana -= allowed; // one mana equals one actually healed HP",
+    "state->healReady = now + std::chrono::seconds(HealCooldownSeconds(*state))",
+    "Talents::AffordableNativeHeal(",
     "state.mana -= amount; // strict 1 mana == 1 absorb HP",
     "absorb->ChangeAmount(SpellEffectValue(amount))",
 ]
