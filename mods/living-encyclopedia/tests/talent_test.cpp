@@ -63,6 +63,15 @@ int main()
     assert(AmplifiedHeal(100, 1) == 110);
     assert(AmplifiedHeal(100, 5) == 150);
     assert(AmplifiedHeal(UINT32_MAX, 5) == UINT32_MAX);
+    // Heal is capped before granting HP: no free HP, no overspend, no overheal.
+    assert(AffordableNativeHeal(200, 500, 400, 0, 0) == 0);
+    assert(AffordableNativeHeal(200, 500, 400, 50, 0) == 50);
+    assert(AffordableNativeHeal(200, 500, 400, 150, 0) == 150);
+    assert(AffordableNativeHeal(200, 500, 400, 500, 0) == 200);
+    assert(AffordableNativeHeal(200, 100, 400, 500, 0) == 100);
+    assert(AffordableNativeHeal(200, 500, 40, 500, 0) == 40);
+    assert(AffordableNativeHeal(200, 500, 400, 500, 5) == 300);
+    assert(AffordableNativeHeal(UINT32_MAX, UINT32_MAX, 100, 50, 5) == 50);
     assert(ReservePercent(0) == 0);
     assert(ReservePercent(3) == 15);
     assert(ReservePercent(5) == 25);
