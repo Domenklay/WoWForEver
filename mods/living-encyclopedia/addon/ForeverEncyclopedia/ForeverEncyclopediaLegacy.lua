@@ -667,28 +667,50 @@ end
 local function drawAppearanceView()
     local base=frame(page,13,63,874,444,DEEP)
     heading(base,12,12,850,"Облики Живой книги")
-    label(base,25,46,816,"Внешний вид не меняет силу и не расходует ману. Открытия проверяет сервер.",
+    label(base,25,46,816,"Облик влияет только на внешний вид. Выберите его для 3D-предпросмотра.",
           "GameFontNormalSmall",MUTED)
-    for i,a in ipairs(catalog.appearances or {}) do
-        local col=(i-1)%2
-        local row=math.floor((i-1)/2)
-        local x=16+col*427
-        local y=86+row*111
+    local list=frame(base,16,82,407,347,BROWN)
+    local detail=frame(base,437,82,421,347,BROWN)
+    local appearances=catalog.appearances or {}
+    local entries=scrollArea(list,9,9,387,329,"appearance-list",math.max(329,#appearances*79+10))
+    local chosen
+    for i,a in ipairs(appearances) do
+        if a.key==selectedAppearance then chosen=a end
         local unlocked=state.appearances[a.key] and state.appearances[a.key].unlocked
-        local b=frame(base,x,y,408,101,unlocked and BROWN or DEEP)
-        emblem(b,13,10,76,76,"Interface\\Icons\\INV_Misc_Book_09")
-        label(b,114,19,274,a.name,"GameFontHighlight",unlocked and PALE or MUTED)
-        label(b,114,47,274,unlocked and "Открыт" or ("Требуется знаний: "..a.threshold),
-              "GameFontNormalSmall",unlocked and GREEN or MUTED)
-        if state.selectedAppearance==a.key then
-            label(b,114,72,270,"Используется","GameFontNormalSmall",GREEN)
-        elseif unlocked then
-            button(b,116,66,190,30,"Выбрать облик",false,function()
-                bridge.SelectAppearance(a.key)
-            end)
-        else
-            label(b,114,72,274,"Недоступен","GameFontNormalSmall",MUTED)
-        end
+        local b=button(entries,5,5+(i-1)*79,350,72,"",a.key==selectedAppearance,function()
+            selectedAppearance=a.key
+            _G.ForeverEncyclopediaLegacy.Refresh("view")
+        end)
+        local icon=b:CreateTexture(nil,"ARTWORK")
+        icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+        icon:SetSize(50,50)
+        icon:SetPoint("TOPLEFT",b,"TOPLEFT",8,-11)
+        if not unlocked then icon:SetDesaturated(true) end
+        local title=font(b,70,11,266,a.name,"GameFontHighlight",unlocked and PALE or MUTED)
+        if title.SetMaxLines then title:SetMaxLines(1) end
+        font(b,70,40,266,unlocked and "Открыт" or
+            ("Нужно накопить: "..a.threshold.." знаний"),
+            "GameFontNormalSmall",unlocked and GREEN or MUTED)
+    end
+    chosen=chosen or appearances[1]
+    if not chosen then
+        label(detail,16,20,382,"В каталоге нет обликов.","GameFontNormal",MUTED)
+        return
+    end
+    local unlocked=state.appearances[chosen.key] and state.appearances[chosen.key].unlocked
+    label(detail,14,9,390,chosen.name,"GameFontHighlight",PALE,"CENTER")
+    modelPreview(detail,14,40,393,219,chosen.creature,"appearance")
+    label(detail,14,265,390,unlocked and "Облик открыт" or
+          ("Для открытия нужно "..chosen.threshold.." знаний"),
+          "GameFontNormalSmall",unlocked and GREEN or MUTED,"CENTER")
+    if state.selectedAppearance==chosen.key then
+        label(detail,14,301,390,"Используется","GameFontHighlight",GREEN,"CENTER")
+    elseif unlocked then
+        button(detail,79,296,267,36,"Выбрать облик",false,function()
+            bridge.SelectAppearance(chosen.key) -- confirmed by server
+        end)
+    else
+        label(detail,14,300,390,"Пока недоступен","GameFontNormalSmall",MUTED,"CENTER")
     end
 end
 
