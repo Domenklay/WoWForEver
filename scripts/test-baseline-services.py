@@ -200,6 +200,12 @@ class ServicesTrial:
                     env[key] = value
                 if any(env[k] != '1' for k in ('FOREVER_ADVANCEMENT_ENABLED', 'FOREVER_ENCYCLOPEDIA_ENABLED', 'FOREVER_SCALING_ENABLED')):
                     raise ValueError('This trial requires all three saved gameplay modules enabled')
+                if self.candidate:
+                    # Exercise new dungeon modules on isolated clone only.
+                    # No host ports or live DB connections are possible.
+                    env.update(FOREVER_SCALING_MIN_OFFSET='-3',
+                               FOREVER_DUNGEON_SCALING_ENABLED='1',
+                               FOREVER_DUNGEON_FINDER_ENABLED='1')
             elif service == 'web':
                 env = dict(DB_HOST='mysql', DB_USER='trinity', DB_PASSWORD=self.password,
                            SOAP_URL='http://worldserver:7878/', SOAP_USER='FOREVERWEB', SOAP_PASSWORD=self.soap,
@@ -308,8 +314,13 @@ class ServicesTrial:
         first = None
         last = {}
         progress_at = 0
-        patterns = list(base.game.adv.ready_patterns({'advancement':{'version':self.advancement_version}})) + ['ForeverEncyclopedia ready:',
-                    'ForeverScaling ready: personal-virtual-v0.2 (enabled=true']
+        scale = '0.4' if self.candidate else '0.2'
+        patterns = list(base.game.adv.ready_patterns({'advancement':{'version':self.advancement_version}})) + [
+            'ForeverEncyclopedia ready:',
+            'ForeverScaling ready: personal-virtual-v' + scale + ' (enabled=true'
+        ]
+        if self.candidate:
+            patterns.append('ForeverDungeonFinder: direct-entry-v0.2 registered (enabled=true')
         while time.monotonic() < deadline:
             item = self.check_container('worldserver')
             if not item['State']['Running']:
