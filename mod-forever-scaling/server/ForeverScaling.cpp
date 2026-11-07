@@ -121,7 +121,7 @@ public:
     Startup() : WorldScript("forever_scaling_startup") { }
     void OnWorldInitialized() override
     {
-        TC_LOG_INFO("scripts", "ForeverScaling ready: personal-virtual-v0.3 (enabled={}, damageGuard={}, dungeonScaling={})",
+        TC_LOG_INFO("scripts", "ForeverScaling ready: personal-virtual-v0.4 (enabled={}, damageGuard={}, dungeonScaling={})",
             Enabled(), DamageGuardEnabled(), DungeonScalingEnabled());
     }
 };
@@ -131,6 +131,6 @@ void AddSC_forever_scaling()
 {
     new ForeverScaling::DamageGuard();
     new ForeverScaling::Startup();
-    TC_LOG_INFO("server.loading", "ForeverScaling: personal-virtual-v0.3 registered (enabled={}, damageGuard={}, dungeonScaling={})",
+    TC_LOG_INFO("server.loading", "ForeverScaling: personal-virtual-v0.4 registered (enabled={}, damageGuard={}, dungeonScaling={})",
         ForeverScaling::Enabled(), ForeverScaling::DamageGuardEnabled(), ForeverScaling::DungeonScalingEnabled());
 }

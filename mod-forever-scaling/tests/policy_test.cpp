@@ -3,12 +3,14 @@
 using namespace forever_scaling;
 int main() {
     Config c;
-    assert(Level(11, 6, Rank::Normal, c) == 6);
-    assert(Level(20, 6, Rank::Normal, c) == 11);
-    assert(Level(20, 15, Rank::Normal, c) == 15);
+    assert(Level(11, 6, Rank::Normal, c) == 8);
+    assert(Level(20, 6, Rank::Normal, c) == 17);
+    assert(Level(20, 15, Rank::Normal, c) == 17);
     assert(Level(20, 30, Rank::Boss, c) == 30);
-    assert(Level(60, 1, Rank::Normal, c) == 51);
-    assert(Level(60, 1, Rank::Boss, c) == 51);
+    assert(Level(60, 1, Rank::Normal, c) == 57);
+    assert(Level(60, 1, Rank::Boss, c) == 57);
+    assert(Level(70, 6, Rank::Normal, c) == 67);
+    assert(Level(80, 6, Rank::Normal, c) == 70); // raised-level cap still applies
     assert(GuardSingleHit(9999,1000,Rank::Normal,c)==200);
     assert(GuardSingleHit(9999,1000,Rank::Elite,c)==300);
     assert(GuardSingleHit(9999,1000,Rank::RareElite,c)==400);

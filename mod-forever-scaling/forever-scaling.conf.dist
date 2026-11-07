@@ -2,8 +2,8 @@
 FOREVER_SCALING_ENABLED=0
 FOREVER_SCALING_DAMAGE_GUARD=1
 
-# Personal virtual-level floor: virtualLevel = max(originalLevel, playerLevel + MIN_OFFSET).
-FOREVER_SCALING_MIN_OFFSET=-9
+# Personal virtual-level XP-safe floor: virtualLevel = max(originalLevel, playerLevel + MIN_OFFSET).
+FOREVER_SCALING_MIN_OFFSET=-3
 FOREVER_SCALING_CREATURE_MAX_LEVEL=70
 
 # Legacy/reserved v0.1 variables. v0.2 does not raise level by creature rank.
