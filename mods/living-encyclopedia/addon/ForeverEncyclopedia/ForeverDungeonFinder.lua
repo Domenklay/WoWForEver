@@ -197,6 +197,12 @@ local function install()
     pane:SetFrameLevel(host:GetFrameLevel() + 101)
     pane:EnableMouse(true)
     if pane.SetTitle then pane:SetTitle("Поиск группы") end
+    -- The stock close control belongs to LFGParentFrame, not the inherited
+    -- portrait page; keep it above the page's matching Blizzard border.
+    local closeButton = _G.LFGParentFrameCloseButton
+    if closeButton and closeButton.SetFrameLevel then
+        closeButton:SetFrameLevel(pane:GetFrameLevel() + 8)
+    end
 
     -- Keep the inherited Blizzard border/portrait/title visible. Only fill
     -- the content well beneath the real header. The page itself covers the
