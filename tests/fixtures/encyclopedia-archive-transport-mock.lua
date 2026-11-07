@@ -77,6 +77,8 @@ end
 incoming("CURRENT 0 7 7")
 incoming("CAPS ARCHIVE1")
 assert(state.archiveSupported)
+assert(not state.archiveLoading,"Do not fetch all account discoveries during login")
+bridge.RequestFullArchive()
 bridge.RequestFullCatalog()
 
 local steps=0
