@@ -93,7 +93,7 @@ working baseline launcher remains 1.7.0, with previous verified release 1.7.1.
 
 Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
 catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
-sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.14.0 and Encyclopedia 0.9.23-v2.1-fdf-diagnostics; server candidate is Ascension 1.14.0, active server remains 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
+sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.14.0 and the independently updated Encyclopedia pin from main; server candidate is Ascension 1.14.1, active server remains 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
 and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
 synchronize the working branch. Catalogue CI 42399343781 checked the actual pinned
 1.14 Git payloads, including all seven loaded files and the preserved stable/Encyclopedia pins. Metadata-only catalogue edits need no launcher rebuild. Old
@@ -183,3 +183,23 @@ the confirmed active 13/Scaling04/Finder02 generation. Current world environment
 values and other services remain exact; SQL is preferences-only and rollback
 never imports old SQL. Use successful prepare's exact record and same checkout
 for apply/rollback. Preserve the existing transition 347c815174f8 as historical.
+
+## 2026-11-08: failed 1.14 user trial and 1.14.1 fix
+
+User's c13cdbff candidate built but failed the school audit: class 1 had ONE
+school instead of three. Report /home/Kayter/WoWForEver-restore-trials/forever-services-check-ce722b2f8d81/report.json
+is failed-cleaned; candidate gameplay-70658-ca79ccc1c1eb must NOT be applied.
+Live server remains 1.13 / Scaling0.4 / Finder0.2. No successful candidate trial.
+The root SkillLineXTraitTree is class-wide, not school-specific. 1.14.1 resolves
+exact spell/rank school metadata, native spec IDs and unambiguous native dependency
+components; retains the three-school audit and reports unresolved nodes.
+Source 80abf81afa1eecd977f4b172894db4c63d49411c; server version 1.14.1,
+AddOn stays 1.14.0. 502 local tests, 30 skips passed. Explicit audit failures now
+end both trial and module wait immediately with the actual reason/report path.
+New C++ requires a new candidate build; never bypass source/image checks to reuse
+the failed ca79 image. Prepare/apply separation and Scaling/Finder preservation
+are unchanged. Follow the updated docs/MULTICLASS-1.14.ru.md command. Do not mark
+user trial/gameplay as passed from fixture tests or CI compilation.
+
+1.14.1 pinned-core CI 42415961780 and combined gameplay CI 42415961803 PASSED;
+backup tooling CI 42415961890 PASSED. These are not a user-data startup pass.
