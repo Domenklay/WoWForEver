@@ -112,7 +112,9 @@ UI: `node tests/fixtures/launcher-content-ui.js .`. Rust: `cargo test --locked -
 Multi 1.8.0 включает это и для `Wow.exe` 70658: после подготовки аддонов обменивает
 сохранённую серверную сессию на свежий login ticket, проверяет аккаунт ответа,
 передаёт билет клиенту и запускает с `-launcherlogin`. На Windows билет хранится
-в Launch Options/WoW как DPAPI-защищённый WEB_TOKEN, без пароля и без токена в
+в Launch Options/WoW как DPAPI-защищённый WEB_TOKEN. Выбирается legacy-ветка
+Blizzard Entertainment или новая Custom Game Server Dev по строкам выбранного
+EXE. Билет передаётся без пароля и без токена в
 командной строке. Выбирается первый игровой аккаунт авторизованного пользователя.
 Пустой список аккаунтов не заменяется выдуманным WoW1: запуск остановится с причиной.
 

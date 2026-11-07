@@ -160,3 +160,13 @@ pub mod wine {
         }
     }
 }
+
+#[cfg(all(test,windows))]mod windows_ticket_tests {
+ use super::*;
+ #[test]fn native_ticket_is_encrypted_and_decryptable_with_the_clients_entropy(){
+  use windows::Win32::Security::Cryptography::{CryptUnprotectData,CRYPTPROTECT_UI_FORBIDDEN,CRYPT_INTEGER_BLOB};
+  use windows::Win32::Foundation::{LocalFree,HLOCAL};
+  let plain=b"TC-synthetic-short-lived-ticket";let mut blob=protect(plain).unwrap();assert!(!blob.windows(plain.len()).any(|part|part==plain));
+  unsafe{let input=CRYPT_INTEGER_BLOB{cbData:blob.len()as u32,pbData:blob.as_mut_ptr()};let entropy=CRYPT_INTEGER_BLOB{cbData:WEB_TOKEN_ENTROPY.len()as u32,pbData:WEB_TOKEN_ENTROPY.as_ptr()as *mut u8};let mut out=CRYPT_INTEGER_BLOB::default();CryptUnprotectData(&input,None,Some(&entropy),None,None,CRYPTPROTECT_UI_FORBIDDEN,&mut out).unwrap();assert_eq!(std::slice::from_raw_parts(out.pbData,out.cbData as usize),plain);let _=LocalFree(HLOCAL(out.pbData as _));}
+ }
+}

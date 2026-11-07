@@ -9,7 +9,27 @@ use std::process::{Child, Command};
 
 pub const WTF_NAME: &str = "ForeverLauncher.wtf";
 #[cfg(not(target_os = "macos"))]
-const LAUNCH_OPTIONS: &str = r"Software\Blizzard Entertainment\Battle.net\Launch Options\WoW";
+const LEGACY_LAUNCH_OPTIONS: &str = r"Software\Blizzard Entertainment\Battle.net\Launch Options\WoW";
+
+#[cfg(not(target_os = "macos"))]
+const FOREVER_LAUNCH_OPTIONS:&str=r"Software\Custom Game Server Dev\Battle.net\Launch Options\WoW";
+
+/// Read the selected executable, never credentials or process memory. New clients
+/// can use the upstream custom vendor registry key; beta clients use the legacy one.
+#[cfg(not(target_os = "macos"))]
+fn launch_options_key(exe:&Path)->Result<&'static str,String>{
+    use std::io::Read;
+    let mut file=std::fs::File::open(exe).map_err(|e|e.to_string())?;
+    let ascii=b"custom game server dev";
+    let wide:Vec<u8>="custom game server dev".encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let mut tail=Vec::new();let mut block=vec![0u8;1024*1024];
+    loop {let count=file.read(&mut block).map_err(|e|e.to_string())?;if count==0{break;}
+        tail.extend(block[..count].iter().map(u8::to_ascii_lowercase));
+        if memchr::memmem::find(&tail,ascii).is_some()||memchr::memmem::find(&tail,&wide).is_some(){return Ok(FOREVER_LAUNCH_OPTIONS);}
+        if tail.len()>128{tail.drain(..tail.len()-128);}
+    }
+    Ok(LEGACY_LAUNCH_OPTIONS)
+}
 
 /// WTF/ForeverLauncher.wtf: a copy of Config.wtf with the portal and the language set.
 pub fn write_wtf(settings: &Settings) -> Result<(), String> {
@@ -104,13 +124,14 @@ mod tests {
 
 /// Stores the login ticket where the client reads it with -launcherlogin.
 #[cfg(windows)]
-pub fn write_launch_options(_settings: &Settings, portal: &str, ticket: &str, game_account: &str) -> Result<(), String> {
+pub fn write_launch_options(settings: &Settings, portal: &str, ticket: &str, game_account: &str) -> Result<(), String> {
     use windows::core::HSTRING;
     use windows::Win32::System::Registry::*;
+    let key_path=launch_options_key(&settings.exe())?;
     let blob = crate::dpapi::protect(ticket.as_bytes())?;
     unsafe {
         let mut key = HKEY::default();
-        RegCreateKeyExW(HKEY_CURRENT_USER, &HSTRING::from(LAUNCH_OPTIONS), 0, None, REG_OPTION_NON_VOLATILE, KEY_WRITE, None, &mut key, None)
+        RegCreateKeyExW(HKEY_CURRENT_USER, &HSTRING::from(key_path), 0, None, REG_OPTION_NON_VOLATILE, KEY_WRITE, None, &mut key, None)
             .ok()
             .map_err(|e| tf("registry", &[&e]))?;
         let set_str = |name: &str, value: &str| {
@@ -130,10 +151,11 @@ pub fn write_launch_options(_settings: &Settings, portal: &str, ticket: &str, ga
 #[cfg(target_os = "linux")]
 pub fn write_launch_options(settings: &Settings, portal: &str, ticket: &str, game_account: &str) -> Result<(), String> {
     use crate::dpapi::{wine, WEB_TOKEN_ENTROPY};
+    let launch_options=launch_options_key(&settings.exe())?;
     let blob = wine::protect(ticket.as_bytes(), wine::PROTON_USER, &WEB_TOKEN_ENTROPY);
     let hexdata: Vec<String> = blob.iter().map(|b| format!("{b:02x}")).collect();
     let content = format!(
-        "Windows Registry Editor Version 5.00\r\n\r\n[HKEY_CURRENT_USER\\{LAUNCH_OPTIONS}]\r\n\"WEB_TOKEN\"=hex:{}\r\n\"GAME_ACCOUNT\"=\"{game_account}\"\r\n\"CONNECTION_STRING\"=\"{portal}\"\r\n",
+        "Windows Registry Editor Version 5.00\r\n\r\n[HKEY_CURRENT_USER\\{launch_options}]\r\n\"WEB_TOKEN\"=hex:{}\r\n\"GAME_ACCOUNT\"=\"{game_account}\"\r\n\"CONNECTION_STRING\"=\"{portal}\"\r\n",
         hexdata.join(",")
     );
     // regedit files are UTF-16 LE with a BOM; Wine sees the Linux file system as Z:
@@ -188,4 +210,14 @@ pub fn spawn(settings: &Settings) -> Result<Child, String> {
         .current_dir(&settings.game_dir)
         .spawn()
         .map_err(|e| tf("launch_failed", &[&cmd[0], &e]))
+}
+
+#[cfg(all(test,not(target_os="macos")))]mod registry_key_tests {
+ use super::*;
+ #[test]fn registry_vendor_is_selected_from_the_actual_client_including_a_chunk_boundary(){
+  let root=std::env::temp_dir().join(format!("forever-login-vendor-{:032x}",rand::random::<u128>()));std::fs::create_dir(&root).unwrap();let exe=root.join("Wow.exe");
+  std::fs::write(&exe,b"legacy client fixture").unwrap();assert_eq!(launch_options_key(&exe).unwrap(),LEGACY_LAUNCH_OPTIONS);
+  let mut bytes=vec![b'x';1024*1024-10];bytes.extend("Software\\Custom Game Server Dev\\Battle.net\\Launch Options\\WoW".encode_utf16().flat_map(u16::to_le_bytes));std::fs::write(&exe,bytes).unwrap();assert_eq!(launch_options_key(&exe).unwrap(),FOREVER_LAUNCH_OPTIONS);
+  std::fs::remove_dir_all(root).unwrap();
+ }
 }

@@ -12,6 +12,10 @@ tool=importlib.util.module_from_spec(spec);spec.loader.exec_module(tool)
 
 class AddonChannelTests(unittest.TestCase):
     def catalog(self): return json.loads((ROOT/'addons/channels.json').read_text())
+    def test_html_control_ids_are_unique(self):
+        import re
+        ids=re.findall(r'\bid="([^"]+)"',(ROOT/'app/ui/index.html').read_text())
+        self.assertEqual(len(ids),len(set(ids)))
     def test_initial_channels_are_real_complete_compatible_payloads(self):
         c=tool.validate(self.catalog())
         self.assertEqual(c['channels']['stable']['addons'],c['channels']['testing']['addons'])
