@@ -42,6 +42,7 @@ local function wipeView()
     wipe(activeScrolls)
     for i = 1, #objects do objects[i]:Hide() end
     wipe(objects)
+    ui.archivePopup=nil
 end
 
 local function solid(parent, layer, rgba)
@@ -556,7 +557,8 @@ local function archiveRecords()
     end
     -- The original 70658 server knows about yet-undiscovered creatures
     -- only in the *current* zone; merge them without fabricating habitats.
-    for _,r in ipairs(state.catalogAll or state.catalog or {}) do
+    local zoneRecords=(state.catalogAll and #state.catalogAll>0) and state.catalogAll or state.catalog or {}
+    for _,r in ipairs(zoneRecords) do
         local existing=ids[r.entry]
         if existing then
             existing.currentZone=state.catalogAllZone or state.zone
@@ -725,6 +727,14 @@ local function drawCreatureView()
         creatureLocation=value; scrollPositions["creature-list"]=0
         _G.ForeverEncyclopediaLegacy.Refresh("view")
     end)
+    local statusLabel=activeMonsterFilter=="known" and "Встреченные" or
+        activeMonsterFilter=="unknown" and "Неизвестные" or "Все записи"
+    button(list,9,77,120,24,statusLabel.." ▾",false,function()
+        activeMonsterFilter=activeMonsterFilter=="all" and "known" or
+            activeMonsterFilter=="known" and "unknown" or "all"
+        scrollPositions["creature-list"]=0
+        _G.ForeverEncyclopediaLegacy.Refresh("view")
+    end)
     local totalLoaded=#allRows
     local loadInfo
     if state.catalogAllLoading or state.archiveLoading then
@@ -733,7 +743,7 @@ local function drawCreatureView()
     else
         loadInfo="Показано: "..#records.." из "..totalLoaded
     end
-    font(list,12,79,290,loadInfo,"GameFontNormalSmall",MUTED)
+    font(list,136,81,168,loadInfo,"GameFontNormalSmall",MUTED,"RIGHT")
     if not state.archiveSupported then
         font(list,11,265,297,"Другие зоны доступны после обновления worldserver",
              "GameFontNormalSmall",MUTED)
@@ -743,8 +753,9 @@ local function drawCreatureView()
     -- They represent a virtual window onto one continuous scrollable list.
     local rowSize=39
     local viewHeight=state.archiveSupported and 177 or 151
-    local contents,scroller=scrollArea(list,9,100,296,viewHeight,"creature-list",
+    local contents,scroller=scrollArea(list,9,108,296,viewHeight-8,"creature-list",
                                     math.max(viewHeight,#records*rowSize+4))
+    viewHeight=viewHeight-8
     local visibleCount=math.ceil(viewHeight/rowSize)+1
     local widgets={}
     for slot=1,visibleCount do
