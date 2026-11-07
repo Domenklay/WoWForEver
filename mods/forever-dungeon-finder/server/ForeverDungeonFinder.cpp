@@ -7,6 +7,8 @@
 #include "WorldSession.h"
 #include "Log.h"
 
+#include <algorithm>
+#include <array>
 #include <charconv>
 #include <cstdlib>
 #include <cstring>
@@ -18,6 +20,12 @@ namespace ForeverDungeonFinder
 static constexpr std::string_view AddonPrefix = "FDF";
 static constexpr std::string_view SoloPrefix = "SOLO:";
 static constexpr std::string_view GroupPrefix = "GROUP:";
+
+// Allow only dungeons listed in the client, not arbitrary instance IDs.
+static constexpr std::array<uint32, 19> AllowedDungeons = {
+    389, 36, 43, 33, 48, 34, 90, 47, 189, 129,
+    70, 209, 349, 109, 230, 229, 429, 289, 329
+};
 
 enum class EntryMode
 {
@@ -37,7 +45,7 @@ static bool EnvBool(char const* name, bool fallback)
 
 static bool Enabled()
 {
-    static bool const enabled = EnvBool("FOREVER_DUNGEON_FINDER_ENABLED", true);
+    static bool const enabled = EnvBool("FOREVER_DUNGEON_FINDER_ENABLED", false);
     return enabled;
 }
 
@@ -77,7 +85,8 @@ static bool ParseRequest(std::string_view text, EntryMode& mode, uint32& mapId)
 static bool IsDungeonMap(uint32 mapId)
 {
     MapEntry const* mapEntry = sMapStore.LookupEntry(mapId);
-    return mapEntry && mapEntry->IsNonRaidDungeon();
+    return mapEntry && mapEntry->IsNonRaidDungeon() &&
+        std::find(AllowedDungeons.begin(), AllowedDungeons.end(), mapId) != AllowedDungeons.end();
 }
 
 static bool PlayerReady(Player* player)
@@ -126,6 +135,11 @@ static bool CollectGroup(Player* leader, std::vector<Player*>& players)
         players.push_back(member);
     }
 
+    if (players.size() != group->GetMembersCount())
+    {
+        Notify(leader, "Forever: для группового входа все участники должны быть в сети.");
+        return false;
+    }
     return true;
 }
 
@@ -239,6 +253,6 @@ public:
 void AddSC_forever_dungeon_finder()
 {
     new ForeverDungeonFinder::DirectEntryPlayerScript();
-    TC_LOG_INFO("server.loading", "ForeverDungeonFinder: direct-entry-v0.1 registered (enabled={})",
+    TC_LOG_INFO("server.loading", "ForeverDungeonFinder: direct-entry-v0.2 registered (enabled={})",
         ForeverDungeonFinder::Enabled());
 }
