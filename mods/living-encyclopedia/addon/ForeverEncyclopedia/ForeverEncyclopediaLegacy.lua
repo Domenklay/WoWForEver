@@ -13,7 +13,6 @@ local selectedAppearance = "living_book"
 local pendingBuy = false
 local ui = {}
 local objects = {}
-local pendingRefresh = false
 
 local GOLD = {0.82, 0.59, 0.24}
 local PALE = {0.96, 0.87, 0.72}
@@ -516,9 +515,9 @@ local function render()
     end
     local header=frame(page,13,6,874,48,BROWN)
     label(header,14,8,266,"Живая энциклопедия","GameFontNormalLarge",PALE)
-    label(header,280,12,277,"Знания: "..(state.knowledgeAvailable or 0)..
-        "   •   Мана: "..(state.mana or 0).."/"..(state.maxMana or 100),
-        "GameFontNormalSmall",GOLD)
+    ui.headerStat=font(header,280,12,277,"","GameFontNormalSmall",GOLD)
+    ui.headerStat:SetText("Знания: "..(state.knowledgeAvailable or 0)..
+        "   •   Мана: "..(state.mana or 0).."/"..(state.maxMana or 100))
     button(header,565,5,102,36,"Таланты",mode=="talents",function() selectMode("talents") end)
     button(header,676,5,102,36,"Коллекция",mode~="talents" and mode~="appearance",function() selectMode("collection") end)
     button(header,787,5,79,36,"Облики",mode=="appearance",function() selectMode("appearance") end)
@@ -602,13 +601,11 @@ _G.ForeverEncyclopediaLegacy = {
     Refresh=function(kind)
         if not page or not page:IsShown() then return end
         if kind=="mana" then
-            -- Re-render only when values change, not on every C_Timer tick.
-            if not pendingRefresh then
-                pendingRefresh=true
-                C_Timer.After(0.05,function()
-                    pendingRefresh=false
-                    if page and page:IsShown() then render() end
-                end)
+            -- Native mana status is frequent: update only the existing header,
+            -- rather than allocating new talent frames every regen tick.
+            if ui.headerStat then
+                ui.headerStat:SetText("Знания: "..(state.knowledgeAvailable or 0)..
+                    "   •   Мана: "..(state.mana or 0).."/"..(state.maxMana or 100))
             end
         else
             if kind=="talents" then pendingBuy=false end
