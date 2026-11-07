@@ -340,6 +340,25 @@ local function createUI()
     updateHeader(); Draw()
 end
 
+local function tryOpenNative()
+    local native = _G.ForeverEncyclopediaLegacy
+    if native and native.Open then
+        local ok, opened = pcall(native.Open)
+        if ok and opened then
+            if ui and ui:IsShown() then ui:Hide() end
+            return true
+        end
+    end
+    return false
+end
+
+local function toggleEncyclopedia()
+    if tryOpenNative() then return end
+    -- Fallback only if Blizzard_LegacySystem isn't available on this client.
+    createUI()
+    if ui:IsShown() then ui:Hide() else ui:Show() end
+end
+
 local function createDock()
     if dock then return end
     if _G.ForeverEncyclopediaBookDock then _G.ForeverEncyclopediaBookDock:Hide() end
@@ -347,7 +366,7 @@ local function createDock()
     dock=CreateFrame("Frame","ForeverEncyclopediaV21BookDock",UIParent); dock:SetSize(184,62); dock:SetFrameStrata("MEDIUM")
     if QuickJoinToastButton then dock:SetPoint("RIGHT",QuickJoinToastButton,"LEFT",-8,0) elseif FriendsMicroButton then dock:SetPoint("RIGHT",FriendsMicroButton,"LEFT",-8,0) elseif ChatFrameMenuButton then dock:SetPoint("LEFT",ChatFrameMenuButton,"RIGHT",8,0) else dock:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",24,180) end
     local bg=tex(dock,"BACKGROUND",0.04,0.025,0.015,0.95); bg:SetAllPoints(); addBorder(dock,0.36,0.23,0.08,0.95)
-    local book=CreateFrame("Button",nil,dock); book:SetPoint("LEFT",dock,"LEFT",6,0); book:SetSize(48,48); local bi=book:CreateTexture(nil,"ARTWORK"); bi:SetPoint("TOPLEFT",book,"TOPLEFT",5,-5); bi:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-5,5); bi:SetTexture("Interface\\Icons\\INV_Misc_Book_09"); book:SetScript("OnClick",function() createUI(); if ui:IsShown() then ui:Hide() else ui:Show() end end)
+    local book=CreateFrame("Button",nil,dock); book:SetPoint("LEFT",dock,"LEFT",6,0); book:SetSize(48,48); local bi=book:CreateTexture(nil,"ARTWORK"); bi:SetPoint("TOPLEFT",book,"TOPLEFT",5,-5); bi:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-5,5); bi:SetTexture("Interface\\Icons\\INV_Misc_Book_09"); book:SetScript("OnClick",toggleEncyclopedia)
     dock.mana=CreateFrame("StatusBar",nil,dock); dock.mana:SetPoint("TOPLEFT",dock,"TOPLEFT",60,-9); dock.mana:SetSize(116,11); dock.mana:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar"); dock.mana:SetStatusBarColor(0.12,0.33,0.78); local mb=tex(dock.mana,"BACKGROUND",0.015,0.015,0.025,1); mb:SetAllPoints(); dock.manaText=dock.mana:CreateFontString(nil,"OVERLAY","GameFontNormalSmall"); dock.manaText:SetPoint("CENTER")
     local defs={{1,"Interface\\Icons\\Spell_Holy_PowerWordShield","Охранная печать"},{2,"Interface\\Icons\\Spell_Holy_Heal","Целительная пометка"},{4,"Interface\\Icons\\Spell_Arcane_Arcane01","Тактическая подсказка"}}; dock.abilities={}
     for i,a in ipairs(defs) do local b=CreateFrame("Button",nil,dock); b:SetSize(30,30); b:SetPoint("TOPLEFT",dock,"TOPLEFT",60+(i-1)*38,-27); local bb=tex(b,"BACKGROUND",0.08,0.05,0.025,1); bb:SetAllPoints(); addBorder(b,0.34,0.22,0.08,1); local icon=b:CreateTexture(nil,"ARTWORK"); icon:SetPoint("TOPLEFT",b,"TOPLEFT",3,-3); icon:SetPoint("BOTTOMRIGHT",b,"BOTTOMRIGHT",-3,3); icon:SetTexture(a[2]); b:SetScript("OnEnter",function() GameTooltip:SetOwner(b,"ANCHOR_TOP"); GameTooltip:AddLine(a[3],1,0.82,0.42); GameTooltip:AddLine(abilityUnlocked(a[1]) and "Изучено деревом талантов." or "Не изучено.",0.75,0.75,0.75); GameTooltip:Show() end); b:SetScript("OnLeave",function() GameTooltip:Hide() end); dock.abilities[i]={bit=a[1],icon=icon} end
@@ -361,7 +380,7 @@ end
 local function parseBase(msg)
     if msg:sub(1,8)=="CATHEAD|" then local _,zone,page,pages,total,known,zoneTotal,zoneKnown=strsplit("|",msg); state.catalog={}; state.catalogLoaded=false; state.catalogPage=tonumber(page) or 1; state.catalogPages=tonumber(pages) or 1; state.catalogTotal=tonumber(total) or 0; state.catalogKnown=tonumber(known) or 0; state.catalogZoneTotal=tonumber(zoneTotal) or 0; state.catalogZoneKnown=tonumber(zoneKnown) or 0; selectedCreature=1
     elseif msg:sub(1,4)=="CAT|" then local _,entry,known,ctype,class,name=strsplit("|",msg); state.catalog[#state.catalog+1]={entry=tonumber(entry) or 0,known=tonumber(known)==1,creatureType=tonumber(ctype) or 0,classification=tonumber(class) or 0,name=name or ""}
-    elseif msg=="CATEND" then state.catalogLoaded=true; state.online=true; selectedCreature=math.min(math.max(1,selectedCreature),math.max(1,#state.catalog)); queueCatalogInfo(); if ui and ui:IsShown() and currentTab==1 then Draw() end
+    elseif msg=="CATEND" then state.catalogLoaded=true; state.online=true; selectedCreature=math.min(math.max(1,selectedCreature),math.max(1,#state.catalog)); queueCatalogInfo(); if ui and ui:IsShown() and currentTab==1 then Draw() end; notifyNative("collection")
     else
         local tag,a,b,c,d,e,f=strsplit(" ",msg)
         if tag=="STATE" then state.total=tonumber(a) or 0; state.creatures=tonumber(b) or 0; state.items=tonumber(c) or 0; state.zones=tonumber(d) or 0; state.online=true
@@ -371,7 +390,7 @@ local function parseBase(msg)
         elseif tag=="REC" and tonumber(a)==3 then state.recentZones[#state.recentZones+1]={entry=tonumber(b) or 0,map=tonumber(c) or 0,zone=tonumber(d) or 0}
         elseif tag=="RECEND" and tonumber(a)==3 then state.recentZonesLoaded=true; if ui and ui:IsShown() and currentTab==2 then Draw() end
         elseif tag=="END" then state.online=true end
-        updateHeader(); updateDock()
+        updateHeader(); updateDock(); if tag=="END" or tag=="RECEND" then notifyNative("collection") end
     end
 end
 
@@ -384,6 +403,7 @@ local function parseRuntime(msg)
     state.maxMana=tonumber(maxMana) or 100
     updateDock()
     if (previousMax~=state.maxMana or previousMask~=state.abilityMask) and ui and ui:IsShown() and currentTab==3 then Draw() end
+    notifyNative("mana")
 end
 
 local function parseTalent(msg)
@@ -403,21 +423,37 @@ local function parseTalent(msg)
             ci.baseAttackTime=tonumber(baseAttack) or 0; ci.rangeAttackTime=tonumber(rangeAttack) or 0
             state.creatureInfo[pendingCreatureInfo]=ci
         end
-    elseif msg=="CEND" then pendingCreatureInfo=nil; if #infoQueue>0 then requestCreatureInfo(table.remove(infoQueue,1)) elseif ui and ui:IsShown() and currentTab==1 then Draw() end
+    elseif msg=="CEND" then pendingCreatureInfo=nil; if #infoQueue>0 then requestCreatureInfo(table.remove(infoQueue,1)) elseif ui and ui:IsShown() and currentTab==1 then Draw() end; notifyNative("info")
     elseif msg:sub(1,7)=="BOUGHT|" then requestTalentStatus()
     elseif msg:sub(1,6)=="ERROR|" then local _,err=strsplit("|",msg); if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffff8040[Энциклопедия]|r "..(err or "Ошибка")) end
-    elseif msg=="END" then talentBatch=false; state.online=true; updateHeader(); updateDock(); if ui and ui:IsShown() then Draw() end; return end
+    elseif msg=="END" then talentBatch=false; state.online=true; updateHeader(); updateDock(); if ui and ui:IsShown() then Draw() end; notifyNative("talents"); return end
     if not talentBatch then updateHeader(); updateDock() end
 end
 
+_G.ForeverEncyclopediaUIBridge = {
+    state=state, catalog=Catalog,
+    RequestStatus=function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus() end,
+    RequestCatalog=requestCatalog,
+    RequestZones=requestZones,
+    RequestCreatureInfo=requestCreatureInfo,
+    BuyTalent=function(key) if type(key)=="string" then send(TAL_REQ,"buy "..key) end end,
+    SelectAppearance=function(key) if type(key)=="string" then send(TAL_REQ,"appearance "..key) end end,
+    ToggleFallback=toggleEncyclopedia,
+    AreaName=areaName,
+}
+local function notifyNative(kind)
+    local native=_G.ForeverEncyclopediaLegacy
+    if native and native.Refresh then native.Refresh(kind) end
+end
+
 SLASH_FOREVERENCYCLOPEDIAV21_1="/ency"; SLASH_FOREVERENCYCLOPEDIAV21_2="/encyclopedia"
-SlashCmdList["FOREVERENCYCLOPEDIAV21"]=function() createUI(); if ui:IsShown() then ui:Hide() else ui:Show() end end
+SlashCmdList["FOREVERENCYCLOPEDIAV21"]=toggleEncyclopedia
 
 local events=CreateFrame("Frame"); events:RegisterEvent("ADDON_LOADED"); events:RegisterEvent("PLAYER_LOGIN"); events:RegisterEvent("PLAYER_ENTERING_WORLD"); events:RegisterEvent("ZONE_CHANGED_NEW_AREA"); events:RegisterEvent("CHAT_MSG_ADDON")
 events:SetScript("OnEvent",function(_,event,...)
     if event=="ADDON_LOADED" then local name=...; if name~=ADDON then return end; registerPrefixes(); return end
     if event=="CHAT_MSG_ADDON" then local p,m=...; if p==BASE_RES then parseBase(tostring(m or "")) elseif p==TAL_RES then parseTalent(tostring(m or "")) elseif p==RUNTIME_RES then parseRuntime(tostring(m or "")) end; return end
     if event=="PLAYER_LOGIN" then createDock() end
-    if event=="ZONE_CHANGED_NEW_AREA" then state.catalog={}; state.catalogLoaded=false; state.catalogPage=1; selectedCreature=1 end
+    if event=="ZONE_CHANGED_NEW_AREA" then state.catalog={}; state.catalogLoaded=false; state.catalogPage=1; selectedCreature=1; notifyNative("collection") end
     C_Timer.After(1.0,function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus(); if ui and ui:IsShown() then if currentTab==1 then requestCatalog(1) elseif currentTab==2 then requestZones() end end end)
 end)
