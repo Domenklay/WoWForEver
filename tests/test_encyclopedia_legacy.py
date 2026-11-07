@@ -12,7 +12,7 @@ source = (ADDON / "ForeverEncyclopediaTalentData.lua").read_text(encoding="utf-8
 overrides = (ADDON / "ForeverEncyclopediaTalentOverrides.lua").read_text(encoding="utf-8")
 
 version = re.search(r"^## Version: (.+)$", toc, re.MULTILINE)
-assert version and version.group(1) == "0.9.17-v2.1-legacy-ux", version
+assert version and version.group(1) == "0.9.18-v2.1-dungeon-scroll", version
 assert "## Interface: 16001" in toc
 entries = [line for line in toc.splitlines() if line and not line.startswith("#")]
 assert len(entries) == len(set(entries)), "Duplicate TOC file"
@@ -51,4 +51,4 @@ for key in ("protection", "healing", "support", "wisdom", "knowledge"):
     assert key in source
 assert "node.implemented" in overrides
 assert '0.9.17-v2.1-legacy-ux' not in source, "Server talents must remain version-independent"
-print("ENCYCLOPEDIA 0.9.13 NATIVE LEGACY RELEASE CHECK PASSED")
+print("ENCYCLOPEDIA 0.9.18 LEGACY UX + NATIVE DUNGEON SCROLL PASSED")
