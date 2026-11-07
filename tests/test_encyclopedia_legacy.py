@@ -12,7 +12,7 @@ source = (ADDON / "ForeverEncyclopediaTalentData.lua").read_text(encoding="utf-8
 overrides = (ADDON / "ForeverEncyclopediaTalentOverrides.lua").read_text(encoding="utf-8")
 
 version = re.search(r"^## Version: (.+)$", toc, re.MULTILINE)
-assert version and version.group(1) == "0.9.19-v2.1-archive-filters", version
+assert version and version.group(1) == "0.9.20-v2.1-archive-layout", version
 assert "## Interface: 16001" in toc
 entries = [line for line in toc.splitlines() if line and not line.startswith("#")]
 assert len(entries) == len(set(entries)), "Duplicate TOC file"
@@ -50,7 +50,7 @@ assert "bridge.RequestCreatureInfo(selected.entry)" in legacy
 for key in ("protection", "healing", "support", "wisdom", "knowledge"):
     assert key in source
 assert "node.implemented" in overrides
-assert '0.9.19-v2.1-archive-filters' not in source, "Server talents must remain version-independent"
+assert '0.9.20-v2.1-archive-layout' not in source, "Server talents must remain version-independent"
 # Archive UX must use the entire current-zone catalogue, not legacy pages.
 creature_view=legacy.split("local function drawCreatureView()",1)[1].split("local function drawZoneView()",1)[0]
 assert 'local list=frame(base,16,39,390,395,BROWN)' in creature_view
