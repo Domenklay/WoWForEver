@@ -64,14 +64,17 @@
     "image_import_on_blank_docker_verified": false
   },
   "launcher_development_release": {
-    "version": "1.7.1",
-    "commit": "87edd5aa6bdf0168dd25714c17b5815df82f6c68",
-    "run": 42291254078,
-    "artifact": 13540302260,
-    "zip_sha256": "a9254f60a896d7e029dc78cc7a6e1b39d16875224ec9e446b233b5e86f5c8d29",
-    "windows_launcher_tests": 61,
+    "version": "1.8.0",
+    "commit": "d55f1662aa8ba8ef8b6e6bac54b39462adec7fa0",
+    "run": 42358676742,
+    "artifact": 13568828528,
+    "zip_sha256": "f55aed4ff7f8b141ffa3289b4254b24caffd4c7b090dcd75bd5401a3543d1b96",
+    "windows_launcher_tests": 80,
     "worker_tests": 224,
     "artifact_verified": true,
-    "runtime_user_verified": false
+    "runtime_user_verified": false,
+    "addon_channels_user_verified": false,
+    "automatic_game_login_user_verified": false,
+    "catalogue_ci_run": 42359312577
   }
 }

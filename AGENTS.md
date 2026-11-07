@@ -83,17 +83,35 @@ SQL or service trials without a new change or unresolved concern.
 
 ## Launcher
 
-Verified Multi 1.7.1 source `87edd5aa6bdf0168dd25714c17b5815df82f6c68`:
-Windows run 42291254078, artifact 13540302260. 61 launcher and 224 worker tests,
-five-language UI, PS5.1, NSIS/portable passed; archive/EXE hashes, GPL worker
-source and unchanged CA checked. Download/hash are in the handoff. User test of
-1.7.1 has not been reported; working baseline launcher is 1.7.0.
+Verified Multi 1.8.0 source `d55f1662aa8ba8ef8b6e6bac54b39462adec7fa0`:
+Windows run 42358676742, artifact 13568828528. 80 launcher tests and 224 worker
+tests passed, with five-language UI, PS5.1 and NSIS/portable; archive/EXE hashes,
+matching GPL worker sources and unchanged CA checked. Chromium verified controls,
+save/reopen/cancel and disabled file mutations. User runtime test is pending;
+working baseline launcher remains 1.7.0, with previous verified release 1.7.1.
 
-Opt-in addonDevelopmentMode preserves existing Ascension/Encyclopedia folders,
-even incomplete ones. Missing folders still get pinned verified installation.
-Default false; turning off restores normal checks/backups at next launch. UI
-checkbox/home notice are translated in RU/FR/EN/ES/PT. Junctions/symlinks remain
-unsupported. SavedVariables, other AddOns and CASC are outside AddOn replacement.
+Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
+catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
+sets. Both initially use the approved source bytes. Use scripts/update-addon-channel.py
+and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
+synchronize the working branch. Catalogue CI 42359312577 checked the actual pinned
+Git payloads. Metadata-only catalogue edits need no launcher rebuild. Old
+app/src-tauri/addons/forever-*.json are historical 1.7 snapshots, not runtime inputs.
+
+Defaults: addonChannel=stable, addonUpdatesEnabled=true, clientUpdatesEnabled=true,
+addonDevelopmentMode=false, autoGameLogin=true. Pausing AddOn updates skips all
+installation/network, including missing folders. Local development preserves existing
+folders; missing folders use the selected saved set. For testing the complete release
+set, enable AddOn updates and disable local development. All changed folders stage
+before any replacement; a journal, per-game lock and backups support rollback/recovery.
+Do not manually delete the transaction journal to bypass an interrupted operation.
+
+Client update pause blocks Multi downloads/repairs/resource operations; read-only
+verification and launching stay available. Battle.net's own update settings are separate.
+Wow.exe now uses ticket login too: refresh after AddOn work, verify returned email
+and game account, DPAPI WEB_TOKEN on Windows, no password/ticket in CLI or WTF.
+Registry vendor is selected from the chosen EXE; manual-login opt-out remains.
+Do not claim actual game login or channel user verification from CI tests.
 
 ## Rules and known limits
 
