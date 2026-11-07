@@ -1109,8 +1109,15 @@ local function drawAppearanceView()
     if chosen.testing then
         -- The creature ID remains visible for model troubleshooting.
         -- Some retail-only 2024+ assets may be missing in client 70658.
-        label(detail,14,260,390,"Тестовая модель · NPC "..chosen.creature,
-              "GameFontNormalSmall",MUTED,"CENTER")
+        local status="Тестовая модель · NPC "..chosen.creature
+        if state.selectedAppearance==chosen.key then
+            if state.skinMissing==chosen.creature then
+                status=status.." · нет модели на сервере"
+            elseif state.skinDisplay and state.skinDisplay>0 then
+                status=status.." · спутник обновлён"
+            end
+        end
+        label(detail,14,260,390,status,"GameFontNormalSmall",MUTED,"CENTER")
     end
     if not chosen.testing then
         label(detail,14,265,390,unlocked and "Облик открыт" or
