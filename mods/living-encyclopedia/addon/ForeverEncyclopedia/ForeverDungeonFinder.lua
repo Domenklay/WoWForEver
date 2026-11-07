@@ -113,12 +113,18 @@ local function requestEntry(group)
     end
 end
 
+-- This client uses Blizzard_GroupFinder_VanillaStyle (Forever 70658).
+-- It has real Listing/Browsing/WhoListing right-hand tabs and a native page
+-- switcher. Do not guess from unrelated PVEFrame or retail GroupFinder frames.
 local function findHost()
-    local panel = _G.PVEFrame or _G.LFGParentFrame or _G.GroupFinderFrame
-        or _G.LookingForGroupFrame or _G.LFGFrame
-    if panel and panel.GetWidth and panel.GetHeight and panel:GetWidth() >= 330 then
-        return panel
+    local frame = _G.LFGParentFrame
+    if not frame or not frame.WhoListingTab or not frame.UpdateTabs
+        or not _G.LFGListingFrame or not _G.LFGBrowseFrame
+        or not _G.LFGWhoListFrame or not PanelTemplates_SetTab
+        or not hooksecurefunc then
+        return nil
     end
+    return frame
 end
 
 local function plain(parent, layer, r, g, b, alpha)
@@ -169,83 +175,26 @@ local function install()
 
     hideOutdatedUi()
 
-    -- A fifth icon cannot fit into the client's 470px role row without
-    -- overwriting the sword/guide controls.  The Group Finder has a persistent
-    -- native right-hand strip of square navigation tabs on EVERY subpage.
-    -- Put our portal into that strip, immediately below the existing buttons.
-    -- Unlike the previous TOPLEFT x/y guess, this is never over the filters.
-    portal = CreateFrame("CheckButton", "ForeverDungeonPortalTab", host)
-    portal:SetSize(50, 50)
-    portal:SetFrameLevel(host:GetFrameLevel() + 112)
-    portal:RegisterForClicks("LeftButtonUp")
-    portal:SetHitRectInsets(0, 0, 0, 0)
-
-    local tile = plain(portal, "BACKGROUND", 0.115, 0.075, 0.040, 1)
-    tile:SetAllPoints()
-    local symbol = portal:CreateTexture(nil, "ARTWORK")
-    symbol:SetPoint("TOPLEFT", portal, "TOPLEFT", 5, -5)
-    symbol:SetPoint("BOTTOMRIGHT", portal, "BOTTOMRIGHT", -5, 5)
-    symbol:SetTexture("Interface\\Icons\\Spell_Arcane_PortalStormWind")
-    symbol:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-    local outer = portal:CreateTexture(nil, "OVERLAY")
-    outer:SetAllPoints()
-    outer:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-    outer:SetVertexColor(0.97, 0.77, 0.31, 1)
-    border(portal, 2, 1, 46, 2)
-    border(portal, 2, 47, 46, 2)
-    border(portal, 1, 2, 2, 46)
-    border(portal, 47, 2, 2, 46)
-
-    local selectedGlow = portal:CreateTexture(nil, "OVERLAY")
-    selectedGlow:SetPoint("TOPLEFT", portal, "TOPLEFT", -12, 12)
-    selectedGlow:SetPoint("BOTTOMRIGHT", portal, "BOTTOMRIGHT", 12, -12)
-    selectedGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
-    selectedGlow:SetBlendMode("ADD")
-    selectedGlow:SetVertexColor(1, 0.70, 0.12, 0.85)
-    selectedGlow:Hide()
-
-    -- For clients exposing the sidebar buttons, attach to the LAST one.
-    -- Check actual geometry: a similarly named bottom tab is not acceptable.
-    local candidates = {
-        "PVEFrameTab3", "LFGParentFrameTab3", "GroupFinderFrameTab3",
-        "LFGFrameTab3", "PVEFrameTab4", "LFGParentFrameTab4",
-    }
-    local anchored = false
-    for _, name in ipairs(candidates) do
-        local native = _G[name]
-        if native and native.GetLeft and native.GetWidth and host.GetRight then
-            local left, right = native:GetLeft(), host:GetRight()
-            local width, height = native:GetWidth(), native:GetHeight()
-            if left and right and width and height
-                and left >= right - 12 and width >= 34 and width <= 72
-                and height >= 34 and height <= 72 then
-                portal:SetPoint("TOPLEFT", native, "BOTTOMLEFT", 0, -6)
-                anchored = true
-                break
-            end
-        end
+    -- Add the fourth page exactly as the Book added its native Legacy page.
+    -- This is the real Forever/Vanilla Group Finder side-tab template, including
+    -- built-in golden border, selected glow, mouse handler and 30px icon.
+    portal = CreateFrame("Frame", "ForeverDungeonPortalTab", host, "LFGVanillaRightTabTemplate")
+    portal:SetID(4)
+    portal.tooltipText = "Вход в подземелье"
+    portal.iconTexture = "Interface\\Icons\\Spell_Arcane_PortalStormWind"
+    if portal.Icon then portal.Icon:SetTexture(portal.iconTexture) end
+    portal:SetPoint("TOPLEFT", host.WhoListingTab, "BOTTOMLEFT", 0, -2)
+    if host.WhoListingTab.GetWidth and host.WhoListingTab.GetHeight then
+        portal:SetSize(host.WhoListingTab:GetWidth(), host.WhoListingTab:GetHeight())
     end
-    if not anchored then
-        -- Observed WoW Forever 70658: three sidebar icons to the right
-        -- of the 470px frame at roughly -95, -150 and -205 from its top.
-        -- Fourth icon follows underneath (not across the top filter bar).
-        portal:SetPoint("TOPLEFT", host, "TOPRIGHT", 4, -249)
-    end
-    portal:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Вход в подземелье", 1, 0.80, 0.26)
-        GameTooltip:AddLine("Соло или текущей группой, без очереди", 0.93, 0.88, 0.76)
-        GameTooltip:Show()
-    end)
-    portal:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    host.DungeonPortalTab = portal
 
-    -- A full opaque panel is crucial: the old version was transparent and
-    -- rendered over the native "Подземелья / Зоны и задания" categories.
+    -- Native page rather than an overlay: it becomes the sole visible page
+    -- when selected; existing listing/browse/who frames are never deleted.
     pane = CreateFrame("Frame", "ForeverDungeonFinderPane", host)
-    pane:SetPoint("TOPLEFT", host, "TOPLEFT", 18, -135)
-    pane:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -17, 48)
-    pane:SetFrameLevel(host:GetFrameLevel() + 100)
+    pane:SetPoint("TOPLEFT", host, "TOPLEFT", 5, -36)
+    pane:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -5, 5)
+    pane:SetFrameLevel(host:GetFrameLevel() + 101)
     pane:EnableMouse(true)
     pane:EnableMouseWheel(true)
 
@@ -258,8 +207,8 @@ local function install()
     inner:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -4, 4)
 
     -- Natural WoW gold trim around the complete native-content rectangle.
-    local width = math.max(325, host:GetWidth() - 35)
-    local height = math.max(270, host:GetHeight() - 183)
+    local width = math.max(325, host:GetWidth() - 10)
+    local height = math.max(340, host:GetHeight() - 41)
     border(pane, 4, 3, width - 8, 2)
     border(pane, 4, height - 6, width - 8, 2)
     border(pane, 3, 4, 2, height - 8)
@@ -429,32 +378,44 @@ local function install()
     solo:SetScript("OnClick", function() requestEntry(false) end)
     together:SetScript("OnClick", function() requestEntry(true) end)
 
-    local function close()
-        pane:Hide()
-        portal:SetChecked(false)
-        selectedGlow:Hide()
+    -- The native right tabs call LFGParentFrame_SetActiveTab(), which sets
+    -- host.selectedTab and calls host:UpdateTabs().  Observe that ONE native
+    -- update method rather than hooking buttons with different names/views.
+    local function syncNativePage()
+        if not pane or not portal then return end
+        local selected = host.selectedTab == 4
+        portal:SetChecked(selected)
+        pane:SetShown(selected)
+        if selected then
+            hideOutdatedUi()
+            update()
+        end
     end
-    local function open()
-        hideOutdatedUi()
-        update()
-        pane:Show()
-        portal:SetChecked(true)
-        selectedGlow:Show()
+    hooksecurefunc(host, "UpdateTabs", syncNativePage)
+
+    local function selectDungeon()
+        -- Same native path as LFGParentFrame_SetActiveTab(1..3), but index 4.
+        PanelTemplates_SetTab(host, 4)
+        LFGListingFrame:Hide()
+        LFGBrowseFrame:Hide()
+        LFGWhoListFrame:Hide()
+        host:UpdateTabs()
     end
-    pane.open = open
-    pane.close = close
-    portal:SetScript("OnClick", function()
-        if pane:IsShown() then close() else open() end
-    end)
-    host:HookScript("OnHide", close)
-    for _, name in ipairs({
-        "PVEFrameTab1", "PVEFrameTab2", "PVEFrameTab3",
-        "LFGParentFrameTab1", "LFGParentFrameTab2", "LFGParentFrameTab3",
-        "GroupFinderFrameGroupButton", "GroupFinderFrameLFGListBrowserButton",
-    }) do
-        local other = _G[name]
-        if other and other.HookScript then other:HookScript("OnClick", close) end
+    if portal.SetCustomOnMouseUpHandler then
+        portal:SetCustomOnMouseUpHandler(function(_, button, inside)
+            if button == "LeftButton" and inside then selectDungeon() end
+        end)
+    else
+        -- The exact Forever template supports SetCustomOnMouseUpHandler,
+        -- but preserve keyboard and mouse activation if a client differs.
+        portal:SetScript("OnMouseUp", function(_, button)
+            if button == "LeftButton" then selectDungeon() end
+        end)
     end
+
+    pane.open = selectDungeon
+    pane.close = function() pane:Hide() end
+    host:HookScript("OnHide", function() pane:Hide() end)
     pane:Hide()
     hideOutdatedUi()
     update()
@@ -463,20 +424,20 @@ end
 
 local function openNative()
     if not install() then
+        -- Forever's stock LFG lives in Blizzard_GroupFinder_VanillaStyle,
+        -- not Blizzard_GroupFinder (retail).
         if C_AddOns and C_AddOns.LoadAddOn then
-            pcall(C_AddOns.LoadAddOn, "Blizzard_GroupFinder")
+            pcall(C_AddOns.LoadAddOn, "Blizzard_GroupFinder_VanillaStyle")
         elseif LoadAddOn then
-            pcall(LoadAddOn, "Blizzard_GroupFinder")
+            pcall(LoadAddOn, "Blizzard_GroupFinder_VanillaStyle")
         end
     end
     if not install() then
-        notice("Откройте «Поиск группы», затем повторите /fd.")
+        notice("Штатные вкладки поиска группы ещё не загружены. Откройте «Поиск группы» и повторите /fd.")
         return
     end
     if not host:IsShown() then
-        if PVEFrame_ShowFrame then pcall(PVEFrame_ShowFrame, "GroupFinderFrame") end
-        if not host:IsShown() and ShowUIPanel then ShowUIPanel(host) end
-        if not host:IsShown() then host:Show() end
+        if ShowUIPanel then ShowUIPanel(host) else host:Show() end
     end
     pane.open()
 end
