@@ -70,7 +70,7 @@ assert 'if (state->appearanceKey!=selected)' in runtime
 assert '"SKIN_MISSING"' in runtime and '"SKIN_APPLIED"' in runtime
 assert '"FET1"' not in runtime or 'RequestPrefix[] = "FEB1"' in runtime
 assert 'Send(player,"SELECTED|' not in runtime
-assert 'if (changed) send(RUNTIME_REQ,"skin") end' in v21
+assert 'if changed then send(RUNTIME_REQ,"skin") end' in v21
 assert 'notifyNative("appearance")' in v21
 assert "test_lofty_libram" in lua and "test_chromies_codex" in lua
 assert 'Только просмотр: нужен новый worldserver' in legacy
