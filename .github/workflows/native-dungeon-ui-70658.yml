@@ -1,0 +1,26 @@
+name: Native dungeon tab 70658
+on:
+  push:
+    branches: [feature/native-dungeon-tab-70658]
+    paths:
+      - 'mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua'
+      - 'mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverEncyclopedia.toc'
+      - 'tests/fixtures/native-dungeon-tab.lua'
+      - '.github/workflows/native-dungeon-ui-70658.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  addon-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lua5.1
+      - name: Syntax check embedded finder and mock
+        run: |
+          luac -p mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
+          luac -p tests/fixtures/native-dungeon-tab.lua
+      - name: Exercise native Group Finder tab and FDF transport
+        run: lua tests/fixtures/native-dungeon-tab.lua mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
