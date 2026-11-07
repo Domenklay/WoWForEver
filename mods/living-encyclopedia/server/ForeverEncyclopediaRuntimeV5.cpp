@@ -18,6 +18,8 @@
 #include "SpellAuraEffects.h"
 #include "Map.h"
 #include "TalentRules.h"
+#include "AppearanceSkins.h"
+#include "ObjectMgr.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -62,6 +64,8 @@ struct RuntimeState
     bool wantHeal = false;
     uint32 regenCarry = 0;
     ObjectGuid companionGuid;
+    std::string appearanceKey = "living_book";
+    uint32 appliedDisplay = 0;
 
     bool shieldPending = false;
     uint32 pendingShieldSpell = 0;
@@ -210,11 +214,66 @@ static void ClearPendingShield(RuntimeState& state)
     state.pendingShieldStarted = Clock::time_point{};
 }
 
+static std::string SelectedAppearance(Player* player)
+{
+    if (!player)
+        return "living_book";
+    if (QueryResult row = CharacterDatabase.PQuery(
+            "SELECT appearance_key FROM forever_encyclopedia_appearance_selection "
+            "WHERE character_guid={}", Guid(player)))
+    {
+        std::string key=row->Fetch()[0].GetString();
+        if (ForeverEncyclopedia::Skins::Find(key))
+            return key;
+    }
+    return "living_book";
+}
+
+static uint32 SkinDisplay(std::string const& key)
+{
+    auto skin=ForeverEncyclopedia::Skins::Find(key);
+    if (!skin)
+        return 0;
+    if (CreatureTemplate const* templateInfo=sObjectMgr->GetCreatureTemplate(skin->creature))
+    {
+        if (CreatureModel const* model=templateInfo->GetFirstValidModel())
+        {
+            if (sObjectMgr->GetCreatureModelInfo(model->CreatureDisplayID))
+                return model->CreatureDisplayID;
+        }
+    }
+    // Two pre-70658 pet display IDs serve as conditional fallbacks.
+    // Never send an unknown display ID to the client.
+    if (skin->displayFallback &&
+        sObjectMgr->GetCreatureModelInfo(skin->displayFallback))
+        return skin->displayFallback;
+    return 0;
+}
+
+static void ApplySkin(Player* player, RuntimeState& state, Creature* companion)
+{
+    if (!companion)
+        return;
+    uint32 display=SkinDisplay(state.appearanceKey);
+    if (!display)
+    {
+        state.appliedDisplay=0;
+        auto skin=ForeverEncyclopedia::Skins::Find(state.appearanceKey);
+        SendEvent(player,"SKIN_MISSING",skin ? skin->creature : 0,0);
+        return;
+    }
+    if (companion->GetDisplayId()!=display)
+        companion->SetDisplayId(display,true);
+    state.appliedDisplay=display;
+    SendEvent(player,"SKIN_APPLIED",display,0);
+}
+
 static void DespawnCompanion(Player* player, RuntimeState& state)
 {
     if (Creature* companion = Companion(player, state))
         companion->DespawnOrUnsummon();
     state.companionGuid.Clear();
+    state.appliedDisplay=0;
     ClearPendingShield(state);
 }
 
@@ -316,6 +375,7 @@ static Creature* EnsureCompanion(Player* player, RuntimeState& state)
     companion->SetUninteractible(true);
     companion->SetLevel(player->GetLevel());
     companion->SetObjectScale(0.55f);
+    ApplySkin(player,state,companion);
     companion->SetCanFly(true);
     companion->SetDisableGravity(true);
     companion->SetHover(true);
@@ -334,6 +394,7 @@ static RuntimeState LoadRuntime(Player* player)
 {
     RuntimeState state;
     state.account = Account(player);
+    state.appearanceKey = SelectedAppearance(player);
     state.ranks = LoadRanks(state.account);
     state.knowledgeTotal = KnowledgeTotal(state.account);
     state.maxMana = MaxMana(state.knowledgeTotal, state.ranks);
@@ -672,6 +733,25 @@ public:
         {
             RefreshRuntimeLocked(player, *state);
             SendBook(player, *state);
+            return;
+        }
+
+        if (cmd == "skin")
+        {
+            std::string selected=SelectedAppearance(player);
+            if (state->appearanceKey!=selected)
+            {
+                state->appearanceKey=selected;
+                if (Creature* companion=Companion(player,*state))
+                    ApplySkin(player,*state,companion);
+            }
+            else if (state->companionEnabled && !Companion(player,*state))
+            {
+                EnsureCompanion(player,*state);
+            }
+            SendEvent(player,"SKIN_SELECTED",
+                ForeverEncyclopedia::Skins::Find(selected) ?
+                ForeverEncyclopedia::Skins::Find(selected)->creature : 0,0);
             return;
         }
 
