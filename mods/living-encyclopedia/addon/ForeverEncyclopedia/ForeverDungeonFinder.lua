@@ -34,12 +34,26 @@ local function registerPrefix()
     end
 end
 
+-- On build 70658 the modern API returns a numeric result enum
+-- (0=queued; nonzero=client-side rejection). Older wrappers can return a
+-- boolean, or put the enum in the SECOND return position. None of these
+-- signals proves that the server script accepted the request.
 local function sendAddon(text, channel, target)
+    local first, second
     if C_ChatInfo and C_ChatInfo.SendAddonMessage then
-        return C_ChatInfo.SendAddonMessage(PREFIX, text, channel, target)
+        first, second = C_ChatInfo.SendAddonMessage(PREFIX, text, channel, target)
     elseif SendAddonMessage then
-        return SendAddonMessage(PREFIX, text, channel, target)
+        first, second = SendAddonMessage(PREFIX, text, channel, target)
+    else
+        return false, "нет API"
     end
+    local code = second ~= nil and second or first
+    if type(code) == "number" then
+        return code == 0, code
+    elseif type(code) == "boolean" then
+        return code, code and "legacy-ok" or "legacy-error"
+    end
+    return nil, "неизвестный код"
 end
 
 local function inGroup()
@@ -104,12 +118,14 @@ local function requestEntry(group)
     local player = UnitName("player")
     if not player then return end
     local mode = group and "GROUP:" or "SOLO:"
-    local result = sendAddon(mode .. picked.map, group and "PARTY" or "WHISPER", group and nil or player)
-    if result == false then
-        notice("Не удалось передать запрос в worldserver.")
-    else
+    local sent, code = sendAddon(mode .. picked.map, group and "PARTY" or "WHISPER", group and nil or player)
+    if sent == false then
+        notice("FDF: клиент отклонил отправку, код " .. tostring(code) .. ".")
+    elseif sent == true then
         if GetTime then lastRequest = GetTime() end
-        notice("Запрос передан. Для переноса нужен включённый серверный модуль DungeonFinder.")
+        notice("FDF: сообщение поставлено в очередь (код " .. tostring(code) .. "). Ожидается решение сервера.")
+    else
+        notice("FDF: API не вернул понятный результат. Проверьте /fdprobe.")
     end
 end
 
@@ -449,6 +465,35 @@ local function openNative()
         if ShowUIPanel then ShowUIPanel(host) else host:Show() end
     end
     pane.open()
+end
+
+-- Non-destructive diagnostic: send an invalid FDF request to oneself.
+-- If the server routes addon whispers, the client receives CHAT_MSG_ADDON
+-- for PROBE. The server's parser ignores PROBE, so this never teleports.
+local probeFrame = CreateFrame("Frame")
+probeFrame:RegisterEvent("CHAT_MSG_ADDON")
+probeFrame:SetScript("OnEvent", function(_, _, prefix, payload, channel)
+    if prefix == PREFIX and payload == "PROBE" then
+        notice("FDF PROBE: эхо получено по " .. tostring(channel) .. ". Канал сообщений работает.")
+    end
+end)
+
+SLASH_FOREVERDUNGEONPROBE1 = "/fdprobe"
+SlashCmdList.FOREVERDUNGEONPROBE = function()
+    registerPrefix()
+    local player = UnitName("player")
+    if not player then
+        notice("FDF PROBE: нет имени персонажа.")
+        return
+    end
+    local sent, code = sendAddon("PROBE", "WHISPER", player)
+    if sent == false then
+        notice("FDF PROBE: отказ клиента, код " .. tostring(code) .. ".")
+    elseif sent == true then
+        notice("FDF PROBE: запрос в очереди (код " .. tostring(code) .. "). Ожидайте сообщение об эхе.")
+    else
+        notice("FDF PROBE: API не сообщил результат; проверяйте наличие эха.")
+    end
 end
 
 SLASH_FOREVERDUNGEONFINDER1 = "/fd"
