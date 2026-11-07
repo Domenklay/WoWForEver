@@ -115,7 +115,7 @@ fn apply(game:&Path,j:&mut Journal,mut replace:impl FnMut(&Path,&Path,&Path,&str
 async fn ensure_set<F,Fut>(game:&Path,c:&Catalog,channel:&Channel,development:bool,log:&mut impl FnMut(String),mut fetch:F)->Result<(),String>
 where F:FnMut(String,u64)->Fut,Fut:Future<Output=Result<Vec<u8>,String>>{
  let release=c.channels.get(channel.key()).ok_or("AddOn channel is missing")?;
- log(tf("addon_channel",&[channel.key(),&release.release]));
+ log(tf("addon_channel",&[&channel.key(),&release.release]));
  let addons=game.join("Interface/AddOns");direct(&addons)?;
  let mut changed=Vec::new();let mut preserved=Vec::new();
  for m in &release.addons{let target=addons.join(&m.name);
