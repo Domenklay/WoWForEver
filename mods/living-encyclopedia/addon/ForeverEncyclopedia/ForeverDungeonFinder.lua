@@ -220,7 +220,7 @@ local function install()
             if left and right and width and height
                 and left >= right - 12 and width >= 34 and width <= 72
                 and height >= 34 and height <= 72 then
-                portal:SetPoint("TOPLEFT", native, "BOTTOMLEFT", 0, -6)
+                portal:SetPoint("TOPLEFT", native, "BOTTOMLEFT", -2, -3)
                 anchored = true
                 break
             end
@@ -230,7 +230,7 @@ local function install()
         -- Observed WoW Forever 70658: three sidebar icons to the right
         -- of the 470px frame at roughly -95, -150 and -205 from its top.
         -- Fourth icon follows underneath (not across the top filter bar).
-        portal:SetPoint("TOPLEFT", host, "TOPRIGHT", 4, -249)
+        portal:SetPoint("TOPLEFT", host, "TOPRIGHT", 1, -238)
     end
     portal:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -243,9 +243,9 @@ local function install()
     -- A full opaque panel is crucial: the old version was transparent and
     -- rendered over the native "Подземелья / Зоны и задания" categories.
     pane = CreateFrame("Frame", "ForeverDungeonFinderPane", host)
-    pane:SetPoint("TOPLEFT", host, "TOPLEFT", 18, -135)
+    pane:SetPoint("TOPLEFT", host, "TOPLEFT", 18, -72)
     pane:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -17, 48)
-    pane:SetFrameLevel(host:GetFrameLevel() + 100)
+    pane:SetFrameLevel(host:GetFrameLevel() + 130)
     pane:EnableMouse(true)
     pane:EnableMouseWheel(true)
 
@@ -259,7 +259,7 @@ local function install()
 
     -- Natural WoW gold trim around the complete native-content rectangle.
     local width = math.max(325, host:GetWidth() - 35)
-    local height = math.max(270, host:GetHeight() - 183)
+    local height = math.max(340, host:GetHeight() - 120)
     border(pane, 4, 3, width - 8, 2)
     border(pane, 4, height - 6, width - 8, 2)
     border(pane, 3, 4, 2, height - 8)
