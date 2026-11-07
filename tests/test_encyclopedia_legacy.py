@@ -53,12 +53,19 @@ assert "node.implemented" in overrides
 assert '0.9.19-v2.1-archive-filters' not in source, "Server talents must remain version-independent"
 # Archive UX must use the entire current-zone catalogue, not legacy pages.
 creature_view=legacy.split("local function drawCreatureView()",1)[1].split("local function drawZoneView()",1)[0]
-assert 'local list=frame(base,16,82,318,292,BROWN)' in creature_view
-assert 'local detail=frame(base,345,82,511,292,BROWN)' in creature_view
+assert 'local list=frame(base,16,39,390,395,BROWN)' in creature_view
+assert 'local detail=frame(base,418,39,439,395,BROWN)' in creature_view
 assert 'CreateFrame("EditBox"' in creature_view
-assert 'dropdown(list,9,44,142,creatureType,MONSTER_TYPES' in creature_view
-assert 'dropdown(list,159,44,147,creatureLocation,options' in creature_view
+assert 'dropdown(list,9,40,178,creatureType,MONSTER_TYPES' in creature_view
+assert 'dropdown(list,195,40,184,creatureLocation,options' in creature_view
 assert 'filteredArchiveRecords(allRows)' in creature_view
+assert 'local rowSize=30' in creature_view, "Compact rows must show more monsters"
+assert 'local viewHeight=286' in creature_view, "List must reclaim wasted vertical space"
+assert 'button(base,16,5,135,28,"К коллекции"' in creature_view
+assert 'modelPreview(detail,14,39,411,233' in creature_view
+assert 'infoBody=scrollArea(detail,13,283,412,103' in creature_view
+assert 'font(list,11,265' not in creature_view, "No reserved footer space"
+assert 'currentName.." v"' in legacy, "Dropdown symbols must be readable in client 70658"
 assert 'archiveRecordName(item)' in creature_view
 assert 'selectedCreatureEntry' in creature_view
 assert 'OnVerticalScroll' in creature_view and 'OnMouseWheel' in creature_view
@@ -84,4 +91,4 @@ assert 'if (cmd=="archive")' in server
 assert 'ARHEAD|' in server and 'AREND' in server
 assert 'first_zone is the place of first discovery' in server
 
-print("ENCYCLOPEDIA LEGACY ARCHIVE FILTERS / SERVER CAPABILITIES CHECK PASSED")
+print("ENCYCLOPEDIA 0.9.20 FULL HEIGHT CREATURE ARCHIVE AND SERVER CAPABILITIES CHECK PASSED")
