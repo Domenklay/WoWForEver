@@ -287,8 +287,9 @@ local function node(parent,x,y,n)
     icon:SetTexCoord(0.08,0.92,0.08,0.92)
     icon:SetDesaturated(not eligible and rank==0)
     icon:SetAlpha((eligible or rank>0) and 1 or 0.36)
-    font(b,23,32,42,rank.."/"..n.max,"GameFontNormalSmall",
-                       (eligible or rank>0) and PALE or MUTED,"CENTER")
+    local badge=font(b,15,32,33,rank.."/"..n.max,"GameFontNormalSmall",
+                     (eligible or rank>0) and PALE or MUTED,"RIGHT")
+    if badge.SetMaxLines then badge:SetMaxLines(1) end
     if chosen then
         local glow=b:CreateTexture(nil,"OVERLAY")
         glow:SetAllPoints()
@@ -296,7 +297,10 @@ local function node(parent,x,y,n)
         glow:SetBlendMode("ADD")
         glow:SetVertexColor(1,0.74,0.20,0.90)
     end
-    label(parent,x-67,y+29,134,n.name,"GameFontNormalSmall",eligible and PALE or MUTED,"CENTER")
+    local title=font(parent,x-71,y+37,142,n.name,"GameFontNormalSmall",
+                     eligible and PALE or MUTED,"CENTER")
+    if title.SetWordWrap then title:SetWordWrap(true) end
+    if title.SetMaxLines then title:SetMaxLines(2) end
     b:SetScript("OnClick",function()
         selectedNode=n.key
         pendingBuy=false
