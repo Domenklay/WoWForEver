@@ -181,7 +181,7 @@ local function install()
     portal = CreateFrame("Frame", "ForeverDungeonPortalTab", host, "LFGVanillaRightTabTemplate")
     portal:SetID(4)
     portal.tooltipText = "Вход в подземелье"
-    portal.iconTexture = "Interface\Icons\Spell_Arcane_PortalStormWind"
+    portal.iconTexture = "Interface\\Icons\\Spell_Arcane_PortalStormWind"
     if portal.Icon then portal.Icon:SetTexture(portal.iconTexture) end
     portal:SetPoint("TOPLEFT", host.WhoListingTab, "BOTTOMLEFT", 0, -2)
     if host.WhoListingTab.GetWidth and host.WhoListingTab.GetHeight then
