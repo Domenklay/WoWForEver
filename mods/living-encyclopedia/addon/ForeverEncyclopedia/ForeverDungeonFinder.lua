@@ -1,0 +1,620 @@
+-- ForeverDungeonFinder 0.2.0 UI, bundled with ForeverEncyclopedia for the
+-- two-AddOn Multi 1.8.0 release contract. Server teleport remains separate.
+-- Do not open duplicate frames if the standalone development AddOn is present.
+if _G.ForeverDungeonFinderFrame then return end
+
+local PREFIX = "FDF"
+
+local DUNGEONS = {
+    { map = 389, name = "Огненная пропасть", range = "13–18", zone = "Оргриммар", desc = "Короткое подземелье под Оргриммаром." },
+    { map = 36,  name = "Мёртвые копи", range = "17–26", zone = "Западный Край", desc = "Шахты Братства Справедливости и пиратская бухта." },
+    { map = 43,  name = "Пещеры Стенаний", range = "17–24", zone = "Степи", desc = "Извилистые пещеры друидов Клыка." },
+    { map = 33,  name = "Крепость Тёмного Клыка", range = "22–30", zone = "Серебряный бор", desc = "Проклятая крепость над деревней Погребальных Костров." },
+    { map = 48,  name = "Непроглядная Пучина", range = "20–30", zone = "Ясеневый лес", desc = "Затопленные руины и служители древних сил." },
+    { map = 34,  name = "Тюрьма", range = "22–30", zone = "Штормград", desc = "Подземная тюрьма Штормграда." },
+    { map = 90,  name = "Гномреган", range = "29–38", zone = "Дун Морог", desc = "Павшая технологическая столица гномов." },
+    { map = 47,  name = "Лабиринты Иглошкурых", range = "29–38", zone = "Степи", desc = "Колючий лабиринт племени Иглошкурых." },
+    { map = 189, name = "Монастырь Алого ордена", range = "26–45", zone = "Тирисфальские леса", desc = "Комплекс Алого ордена. Пока используется общий вход карты; отдельные крылья добавим следующим слоем." },
+    { map = 129, name = "Курганы Иглошкурых", range = "37–46", zone = "Степи", desc = "Некрополь Иглошкурых, захваченный Плетью." },
+    { map = 70,  name = "Ульдаман", range = "41–51", zone = "Бесплодные земли", desc = "Древнее хранилище титанов." },
+    { map = 209, name = "Зул'Фаррак", range = "44–54", zone = "Танарис", desc = "Город песчаных троллей среди пустыни." },
+    { map = 349, name = "Мародон", range = "46–55", zone = "Пустоши", desc = "Осквернённые пещеры и владения принцессы Терадрас." },
+    { map = 109, name = "Затонувший храм", range = "50–60", zone = "Болото Печали", desc = "Храм Атал'Хаккара, поглощённый болотом." },
+    { map = 230, name = "Глубины Чёрной горы", range = "52–60", zone = "Чёрная гора", desc = "Огромный город Чёрного Железа под горой." },
+    { map = 229, name = "Вершина Чёрной горы", range = "55–60", zone = "Чёрная гора", desc = "Верхние залы Чёрной горы и логово орков Чёрной Вершины." },
+    { map = 429, name = "Забытый Город", range = "55–60", zone = "Фералас", desc = "Эльфийский город Эльдре'Талас." },
+    { map = 289, name = "Некроситет", range = "58–60", zone = "Западные Чумные земли", desc = "Школа некромантии в Каэр Дарроу." },
+    { map = 329, name = "Стратхольм", range = "58–60", zone = "Восточные Чумные земли", desc = "Павший город, разделённый между Алым орденом и Плетью." },
+}
+
+local filtered, rows = {}, {}
+local selected, offset = nil, 0
+local ROWS = 12
+
+local function registerPrefix()
+    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+        return C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
+    elseif RegisterAddonMessagePrefix then
+        return RegisterAddonMessagePrefix(PREFIX)
+    end
+end
+
+local function sendAddon(text, channel, target)
+    if C_ChatInfo and C_ChatInfo.SendAddonMessage then
+        return C_ChatInfo.SendAddonMessage(PREFIX, text, channel, target)
+    elseif SendAddonMessage then
+        return SendAddonMessage(PREFIX, text, channel, target)
+    end
+end
+
+local function inGroup()
+    return IsInGroup and IsInGroup()
+end
+
+local function partyState()
+    if IsInRaid and IsInRaid() then
+        return GetNumGroupMembers and GetNumGroupMembers() or 0, true, false
+    end
+    if inGroup() then
+        local count = GetNumGroupMembers and GetNumGroupMembers() or 0
+        local leader = UnitIsGroupLeader and UnitIsGroupLeader("player") or false
+        return count, false, leader
+    end
+    return 1, false, true
+end
+
+local frame = CreateFrame("Frame", "ForeverDungeonFinderFrame", UIParent)
+frame:SetSize(780, 530)
+frame:SetPoint("CENTER")
+frame:SetFrameStrata("DIALOG")
+frame:SetClampedToScreen(true)
+frame:SetMovable(true)
+frame:EnableMouse(true)
+frame:RegisterForDrag("LeftButton")
+frame:SetScript("OnDragStart", frame.StartMoving)
+frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+frame:Hide()
+
+local shadow = frame:CreateTexture(nil, "BACKGROUND")
+shadow:SetPoint("TOPLEFT", -5, 5)
+shadow:SetPoint("BOTTOMRIGHT", 5, -5)
+shadow:SetColorTexture(0, 0, 0, 0.60)
+
+local bg = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
+bg:SetAllPoints()
+bg:SetColorTexture(0.035, 0.045, 0.060, 0.98)
+
+local header = frame:CreateTexture(nil, "ARTWORK")
+header:SetPoint("TOPLEFT", 1, -1)
+header:SetPoint("TOPRIGHT", -1, -1)
+header:SetHeight(58)
+header:SetColorTexture(0.055, 0.075, 0.105, 1)
+
+local divider = frame:CreateTexture(nil, "ARTWORK")
+divider:SetPoint("TOPLEFT", 292, -68)
+divider:SetPoint("BOTTOMLEFT", 292, 20)
+divider:SetWidth(1)
+divider:SetColorTexture(0.20, 0.27, 0.35, 0.8)
+
+local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+title:SetPoint("TOPLEFT", 24, -17)
+title:SetText("Поиск подземелий")
+title:SetTextColor(0.90, 0.95, 1.00)
+
+local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
+subtitle:SetText("WoW Forever • мгновенный вход без очереди")
+subtitle:SetTextColor(0.48, 0.62, 0.78)
+
+local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+close:SetPoint("TOPRIGHT", -7, -7)
+
+local search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+search:SetSize(244, 28)
+search:SetPoint("TOPLEFT", 22, -79)
+search:SetAutoFocus(false)
+search:SetMaxLetters(40)
+search:SetTextInsets(8, 8, 0, 0)
+
+local searchHint = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+searchHint:SetPoint("LEFT", search, "LEFT", 9, 0)
+searchHint:SetText("Поиск...")
+searchHint:SetTextColor(0.42, 0.48, 0.55)
+
+local listCaption = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+listCaption:SetPoint("TOPLEFT", 24, -116)
+listCaption:SetText("ДОСТУПНЫЕ ПОДЗЕМЕЛЬЯ")
+listCaption:SetTextColor(0.48, 0.62, 0.78)
+
+for i = 1, ROWS do
+    local row = CreateFrame("Button", nil, frame)
+    row.index = i
+    row:SetSize(252, 30)
+    row:SetPoint("TOPLEFT", 20, -137 - ((i - 1) * 31))
+
+    row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetAllPoints()
+
+    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.name:SetPoint("LEFT", 9, 2)
+    row.name:SetPoint("RIGHT", -58, 2)
+    row.name:SetJustifyH("LEFT")
+    row.name:SetTextColor(0.88, 0.91, 0.94)
+
+    row.level = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    row.level:SetPoint("RIGHT", -8, 0)
+    row.level:SetTextColor(0.50, 0.60, 0.70)
+
+    row:SetScript("OnEnter", function(self)
+        self.bg:SetColorTexture(0.11, 0.18, 0.26, 0.95)
+    end)
+    row:SetScript("OnLeave", function(self)
+        if self.data and selected == self.data then
+            self.bg:SetColorTexture(0.10, 0.24, 0.36, 0.95)
+        else
+            self.bg:SetColorTexture(0.055, 0.070, 0.090, self.index % 2 == 0 and 0.75 or 0.48)
+        end
+    end)
+    rows[i] = row
+end
+
+local up = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+up:SetSize(30, 22)
+up:SetPoint("BOTTOMLEFT", 205, 27)
+up:SetText("▲")
+
+local down = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+down:SetSize(30, 22)
+down:SetPoint("LEFT", up, "RIGHT", 4, 0)
+down:SetText("▼")
+
+local detailTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+detailTitle:SetPoint("TOPLEFT", 320, -91)
+detailTitle:SetPoint("RIGHT", -28, 0)
+detailTitle:SetJustifyH("LEFT")
+detailTitle:SetTextColor(0.92, 0.96, 1.00)
+
+local detailZone = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+detailZone:SetPoint("TOPLEFT", detailTitle, "BOTTOMLEFT", 0, -9)
+detailZone:SetTextColor(0.47, 0.66, 0.84)
+
+local line = frame:CreateTexture(nil, "ARTWORK")
+line:SetPoint("TOPLEFT", 320, -150)
+line:SetPoint("TOPRIGHT", -30, -150)
+line:SetHeight(1)
+line:SetColorTexture(0.20, 0.27, 0.35, 0.8)
+
+local levelLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+levelLabel:SetPoint("TOPLEFT", 320, -174)
+levelLabel:SetText("Исходный диапазон:")
+levelLabel:SetTextColor(0.62, 0.68, 0.74)
+
+local levelValue = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+levelValue:SetPoint("LEFT", levelLabel, "RIGHT", 8, 0)
+levelValue:SetTextColor(0.84, 0.90, 0.96)
+
+local scaling = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+scaling:SetPoint("TOPLEFT", 320, -205)
+scaling:SetWidth(420)
+scaling:SetJustifyH("LEFT")
+scaling:SetText("Уровень врагов масштабируется персонально под каждого игрока.")
+scaling:SetTextColor(0.48, 0.76, 0.94)
+
+local desc = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+desc:SetPoint("TOPLEFT", 320, -246)
+desc:SetWidth(420)
+desc:SetJustifyH("LEFT")
+desc:SetJustifyV("TOP")
+desc:SetTextColor(0.72, 0.76, 0.80)
+
+local groupPanel = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+groupPanel:SetPoint("BOTTOMLEFT", 315, 100)
+groupPanel:SetPoint("BOTTOMRIGHT", -25, 100)
+groupPanel:SetHeight(72)
+groupPanel:SetColorTexture(0.050, 0.065, 0.085, 0.95)
+
+local groupTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+groupTitle:SetPoint("TOPLEFT", groupPanel, "TOPLEFT", 14, -11)
+groupTitle:SetText("ТЕКУЩИЙ СОСТАВ")
+groupTitle:SetTextColor(0.48, 0.62, 0.78)
+
+local groupInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+groupInfo:SetPoint("TOPLEFT", groupTitle, "BOTTOMLEFT", 0, -8)
+groupInfo:SetPoint("RIGHT", groupPanel, "RIGHT", -14, 0)
+groupInfo:SetJustifyH("LEFT")
+groupInfo:SetTextColor(0.84, 0.87, 0.90)
+
+local soloEnter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+soloEnter:SetSize(174, 38)
+soloEnter:SetPoint("BOTTOMLEFT", 320, 34)
+soloEnter:SetText("Войти соло")
+
+local groupEnter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+groupEnter:SetSize(220, 38)
+groupEnter:SetPoint("LEFT", soloEnter, "RIGHT", 12, 0)
+groupEnter:SetText("Войти группой")
+
+local note = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+note:SetPoint("BOTTOMLEFT", 320, 19)
+note:SetText("Без очереди, ролей и подбора случайных игроков")
+note:SetTextColor(0.45, 0.50, 0.56)
+
+local function setButtonEnabled(button, enabled)
+    if enabled then button:Enable() else button:Disable() end
+end
+
+local function refreshGroup()
+    local count, raid, leader = partyState()
+    setButtonEnabled(soloEnter, selected ~= nil)
+
+    if raid then
+        groupInfo:SetText("Рейдовая группа: групповой прямой вход недоступен. Соло остаётся доступно.")
+        groupEnter:SetText("Недоступно для рейда")
+        groupEnter:Disable()
+    elseif count <= 1 then
+        groupInfo:SetText("Вы сейчас без группы. Можно войти в подземелье соло.")
+        groupEnter:SetText("Нет текущей группы")
+        groupEnter:Disable()
+    elseif not leader then
+        groupInfo:SetText(string.format("Группа: %d игроков. Групповой вход запускает только лидер.", count))
+        groupEnter:SetText("Ожидание лидера")
+        groupEnter:Disable()
+    else
+        groupInfo:SetText(string.format("Группа: %d игроков. Лидер перенесёт весь текущий состав в один экземпляр.", count))
+        groupEnter:SetText(string.format("Войти группой (%d)", count))
+        setButtonEnabled(groupEnter, selected ~= nil)
+    end
+end
+
+local function refreshDetails()
+    if selected then
+        detailTitle:SetText(selected.name)
+        detailZone:SetText(selected.zone)
+        levelValue:SetText(selected.range)
+        desc:SetText(selected.desc)
+    else
+        detailTitle:SetText("Выберите подземелье")
+        detailZone:SetText("")
+        levelValue:SetText("—")
+        desc:SetText("Выберите подземелье слева. Поиск группы не запускается — вы сами выбираете соло или текущую группу.")
+    end
+    refreshGroup()
+end
+
+local function refreshRows()
+    local maxOffset = math.max(0, #filtered - ROWS)
+    offset = math.max(0, math.min(offset, maxOffset))
+
+    for i, row in ipairs(rows) do
+        local data = filtered[offset + i]
+        row.data = data
+        if data then
+            row:Show()
+            row.name:SetText(data.name)
+            row.level:SetText(data.range)
+            if selected == data then
+                row.bg:SetColorTexture(0.10, 0.24, 0.36, 0.95)
+            else
+                row.bg:SetColorTexture(0.055, 0.070, 0.090, i % 2 == 0 and 0.75 or 0.48)
+            end
+            row:SetScript("OnClick", function(self)
+                selected = self.data
+                refreshRows()
+                refreshDetails()
+            end)
+        else
+            row:Hide()
+        end
+    end
+
+    setButtonEnabled(up, offset > 0)
+    setButtonEnabled(down, offset < maxOffset)
+end
+
+local function applyFilter()
+    wipe(filtered)
+    local query = search:GetText() or ""
+    local queryLower = string.lower(query)
+    for _, dungeon in ipairs(DUNGEONS) do
+        local haystack = dungeon.name .. " " .. dungeon.zone
+        if query == "" or string.find(haystack, query, 1, true) or string.find(string.lower(haystack), queryLower, 1, true) then
+            table.insert(filtered, dungeon)
+        end
+    end
+    offset = 0
+    refreshRows()
+end
+
+search:SetScript("OnTextChanged", function(self)
+    if (self:GetText() or "") == "" then searchHint:Show() else searchHint:Hide() end
+    applyFilter()
+end)
+search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+
+up:SetScript("OnClick", function() offset = math.max(0, offset - 1); refreshRows() end)
+down:SetScript("OnClick", function() offset = math.min(math.max(0, #filtered - ROWS), offset + 1); refreshRows() end)
+
+frame:EnableMouseWheel(true)
+frame:SetScript("OnMouseWheel", function(_, delta)
+    if delta > 0 then
+        offset = math.max(0, offset - 2)
+    else
+        offset = math.min(math.max(0, #filtered - ROWS), offset + 2)
+    end
+    refreshRows()
+end)
+
+soloEnter:SetScript("OnClick", function()
+    if not selected then return end
+    local playerName = UnitName("player")
+    if playerName then
+        sendAddon("SOLO:" .. tostring(selected.map), "WHISPER", playerName)
+    end
+end)
+
+groupEnter:SetScript("OnClick", function()
+    if not selected then return end
+    local count, raid, leader = partyState()
+    if count <= 1 or raid or not leader then return end
+    sendAddon("GROUP:" .. tostring(selected.map), "PARTY")
+end)
+
+frame:SetScript("OnShow", function() refreshDetails() end)
+
+local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("PLAYER_LOGIN")
+eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+eventFrame:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGIN" then
+        registerPrefix()
+    elseif event == "GROUP_ROSTER_UPDATE" and frame:IsShown() then
+        refreshGroup()
+    end
+end)
+
+SLASH_FOREVERDUNGEONFINDER1 = "/fd"
+SLASH_FOREVERDUNGEONFINDER2 = "/dungeon"
+SlashCmdList.FOREVERDUNGEONFINDER = function()
+    if frame:IsShown() then
+        frame:Hide()
+    else
+        frame:Show()
+        search:ClearFocus()
+    end
+end
+
+local minimap = CreateFrame("Button", "ForeverDungeonFinderMinimapButton", Minimap)
+minimap:SetSize(32, 32)
+minimap:SetFrameStrata("MEDIUM")
+minimap:SetPoint("TOPLEFT", Minimap, "TOPLEFT", -2, -4)
+minimap:RegisterForClicks("LeftButtonUp")
+
+local miniBg = minimap:CreateTexture(nil, "BACKGROUND")
+miniBg:SetAllPoints()
+miniBg:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+
+local miniIcon = minimap:CreateTexture(nil, "ARTWORK")
+miniIcon:SetSize(18, 18)
+miniIcon:SetPoint("CENTER", 0, 1)
+miniIcon:SetTexture("Interface\\Icons\\INV_Misc_Map_01")
+miniIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+minimap:SetScript("OnClick", function() SlashCmdList.FOREVERDUNGEONFINDER() end)
+minimap:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine("Поиск подземелий", 0.90, 0.95, 1.00)
+    GameTooltip:AddLine("Соло или текущая группа — без очереди.", 0.70, 0.76, 0.82)
+    GameTooltip:Show()
+end)
+minimap:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+
+-- Native Group Finder tab (client builds vary: PVEFrame / LFGParentFrame /
+-- GroupFinderFrame). Never touches the unsafe retail LFG queue protocol.
+local nativeOverlay, nativeRefresh, nativeTab
+local function installNativeTab()
+    if nativeTab then return end
+    local host = PVEFrame or LFGParentFrame or GroupFinderFrame
+    if not host or not host.CreateTexture then return end
+
+    nativeTab = CreateFrame("Button", "ForeverDungeonFinderGroupFinderTab", host, "UIPanelButtonTemplate")
+    nativeTab:SetSize(166, 25)
+    nativeTab:SetPoint("TOPRIGHT", host, "TOPRIGHT", -37, -38)
+    nativeTab:SetText("Вход в подземелье")
+    nativeTab:SetFrameLevel(host:GetFrameLevel() + 40)
+
+    nativeOverlay = CreateFrame("Frame", "ForeverDungeonFinderGroupFinderPane", host)
+    nativeOverlay:SetSize(520, 390)
+    nativeOverlay:SetPoint("TOP", host, "TOP", 0, -73)
+    nativeOverlay:SetFrameLevel(host:GetFrameLevel() + 35)
+    nativeOverlay:EnableMouse(true)
+    nativeOverlay:Hide()
+
+    local surface = nativeOverlay:CreateTexture(nil, "BACKGROUND")
+    surface:SetAllPoints()
+    surface:SetColorTexture(0.035, 0.049, 0.071, 0.99)
+
+    local heading = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    heading:SetPoint("TOPLEFT", 16, -12)
+    heading:SetText("Прямой вход — WoW Forever")
+    heading:SetTextColor(1, 0.83, 0.45)
+
+    local info = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    info:SetPoint("TOPLEFT", 16, -35)
+    info:SetText("Выберите подземелье и способ входа. Без очереди и поиска игроков.")
+    info:SetTextColor(0.66, 0.76, 0.86)
+
+    local searchTab = CreateFrame("EditBox", nil, nativeOverlay, "InputBoxTemplate")
+    searchTab:SetSize(205, 25)
+    searchTab:SetPoint("TOPLEFT", 19, -60)
+    searchTab:SetAutoFocus(false)
+    searchTab:SetMaxLetters(40)
+
+    local leftTitle = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    leftTitle:SetPoint("TOPLEFT", 20, -96)
+    leftTitle:SetText("ПОДЗЕМЕЛЬЯ")
+    local rightTitle = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    rightTitle:SetPoint("TOPLEFT", 261, -96)
+    rightTitle:SetText("ВЫБРАННОЕ ПОДЗЕМЕЛЬЕ")
+
+    local dividingLine = nativeOverlay:CreateTexture(nil, "ARTWORK")
+    dividingLine:SetPoint("TOPLEFT", 246, -91)
+    dividingLine:SetSize(1, 280)
+    dividingLine:SetColorTexture(0.55, 0.43, 0.21, 0.75)
+
+    local picked = DUNGEONS[1]
+    local page, listed, buttons = 0, {}, {}
+    local labelName = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    labelName:SetPoint("TOPLEFT", 260, -120)
+    labelName:SetWidth(242)
+    labelName:SetJustifyH("LEFT")
+
+    local labelZone = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    labelZone:SetPoint("TOPLEFT", 260, -167)
+    labelZone:SetWidth(230)
+    labelZone:SetJustifyH("LEFT")
+
+    local labelDesc = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    labelDesc:SetPoint("TOPLEFT", 260, -207)
+    labelDesc:SetWidth(230)
+    labelDesc:SetJustifyH("LEFT")
+    labelDesc:SetJustifyV("TOP")
+
+    local partyText = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    partyText:SetPoint("BOTTOMLEFT", 260, 88)
+    partyText:SetWidth(235)
+    partyText:SetJustifyH("LEFT")
+
+    local buttonSolo = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+    buttonSolo:SetSize(111, 30)
+    buttonSolo:SetPoint("BOTTOMLEFT", 260, 45)
+    buttonSolo:SetText("Соло")
+
+    local buttonGroup = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+    buttonGroup:SetSize(120, 30)
+    buttonGroup:SetPoint("LEFT", buttonSolo, "RIGHT", 7, 0)
+    buttonGroup:SetText("Группой")
+
+    local prev = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+    prev:SetSize(65, 22)
+    prev:SetPoint("BOTTOMLEFT", 20, 14)
+    prev:SetText("Назад")
+    local nextButton = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+    nextButton:SetSize(65, 22)
+    nextButton:SetPoint("LEFT", prev, "RIGHT", 6, 0)
+    nextButton:SetText("Далее")
+    local pageText = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    pageText:SetPoint("LEFT", nextButton, "RIGHT", 8, 0)
+
+    local function refreshEmbedded()
+        local searchValue = searchTab:GetText() or ""
+        local needle = string.lower(searchValue)
+        wipe(listed)
+        for _, entry in ipairs(DUNGEONS) do
+            if needle == "" or string.find(string.lower(entry.name .. " " .. entry.zone), needle, 1, true) then
+                table.insert(listed, entry)
+            end
+        end
+        local pages = math.max(1, math.ceil(#listed / 8))
+        page = math.max(0, math.min(page, pages - 1))
+        for index, button in ipairs(buttons) do
+            local entry = listed[page * 8 + index]
+            button.data = entry
+            if entry then
+                button:Show()
+                button:SetText(entry.name)
+                button:GetFontString():SetTextColor(
+                    entry == picked and 1 or 0.84, entry == picked and 0.82 or 0.89, 0.73)
+            else
+                button:Hide()
+            end
+        end
+        prev:SetEnabled(page > 0)
+        nextButton:SetEnabled(page < pages - 1)
+        pageText:SetText(tostring(page + 1) .. "/" .. tostring(pages))
+
+        labelName:SetText(picked.name)
+        labelZone:SetText(picked.zone .. "  •  " .. picked.range)
+        labelDesc:SetText(picked.desc)
+        local count, raid, leader = partyState()
+        if raid then
+            partyText:SetText("Рейд: групповой вход недоступен.")
+        elseif count <= 1 then
+            partyText:SetText("Вы один. Доступен одиночный вход.")
+        elseif leader then
+            partyText:SetText(string.format("Группа: %d. Вы лидер.", count))
+        else
+            partyText:SetText(string.format("Группа: %d. Нужен лидер.", count))
+        end
+        buttonGroup:SetEnabled(count > 1 and not raid and leader)
+    end
+    nativeRefresh = refreshEmbedded
+
+    for i = 1, 8 do
+        local button = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+        button:SetSize(216, 27)
+        button:SetPoint("TOPLEFT", 18, -116 - (i - 1) * 30)
+        button:GetFontString():SetJustifyH("LEFT")
+        button:SetScript("OnClick", function(self)
+            if self.data then
+                picked = self.data
+                selected = self.data
+                refreshDetails()
+                refreshEmbedded()
+            end
+        end)
+        buttons[i] = button
+    end
+
+    searchTab:SetScript("OnTextChanged", function() page = 0; refreshEmbedded() end)
+    searchTab:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    searchTab:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    prev:SetScript("OnClick", function() page = page - 1; refreshEmbedded() end)
+    nextButton:SetScript("OnClick", function() page = page + 1; refreshEmbedded() end)
+
+    buttonSolo:SetScript("OnClick", function()
+        if picked and UnitName("player") then
+            sendAddon("SOLO:" .. tostring(picked.map), "WHISPER", UnitName("player"))
+        end
+    end)
+    buttonGroup:SetScript("OnClick", function()
+        local count, raid, leader = partyState()
+        if picked and count > 1 and not raid and leader then
+            sendAddon("GROUP:" .. tostring(picked.map), "PARTY")
+        end
+    end)
+
+    nativeTab:SetScript("OnClick", function()
+        if nativeOverlay:IsShown() then nativeOverlay:Hide() else refreshEmbedded(); nativeOverlay:Show() end
+    end)
+    host:HookScript("OnHide", function() nativeOverlay:Hide() end)
+
+    -- Blizzard's tabs remain untouched. Switching to a native tab closes
+    -- only our overlay instead of invoking the unsafe LFG matchmaking code.
+    for i = 1, 5 do
+        local other = _G["PVEFrameTab" .. i] or _G["LFGParentFrameTab" .. i]
+        if other and other.HookScript then
+            other:HookScript("OnClick", function() nativeOverlay:Hide() end)
+        end
+    end
+    refreshEmbedded()
+end
+
+local tabEvents = CreateFrame("Frame")
+tabEvents:RegisterEvent("PLAYER_LOGIN")
+tabEvents:RegisterEvent("ADDON_LOADED")
+tabEvents:RegisterEvent("GROUP_ROSTER_UPDATE")
+tabEvents:SetScript("OnEvent", function(_, event)
+    if event == "GROUP_ROSTER_UPDATE" then
+        if nativeOverlay and nativeOverlay:IsShown() and nativeRefresh then nativeRefresh() end
+    else
+        installNativeTab()
+    end
+end)
+if IsLoggedIn and IsLoggedIn() then installNativeTab() end
+
+for _, dungeon in ipairs(DUNGEONS) do table.insert(filtered, dungeon) end
+selected = filtered[1]
+refreshRows()
+refreshDetails()
