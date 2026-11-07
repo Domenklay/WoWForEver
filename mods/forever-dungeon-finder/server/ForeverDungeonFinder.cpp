@@ -1,4 +1,6 @@
 #include "ScriptMgr.h"
+#include "Chat.h"
+#include "ChatPackets.h"
 #include "DB2Stores.h"
 #include "Group.h"
 #include "Map.h"
@@ -49,10 +51,27 @@ static bool Enabled()
     return enabled;
 }
 
+// A separate addon response is necessary because client 70658 does not reliably
+// display server SendNotification messages. This follows the proven FAC1/FAR1
+// transport without changing or depending on the dungeon browser addon.
+static void Reply(Player* player, std::string const& message)
+{
+    if (!player || !player->GetSession())
+        return;
+
+    WorldPackets::Chat::Chat packet;
+    packet.Initialize(CHAT_MSG_WHISPER, LANG_ADDON, player, player, message, 0, "", LOCALE_enUS, "FDFR");
+    player->GetSession()->SendPacket(packet.Write());
+    TC_LOG_INFO("forever.dungeonfinder", "FDF response: player={} result={}", player->GetName(), message);
+}
+
 static void Notify(Player* player, char const* message)
 {
     if (player && player->GetSession())
+    {
+        Reply(player, std::string("ERROR ") + message);
         player->GetSession()->SendNotification("%s", message);
+    }
 }
 
 static bool ParseRequest(std::string_view text, EntryMode& mode, uint32& mapId)
@@ -202,6 +221,7 @@ static bool EnterDungeon(Player* requester, uint32 mapId, EntryMode mode)
 
     TC_LOG_INFO("forever.dungeonfinder", "Direct dungeon entry: requester={} map={} mode={} players={}",
         requester->GetName(), mapId, mode == EntryMode::Solo ? "solo" : "group", players.size());
+    Reply(requester, std::string("OK ") + (mode == EntryMode::Solo ? "SOLO:" : "GROUP:") + std::to_string(mapId));
     return true;
 }
 
@@ -221,13 +241,23 @@ public:
     {
         // Solo requests are self-whispers. A targeted request may never move a
         // different character, even if another addon sends the FDF prefix.
-        if (receiver != player)
+        if (!player || prefix != AddonPrefix || receiver != player)
             return;
+
+        TC_LOG_INFO("forever.dungeonfinder", "FDF received: player={} channel=WHISPER request={}", player->GetName(), text);
+        if (text == "PING")
+        {
+            Reply(player, "PONG v0.2.1");
+            return;
+        }
 
         EntryMode mode = EntryMode::Solo;
         uint32 mapId = 0;
         if (!ParseAddonRequest(player, prefix, text, mode, mapId) || mode != EntryMode::Solo)
+        {
+            Notify(player, "Forever: некорректная команда одиночного входа.");
             return;
+        }
 
         EnterDungeon(player, mapId, mode);
     }
@@ -237,13 +267,17 @@ public:
     {
         // Group entry is sent through PARTY and still requires the sender to be
         // the current group's leader inside CollectGroup().
-        if (!group || player->GetGroup() != group)
+        if (!player || prefix != AddonPrefix || !group || player->GetGroup() != group)
             return;
 
+        TC_LOG_INFO("forever.dungeonfinder", "FDF received: player={} channel=PARTY request={}", player->GetName(), text);
         EntryMode mode = EntryMode::Group;
         uint32 mapId = 0;
         if (!ParseAddonRequest(player, prefix, text, mode, mapId) || mode != EntryMode::Group)
+        {
+            Notify(player, "Forever: некорректная команда группового входа.");
             return;
+        }
 
         EnterDungeon(player, mapId, mode);
     }
