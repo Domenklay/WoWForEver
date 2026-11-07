@@ -30,6 +30,7 @@ function log(line) {
   const time = new Date().toLocaleTimeString(lang);
   pre.textContent += `[${time}] ${line}\n`;
   pre.scrollTop = pre.scrollHeight;
+  $('log-empty').hidden = !!pre.textContent;
 }
 
 function setStep(text, kind = '') {
@@ -50,6 +51,7 @@ function setLanguage(setting) {
 async function refresh() {
   state = await invoke('get_state');
   state.settings.addonChannel ||= 'stable';
+  fillAddonSettings(state.settings);
   state.settings.addonUpdatesEnabled ??= true;
   state.settings.clientUpdatesEnabled ??= true;
   state.settings.autoGameLogin ??= true;
@@ -194,9 +196,9 @@ $('play').addEventListener('click', async () => {
 $('setup-fix').addEventListener('click', (ev) => repair(ev.currentTarget));
 $('toggle-log').addEventListener('click', (ev) => {
   ev.preventDefault();
-  $('log-box').hidden = !$('log-box').hidden;
+  page('journal');
 });
-$('close-log').addEventListener('click', () => ($('log-box').hidden = true));
+$('close-log').addEventListener('click', () => page('home'));
 $('repair').addEventListener('click', (ev) => repair(ev.currentTarget));
 
 listen('game', ({ payload }) => {
@@ -523,14 +525,14 @@ async function refreshNews() {
 
 // ------------------------------------------------------------------------------------------------ client workshop
 function page(name) {
-  $('home-page').hidden = name !== 'home';
-  $('workshop-page').hidden = name !== 'workshop';
-  $('native-page').hidden = name !== 'downloads';
-  $('nav-home').classList.toggle('selected', name === 'home');
-  $('nav-workshop').classList.toggle('selected', name === 'workshop');
-  $('nav-downloads').classList.toggle('selected', name === 'downloads');
-  $('page-name').textContent = t(name === 'home' ? 'wHome' : name === 'downloads' ? 'nTitle' : 'wLibrary');
+  for (const [key,id] of Object.entries({home:'home-page',workshop:'workshop-page',downloads:'native-page',addons:'addons-page',journal:'journal-page'})) {
+    $(id).hidden = name !== key;
+    $('nav-'+key).classList.toggle('selected', name === key);
+  }
+  $('page-name').textContent = t({home:'wHome',downloads:'nTitle',workshop:'wLibrary',addons:'addonSettings',journal:'journal'}[name]);
   if (name === 'downloads') fillNative();
+  if (name === 'addons') { fillAddonSettings(state.settings); loadAddonChannels(false); inspectAddons(); }
+  if (name === 'journal') { $('log-empty').hidden = !!$('log').textContent; $('log').scrollTop = $('log').scrollHeight; }
   updateWorkshopActions();
 }
 function workshopSource() {
@@ -665,7 +667,8 @@ $('nav-home').addEventListener('click', () => page('home'));
 $('brand-home').addEventListener('click', e => { e.preventDefault(); page('home'); });
 $('nav-workshop').addEventListener('click', () => page('workshop'));
 $('nav-downloads').addEventListener('click', () => page('downloads'));
-$('nav-journal').addEventListener('click', () => { $('log-box').hidden = !$('log-box').hidden; });
+$('nav-journal').addEventListener('click', () => page('journal'));
+$('nav-addons').addEventListener('click', () => page('addons'));
 for (const id of ['quick-download','quick-repair']) $(id).addEventListener('click', () => page('downloads'));
 for (const [id, action] of [['quick-verify','verify'],['w-download','download'],['w-verify','verify'],['w-repair','repair'],['w-recover','recover']]) $(id).addEventListener('click', () => runWorkshop(action));
 for (const name of ['target','reference','manifest']) {
@@ -795,3 +798,50 @@ $('s-addon-updates').addEventListener('change', updateAddonChannelControls);
 $('s-addon-development').addEventListener('change', updateAddonChannelControls);
 $('s-addon-channel').addEventListener('change', updateAddonChannelControls);
 $('addon-channel-refresh').addEventListener('click', () => loadAddonChannels(true));
+
+function fillAddonSettings(settings) {
+  $('s-addon-updates').checked = settings.addonUpdatesEnabled !== false;
+  $('s-addon-development').checked = !!settings.addonDevelopmentMode;
+  $('s-addon-channel').replaceChildren();
+  option($('s-addon-channel'), 'stable', t('addonStable'));
+  option($('s-addon-channel'), 'testing', t('addonTesting'));
+  $('s-addon-channel').value = settings.addonChannel || 'stable';
+  $('addons-save').disabled = !!state?.playing;
+  $('addons-path').textContent = settings.gameDir || t('addonsNoFolder');
+  updateAddonChannelControls();
+}
+async function inspectAddons() {
+  $('addons-inspect').disabled = true;
+  $('addons-status').textContent = t('addonsReading');
+  $('addons-list').replaceChildren();
+  try {
+    const result = await invoke('installed_addons');
+    for (const a of result.addons) {
+      const row = document.createElement('div'); row.className='addon-installed-row';
+      const title = document.createElement('strong'); title.textContent=a.name;
+      const version = document.createElement('span'); version.textContent=a.version || t('addonsUnknownVersion');
+      const detail = document.createElement('p'); detail.className='small muted';
+      detail.textContent=t(a.status === 'verified' ? 'addonsVerified' : a.status === 'changed' ? 'addonsChanged' : 'addonsUnmanaged');
+      row.append(title, version, detail); $('addons-list').append(row);
+    }
+    $('addons-status').textContent = result.addons.length ? t('addonsCount',{n:result.addons.length}) : t('addonsEmpty');
+    if (result.recoveryNeeded) $('addons-status').textContent += ' '+t('addonsRecovery');
+  } catch(e) { $('addons-status').textContent=String(e); }
+  finally { $('addons-inspect').disabled=false; }
+}
+$('addons-inspect').addEventListener('click', inspectAddons);
+$('addons-save').addEventListener('click', async () => {
+  $('addons-save').disabled=true;
+  try {
+    // Only this page's three options are saved; an unfinished settings draft is not applied.
+    const current=await invoke('get_state');
+    if (current.playing) throw t('addonsBusy');
+    const settings=structuredClone(current.settings);
+    settings.addonUpdatesEnabled=$('s-addon-updates').checked;
+    settings.addonDevelopmentMode=$('s-addon-development').checked;
+    settings.addonChannel=$('s-addon-channel').value || 'stable';
+    await invoke('save_settings',{settings}); await refresh();
+    $('addons-save-status').textContent=t('addonsSaved');
+  } catch(e) { $('addons-save-status').textContent=String(e); }
+  finally { $('addons-save').disabled=!!state?.playing; }
+});

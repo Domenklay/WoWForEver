@@ -265,3 +265,52 @@ pub async fn channel_summary(cache:&Path,refresh:bool)->Result<serde_json::Value
  #[test]fn corrupted_cache_cannot_be_used_as_a_release_set(){let temp=Temp::new();let p=temp.0.join("channels.json");fs::write(&p,b"not json").unwrap();assert!(cached(&p).is_err());}
  #[test]fn recovery_rejects_a_path_injected_target(){let c=fixture();let mut j=journal(&c,&"d".repeat(32));j.changes[0].name="../../WTF".into();assert!(validate_journal(&j).is_err());}
 }
+
+/// Read the selected client only. No catalogue fetch, install, recovery or settings writes.
+pub fn installed(game:&Path)->Result<serde_json::Value,String>{
+ if game.as_os_str().is_empty(){return Ok(serde_json::json!({"addons":[],"recoveryNeeded":false}));}
+ let folder=game.join("Interface/AddOns");direct(&folder)?;
+ let receipt_path=game.join(".forever-multi/addon-installed.json");direct(&receipt_path)?;
+ let receipt=if receipt_path.exists(){
+  if fs::metadata(&receipt_path).map_err(|e|e.to_string())?.len()>catalog::LIMIT as u64{return Err("Oversized AddOn receipt".into());}
+  let r:Receipt=serde_json::from_slice(&fs::read(&receipt_path).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+  if r.format!="forever-addon-installed-v1"{return Err("Unknown AddOn receipt".into());}
+  for m in &r.release.addons{catalog::validate_manifest(m)?;}
+  Some(r)
+ }else{None};
+ let mut addons=Vec::new();
+ if folder.exists(){for entry in fs::read_dir(&folder).map_err(|e|e.to_string())?{
+  let entry=entry.map_err(|e|e.to_string())?;let path=entry.path();
+  let name=entry.file_name().to_string_lossy().into_owned();
+  if name.starts_with('.')||!entry.file_type().map_err(|e|e.to_string())?.is_dir(){continue;}
+  direct(&path)?;
+  if addons.len()>=2048{return Err("Too many AddOn folders".into());}
+  let mut version=None;
+  // Prefer the generic TOC, then this client flavour. Never execute Lua or follow links.
+  for suffix in ["", "_Mainline", "_Forever"]{
+   let toc=path.join(format!("{name}{suffix}.toc"));direct(&toc)?;
+   if !toc.exists(){continue;}
+   if fs::metadata(&toc).map_err(|e|e.to_string())?.len()>65536{return Err("Oversized AddOn TOC".into());}
+   let body=fs::read_to_string(&toc).map_err(|e|e.to_string())?;
+   version=body.lines().find_map(|line|line.trim_start_matches('\u{feff}').trim().strip_prefix("## Version:").map(|v|v.trim().to_owned()));
+   break;
+  }
+  let managed=receipt.as_ref().and_then(|r|r.release.addons.iter().find(|m|m.name==name));
+  let status=if let Some(m)=managed{if current(&path,m)?{"verified"}else{"changed"}}else{"unmanaged"};
+  addons.push(serde_json::json!({"name":name,"version":version,"status":status}));
+ }}
+ addons.sort_by_key(|a|a["name"].as_str().unwrap_or("").to_lowercase());
+ Ok(serde_json::json!({"addons":addons,"recoveryNeeded":journal_path(game).exists()}))
+}
+
+#[cfg(test)]
+mod inventory_tests{
+ use super::*;
+ #[test]fn installed_versions_are_read_from_disk_without_writing(){
+  let temp=std::env::temp_dir().join(format!("forever-inventory-{}",std::process::id()));
+  fs::create_dir_all(temp.join("Interface/AddOns/ThirdParty")).unwrap();
+  let toc=temp.join("Interface/AddOns/ThirdParty/ThirdParty.toc");fs::write(&toc,b"## Title: Other\n## Version: 7.2\n").unwrap();
+  let v=installed(&temp).unwrap();assert_eq!(v["addons"][0]["name"],"ThirdParty");assert_eq!(v["addons"][0]["version"],"7.2");assert_eq!(v["addons"][0]["status"],"unmanaged");
+  assert!(!temp.join(".forever-multi").exists());assert_eq!(fs::read(&toc).unwrap(),b"## Title: Other\n## Version: 7.2\n");fs::remove_dir_all(temp).unwrap();
+ }
+}

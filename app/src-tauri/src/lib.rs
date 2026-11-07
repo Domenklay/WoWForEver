@@ -214,6 +214,11 @@ fn package_guard(state: &AppState) -> Result<PackageGuard<'_>,String> {
     #[allow(unreachable_code)] Ok(guard)
 }
 #[tauri::command]
+fn installed_addons(state: State<AppState>)->Result<serde_json::Value,String>{
+    let settings=state.settings.lock().unwrap().clone();
+    addon::installed(std::path::Path::new(&settings.game_dir))
+}
+#[tauri::command]
 async fn addon_channels(refresh:bool)->Result<serde_json::Value,String>{addon::channel_summary(&config::config_dir().join("addon-cache"),refresh).await}
 #[tauri::command]
 fn content_catalog() -> serde_json::Value {
@@ -479,7 +484,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState { settings: Mutex::new(Settings::load()), playing: AtomicBool::new(false), client_cancel: std::sync::Arc::new(AtomicBool::new(false)) })
         .invoke_handler(tauri::generate_handler![
-            get_state, save_settings, set_language, detect_locale, inspect_official_client, login, logout, server_status, news, checks, repair, play,
+            get_state, installed_addons, save_settings, set_language, detect_locale, inspect_official_client, login, logout, server_status, news, checks, repair, play,
             addon_channels, content_catalog, content_status, inspect_content, install_content, rollback_content
             , client_work, native_client_work, cancel_client_work, inspect_client_locations
         ])

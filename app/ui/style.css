@@ -17,3 +17,5 @@ label{display:grid;gap:6px;font-size:11px;font-weight:500;color:#9fb1b4}input[ty
 label.row:has(>input[type=checkbox]){align-items:center;justify-content:flex-start}
 label.row>input[type=checkbox]{flex:0 0 16px;width:16px;height:16px;margin:0;accent-color:var(--mint)}
 label.row>input[type=checkbox]+span{flex:1}
+
+.journal-panel{min-height:340px;height:calc(100vh - 260px);display:flex;flex-direction:column;overflow:hidden}.journal-panel pre{flex:1;min-height:260px;margin:12px 0 0;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 Consolas,monospace;user-select:text}.addon-installed-row{padding:14px 0;border-bottom:1px solid var(--line)}.addon-installed-row>span{float:right;color:var(--mint)}#addons-path{margin-bottom:16px;overflow-wrap:anywhere}#addons-save-status{margin-top:12px}
