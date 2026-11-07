@@ -19,12 +19,14 @@ START_SECONDS = 1793998800
 
 
 class ModuleReadinessTests(unittest.TestCase):
-    def file_probe(self, root, append=False, stale=False, denied_cwd=False):
+    def file_probe(self, root, append=False, stale=False, denied_cwd=False, dungeon=False):
         config=root/'worldserver.conf'; log=root/'Server.log'
         config.write_text('ForeverAdvancement.Enable = 1\nLogger.scripts = 3,Console Server\n'
                           +'LogsDir = "'+('' if denied_cwd else str(root))+'"\nAppender.Server = 2,2,0,Server.log,'+('a' if append else 'w')
                           +'\nLoginDatabaseInfo = "mysql;password-that-must-not-leave"\n')
-        log.write_text('ForeverAdvancement ready: fixture\n'+'irrelevant startup line\n'*6000)
+        log.write_text('ForeverAdvancement ready: fixture\n'
+                       + ('ForeverDungeonFinder: direct-entry-v0.2 registered (enabled=true)\n' if dungeon else '')
+                       + 'irrelevant startup line\n'*6000)
         os.utime(log,(START_SECONDS+(2 if not stale else -20),)*2)
         code=ready.PROBE
         if denied_cwd: code='from pathlib import Path\nPath.resolve=lambda self: (_ for _ in ()).throw(PermissionError("fixture"))\n'+code
@@ -37,6 +39,13 @@ class ModuleReadinessTests(unittest.TestCase):
             result=self.file_probe(Path(temp))
             self.assertEqual(result['serverLogStatus'],'current-process-file')
             self.assertEqual(result['lines'],['ForeverAdvancement ready: fixture'])
+
+    def test_dungeon_finder_registration_in_current_process_file_is_visible(self):
+        with tempfile.TemporaryDirectory() as temp:
+            report = self.file_probe(Path(temp), dungeon=True)
+            self.assertEqual(report['serverLogStatus'], 'current-process-file')
+            self.assertTrue(any('ForeverDungeonFinder: direct-entry-v0.2 registered (enabled=true)' in line
+                                for line in report['lines']))
 
     def test_file_evidence_from_earlier_processes_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:

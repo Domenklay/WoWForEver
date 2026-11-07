@@ -11,7 +11,7 @@ parser.add_argument('--build', type=Path, required=True)
 args = parser.parse_args()
 units = ('SpellEffects.cpp', 'TraitMgr.cpp', 'ForeverAdvancement.cpp', 'Player.cpp', 'DB2Stores.cpp', 'HotfixHandler.cpp', 'ChatHandler.cpp',
          'ForeverEncyclopedia.cpp', 'ForeverEncyclopediaTalents.cpp', 'ForeverEncyclopediaRuntime.cpp',
-         'ForeverEncyclopediaAbilities.cpp', 'ForeverScaling.cpp', 'Creature.cpp', 'UpdateFields.cpp')
+         'ForeverEncyclopediaAbilities.cpp', 'ForeverScaling.cpp', 'ForeverDungeonFinder.cpp', 'Creature.cpp', 'UpdateFields.cpp')
 commands = json.loads((args.build / 'compile_commands.json').read_text())
 failed = []
 for unit in units:
@@ -29,4 +29,4 @@ for unit in units:
     print('Checking combined 70658 gameplay source: ' + unit, flush=True)
     if subprocess.run(command, cwd=item['directory']).returncode: failed.append(unit)
 if failed: raise SystemExit('Compilation failed: ' + ', '.join(failed))
-print('All 12 combined gameplay and core translation units compile successfully.')
+print('All pinned combined gameplay and core translation units compile successfully.')

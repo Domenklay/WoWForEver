@@ -26,6 +26,10 @@ class GameplayTests(unittest.TestCase):
             self.assertEqual(old['ports'], new['ports']); self.assertEqual(old['volumes'][1:], new['volumes'])
             self.assertEqual(new['environment']['FOREVER_ENCYCLOPEDIA_ENABLED'], '1')
             self.assertEqual(new['environment']['FOREVER_SCALING_ENABLED'], '1')
+            self.assertEqual(target['gameplay']['scaling'], '0.4.0')
+            self.assertEqual(target['gameplay']['dungeonfinder'], '0.2.0')
+            self.assertEqual(new['environment']['FOREVER_DUNGEON_SCALING_ENABLED'], '0')
+            self.assertEqual(new['environment']['FOREVER_DUNGEON_FINDER_ENABLED'], '0')
             self.assertEqual(target['client'], state['client'])
             game.clean.save(target); self.assertEqual(game.clean.load_state(root / 'state.json'), target)
 
@@ -136,7 +140,8 @@ class GameplayTests(unittest.TestCase):
         labels = {'org.wowforever.core':game.clean.CORE,'org.wowforever.advancement':game.adv.VERSION,
                   'org.wowforever.advancement.source':game.adv.source_id(),
                   'org.wowforever.gameplay.source':game.source_id(),
-                  'org.wowforever.encyclopedia':game.BOOK_VERSION,'org.wowforever.scaling':game.SCALING_VERSION}
+                  'org.wowforever.encyclopedia':game.BOOK_VERSION,'org.wowforever.scaling':game.SCALING_VERSION,
+                  'org.wowforever.dungeonfinder':game.FINDER_VERSION}
         with patch.object(game.adv,'image',return_value={'Config':{'Labels':labels}}), patch.object(game.clean,'run') as command:
             self.assertEqual(game.build(state,2),'forever-trinitycore:gameplay-70658-'+game.source_id()[:12])
             command.assert_not_called()
