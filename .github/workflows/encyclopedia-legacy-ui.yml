@@ -6,6 +6,7 @@ on:
       - 'mods/living-encyclopedia/addon/**'
       - 'mods/living-encyclopedia/server/ForeverEncyclopedia.cpp'
       - 'tests/fixtures/encyclopedia-legacy-mock.lua'
+      - 'tests/fixtures/encyclopedia-archive-transport-mock.lua'
       - 'tests/test_encyclopedia_legacy.py'
       - '.github/workflows/encyclopedia-legacy-ui.yml'
   pull_request:
@@ -13,6 +14,7 @@ on:
       - 'mods/living-encyclopedia/addon/**'
       - 'mods/living-encyclopedia/server/ForeverEncyclopedia.cpp'
       - 'tests/fixtures/encyclopedia-legacy-mock.lua'
+      - 'tests/fixtures/encyclopedia-archive-transport-mock.lua'
       - 'tests/test_encyclopedia_legacy.py'
   workflow_dispatch:
 jobs:
@@ -27,7 +29,10 @@ jobs:
           sudo apt-get install -y lua5.1
           find mods/living-encyclopedia/addon/ForeverEncyclopedia -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
           luac5.1 -p tests/fixtures/encyclopedia-legacy-mock.lua
+          luac5.1 -p tests/fixtures/encyclopedia-archive-transport-mock.lua
       - name: Simulated real fourth Blizzard Legacy page and talent purchases
         run: lua5.1 tests/fixtures/encyclopedia-legacy-mock.lua mods/living-encyclopedia/addon/ForeverEncyclopedia
+      - name: Simulate every zone page, account archive and request pacing
+        run: lua5.1 tests/fixtures/encyclopedia-archive-transport-mock.lua mods/living-encyclopedia/addon/ForeverEncyclopedia
       - name: Check addon completeness and saved UI protocol
         run: python3 tests/test_encyclopedia_legacy.py
