@@ -49,6 +49,6 @@ assert 'SlashCmdList["FOREVERENCYCLOPEDIAV21"]=toggleEncyclopedia' in v21
 assert "bridge.RequestCreatureInfo(rec.entry)" in legacy
 for key in ("protection", "healing", "support", "wisdom", "knowledge"):
     assert key in source
-assert "n.implemented" in overrides
+assert "node.implemented" in overrides
 assert '0.9.13-v2.1-legacy-book' not in source, "Server talents must remain version-independent"
 print("ENCYCLOPEDIA 0.9.13 NATIVE LEGACY RELEASE CHECK PASSED")
