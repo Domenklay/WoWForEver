@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107T175503687745Z",
+  "revision": "70658-20261107-flying-book-skins-21",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,7 +102,7 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-20",
+      "release": "testing-70658-20261107-21",
       "clientBuild": 70658,
       "addons": [
         {
@@ -151,9 +151,9 @@
         },
         {
           "name": "ForeverEncyclopedia",
-          "version": "0.9.23-v2.1-fdf-diagnostics",
+          "version": "0.9.24-v2.1-flying-skins",
           "protocol": 1,
-          "sourceCommit": "6a1af229897d65f2152054938265b7b5abbb542d",
+          "sourceCommit": "04fd4e9dbb8b1f3f89e3d010841aca03d37dcfbc",
           "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia",
           "files": [
             {
@@ -163,8 +163,8 @@
             },
             {
               "name": "ForeverEncyclopedia.toc",
-              "size": 654,
-              "sha256": "75cfac18bb5a9ecb5f17ce82a30848dfa7ac5a7d670fb25f3a618a0972eeb96a"
+              "size": 651,
+              "sha256": "0bcea724cb8ff6c83c8ed0f6b2aa5903c5bac6807c99dd1ee9282de246f75176"
             },
             {
               "name": "ForeverEncyclopediaAbilities.lua",
@@ -178,8 +178,8 @@
             },
             {
               "name": "ForeverEncyclopediaLegacy.lua",
-              "size": 54660,
-              "sha256": "2d7d9d928a608313e7a899dd699254cc057003240629c26db52c073ff6ede2de"
+              "size": 55727,
+              "sha256": "f516ca9c956722665084f8f1dd953c0736e01f4fc8a415404d435bdd1bc9665e"
             },
             {
               "name": "ForeverEncyclopediaMovableDock.lua",
@@ -193,8 +193,8 @@
             },
             {
               "name": "ForeverEncyclopediaTalentData.lua",
-              "size": 14806,
-              "sha256": "014914ff90993a5409d75228fdfb403146824022f0efed3ac4a60814cd5b2aaa"
+              "size": 16017,
+              "sha256": "da7e45dffc65cb9f79c7b54ecdf2faa14baf49905f7a21208cee3e7ad297e7b7"
             },
             {
               "name": "ForeverEncyclopediaTalentOverrides.lua",
@@ -203,8 +203,8 @@
             },
             {
               "name": "ForeverEncyclopediaV21.lua",
-              "size": 49171,
-              "sha256": "c677a1702c78009175967b48cead2c10fe54bd2a5371e2f4ae9f29f58ad2a3bd"
+              "size": 50035,
+              "sha256": "5fec3ff7eb40e598f31b413bcd13d602e768497b6741fde86483f87cac1bb82b"
             }
           ]
         }
