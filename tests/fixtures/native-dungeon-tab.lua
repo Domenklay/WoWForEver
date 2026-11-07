@@ -81,7 +81,7 @@ search:SetText("зул")
 search.scripts.OnTextChanged(search)
 local filtered
 for _,v in ipairs(frames) do
-    if v.kind=="Button" and v.data and v.data.name=="Зул'Фаррак" and v:IsShown() then
+    if v.kind=="Button" and rawget(v,"data") and v.data.name=="Зул'Фаррак" and v:IsShown() then
         filtered=v
     end
 end
