@@ -13,46 +13,102 @@ function ForeverAscensionPickupSpell(spell)
  end
  return false
 end
-local talentHost,talentButton
+-- Follow Encyclopedia's native Pages/Tabs adapter. No replacement native talent window.
+local talentHost,talentButton,talentPage,nativeIndex
+local function root()
+ return PlayerTalentFrame or TalentFrame or ClassTalentFrame or ClassicTalentFrame or (PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame) or PlayerSpellsFrame
+end
+local function showContent()
+ if ForeverAscensionShowIn then ForeverAscensionShowIn(talentPage) end
+end
+local function modern()
+ local frame=PlayerSpellsFrame
+ if not frame or type(frame.AddNamedTab)~="function" or type(frame.SetTab)~="function" or type(frame.GetTabButton)~="function" then return false end
+ if talentHost==frame and nativeIndex then return true end
+ if talentButton then talentButton:Hide() end;if talentPage then talentPage:Hide() end
+ talentHost=frame
+ talentPage=CreateFrame("Frame","ForeverAscensionNativeTalentPage",frame)
+ talentPage:SetPoint("TOPLEFT",frame,"TOPLEFT",5,-35);talentPage:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-5,30)
+ talentPage:EnableMouse(true);talentPage:Hide();talentPage:SetScript("OnShow",showContent)
+ nativeIndex=frame:AddNamedTab("Мультикласс",talentPage)
+ talentButton=frame:GetTabButton(nativeIndex)
+ local available=frame.IsTabAvailable
+ if type(available)=="function" then
+  frame.IsTabAvailable=function(self,id,...)
+   if id==nativeIndex then return not (type(self.IsInspecting)=="function" and self:IsInspecting()) end
+   return available(self,id,...)
+  end
+ end
+ local title=frame.UpdateFrameTitle
+ if type(title)=="function" then
+  frame.UpdateFrameTitle=function(self,...)
+   if self:GetTab()==nativeIndex and self.SetTitle then self:SetTitle("Таланты: Мультикласс") else return title(self,...) end
+  end
+ end
+ ForeverAscensionTalentButton=talentButton;ForeverAscensionTalentPage=talentPage
+ return true
+end
 local function attach()
- if InCombatLockdown and InCombatLockdown() then return end
- -- Do not float a micro button over the XP/reputation bar.
- local frame=PlayerTalentFrame or TalentFrame or ClassTalentFrame or ClassicTalentFrame or (PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame) or PlayerSpellsFrame
- if frame and frame~=talentHost then
-  if talentButton then talentButton:Hide() end
-  talentHost=frame
-  talentButton=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate")
-  talentButton:SetSize(146,24);talentButton:SetText("Мультикласс")
-  talentButton:EnableMouse(true);talentButton:SetEnabled(true);talentButton:RegisterForClicks("LeftButtonUp")
-  talentButton:SetFrameStrata("DIALOG");talentButton:SetFrameLevel(frame:GetFrameLevel()+100)
-  local search
-  for _,key in ipairs({"SearchBox","SearchEditBox","SearchBar","SearchContainer"}) do
-   local candidate=frame[key]
-   if (type(candidate)=="table" or type(candidate)=="userdata") and type(candidate.GetObjectType)=="function" then search=candidate;break end
-  end
-  if not search then search=PlayerTalentFrameSearchBox or TalentFrameSearchBox end
-  if search then
-   talentButton:SetPoint("RIGHT",search,"LEFT",-12,0)
-  else
-   -- Some client layouts do not expose their search widget. Keep the button
-   -- in the empty footer instead of guessing coordinates in the header.
-   talentButton:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-24,14)
-  end
+ if InCombatLockdown and InCombatLockdown() then return false end
+ if modern() then return true end
+ local frame=root();if not frame then return false end
+ if frame==talentHost and talentButton then return true end
+ if talentButton then talentButton:Hide() end;if talentPage then talentPage:Hide() end
+ talentHost=frame
+ talentPage=CreateFrame("Frame",nil,frame);talentPage:SetPoint("TOPLEFT",frame,"TOPLEFT",5,-82);talentPage:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-5,5)
+ talentPage:SetFrameLevel(frame:GetFrameLevel()+50);talentPage:EnableMouse(true);talentPage:Hide()
+ talentPage:SetScript("OnShow",showContent)
+ local template
+ for _,candidate in ipairs({"PanelTopTabButtonTemplate","CharacterFrameTabButtonTemplate"}) do
+  local ok,result=pcall(CreateFrame,"Button",nil,frame,candidate);if ok and result then talentButton=result;template=candidate;break end
+ end
+ if not template then talentButton=CreateFrame("Button",nil,frame) end
+ talentButton:SetSize(155,30);talentButton:SetText("Мультикласс")
+ talentButton:SetFrameLevel(frame:GetFrameLevel()+60);talentButton:EnableMouse(true);talentButton:SetEnabled(true)
+ local tabs=type(frame.Tabs)=="table" and frame.Tabs or nil
+ local last=tabs and tabs[#tabs] or frame.SecondaryTab or frame.PrimaryTab or _G.PlayerTalentFrameTab2 or _G.PlayerTalentFrameTab1
+ if (type(last)=="table" or type(last)=="userdata") and last.GetObjectType then talentButton:SetPoint("LEFT",last,"RIGHT",5,0)
+ else talentButton:SetPoint("TOPLEFT",frame,"TOPLEFT",395,-49) end
+ if PanelTemplates_TabResize then pcall(PanelTemplates_TabResize,talentButton,20) end
+ if tabs and type(frame.Pages)=="table" and type(frame.SelectPage)=="function" then
+  nativeIndex=#frame.Pages+1;talentButton:SetID(nativeIndex)
+  table.insert(tabs,talentButton);table.insert(frame.Pages,talentPage)
+  talentButton:SetScript("OnClick",function() if not InCombatLockdown or not InCombatLockdown() then frame:SelectPage(nativeIndex) end end)
+ else
+  nativeIndex=nil
+  -- Some client revisions use top tabs without exposing Pages. Keep their own callbacks.
   talentButton:SetScript("OnClick",function()
    if InCombatLockdown and InCombatLockdown() then return end
-   -- The native full-screen talent UI can cover a DIALOG window even after
-   -- a successful click. Close its top-level panel before opening ours.
-   local host=PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame==frame and PlayerSpellsFrame or frame
-   if HideUIPanel then HideUIPanel(host) end
-   host:Hide()
-   if ForeverAscensionWindow then ForeverAscensionWindow:Hide() end
-   if ForeverAscensionToggle then ForeverAscensionToggle() end
+   talentPage:Show();showContent()
+   if PanelTemplates_SelectTab then pcall(PanelTemplates_SelectTab,talentButton) end
   end)
-  talentButton:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_BOTTOM");GameTooltip:SetText("Мультикласс",1,0.82,0);GameTooltip:AddLine("Способности и таланты других классов",1,1,1);GameTooltip:Show() end end)
-  talentButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
-  ForeverAscensionTalentButton=talentButton
+  local originals=tabs or {frame.PrimaryTab,frame.SecondaryTab,_G.PlayerTalentFrameTab1,_G.PlayerTalentFrameTab2}
+  for _,tab in pairs(originals) do if tab and tab.HookScript then
+   local function restore() talentPage:Hide();if PanelTemplates_DeselectTab then pcall(PanelTemplates_DeselectTab,talentButton) end end
+   tab:HookScript("OnClick",restore);tab:HookScript("OnMouseUp",restore)
+  end end
  end
+ talentButton:SetScript("OnEnter",function(self) if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_BOTTOM");GameTooltip:SetText("Мультикласс",1,0.82,0);GameTooltip:AddLine("Способности, ветки талантов и владение выбранного класса",1,1,1);GameTooltip:Show() end end)
+ talentButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+ ForeverAscensionTalentButton=talentButton;ForeverAscensionTalentPage=talentPage
+ return true
 end
+ForeverAscensionNativeTalentTab={Install=attach,Open=function()
+ if InCombatLockdown and InCombatLockdown() then return false end
+ if not attach() then
+  if C_AddOns and C_AddOns.LoadAddOn then
+   for _,name in ipairs({"Blizzard_PlayerSpells","Blizzard_ClassTalentUI","Blizzard_TalentUI"}) do pcall(C_AddOns.LoadAddOn,name);if attach() then break end end
+  end
+ end
+ if not talentHost then return false end
+ local top=PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame==talentHost and PlayerSpellsFrame or talentHost
+ if ShowUIPanel then ShowUIPanel(top) else top:Show() end
+ if talentHost~=top then talentHost:Show() end
+ if nativeIndex then
+  if talentHost==PlayerSpellsFrame and type(talentHost.SetTab)=="function" then talentHost:SetTab(nativeIndex) else talentHost:SelectPage(nativeIndex) end
+ else talentButton:GetScript("OnClick")() end
+ return true
+end}
 local events=CreateFrame("Frame");events:RegisterEvent("PLAYER_LOGIN");events:RegisterEvent("ADDON_LOADED");events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent",attach)
 

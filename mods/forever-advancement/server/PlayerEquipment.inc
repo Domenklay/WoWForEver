@@ -1,15 +1,25 @@
 // Foreign equipment skills/proficiency are transient and never reward additional spells.
-void Player::SyncForeverAdvancementEquipment(uint32 owner, std::set<uint32> const& skills, uint16 value, uint32 weapons, uint32 armor)
+void Player::SyncForeverAdvancementEquipment(uint32 owner, std::set<uint32> const& skills, uint16 value, uint32 weapons, uint32 armor, bool dual)
 {
+    std::set<uint32> permanentSkills;
+    bool permanentDual=CanDualWield()&&!m_foreverAdvancementDual;
+    for(auto const& [id,spell]:m_spells)
+        if(spell.state!=PLAYERSPELL_REMOVED&&spell.state!=PLAYERSPELL_TEMPORARY)
+            if(auto info=sSpellMgr->GetSpellInfo(id,DIFFICULTY_NONE))
+            {
+                if(info->HasEffect(SPELL_EFFECT_DUAL_WIELD)) permanentDual=true;
+                if(info->HasEffect(SPELL_EFFECT_PROFICIENCY))
+                {auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(id);for(auto it=bounds.first;it!=bounds.second;++it) permanentSkills.insert(it->second->SkillLine);}
+            }
     for (auto skill : m_foreverAdvancementEquipmentSkills)
-        if (!skills.count(skill))
+        if (!skills.count(skill)&&!permanentSkills.count(skill))
         {
             SetSkill(skill,0,0,0,true);
             if (auto it=mSkillStatus.find(skill);it!=mSkillStatus.end()) it->second.uState=SKILL_UNCHANGED;
         }
     std::set<uint32> owned;
     for (auto skill:skills)
-        if (m_foreverAdvancementEquipmentSkills.count(skill) || !HasSkill(skill))
+        if (!permanentSkills.count(skill)&&(m_foreverAdvancementEquipmentSkills.count(skill) || !HasSkill(skill)))
         { SetSkill(skill,0,value,value,true);owned.insert(skill); }
     m_foreverAdvancementEquipmentSkills=std::move(owned);
     uint32 permanentWeapons=0,permanentArmor=0;
@@ -25,6 +35,7 @@ void Player::SyncForeverAdvancementEquipment(uint32 owner, std::set<uint32> cons
     uint32 baseArmor=(m_ArmorProficiency&~m_foreverAdvancementArmor)|permanentArmor;
     m_foreverAdvancementWeapons=weapons&~baseWeapons;m_foreverAdvancementArmor=armor&~baseArmor;
     m_WeaponProficiency=baseWeapons|weapons;m_ArmorProficiency=baseArmor|armor;
+    m_foreverAdvancementDual=dual&&!permanentDual;SetCanDualWield(dual||permanentDual);
     m_foreverAdvancementOwner=owner;
     if(IsInWorld()) { SendProficiency(ITEM_CLASS_WEAPON,m_WeaponProficiency);SendProficiency(ITEM_CLASS_ARMOR,m_ArmorProficiency); }
 }

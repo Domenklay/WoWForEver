@@ -85,7 +85,7 @@ class AdvancementTests(unittest.TestCase):
             self.assertEqual([p.name for p in target.parent.iterdir()],['ForeverAscension'])
             self.assertFalse((target/'user.lua').exists())
             self.assertEqual((root/'second/ForeverAscension/user.lua').read_text(),'local edits')
-            self.assertIn('## Version: 1.12.0',(target/'ForeverAscension.toc').read_text())
+            self.assertIn('## Version: 1.13.0',(target/'ForeverAscension.toc').read_text())
             installer.restore(root/'second')
             self.assertEqual((target/'user.lua').read_text(),'local edits')
             self.assertFalse((target.parent/'ForeverSubclass').exists())
@@ -125,7 +125,7 @@ void Player::SetReputation() {}
             self.assertIn('bool advancementEdit = false',(player/'Player.h').read_text())
             self.assertEqual(first.count('if (!advancementEdit) LearnSkillRewardedSpells'),2)
             self.assertIn('m_foreverAdvancementClassSkills.count(itr->first) ||',first)
-            self.assertIn('if (m_foreverAdvancementClassSkills.count(skillId)) return;',first)
+            self.assertIn('if (m_foreverAdvancementClassSkills.count(skillId) || m_foreverAdvancementEquipmentSkills.count(skillId)) return;',first)
             self.assertEqual(first.count('void Player::SyncForeverAdvancementClassSkills('),1)
 
     def test_client_book_serialization_injection_is_idempotent_for_both_packet_paths(self):
@@ -192,6 +192,10 @@ function methods:SetMinMaxValues(lo,hi) self.maximum=hi end
 function methods:SetHeight(value) self.height=value end
 function methods:SetWidth(value) self.width=value end
 function methods:GetHeight() return self.height or 10 end
+function methods:GetWidth() return self.width or 1020 end
+function methods:GetFrameStrata() return self.strata or "MEDIUM" end
+function methods:GetScript(k) return self.scripts[k] end
+function methods:SetParent(parent) self.parent=parent end
 function methods:SetSize(w,h) self.width=w;self.height=h end
 function methods:GetFrameLevel() return 1 end
 function methods:SetFrameLevel(value) self.level=value end
@@ -249,6 +253,20 @@ class AdvancementUITests(unittest.TestCase):
                 if status:self.fail(lib.lua_tolstring(state,-1,None).decode())
         finally:lib.lua_close(state)
 
+    def test_scrolling_abilities_keep_all_rows_and_do_not_follow_talent_branch_filter(self):
+        self.lua(r'''
+open();parse('STATE 1 40 0 8');parse('ACTIVE 8');parse('CLASS 8 40 0 1000');parse('CATALOG NATIVE');parse('TREES')
+for i=1,30 do parse('NATIVE '..i..' 8 '..(100+i)..' 1 0 1 0 1 available') end
+parse('NATIVE 1000 8 2000 10 1 5 700 1 available');parse('NATIVE 1001 8 2001 10 1 5 701 1 available')
+parse('TREE arcane d0a2d0b0d0b9d0bdd0b0d18f');parse('TNODE 1000 arcane 0 0');parse('TNODE 1001 fire 1 1');parse('TEDGE 1001 1000');parse('END')
+selectedClass=8;selectedTab='arcane';refresh();local abilities,talents=visible();assert(#abilities==30 and #talents==1)
+assert(#abilityNodes>=30 and abilityNodes[30].entry.ID==30 and abilityCanvas:GetHeight()>=1620)
+abilityScroll.height=400;abilityScroll.scripts.OnMouseWheel(abilityScroll,-100);assert(abilityScroll.scroll>=1200)
+assert(not previous:IsShown() and not nextPage:IsShown() and not classButtons[12] and not classButtons[13])
+selectedTab='fire';refresh();abilities,talents=visible();assert(#abilities==30 and #talents==1 and talents[1].ID==1001)
+advance();talentNodes[1].scripts.OnClick(talentNodes[1],'LeftButton');assert(sent[#sent]=='talent 1001')
+''')
+
     def test_native_menu_remains_usable_on_the_current_server_without_donor_data(self):
         self.lua(r'''
 open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CATALOG');parse('ENTRY 10 116 4 0 8');parse('TENTRY 398 3 10 1 0 8 11069');parse('END')
@@ -285,7 +303,7 @@ parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1
 parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
 parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
 assert(talentNodes[1].entry.ID==200);advance();local count=#sent;talentNodes[1].scripts.OnClick(talentNodes[1],'LeftButton');assert(#sent==count)
-assert(message.text:find('просмотр',1,true));assert(not talentPoints:IsShown())
+assert(message.text:find('не поддерживается',1,true));assert(not talentPoints:IsShown())
 ''')
 
     def test_portrait_resources_survive_switch_and_missing_native_bar(self):
@@ -375,37 +393,38 @@ parse('STATE 8 20 0 8');parse('KNOWN 100 116');parse('END');refresh();local n=ab
 ''')
 
     def test_talent_window_button_attaches_after_delayed_frame_load_and_uses_native_tooltip_id(self):
-        self.lua(r"""
-open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE');parse('NATIVE 398 8 11069 10 1 3 500 0 native_rules_required');parse('TALENT 398 2 12338');parse('END')
-assert(compatible[398].spell==12338)
-PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrame',UIParent)
-for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
-local button=ForeverAscensionTalentButton
-assert(button and button.parent==PlayerTalentFrame and button.text=='Мультикласс')
-assert(button.points[1][1]=='BOTTOMRIGHT' and button.points[1][4]==-24)
-window:Hide();button.scripts.OnClick();assert(window:IsShown() and not PlayerTalentFrame:IsShown())
-assert(button.enabled and button.level==101 and button.strata=="DIALOG")
-local previous=button
-PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrameWithSearch',UIParent)
-PlayerTalentFrame.SearchBox=CreateFrame('EditBox',nil,PlayerTalentFrame)
-for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
-button=ForeverAscensionTalentButton
-assert(not previous:IsShown() and button.points[1][1]=='RIGHT')
-assert(button.points[1][2]==PlayerTalentFrame.SearchBox and button.points[1][3]=='LEFT' and button.points[1][4]==-12)
-""")
+        self.lua(r'''
+
+open();PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrame',UIParent)
+PlayerTalentFrame.Pages={CreateFrame('Frame',nil,PlayerTalentFrame)};PlayerTalentFrame.Tabs={CreateFrame('Button',nil,PlayerTalentFrame)}
+PlayerTalentFrame.SelectPage=function(self,id) self.currentPage=id;for i,p in ipairs(self.Pages) do p:SetShown(i==id) end;local p=self.Pages[id];if p.scripts.OnShow then p.scripts.OnShow(p) end end
+for _,f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f,'ADDON_LOADED') end end
+assert(#PlayerTalentFrame.Pages==2 and #PlayerTalentFrame.Tabs==2)
+ForeverAscensionTalentButton.scripts.OnClick();assert(PlayerTalentFrame:IsShown() and window.parent==ForeverAscensionTalentPage)
+assert(PlayerTalentFrame.currentPage==2 and not window.title:IsShown() and not window.close:IsShown())
+PlayerTalentFrame:SelectPage(1);assert(not ForeverAscensionTalentPage:IsShown())
+''')
 
     def test_modern_talent_button_anchors_to_content_and_closes_root(self):
-        self.lua(r"""
-open()
-PlayerSpellsFrame=CreateFrame('Frame','PlayerSpellsFrame',UIParent)
-PlayerSpellsFrame.TalentsFrame=CreateFrame('Frame',nil,PlayerSpellsFrame)
-PlayerSpellsFrame.TalentsFrame:Hide()
-for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end
-local button=ForeverAscensionTalentButton
-assert(button and button.parent==PlayerSpellsFrame.TalentsFrame)
-window:Hide();button.scripts.OnClick()
-assert(not PlayerSpellsFrame:IsShown() and window:IsShown())
-""")
+        self.lua(r'''
+
+open();PlayerSpellsFrame=CreateFrame('Frame','PlayerSpellsFrame',UIParent)
+local host=PlayerSpellsFrame;host.nativePages={CreateFrame('Frame',nil,host)};host.nativeButtons={CreateFrame('Button',nil,host)};host.active=1
+host.AddNamedTab=function(self,text,page) local id=#self.nativePages+1;self.nativePages[id]=page;local b=CreateFrame('Button',nil,self);b:SetText(text);b:SetScript('OnClick',function() self:SetTab(id) end);self.nativeButtons[id]=b;return id end
+host.GetTabButton=function(self,id) return self.nativeButtons[id] end
+host.GetTab=function(self) return self.active end
+host.IsInspecting=function() return false end
+host.IsTabAvailable=function(self,id) return id==1 end
+host.UpdateFrameTitle=function(self) self.title='Native' end
+host.SetTitle=function(self,text) self.title=text end
+host.SetTab=function(self,id) self.active=id;for i,p in ipairs(self.nativePages) do p:SetShown(i==id) end;local p=self.nativePages[id];if p.scripts.OnShow then p.scripts.OnShow(p) end;self:UpdateFrameTitle() end
+for _,f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f,'ADDON_LOADED') end end
+assert(#host.nativePages==2 and ForeverAscensionTalentButton.text=='Мультикласс')
+ForeverAscensionNativeTalentTab.Open();assert(host:IsShown() and host:GetTab()==2 and host:IsTabAvailable(2))
+assert(window.parent==ForeverAscensionTalentPage and host.title=='Таланты: Мультикласс')
+host:SetTab(1);assert(host.title=='Native' and not ForeverAscensionTalentPage:IsShown())
+ForeverAscensionNativeTalentTab.Install();assert(#host.nativePages==2,'idempotent native tab integration')
+''')
 
     def test_trait_description_uses_native_entry_rank_and_reports_actual_aura_values(self):
         self.lua(r'''

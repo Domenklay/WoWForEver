@@ -8,7 +8,9 @@ SOURCE=Path(__file__).parents[1]/'mods/forever-advancement/server/ForeverAdvance
 
 
 def function(source,signature):
-    start=source.index(signature);end=source.index('{',start)+1;depth=1
+    start=source.index(signature)
+    while ';' in source[start:source.index('{',start)]: start=source.index(signature,start+len(signature))
+    end=source.index('{',start)+1;depth=1
     while depth:
         depth+=(source[end]=='{')-(source[end]=='}');end+=1
     return source[start:end]
@@ -42,7 +44,7 @@ class AdvancementRuleTests(unittest.TestCase):
 #include <string>
 #include <string_view>
 #include <vector>
-using uint32=unsigned;
+using int32=int;using uint32=unsigned;
 constexpr int DIFFICULTY_NONE=0,TOTAL_LOCALES=2;
 struct LocalizedString {std::array<char const*,2> Str;};
 struct SpellInfo {uint32 Id,SpellFamilyName;LocalizedString const* SpellName;};
@@ -104,7 +106,7 @@ int main() {
 #include <map>
 #include <set>
 #include <vector>
-using uint32=uint32_t;
+using int32=int32_t;using uint32=uint32_t;
 constexpr int PLAYERSPELL_TEMPORARY=5,PERMANENT=0;
 struct PlayerSpell {int state;};
 namespace WorldPackets::Spells {
@@ -125,9 +127,16 @@ struct Player {
  void SendDirectMessage(WorldPackets::Spells::UnlearnedSpells* p){for(auto id:p->SpellID)removed.push_back(id);}
 };
 struct ClassProgress {uint32 level=1;uint64_t xp=0;};
-struct State {uint32 active=8;std::map<uint32,ClassProgress> classes;std::set<uint32> learned,bookSpells;};
+struct State {uint32 active=8;std::map<uint32,uint32> talents;std::map<uint32,ClassProgress> classes;std::set<uint32> learned,bookSpells,equipmentSpells;};
 struct Definition {uint32 entry,owner,spell,level;};
 std::map<uint32,std::vector<Definition>> Catalog;
+std::map<uint32,std::vector<Definition>> TalentCatalog;
+bool TalentBuildValid(Player*,State const&){return true;}
+constexpr int DIFFICULTY_NONE=0;
+struct Info {bool IsPassive()const{return false;}};
+struct Spells {Info info;Info const* GetSpellInfo(uint32,int){return &info;}} spells;
+auto sSpellMgr=&spells;
+
 '''+''.join(function(source,name) for name in ['static uint32 ClassLevel(', 'static Definition const* Best(', 'static Definition const* BestFor(', 'static bool TemporaryBookSpell(', 'static void SyncSpellbook(Player* p,State& s)\n{','static uint32 BookEntry('])+r'''
 namespace ForeverAdvancement {}
 struct CastTag {uint32 entry;};
@@ -266,7 +275,7 @@ auto sSpellMgr=&manager;
 struct Definition {uint32 entry,owner,spell,level;};
 std::map<uint32,std::vector<Definition>> Catalog;
 struct ClassProgress {uint32 level=1;uint64_t xp=0;};
-struct State {uint32 active=8;std::map<uint32,ClassProgress> classes;std::set<uint32> learned;};
+struct State {uint32 active=8;std::map<uint32,uint32> talents;std::map<uint32,ClassProgress> classes;std::set<uint32> learned;};
 struct Status {int uState=1;};
 struct Player {
  uint32 cls=1,level=20;std::set<uint32> m_foreverAdvancementClassSkills,skills;
@@ -317,7 +326,7 @@ int main() {
 #include <vector>
 #include <string>
 #include <cassert>
-using uint32=unsigned;
+using int32=int;using uint32=unsigned;
 struct SpellInfo {uint32 Id;};
 using NameIndex=std::map<std::wstring,std::vector<SpellInfo const*>>;
 '''+UTF8_UTIL_STUB+function(source,'static std::wstring NameKey(')+source[source.index('struct NativeTrait {'):source.index('static NativeTraits LoadNativeTraits(')]+function(source,'static NativeTrait const* ResolveNamedTrait(')+r'''
@@ -346,7 +355,7 @@ int main(){
 #include <map>
 #include <set>
 #include <vector>
-using uint32=unsigned;
+using int32=int;using uint32=unsigned;
 constexpr int DIFFICULTY_NONE=0;
 struct SpellInfo {};
 struct Spells {SpellInfo const* GetSpellInfo(uint32,int){return nullptr;}} spellMgr;[[maybe_unused]] auto sSpellMgr=&spellMgr;
@@ -363,8 +372,8 @@ struct Skill {uint32 ID;int CategoryID;};Store<Skill> sSkillLineStore;
 struct SkillTree {uint32 ID,SkillLineID,TraitTreeID;};Store<SkillTree> sSkillLineXTraitTreeStore;
 struct Info {int ClassMask;};
 struct Manager {std::map<uint32,std::vector<Info const*>> infos;auto GetSkillRaceClassInfo(uint32 id){return infos[id];}} sDB2Manager;
-struct NodeLink {uint32 ID,TraitNodeID,TraitNodeEntryID;};Store<NodeLink> sTraitNodeXTraitNodeEntryStore;
-struct Node {uint32 ID,TraitTreeID;};Store<Node> sTraitNodeStore;
+struct NodeLink {uint32 ID,TraitNodeID,TraitNodeEntryID;int Index=0;};Store<NodeLink> sTraitNodeXTraitNodeEntryStore;
+struct Node {uint32 ID,TraitTreeID;int PosX=0,PosY=0;};Store<Node> sTraitNodeStore;
 struct Entry {uint32 ID;int MaxRanks,TraitDefinitionID;};Store<Entry> sTraitNodeEntryStore;
 struct Definition {uint32 ID;int SpellID,VisibleSpellID;};Store<Definition> sTraitDefinitionStore;
 '''+source[source.index('struct NativeTrait {'):source.index('static void PublishBookMetadata()')]+r'''
@@ -394,10 +403,10 @@ int main() {
         code=r'''#include <cassert>
 #include <map>
 #include <optional>
-using uint32=unsigned;using int32=int;
+using int32=int;using uint32=unsigned;using int32=int;
 template<class T> using Optional=std::optional<T>;
 struct PlayerSpellTrait {int DefinitionId,Rank;};
-struct PlayerSpell {Optional<PlayerSpellTrait> Trait;};
+constexpr int PLAYERSPELL_TEMPORARY=5;struct PlayerSpell {Optional<PlayerSpellTrait> Trait;int state=0;};
 namespace Trinity::Containers {
  template<class T> auto MapGetValuePtr(T const& map,uint32 id)->typename T::mapped_type const* {auto it=map.find(id);return it==map.end()?nullptr:&it->second;}
 }
@@ -434,7 +443,7 @@ int main() {
 #include <cassert>
 #include <map>
 #include <vector>
-using uint32=unsigned;
+using int32=int;using uint32=unsigned;
 constexpr int DIFFICULTY_NONE=0,SKILL_CATEGORY_CLASS=7;
 struct LocalizedString {std::array<char const*,2> Str;};
 struct SpellInfo {uint32 Id,SpellFamilyName;LocalizedString const* SpellName;};
@@ -513,7 +522,7 @@ int main() {
             'static void Refresh(', 'static int32 Available(', 'static Definition const* Best(',
             'static uint32 Used(', 'static int32 Cost(', 'static bool CompatibleCosts(', 'static bool CanCast(',
             'static TalentDefinition const* Talent(', 'static uint32 TalentBudget(', 'static uint32 TalentSpent(',
-            'static uint32 LowerTierSpent(', 'static bool TalentBuildValid(', 'static void SyncTalents(Player* p,State& s)\n{', 'static std::wstring NameKey(', 'static bool SourceNameMatches('])
+            'static bool TalentBuildValid(', 'static void SyncTalents(Player* p,State& s)\n{', 'static std::wstring NameKey(', 'static bool SourceNameMatches('])
         code=r'''
 #include <algorithm>
 #include <array>
@@ -529,16 +538,18 @@ enum Powers {POWER_MANA=0,POWER_RAGE=1,POWER_ENERGY=3};
 constexpr int MAX_POWERS_PER_CLASS=6,CLASS_PRIEST=5,STAT_SPIRIT=4,DIFFICULTY_NONE=0,SPELL_ATTR1_USE_ALL_MANA=1;
 constexpr std::array<Powers,3> PowersList={POWER_MANA,POWER_RAGE,POWER_ENERGY};
 struct Definition { uint32 entry,owner,spell,level; };
-struct TalentDefinition {uint32 entry,owner,spell,rank,level,cost,investment,tab;uint32 trait=0,traitEntry=0;};
+struct TalentDefinition {uint32 entry,owner,spell,rank,level,cost,investment,tab;uint32 trait=0,traitEntry=0,node=1,tree=1;int32 x=0,y=0;};
 struct Pool {int32 current=0,maximum=0;double fraction=0;};
 struct ClassProgress {uint32 level=1;uint64_t xp=0;};
 struct State {uint32 active=8;std::map<uint32,ClassProgress> classes;std::set<uint32> learned;std::map<uint32,uint32> talents;std::set<uint32> ownedAuras;std::map<uint32,std::pair<uint32,uint32>> ownedTraits;bool syncing=false;std::map<Powers,Pool> pools;Clock::time_point updated=Clock::now();};
+struct SpellInfo;
 struct Player {
  uint32 cls=1,level=20;bool combat=false,alive=true;
  std::set<uint32> auras,spells,removed;
  std::map<uint32,std::pair<uint32,uint32>> traits;
  std::map<uint32,uint32> appliedRanks;
  void SetForeverAdvancementTrait(uint32 spell,int definition,int rank) {if(definition&&rank&&!HasSpell(spell))traits[spell]={unsigned(definition),unsigned(rank)};else traits.erase(spell);}
+ bool HandlePassiveSpellLearn(SpellInfo const*) {return true;}
  bool HasAura(uint32 id) const {return auras.count(id);}
  bool HasSpell(uint32 id) const {return spells.count(id);}
  bool AddAura(uint32 id,Player*) {auras.insert(id);appliedRanks[id]=traits.count(id)?traits[id].second:0;return true;}
@@ -557,7 +568,7 @@ auto sObjectMgr=&objectMgr;
 struct PowerCost {int Amount=30;};
 struct SpellPowerEntry {int PowerType=0,ManaPerSecond=0,PowerPctPerSecond=0,OptionalCost=0,OptionalCostPct=0,RequiredAuraSpellID=0,PowerCostPct=0,PowerCostMaxPct=0,ManaCost=20,ManaCostPerLevel=0;};
 struct LocalizedString {std::array<char const*,3> Str={};};
-struct SpellInfo {
+struct SpellInfo {bool IsPassive()const{return true;}
  LocalizedString const* SpellName=nullptr;
  std::array<SpellPowerEntry const*,2> PowerCosts={};
  bool HasAttribute(int) const {return false;}
@@ -571,6 +582,22 @@ auto sSpellMgr=&spellMgr;
 std::map<uint32,std::vector<Definition>> Catalog;
 std::map<uint32,std::vector<TalentDefinition>> TalentCatalog;
 uint32 TalentCap=71;
+enum class TraitConfigType {Combat};
+namespace WorldPackets::Traits {
+struct TraitEntry {int TraitNodeID=0,TraitNodeEntryID=0,Rank=0,GrantedRanks=0;};
+struct TraitConfig {TraitConfigType Type={};int ChrSpecializationID=0;std::vector<TraitEntry> Entries;};
+}
+struct Spec {int ID=8;};struct DBMgr {Spec spec;Spec const* GetDefaultChrSpecializationForClass(uint32 id){return id?&spec:nullptr;}} sDB2Manager;
+bool nativeAllowed=true;
+namespace TraitMgr {
+enum class LearnResult {Ok,Unknown};
+struct PlayerDataAccessor {PlayerDataAccessor(Player const*,uint32) {}};
+std::vector<WorldPackets::Traits::TraitEntry> GetGrantedTraitEntriesForConfig(WorldPackets::Traits::TraitConfig const&,PlayerDataAccessor){return {};}
+LearnResult ValidateConfig(WorldPackets::Traits::TraitConfig const&,PlayerDataAccessor,bool,bool){return nativeAllowed?LearnResult::Ok:LearnResult::Unknown;}
+}
+static bool TalentBuildValid(Player*,State const&);
+bool TemporaryBookSpell(Player*,uint32){return false;}
+
 '''+UTF8_UTIL_STUB+'\n#include \"'+str(SOURCE.parent/'CustomAbilityRules.h')+'\"\n'+functions+r'''
 int main() {
  Player p;State s;s.classes[8].level=40;s.classes[5].level=40;Refresh(&p,s);
@@ -610,8 +637,8 @@ int main() {
  TalentCatalog[101]={{101,8,11083,1,15,1,3,10}};
  TalentCatalog[200]={{200,5,14908,1,10,1,0,20}};
  s.talents={{100,2},{200,1}};assert(TalentSpent(s)==2 && TalentBuildValid(&p,s));
- s.talents[101]=1;assert(!TalentBuildValid(&p,s));s.talents[100]=3;assert(TalentBuildValid(&p,s));
- s.talents[100]=2;assert(!TalentBuildValid(&p,s));s.talents.erase(101);
+ s.talents[101]=1;nativeAllowed=false;assert(!TalentBuildValid(&p,s));nativeAllowed=true;s.talents[100]=3;assert(TalentBuildValid(&p,s));
+ s.talents[100]=2;nativeAllowed=false;assert(!TalentBuildValid(&p,s));nativeAllowed=true;s.talents.erase(101);
  p.level=11;assert(TalentBudget(&p,s)==2 && TalentBuildValid(&p,s));p.level=20;
  s.talents={{100,1}};p.auras.insert(11069);SyncTalents(&p,s);
  assert(!s.ownedAuras.count(11069));s.talents.clear();SyncTalents(&p,s);assert(p.auras.count(11069));

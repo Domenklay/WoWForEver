@@ -2,7 +2,7 @@ name: Ascension on pinned 70658
 on:
   push:
     branches: [codex/native-cdn-70658-20261106]
-    paths: [scripts/upgrade-clean-gameplay.py, tests/test_gameplay_transition.py, tests/test_advancement.py, tests/test_advancement_rules.py, mods/forever-advancement/**, scripts/enable-clean-advancement.py, scripts/inject-advancement.py, scripts/check-advancement-core.py, scripts/clean-forever-server.py, scripts/module_readiness.py, tests/test_module_readiness.py, docker/advancement/**, docker/clean/entrypoint.py, tests/test_clean_advancement.py, .github/workflows/ascension-70658.yml]
+    paths: [tests/test_advancement_equipment.py, scripts/upgrade-clean-gameplay.py, tests/test_gameplay_transition.py, tests/test_advancement.py, tests/test_advancement_rules.py, mods/forever-advancement/**, scripts/enable-clean-advancement.py, scripts/inject-advancement.py, scripts/check-advancement-core.py, scripts/clean-forever-server.py, scripts/module_readiness.py, tests/test_module_readiness.py, docker/advancement/**, docker/clean/entrypoint.py, tests/test_clean_advancement.py, .github/workflows/ascension-70658.yml]
   workflow_dispatch:
 permissions:
   contents: read

@@ -190,7 +190,10 @@ local function makeNode(parent,talent)
   if d.owner==state.primary then message:SetText("Способности основного класса изучаются штатно.");return end
   if d.level>classLevel(d.owner) and mouse~="RightButton" then message:SetText("Для изучения нужен уровень "..d.level..".");return end
   if isTalent(row) and state.active~=d.owner then message:SetText("Сначала активируйте этот подкласс.");return end
-  if isTalent(row) then send((mouse=="RightButton" and "untalent " or "talent ")..row.ID)
+  if isTalent(row) then
+   if mouse=="RightButton" and d.canRefund==false then message:SetText("Сначала верните зависящие от этого узла таланты.");return end
+   if mouse~="RightButton" and d.canLearn==false then message:SetText("Не выполнены штатные условия узла или не хватает очков. Нажмите «Обновить» после изменения условий.");return end
+   send((mouse=="RightButton" and "untalent " or "talent ")..row.ID)
   elseif mouse=="RightButton" then if state.learned[row.ID] then send("unlearn "..row.ID) end
   elseif state.learned[row.ID] then
    if state.active~=d.owner then message:SetText("Активируйте этот подкласс для применения способности.");return end
@@ -268,7 +271,7 @@ local function renderTalents(rows)
   local d=compatible[row.ID];local rank=state and state.talents[row.ID] or 0
   local max=d and d.max or #row.Spells
   n.icon:SetTexture(icon(row));n.note:SetText(rank.."/"..max)
-  local locked=not d or d.available==false or not state or state.active~=d.owner or d.level>classLevel(d.owner) or lowerTierSpent(row)<(row.RequiredTEInvestment or 0)
+  local locked=not d or d.available==false or (rank==0 and d.canLearn==false) or not state or state.active~=d.owner or d.level>classLevel(d.owner) or lowerTierSpent(row)<(row.RequiredTEInvestment or 0)
   if n.icon.SetDesaturated then n.icon:SetDesaturated(locked and true or false) end
   n:SetAlpha(d and 1 or 0.5);n.border:SetVertexColor(rank>0 and 0.3 or 0.85,rank>0 and 1 or 0.7,0.2)
   n.note:SetTextColor(rank==max and 0.3 or 1,rank==max and 1 or 0.82,rank==max and 0.3 or 0.2);n:Show()
@@ -307,7 +310,7 @@ refresh=function()
   xpShareButton:SetShown(state.xpShare~=nil);xpShareButton:SetChecked(state.xpShare==true)
   activateButton:SetText(selectedClass==state.primary and "Основной класс" or state.active==selectedClass and "Подкласс активен" or "Активировать")
   activateButton:SetEnabled(state.active~=(selectedClass==state.primary and 0 or selectedClass))
-  talentPoints:SetText("TE активного: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
+  talentPoints:SetText("Очки активного: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
  else summary:SetText("Ожидаем состояние персонажа...");talentPoints:SetText("TE мультикласса: —") end
  local tabs,seen={},{ }
  for _,row in ipairs(custom and {} or byClass[selectedClass] or {}) do if isTalent(row) and availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
@@ -319,7 +322,8 @@ refresh=function()
   local count=0;if state then for learned in pairs(state.learned) do local row=byId[learned];if row and not customRule(row) and row.Class==classes[id][1] then count=count+1 end end end
   b.count:SetText(count>0 and tostring(count) or "")
  end
- selectedText:SetText(name(selectedClass).."  |  "..tostring(treeNames[selectedTab] or schools[selectedTab] or selectedTab or ""))
+ selectedText:SetText(name(selectedClass))
+ talentHeading:SetText("Таланты"..(selectedTab and (" — "..tostring(treeNames[selectedTab] or schools[selectedTab] or selectedTab)) or ""))
  local abilities,talents=visible()
  renderAbilities(abilities);renderTalents(talents)
  emptyAbilities:SetShown(#abilities==0)
@@ -345,8 +349,8 @@ local function build()
  if window then return end
  window=CreateFrame("Frame","ForeverAscensionWindow",UIParent,BackdropTemplateMixin and "BackdropTemplate" or nil)
  if window.SetBackdrop then window:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",edgeFile="Interface\\DialogFrame\\UI-DialogBox-Gold-Border",tile=true,tileSize=32,edgeSize=32,insets={left=9,right=9,top=9,bottom=9}});window:SetBackdropColor(0.55,0.43,0.3,1) end
- local title=label(window,"Мультиклассы","GameFontNormalLarge");title:SetPoint("TOP",0,-17);title:SetTextColor(1,0.82,0)
- local close=button(window,"X",32,function() window:Hide() end);close:SetPoint("TOPRIGHT",-12,-10)
+ local title=label(window,"Мультиклассы","GameFontNormalLarge");title:SetPoint("TOP",0,-17);title:SetTextColor(1,0.82,0);window.title=title
+ local close=button(window,"X",32,function() window:Hide() end);close:SetPoint("TOPRIGHT",-12,-10);window.close=close
  window:SetSize(1020,690);window:SetPoint("CENTER");window:SetFrameStrata("DIALOG");window:SetClampedToScreen(true)
  if GetScreenHeight and GetScreenWidth then window:SetScale(math.min(1,(GetScreenWidth()-40)/1020,(GetScreenHeight()-40)/690)) end
  window:SetMovable(true);window:EnableMouse(true);window:RegisterForDrag("LeftButton")
@@ -391,7 +395,7 @@ local function build()
  customHelp=label(right,"Для Mana-forged Barrier нужны два разных магических класса.\n\nМагические классы: паладин, жрец, шаман, маг, чернокнижник, друид.\n\nУчитываются основной класс и классы купленных обычных способностей. Открытый каталог, уровень подкласса и кастомная покупка сами класс не добавляют.\n\nЭто отдельный барьер Ascension 701463. Его эффекты ещё требуют переноса в Forever; обычный щит маны 1463 его не заменяет. Пока барьер нельзя купить или применить.","GameFontHighlight")
  customHelp:SetPoint("TOPLEFT",25,-60);customHelp:SetWidth(510);customHelp:SetJustifyH("LEFT");customHelp:SetWordWrap(true);customHelp:Hide()
  talentPoints=label(right,"","GameFontNormal");talentPoints:SetPoint("TOPRIGHT",-25,-16)
- talentScroll=CreateFrame("ScrollFrame","ForeverAscensionTalentScroll",right);talentScroll:SetPoint("TOPLEFT",10,-44);talentScroll:SetPoint("BOTTOMRIGHT",-10,8)
+ talentScroll=CreateFrame("ScrollFrame","ForeverAscensionTalentScroll",right,"UIPanelScrollFrameTemplate");talentScroll:SetPoint("TOPLEFT",10,-44);talentScroll:SetPoint("BOTTOMRIGHT",-28,8)
  talentCanvas=CreateFrame("Frame",nil,talentScroll);talentCanvas:SetSize(545,446);talentScroll:SetScrollChild(talentCanvas);talentScroll:EnableMouseWheel(true)
  talentEmpty=label(right,"","GameFontHighlightSmall");talentEmpty:SetPoint("CENTER",0,0);talentEmpty:SetWidth(460);talentEmpty:SetJustifyH("CENTER");talentEmpty:SetWordWrap(true)
  talentScroll:SetScript("OnMouseWheel",function(self,delta) local current=self:GetVerticalScroll() or 0;self:SetVerticalScroll(math.max(0,math.min(math.max(0,talentCanvas:GetHeight()-math.max(300,self:GetHeight() or 403)),current-delta*40))) end)
@@ -416,9 +420,22 @@ local function build()
 
  window:Hide();refresh()
 end
-local function open() build();window:Show();refresh();send("status") end
+function ForeverAscensionShowIn(parent)
+ build();if UISpecialFrames then for i=#UISpecialFrames,1,-1 do if UISpecialFrames[i]=="ForeverAscensionWindow" then table.remove(UISpecialFrames,i) end end end
+ window:SetParent(parent);window:ClearAllPoints();window:SetPoint("TOP",parent,"TOP",0,0)
+ local width,height=parent:GetWidth(),parent:GetHeight()
+ if width>0 and height>0 then window:SetScale(math.min(width/1020,height/690)) else window:SetScale(0.85) end
+ window:SetFrameStrata(parent:GetFrameStrata());window:SetFrameLevel(parent:GetFrameLevel()+1)
+ window:SetMovable(false);window:SetScript("OnDragStart",nil);window:SetScript("OnDragStop",nil)
+ if window.title then window.title:Hide() end;if window.close then window.close:Hide() end
+ window:Show();refresh();send("status")
+end
+local function open()
+ if ForeverAscensionNativeTalentTab and ForeverAscensionNativeTalentTab.Open() then return end
+ build();window:Show();refresh();send("status")
+end
 function ForeverAscensionToggle()
- if window and window:IsShown() then window:Hide() else open() end
+ if ForeverAscensionTalentPage and ForeverAscensionTalentPage:IsShown() then ForeverAscensionTalentPage:Hide() elseif window and window:IsShown() then window:Hide() else open() end
 end
 SLASH_FOREVERASCENSION1="/ascension";SLASH_FOREVERASCENSION2="/fa";SLASH_FOREVERASCENSION3="/fsub"
 SlashCmdList.FOREVERASCENSION=function(text)
@@ -462,6 +479,8 @@ local function parse(text)
   local row=byId[tonumber(words[2])];if row then row.Tab=words[3];row.GridX=tonumber(words[4]);row.GridY=tonumber(words[5]);row.RequiredIDs={} end
  elseif kind=="TEDGE" and pending then
   local row=byId[tonumber(words[2])];if row then table.insert(row.RequiredIDs,tonumber(words[3])) end
+ elseif kind=="TREADY" and pending then
+  local d=compatible[tonumber(words[2])];if d then d.canLearn=words[3]=="1";d.canRefund=words[4]=="1" end
  elseif kind=="TENTRY" and pending then -- legacy donor tree stays hidden
  elseif kind=="TPOINTS" and pending then pending.talentFree=tonumber(words[2]);pending.talentSpent=tonumber(words[3]);pending.talentTotal=tonumber(words[4])
  elseif kind=="TALENT" and pending then

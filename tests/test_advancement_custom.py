@@ -26,7 +26,9 @@ class CustomCatalogTests(unittest.TestCase):
 #include <string>
 #include <vector>
 #include <cassert>
-using uint32=unsigned;
+using uint32=unsigned;using uint8=unsigned char;
+constexpr int EQUIPMENT_SLOT_OFFHAND=1,ITEM_CLASS_WEAPON=2,EQUIPMENT_SLOT_START=0,EQUIPMENT_SLOT_END=0,INVENTORY_SLOT_BAG_0=0,EQUIP_ERR_OK=0,CLASS_HUNTER=3,HUNTER_PET=1,PET_SAVE_AS_CURRENT=0;
+struct Pet {int getPetType(){return 1;}};struct Item {Item const* GetTemplate()const{return this;}int GetClass()const{return 2;}};
 using Clock=std::chrono::steady_clock;
 struct Unit {};
 struct CastTag {uint32 entry;};
@@ -34,8 +36,10 @@ struct CastSpellExtraArgs {explicit CastSpellExtraArgs(int){} CastSpellExtraArgs
 constexpr int UNIT_STATE_CASTING=1,DIFFICULTY_NONE=0,TRIGGERED_IGNORE_POWER_COST=1,SPELL_CAST_OK=0;
 struct Definition {uint32 entry,owner,spell,level;};
 std::map<uint32,uint32> LegacyAbilityIds;
-struct State {bool experienceEnabled=true;uint32 experienceCarry=0;uint32 active=0;std::map<uint32,uint32> classes,talents;std::set<uint32> learned;Clock::time_point request{};};
-struct Player:Unit {uint32 cls=1;int casts=0;uint32 GetClass(){return cls;}
+struct State {bool talentStatusDirty=true;bool experienceEnabled=true;uint32 experienceCarry=0;uint32 active=0;std::map<uint32,uint32> classes,talents;std::set<uint32> learned;Clock::time_point request{};};
+struct Player:Unit {
+ Item* GetItemByPos(int,int){return nullptr;}int CanUseItem(Item*,bool){return 0;}bool CanDualWield(){return true;}Pet* GetPet(){return nullptr;}void RemovePet(Pet*,int){}
+uint32 cls=1;int casts=0;uint32 GetClass(){return cls;}
  bool IsInCombat(){return false;}bool IsAlive(){return true;}bool HasUnitState(int){return false;}
  bool HasSpell(unsigned){return false;}Unit* GetSelectedUnit(){return this;}
  int CastSpell(Unit*,unsigned,CastSpellExtraArgs const&){++casts;return 0;}
@@ -53,6 +57,7 @@ void Error(Player*,char const* text){error=text;}
 void Send(Player*,std::string const&){}
 namespace Trinity {template<class... T>std::string StringFormat(char const* text,T...){return text;}}
 void Snapshot(Player*,State&,bool=false){}
+void SyncEquipment(Player*,State&){}
 Definition const* BestFor(Player*,State const&,uint32 id){auto it=Catalog.find(id);return it==Catalog.end()?nullptr:&it->second.front();}
 bool CanCast(Player*,State const&,Definition const&){return true;}
 void SyncTalents(Player*,State&){} void SyncBookSchools(Player*,State&){} void SyncSpellbook(Player*,State&){}

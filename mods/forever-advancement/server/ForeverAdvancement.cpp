@@ -47,6 +47,7 @@ struct ClassProgress { uint32 level=1;uint64 xp=0; };
 struct State
 {
     uint32 active=0;
+    bool talentStatusDirty=true;
     bool equipmentInitialized=false;uint32 equipmentClass=0,equipmentLevel=0;
     bool experienceEnabled=true;
     uint32 experienceCarry=0;
@@ -55,7 +56,7 @@ struct State
     std::map<uint32,uint32> talents;
     std::set<uint32> ownedAuras;
     std::map<uint32,std::pair<uint32,uint32>> ownedTraits;
-    std::set<uint32> bookSpells;
+    std::set<uint32> bookSpells,equipmentSpells;
     bool syncing=false;
     std::map<Powers,Pool> pools;
     Clock::time_point updated=Clock::now(),request{};
@@ -67,11 +68,12 @@ static std::map<uint32,std::vector<TalentDefinition>> TalentCatalog;
 struct NativeMenuRow { uint32 id,owner,spell,level,kind,max,traitEntry; bool available; char const* reason; };
 static std::map<uint32,NativeMenuRow> NativeMenu;
 static std::map<uint32,uint32> LegacyAbilityIds;
-struct Equipment {uint32 skill,spell,level,weapons,armor;};
+struct Equipment {uint32 skill,spell,level,weapons,armor,mask=0;bool dual=false;};
 static std::vector<Equipment> EquipmentCatalog;
 static std::map<uint32,std::string> TreeTitles;
+static std::map<std::string,std::string> BranchTitles;
 static std::map<uint32,std::vector<uint32>> TalentParents;
-struct Layout {uint32 node,tree;int32 x,y;float col=0,row=0;std::string tag;};
+struct Layout {uint32 node,tree;int32 x,y;float offset=0,col=0,row=0;std::string tag;};
 static std::map<uint32,Layout> TalentLayout;
 static std::string Hex(std::string const& text)
 {static char const* digits="0123456789abcdef";std::string out;for(unsigned char c:text.substr(0,80)) {out+=digits[c>>4];out+=digits[c&15];}return out;}
@@ -86,11 +88,26 @@ static void BuildTalentLayout()
         int group=0,col=0;first=true;
         for(auto x:xs) {if(!first&&step&&x-previous>step*3) {++group;col=0;} if(x==l.x) break;++col;previous=x;first=false;}
         l.tag=std::to_string(NativeMenu.at(id).owner)+"-"+std::to_string(l.tree)+"-"+std::to_string(group);
-        l.col=col;
+        l.col=col+l.offset;
         std::set<int32> ys;for(auto const& [otherId,other]:TalentLayout) if(other.tree==l.tree&&NativeMenu.at(otherId).owner==NativeMenu.at(id).owner) ys.insert(other.y);
         l.row=std::distance(ys.begin(),ys.find(l.y));
         if(!TreeTitles.count(l.tree)||TreeTitles[l.tree].empty()) TreeTitles[l.tree]="Ветка "+std::to_string(l.tree);
     }
+    std::map<std::string,std::map<std::string,uint32>> names;
+    for(auto const& [id,l]:TalentLayout)
+    {
+        auto const& menu=NativeMenu.at(id);auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(menu.spell);
+        for(auto it=bounds.first;it!=bounds.second;++it)
+        {
+            auto skill=sSkillLineStore.LookupEntry(it->second->SkillLine);if(!skill||skill->CategoryID!=SKILL_CATEGORY_CLASS) continue;
+            bool root=false;for(auto link:sSkillLineXTraitTreeStore) if(link->TraitTreeID==l.tree&&link->SkillLineID==skill->ID) root=true;
+            if(root) continue;
+            for(uint32 locale:{8u,0u}) if(auto title=skill->DisplayName.Str[locale];title&&title[0]) {++names[l.tag][title];break;}
+        }
+        if(!BranchTitles.count(l.tag)) BranchTitles[l.tag]=TreeTitles[l.tree];
+    }
+    for(auto const& [tag,counts]:names)
+    {uint32 best=0;for(auto const& [name,count]:counts) if(count>best) {BranchTitles[tag]=name;best=count;}}
     for(auto edge:sTraitEdgeStore) for(auto const& [child,layout]:TalentLayout)
         if(layout.node==uint32(edge->RightTraitNodeID)) for(auto const& [parent,p]:TalentLayout)
             if(p.node==edge->LeftTraitNodeID&&NativeMenu.at(child).owner==NativeMenu.at(parent).owner) TalentParents[child].push_back(parent);
@@ -110,17 +127,19 @@ static uint32 ClassLevel(Player* p,State const& s,uint32 owner)
 static uint32 ActiveLevel(Player* p,State const& s) { return s.active?ClassLevel(p,s,s.active):0; }
 static void SyncEquipment(Player* p,State& s)
 {
-    std::set<uint32> skills;uint32 weapons=0,armor=0,level=ActiveLevel(p,s);
+    std::set<uint32> skills,spells;uint32 weapons=0,armor=0,level=ActiveLevel(p,s);bool dual=false;
     if(s.equipmentInitialized&&s.equipmentClass==s.active&&s.equipmentLevel==level) return;
     if(s.active) for(auto const& e:EquipmentCatalog)
     {
         if(e.level>level) continue;
-        bool allowed=false;
+        bool allowed=e.mask&&(e.mask&(1u<<(s.active-1)));
         for(auto row:sDB2Manager.GetSkillRaceClassInfo(e.skill))
             if((uint32(row->ClassMask)&(1u<<(s.active-1)))&&uint32(std::max<int32>(0,row->MinLevel))<=level&&row->RaceMask.HasRace(p->GetRace())) allowed=true;
-        if(allowed) {skills.insert(e.skill);weapons|=e.weapons;armor|=e.armor;}
+        if(allowed) {if(!e.dual) skills.insert(e.skill);spells.insert(e.spell);weapons|=e.weapons;armor|=e.armor;dual|=e.dual;}
     }
-    p->SyncForeverAdvancementEquipment(s.active,skills,uint16(std::min<uint32>(65535,std::max<uint32>(1,level*5))),weapons,armor);
+    p->SyncForeverAdvancementEquipment(s.active,skills,uint16(std::min<uint32>(65535,std::max<uint32>(1,level*5))),weapons,armor,dual);
+    s.equipmentSpells=std::move(spells);
+    s.talentStatusDirty=true;
     s.equipmentInitialized=true;s.equipmentClass=s.active;s.equipmentLevel=level;
 }
 static bool Native(Player* p,Powers power) { return p->GetPowerIndex(power)<MAX_POWERS_PER_CLASS&&p->GetMaxPower(power)>0; }
@@ -231,7 +250,7 @@ static bool TemporaryBookSpell(Player* p,uint32 spell)
 }
 static void SyncSpellbook(Player* p,State& s)
 {
-    std::set<uint32> desired;
+    std::set<uint32> desired=s.equipmentSpells;
     for(auto entry:s.learned)
         if(auto d=BestFor(p,s,entry);d&&d->owner!=p->GetClass()&&d->owner==s.active) desired.insert(d->spell);
     if(TalentBuildValid(p,s)) for(auto const& [id,rank]:s.talents)
@@ -321,15 +340,9 @@ static uint32 TalentSpent(State const& s)
     for(auto const& [id,rank]:s.talents) if(auto d=Talent(id,rank);d&&d->owner==s.active) spent+=rank*d->cost;
     return spent;
 }
-static uint32 LowerTierSpent(State const& s,TalentDefinition const& node)
-{
-    uint32 spent=0;
-    for(auto const& [id,rank]:s.talents)
-        if(auto d=Talent(id,rank);d&&d->owner==node.owner&&d->tab==node.tab&&d->investment<node.investment) spent+=rank*d->cost;
-    return spent;
-}
 static bool TalentBuildValid(Player* p,State const& s)
 {
+    if(s.active&&s.active==p->GetClass()) return false;
     if(TalentSpent(s)>TalentBudget(p,s)) return false;
     auto spec=sDB2Manager.GetDefaultChrSpecializationForClass(s.active);if(!spec) return TalentSpent(s)==0;
     WorldPackets::Traits::TraitConfig config;config.Type=TraitConfigType::Combat;config.ChrSpecializationID=spec->ID;
@@ -356,7 +369,8 @@ static void SyncTalents(Player* p,State& s)
     if(TalentBuildValid(p,s))
         for(auto const& [id,rank]:s.talents) if(auto d=Talent(id,rank);d&&d->owner==s.active)
         {
-            if(auto info=sSpellMgr->GetSpellInfo(d->spell,DIFFICULTY_NONE);info&&info->IsPassive()) desired.insert(d->spell);if(d->trait) traits[d->spell]={d->trait,d->rank};
+            if(auto info=sSpellMgr->GetSpellInfo(d->spell,DIFFICULTY_NONE);info&&info->IsPassive()) desired.insert(d->spell);
+            if(d->trait) traits[d->spell]={d->trait,d->rank};
         }
     for(auto it=s.ownedAuras.begin();it!=s.ownedAuras.end();)
         if(p->HasSpell(*it)) { it=s.ownedAuras.erase(it); }
@@ -364,10 +378,10 @@ static void SyncTalents(Player* p,State& s)
         { p->RemoveAurasDueToSpell(*it,p->GetGUID());it=s.ownedAuras.erase(it); }
         else ++it;
     for(auto it=s.ownedTraits.begin();it!=s.ownedTraits.end();)
-        if(!traits.count(it->first)||traits.at(it->first)!=it->second)
+        if(!traits.count(it->first)||traits.at(it->first)!=it->second||(p->HasSpell(it->first)&&!TemporaryBookSpell(p,it->first)))
         { p->SetForeverAdvancementTrait(it->first,0,0);it=s.ownedTraits.erase(it); }
         else ++it;
-    for(auto const& [spell,trait]:traits) if(!p->HasSpell(spell)||TemporaryBookSpell(p,spell))
+    for(auto const& [spell,trait]:traits) if((!p->HasSpell(spell)||TemporaryBookSpell(p,spell))&&(!desired.count(spell)||!p->HasAura(spell)||s.ownedAuras.count(spell)))
     { p->SetForeverAdvancementTrait(spell,trait.first,trait.second);s.ownedTraits[spell]=trait; }
     if(p->IsAlive()) for(auto spell:desired)
         if(!p->HasAura(spell)&&!p->HasSpell(spell)&&p->HandlePassiveSpellLearn(sSpellMgr->GetSpellInfo(spell,DIFFICULTY_NONE)))
@@ -454,7 +468,7 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
         std::set<std::string> sent;
         for(auto const& [id,l]:TalentLayout)
         {
-            if(sent.insert(l.tag).second) Send(p,Trinity::StringFormat("TREE {} {}",l.tag,Hex(TreeTitles[l.tree])));
+            if(sent.insert(l.tag).second) Send(p,Trinity::StringFormat("TREE {} {}",l.tag,Hex(BranchTitles[l.tag])));
             Send(p,Trinity::StringFormat("TNODE {} {} {} {}",id,l.tag,l.col,l.row));
         }
         for(auto const& [id,parents]:TalentParents) for(auto parent:parents) Send(p,Trinity::StringFormat("TEDGE {} {}",id,parent));
@@ -486,6 +500,21 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
             for(auto const& effect:sSpellMgr->GetSpellInfo(d->spell,DIFFICULTY_NONE)->GetEffects())
                 if(auto applied=aura->GetEffect(effect.EffectIndex))
                     Send(p,Trinity::StringFormat("TEFFECT {} {} {}",id,effect.EffectIndex,applied->GetAmount()));
+    }
+    if(includeCatalog||s.talentStatusDirty)
+    {
+        for(auto const& [id,rows]:TalentCatalog)
+        {
+            bool learn=false,refund=false;uint32 rank=s.talents.count(id)?s.talents.at(id):0;
+            if(rows.front().owner==s.active&&s.active!=p->GetClass())
+            {
+                auto candidate=s;
+                if(rank<rows.size()) {candidate.talents[id]=rank+1;learn=TalentBuildValid(p,candidate);}
+                if(rank) {candidate.talents[id]=rank-1;if(rank==1) candidate.talents.erase(id);refund=TalentBuildValid(p,candidate);}
+            }
+            Send(p,Trinity::StringFormat("TREADY {} {} {}",id,learn?1:0,refund?1:0));
+        }
+        s.talentStatusDirty=false;
     }
     for(auto id:s.learned) Send(p,Trinity::StringFormat("LEARNED {}",id));
     Send(p,"END");
@@ -527,10 +556,10 @@ static void Request(Player* p,std::string const& payload)
     if(command=="activate")
     {
         if(arg&&(!SupportedClass(arg)||arg==p->GetClass())) { Error(p,"invalid_subclass");return; }
-        auto previous=s.active;s.active=arg;if(arg) s.classes.try_emplace(arg);SyncEquipment(p,s);
+        auto previous=s.active;s.active=arg;if(arg) s.classes.try_emplace(arg);SyncEquipment(p,s);SyncSpellbook(p,s);
         for(uint8 slot=EQUIPMENT_SLOT_START;slot<EQUIPMENT_SLOT_END;++slot)
-            if(auto item=p->GetItemByPos(INVENTORY_SLOT_BAG_0,slot);item&&p->CanUseItem(item,false)!=EQUIP_ERR_OK)
-            {s.active=previous;SyncEquipment(p,s);Error(p,"remove_foreign_equipment");return;}
+            if(auto item=p->GetItemByPos(INVENTORY_SLOT_BAG_0,slot);item&&(p->CanUseItem(item,false)!=EQUIP_ERR_OK||(slot==EQUIPMENT_SLOT_OFFHAND&&item->GetTemplate()->GetClass()==ITEM_CLASS_WEAPON&&!p->CanDualWield())))
+            {s.active=previous;SyncEquipment(p,s);SyncSpellbook(p,s);Error(p,"remove_foreign_equipment");return;}
         if(previous==CLASS_HUNTER&&arg!=CLASS_HUNTER&&p->GetClass()!=CLASS_HUNTER)
             if(auto pet=p->GetPet();pet&&pet->getPetType()==HUNTER_PET) p->RemovePet(pet,PET_SAVE_AS_CURRENT);
         SyncTalents(p,s);SyncBookSchools(p,s);SyncSpellbook(p,s);Refresh(p,s);Save(p,s);Snapshot(p,s,true);return;
@@ -544,7 +573,7 @@ static void Request(Player* p,std::string const& payload)
         if(next==rank||!Talent(arg,command=="talent"?next:rank)) { Error(p,"talent_unavailable");return; }
         auto candidate=s;candidate.talents[arg]=next;if(!next) candidate.talents.erase(arg);
         if(!TalentBuildValid(p,candidate)&&!(command=="untalent"&&!TalentBuildValid(p,s))) { Error(p,"talent_requirements");return; }
-        s.talents=std::move(candidate.talents);SyncTalents(p,s);SyncSpellbook(p,s);Refresh(p,s);
+        s.talents=std::move(candidate.talents);s.talentStatusDirty=true;SyncTalents(p,s);SyncSpellbook(p,s);Refresh(p,s);
     }
     else if(command=="learn")
     {
@@ -683,7 +712,7 @@ static SpellInfo const* ResolveNativeTalent(uint32 spell,uint32 owner,uint32 ran
     if(it==owners.end()||!it->second.count({owner,rank})) return nullptr;
     return sSpellMgr->GetSpellInfo(spell,DIFFICULTY_NONE);
 }
-struct NativeTrait { uint32 definition,spell,owner,max,entry=0,node=0,tree=0;int32 x=0,y=0; };
+struct NativeTrait { uint32 definition,spell,owner,max,entry=0,node=0,tree=0;int32 x=0,y=0,choice=0; };
 using NativeTraits=std::map<uint32,std::vector<NativeTrait>>;
 static NativeTrait const* ResolveTrait(uint32 first,uint32 owner,uint32 rank,NativeTraits const& traits)
 {
@@ -718,7 +747,7 @@ static NativeTraits LoadNativeTraits()
         for(uint32 owner=1;owner<=11;++owner)
             if(classMask->second&(1u<<(owner-1)))
             {
-                NativeTrait trait{definition->ID,uint32(definition->SpellID),owner,uint32(entry->MaxRanks),entry->ID,node->ID,node->TraitTreeID,node->PosX,node->PosY};
+                NativeTrait trait{definition->ID,uint32(definition->SpellID),owner,uint32(entry->MaxRanks),entry->ID,node->ID,node->TraitTreeID,node->PosX,node->PosY,link->Index};
                 traits[trait.spell].push_back(trait);
                 if(definition->VisibleSpellID>0&&uint32(definition->VisibleSpellID)!=trait.spell) traits[definition->VisibleSpellID].push_back(trait);
             }
@@ -853,6 +882,11 @@ public:
             if(auto skill=sSkillLineStore.LookupEntry(ability->SkillLine);skill&&(skill->CategoryID==SKILL_CATEGORY_WEAPON||skill->CategoryID==SKILL_CATEGORY_ARMOR))
                 if(auto info=sSpellMgr->GetSpellInfo(ability->Spell,DIFFICULTY_NONE);info&&info->HasEffect(SPELL_EFFECT_PROFICIENCY))
                     EquipmentCatalog.push_back({skill->ID,info->Id,std::max<uint32>(1,info->SpellLevel),info->EquippedItemClass==ITEM_CLASS_WEAPON?uint32(info->EquippedItemSubClassMask):0,info->EquippedItemClass==ITEM_CLASS_ARMOR?uint32(info->EquippedItemSubClassMask):0});
+        for(auto ability:sSkillLineAbilityStore)
+            if(auto info=sSpellMgr->GetSpellInfo(ability->Spell,DIFFICULTY_NONE);info&&info->HasEffect(SPELL_EFFECT_DUAL_WIELD))
+                if(auto skill=sSkillLineStore.LookupEntry(ability->SkillLine);skill&&skill->CategoryID==SKILL_CATEGORY_CLASS)
+                {uint32 mask=uint32(ability->ClassMask);if(!mask) for(auto row:sDB2Manager.GetSkillRaceClassInfo(skill->ID)) mask|=uint32(row->ClassMask);
+                 EquipmentCatalog.push_back({skill->ID,info->Id,std::max<uint32>(1,info->SpellLevel),0,0,mask,true});}
         for(auto& [id,rows]:Catalog) std::sort(rows.begin(),rows.end(),[](auto const& a,auto const& b){return a.level<b.level;});
         for(auto const& row:AscensionSourceEntries)
         {
@@ -881,7 +915,7 @@ public:
                 for(auto cost:sTraitNodeGroupXTraitCostStore) if(cost->TraitNodeGroupID==link->TraitNodeGroupID&&!safeCost(cost->TraitCostID)) supported=false;
             if(info->IsPassive()) for(auto const& effect:info->GetEffects()) if(effect.IsEffect()&&!effect.IsAura()) supported=false;
             NativeMenu[id]={id,row.owner,row.spell,10,1,row.max,row.entry,supported,supported?"available":"unsupported_talent_effect"};
-            TalentLayout[id]={row.node,row.tree,row.x,row.y};
+            TalentLayout[id]={row.node,row.tree,row.x,row.y,float(row.choice)*0.5f};
             if(auto tree=sTraitTreeStore.LookupEntry(row.tree)) for(uint32 locale:{8u,0u}) if(auto title=tree->TitleText.Str[locale];title&&title[0]) {TreeTitles[row.tree]=title;break;}
             for(uint32 rank=1;rank<=row.max;++rank)
                 TalentCatalog[id].push_back({id,row.owner,row.spell,rank,10,1,0,row.tree,row.definition,row.entry,row.node,row.tree,row.x,row.y});
@@ -906,11 +940,11 @@ public:
         if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement native catalog empty; disabled");return; }
         TC_LOG_INFO("scripts","ForeverAdvancement equipment metadata: {} proficiency skill records",EquipmentCatalog.size());
         BuildTalentLayout();PublishBookSchoolMetadata();PublishBookMetadata();
-        TC_LOG_INFO("scripts","ForeverAdvancement native catalogue: {} supported records; {} resource exclusions; {} native talent entries (browse only)",accepted,rejected,seenTraits.size());
+        TC_LOG_INFO("scripts","ForeverAdvancement native catalogue: {} supported records; {} resource exclusions; {} native trait entries",accepted,rejected,seenTraits.size());
         TC_LOG_INFO("scripts","ForeverAdvancement catalog audit: {}; legacy talents hidden; no name substitutions",audit?"written to ForeverAdvancement-catalog.tsv":"could not open audit file");
-        TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: accepted=0; native browser active");
+        TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: {} purchasable native nodes; native TraitMgr validation",TalentCatalog.size());
         TC_LOG_INFO("scripts","ForeverAdvancement custom rules: 0 visible abilities; protocol=3; version=1.13.0");
-        Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} compatible Ascension abilities; {} passive talents; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
+        Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} native ability entries; {} native talent nodes; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }
 };
 }

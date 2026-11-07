@@ -24,7 +24,7 @@ class TransitionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);state,model=self.state(root)
             t.check_before(state,model)
-            wrong=copy.deepcopy(state);wrong['advancement']['version']='1.12.0'
+            wrong=copy.deepcopy(state);wrong['advancement']['version']='1.13.0'
             with self.assertRaises(ValueError):t.check_before(wrong,model)
             (root/t.MARKER).write_text('{}')
             with self.assertRaises(ValueError):t.check_before(state,model)
@@ -80,5 +80,5 @@ class TransitionTests(unittest.TestCase):
             self.assertEqual(current['services']['worldserver'],old_world)
             self.assertEqual(len(sql_calls),2);self.assertIn('CREATE TABLE IF NOT EXISTS forever_advancement_preferences',sql_calls[1])
             self.assertNotIn('DROP ',sql_calls[1]);self.assertNotIn('DELETE ',sql_calls[1])
-            self.assertEqual(t.clean.load_state(root/'state.json')['advancement']['version'],'1.12.0')
+            self.assertEqual(t.clean.load_state(root/'state.json')['advancement']['version'],'1.13.0')
             self.assertFalse((root/t.MARKER).exists())

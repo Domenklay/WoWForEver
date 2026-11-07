@@ -1,7 +1,7 @@
 Optional<PlayerSpellTrait> Player::GetTraitInfoForSpell(uint32 spellId) const
 {
     // Native class configurations always take precedence.
-    if (PlayerSpell const* spell = Trinity::Containers::MapGetValuePtr(m_spells, spellId); spell && spell->Trait)
+    if (PlayerSpell const* spell = Trinity::Containers::MapGetValuePtr(m_spells, spellId); spell && (spell->Trait || spell->state != PLAYERSPELL_TEMPORARY))
         return spell->Trait;
     if (auto it = m_foreverAdvancementTraits.find(spellId); it != m_foreverAdvancementTraits.end())
         return it->second;

@@ -119,12 +119,12 @@ def inject(core,module=None):
         player_source.write_text(text_player)
     if player_header.exists() and player_source.exists():
         h=player_header.read_text();src=player_source.read_text()
-        signature='        void SyncForeverAdvancementEquipment(uint32 owner, std::set<uint32> const& skills, uint16 value, uint32 weapons, uint32 armor);'
+        signature='        void SyncForeverAdvancementEquipment(uint32 owner, std::set<uint32> const& skills, uint16 value, uint32 weapons, uint32 armor, bool dual);'
         if signature not in h:
             marker='        void SyncForeverAdvancementClassSkills(std::set<uint32> const& desired);'
             h=h.replace(marker,marker+'\n'+signature+'\n        uint32 GetForeverAdvancementClass() const { return m_foreverAdvancementOwner; }')
             marker='        std::set<uint32> m_foreverAdvancementClassSkills;'
-            h=h.replace(marker,marker+'\n        std::set<uint32> m_foreverAdvancementEquipmentSkills;\n        uint32 m_foreverAdvancementOwner=0, m_foreverAdvancementWeapons=0, m_foreverAdvancementArmor=0;')
+            h=h.replace(marker,marker+'\n        std::set<uint32> m_foreverAdvancementEquipmentSkills;\n        uint32 m_foreverAdvancementOwner=0, m_foreverAdvancementWeapons=0, m_foreverAdvancementArmor=0;\n        bool m_foreverAdvancementDual=false;')
             src+='\n'+(module/'server/PlayerEquipment.inc').read_text()
         save_guard='m_foreverAdvancementClassSkills.count(itr->first) ||'
         src=src.replace(save_guard,'m_foreverAdvancementEquipmentSkills.count(itr->first) || '+save_guard) if 'm_foreverAdvancementEquipmentSkills.count(itr->first)' not in src else src

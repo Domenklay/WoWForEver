@@ -77,7 +77,7 @@ class GameplayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); state, model, calls, compose, dump = self.run_install(root, previous_advancement=True)
             saved = game.clean.load_state(root / 'state.json')
-            self.assertEqual(saved['advancement']['version'], '1.12.0')
+            self.assertEqual(saved['advancement']['version'], '1.13.0')
             self.assertEqual(saved['gameplay']['encyclopedia'], game.BOOK_VERSION)
             self.assertEqual(saved['image'], 'candidate'); dump.assert_called_once()
             body = '\n'.join(calls)

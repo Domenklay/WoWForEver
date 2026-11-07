@@ -99,7 +99,7 @@ class CleanAdvancementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); state, model, calls, compose, dump = self.run_install(root)
             saved = adv.clean.load_state(root / 'state.json')
-            self.assertEqual(saved['advancement']['version'], '1.12.0')
+            self.assertEqual(saved['advancement']['version'], '1.13.0')
             self.assertEqual(saved['image'], 'candidate-image')
             changed = json.loads((root / 'compose.private.json').read_text())
             self.assertEqual(changed['services']['mysql'], model['services']['mysql'])
