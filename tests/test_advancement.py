@@ -197,7 +197,7 @@ function methods:GetFrameStrata() return self.strata or "MEDIUM" end
 function methods:GetScript(k) return self.scripts[k] end
 function methods:SetParent(parent) self.parent=parent end
 function methods:SetSize(w,h) self.width=w;self.height=h end
-function methods:GetFrameLevel() return 1 end
+function methods:GetFrameLevel() return self.level or 1 end
 function methods:SetFrameLevel(value) self.level=value end
 function methods:SetFrameStrata(value) self.strata=value end
 function methods:GetAlpha() return self.alpha or 1 end
@@ -209,6 +209,7 @@ function methods:GetChildren()
  local out={};for _,f in ipairs(frames) do if f.parent==self then out[#out+1]=f end end;return table.unpack(out)
 end
 function methods:GetObjectType() return self.kind end
+function methods:GetParent() return self.parent end
 function methods:GetLeft() return self.left end
 function methods:GetRight() return self.right end
 function methods:GetBottom() return self.bottom end
@@ -424,7 +425,8 @@ root.AddNamedTab=function() retailTabs=retailTabs+1 end
 root.SetTab=function(self,id) self.active=id end;root.talentTabID=2
 root.TalentsFrame=CreateFrame('Frame',nil,root)
 local host=root.TalentsFrame;host.ButtonsParent=CreateFrame('Frame',nil,host)
-local strip=host.ButtonsParent
+local canvas=host.ButtonsParent;canvas:SetFrameLevel(1000)
+local strip=CreateFrame('Frame',nil,host);host.TabSystem=strip;strip:SetSize(301,32)
 local primary=CreateFrame('Button',nil,strip);primary:SetText('Основное');primary.right=200
 local secondary=CreateFrame('Button',nil,strip);secondary:SetText('Дополнительное');secondary.right=350
 local nativeClicks=0;secondary:SetScript('OnClick',function() nativeClicks=nativeClicks+1 end)
@@ -433,11 +435,12 @@ local hidden=CreateFrame('Frame',nil,host);hidden:Hide()
 ForeverAscensionNativeTalentTab.Install()
 assert(retailTabs==0,'hidden retail TabSystem must not receive the new tab')
 local tab=ForeverAscensionTalentButton;local page=ForeverAscensionTalentPage
-assert(tab.parent==strip and page.parent==host)
-assert(tab.points[1][2]==secondary,'tab follows the native secondary loadout')
+assert(tab.parent==host and page.parent==host,'tab must not be clipped or panned with the node canvas')
+assert(tab:GetFrameLevel()>canvas:GetFrameLevel() and page:GetFrameLevel()>canvas:GetFrameLevel())
+assert(tab.points[1][2]==strip,'tab follows the confirmed 301x32 native loadout strip')
 SlashCmdList.FOREVERASCENSION('')
 assert(root.active==2 and root:IsShown() and host:IsShown())
-assert(window.parent==page and page:IsShown() and not tree:IsShown() and not footer:IsShown())
+assert(window.parent==page and page:IsShown() and not tree:IsShown() and not footer:IsShown() and not canvas:IsShown())
 assert(tab:IsShown() and primary:IsShown() and secondary:IsShown())
 secondary.scripts.OnClick(secondary)
 assert(nativeClicks==1,'native handler preserved')
@@ -458,8 +461,10 @@ assert(not ForeverAscensionNativeTalentTab.Install())
 root.SetTab=function(self,id) self.active=id end;root.talentTabID=2
 SlashCmdList.FOREVERASCENSION('');assert(window==nil,'delayed native load must not open a standalone window')
 root.TalentsFrame.ButtonsParent=CreateFrame('Frame',nil,root.TalentsFrame)
+assert(not ForeverAscensionNativeTalentTab.Install(),'node canvas alone is not the tab strip')
+root.TalentsFrame.TabSystem=CreateFrame('Frame',nil,root.TalentsFrame)
 for _,f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f,'ADDON_LOADED') end end
-assert(ForeverAscensionTalentButton.parent==root.TalentsFrame.ButtonsParent)
+assert(ForeverAscensionTalentButton.parent==root.TalentsFrame)
 assert(window.parent==ForeverAscensionTalentPage and root.active==2)
 ''')
 

@@ -25,70 +25,62 @@ end
 local function showContent()
  if ForeverAscensionShowIn then ForeverAscensionShowIn(talentPage) end
 end
--- Forever replaces the visible talent loadout strip. PlayerSpellsFrame.TabSystem
--- still exists but is hidden: adding a retail tab there produces an unreachable
--- page. Attach to the confirmed TalentsFrame.ButtonsParent instead.
+-- Forever replaces the visible talent loadout strip. The inherited retail
+-- TabSystem is hidden. The visible 301x32 strip is TalentsFrame.TabSystem;
+-- ButtonsParent is the clipped, high-level node canvas, not a tab container.
 local function camelot()
  local owner=PlayerSpellsFrame
  local host=owner and owner.TalentsFrame
  if type(host)~="table" and type(host)~="userdata" then return false end
- local strip=host.ButtonsParent
+ local strip=host.TabSystem
  if type(strip)~="table" and type(strip)~="userdata" then return false end
  if talentHost==host and camelotOwner==owner then if camelotPosition then camelotPosition() end;return true end
  if talentButton then talentButton:Hide() end;if talentPage then talentPage:Hide() end
  talentHost=host;camelotOwner=owner;nativeIndex=nil;camelotSelected=false;camelotHidden={}
  talentPage=CreateFrame("Frame","ForeverAscensionCamelotTalentPage",host)
  talentPage:SetPoint("TOPLEFT",host,"TOPLEFT",5,-45);talentPage:SetPoint("BOTTOMRIGHT",host,"BOTTOMRIGHT",-5,5)
- talentPage:SetFrameStrata(host:GetFrameStrata());talentPage:SetFrameLevel(host:GetFrameLevel()+50)
+ local level=host:GetFrameLevel()
+ for _,child in ipairs({host:GetChildren()}) do level=math.max(level,child:GetFrameLevel()) end
+ talentPage:SetFrameStrata(host:GetFrameStrata());talentPage:SetFrameLevel(level+10)
  local background=talentPage:CreateTexture(nil,"BACKGROUND");background:SetAllPoints();background:SetColorTexture(0.025,0.022,0.018,1)
  talentPage:EnableMouse(true);talentPage:Hide();talentPage:SetScript("OnShow",showContent)
  talentButton=nil
  for _,template in ipairs({"PanelTopTabButtonTemplate","CharacterFrameTabButtonTemplate","UIPanelButtonTemplate"}) do
-  local ok,button=pcall(CreateFrame,"Button",nil,strip,template)
+  local ok,button=pcall(CreateFrame,"Button",nil,host,template)
   if ok and button then talentButton=button;break end
  end
- if not talentButton then talentButton=CreateFrame("Button",nil,strip) end
+ if not talentButton then talentButton=CreateFrame("Button",nil,host) end
  ForeverAscensionCamelotTalentTab=talentButton
  talentButton:SetSize(155,28);talentButton:SetText("Мультикласс");talentButton:SetID(3)
- talentButton:SetFrameStrata(strip:GetFrameStrata());talentButton:SetFrameLevel(strip:GetFrameLevel()+10)
+ talentButton:SetFrameStrata(host:GetFrameStrata());talentButton:SetFrameLevel(level+20)
  local function restore()
   camelotSelected=false;talentPage:Hide()
   local hidden=camelotHidden;camelotHidden={}
   for child in pairs(hidden) do child:Show() end
-  if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(talentButton) end
+  if PanelTemplates_DeselectTab then pcall(PanelTemplates_DeselectTab,talentButton) end
  end
  camelotRestore=restore
  local hooked=setmetatable({}, {__mode="k"})
  local function visit(parent,depth,fn)
   if depth>5 or not parent.GetChildren then return end
   for _,child in ipairs({parent:GetChildren()}) do
-   if child~=talentButton and child~=talentPage then fn(child);visit(child,depth+1,fn) end
-  end
- end
- local function textOf(child)
-  if child.GetText then local ok,text=pcall(child.GetText,child);if ok and type(text)=="string" then return text end end
-  for _,key in ipairs({"Text","Label","text"}) do
-   local text=child[key]
-   if (type(text)=="table" or type(text)=="userdata") and text.GetText then local ok,value=pcall(text.GetText,text);if ok and type(value)=="string" then return value end end
+   if child~=talentButton and child~=talentPage and child~=owner.SpecFrame and child~=owner.SpellBookFrame then fn(child);visit(child,depth+1,fn) end
   end
  end
  local function position()
-  local anchor,right
+  if owner.IsInspecting and owner:IsInspecting() then restore();talentButton:Hide();return end
   visit(strip,0,function(child)
-   local text=textOf(child)
-   if text and (text:find("Основное",1,true) or text:find("Дополнительное",1,true) or text:find("Primary",1,true) or text:find("Secondary",1,true)) then
-    local edge=child.GetRight and child:GetRight()
-    if not anchor or (edge and (not right or edge>right)) then anchor=child;right=edge end
-   end
    if child.HookScript and not hooked[child] then
     hooked[child]=true
-    -- The native strip can use Frame mouse handlers rather than Button OnClick.
+    -- Native tabs may use Frame mouse handlers rather than Button OnClick.
     for _,script in ipairs({"OnMouseDown","OnMouseUp","OnClick"}) do pcall(child.HookScript,child,script,restore) end
    end
   end)
-  talentButton:ClearAllPoints()
-  if anchor then talentButton:SetPoint("LEFT",anchor,"RIGHT",5,0)
-  else talentButton:SetPoint("TOPLEFT",strip,"TOPLEFT",330,0) end
+  talentButton:ClearAllPoints();talentButton:SetPoint("LEFT",strip,"RIGHT",5,0)
+  local top,bottom=host:GetTop(),strip:GetBottom()
+  if top and bottom and top-bottom>=0 and top-bottom<120 then
+   talentPage:ClearAllPoints();talentPage:SetPoint("TOPLEFT",host,"TOPLEFT",5,-(top-bottom+4));talentPage:SetPoint("BOTTOMRIGHT",host,"BOTTOMRIGHT",-5,5)
+  end
   talentButton:Show()
  end
  camelotPosition=position
@@ -98,18 +90,17 @@ local function camelot()
   if not camelotSelected then
    camelotHidden={}
    for _,child in ipairs({host:GetChildren()}) do
-    if child~=strip and child~=talentPage and child:IsShown() then camelotHidden[child]=true;child:Hide() end
+    if child~=strip and child~=talentPage and child~=talentButton and child:IsShown() then camelotHidden[child]=true;child:Hide() end
    end
   end
   camelotSelected=true;talentPage:Show();showContent()
-  if PanelTemplates_SelectTab then PanelTemplates_SelectTab(talentButton) end
+  if PanelTemplates_SelectTab then pcall(PanelTemplates_SelectTab,talentButton) end
  end)
  -- Switching a native loadout or closing the window restores its own content.
  host:HookScript("OnHide",restore)
  host:HookScript("OnShow",position)
  strip:HookScript("OnShow",position)
  strip:HookScript("OnSizeChanged",position)
- strip:HookScript("OnMouseDown",restore)
  position()
  ForeverAscensionTalentButton=talentButton;ForeverAscensionTalentPage=talentPage
  return true
@@ -144,7 +135,7 @@ end
 local function attach()
  if InCombatLockdown and InCombatLockdown() then return false end
  if camelot() then return true end
- if isCamelot() then return false end -- wait for the real loadout strip, not a hidden retail tab
+ if isCamelot() then return false end -- wait for the inner talent strip, not a hidden retail tab
  if modern() then return true end
  local frame=root();if not frame then return false end
  if frame==talentHost and talentButton then return true end
