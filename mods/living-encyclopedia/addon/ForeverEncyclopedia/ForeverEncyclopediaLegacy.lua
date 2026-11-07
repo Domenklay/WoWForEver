@@ -725,6 +725,96 @@ local function dropdown(parent,x,y,w,current,options,choose)
     return trigger
 end
 
+local function lootItemPresentation(entry)
+    local name="Предмет #"..tostring(entry)
+    local icon="Interface\Icons\INV_Misc_QuestionMark"
+    if C_Item and C_Item.GetItemInfo then
+        local ok,found=pcall(C_Item.GetItemInfo,entry)
+        if ok and type(found)=="string" and found~="" then name=found end
+    elseif GetItemInfo then
+        local ok,found=pcall(GetItemInfo,entry)
+        if ok and type(found)=="string" and found~="" then name=found end
+    end
+    if C_Item and C_Item.GetItemIconByID then
+        local ok,found=pcall(C_Item.GetItemIconByID,entry)
+        if ok and found then icon=found end
+    elseif GetItemIcon then
+        local ok,found=pcall(GetItemIcon,entry)
+        if ok and found then icon=found end
+    end
+    return name,icon
+end
+
+local function rawChanceLabel(item)
+    if item.chance<=0 then return "Равная доля группы" end
+    return "База: "..string.format("%.2f",item.chance).."%"
+end
+
+local function tooltipLootItem(owner,item)
+    GameTooltip:SetOwner(owner,"ANCHOR_RIGHT")
+    local ok=false
+    if GameTooltip.SetHyperlink then
+        ok=pcall(function() GameTooltip:SetHyperlink("item:"..item.entry) end)
+    end
+    if not ok then
+        if GameTooltip.ClearLines then GameTooltip:ClearLines() end
+        local name=lootItemPresentation(item.entry)
+        GameTooltip:AddLine(name,1,0.82,0.36)
+        GameTooltip:AddLine("Предмет #"..item.entry,0.7,0.7,0.7)
+    end
+    GameTooltip:AddLine(rawChanceLabel(item),0.42,0.82,0.52,true)
+    if item.group>0 then
+        GameTooltip:AddLine("Группа добычи #"..item.group..
+            ". Итоговый шанс зависит от других записей.",0.94,0.71,0.31,true)
+    end
+    if item.quest then GameTooltip:AddLine("Требуется подходящее задание.",0.94,0.70,0.30,true) end
+    if item.lootMode~=1 then GameTooltip:AddLine("Режим добычи: "..item.lootMode,0.78,0.72,0.64,true) end
+    if item.maxCount>1 then
+        GameTooltip:AddLine("Количество: "..item.minCount.."–"..item.maxCount,0.75,0.75,0.75)
+    end
+    GameTooltip:AddLine("Процент из БД до множителей, условий и групп.",0.67,0.64,0.59,true)
+    GameTooltip:Show()
+end
+
+local function drawCreatureLoot(parent,selected)
+    local panel=frame(parent,202,39,223,233,BROWN)
+    label(panel,9,7,205,"Возможная добыча","GameFontHighlight",PALE,"CENTER")
+    if not selected.known then
+        label(panel,11,65,195,"Сначала изучите это существо.","GameFontNormalSmall",MUTED,"CENTER")
+        return
+    end
+    if not state.lootSupported then
+        label(panel,12,60,192,"Добыча появится после обновления worldserver.",
+              "GameFontNormalSmall",MUTED,"CENTER")
+        return
+    end
+    if bridge.RequestCreatureLoot then bridge.RequestCreatureLoot(selected.entry) end
+    local data=state.lootByCreature and state.lootByCreature[selected.entry]
+    if not data then return end
+    if data.loading and #data.items==0 then
+        label(panel,12,55,190,"Загрузка добычи с сервера…","GameFontNormalSmall",MUTED,"CENTER")
+    elseif data.loaded and #data.items==0 then
+        label(panel,12,58,190,"Прямой добычи в базе не найдено.","GameFontNormalSmall",MUTED,"CENTER")
+    end
+    local rows=scrollArea(panel,7,34,205,188,"loot-"..selected.entry,
+                          math.max(188,#data.items*48+5))
+    for i,item in ipairs(data.items) do
+        local name,icon=lootItemPresentation(item.entry)
+        local b=button(rows,3,3+(i-1)*48,168,44,"",false,function() end)
+        local texture=b:CreateTexture(nil,"ARTWORK")
+        texture:SetTexture(icon)
+        texture:SetPoint("TOPLEFT",b,"TOPLEFT",5,-6)
+        texture:SetSize(31,31)
+        local title=font(b,41,4,122,name,"GameFontNormalSmall",PALE)
+        if title.SetMaxLines then title:SetMaxLines(1) end
+        local chance=font(b,41,22,122,rawChanceLabel(item),
+                          "GameFontNormalSmall",item.group>0 and GOLD or GREEN)
+        if chance.SetMaxLines then chance:SetMaxLines(1) end
+        b:SetScript("OnEnter",function() tooltipLootItem(b,item) end)
+        b:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    end
+end
+
 local function drawCreatureView()
     local base=frame(page,13,63,874,444,DEEP)
     -- Reclaim dead vertical space above/below the chooser and reuse the
@@ -845,7 +935,8 @@ local function drawCreatureView()
         selectedCreatureEntry=selected.entry
         local info=state.creatureInfo[selected.entry] or {}
         label(detail,12,9,415,archiveRecordName(selected),"GameFontHighlight",PALE,"CENTER")
-        modelPreview(detail,14,39,411,233,selected.known and selected.entry or nil,"creature")
+        modelPreview(detail,12,39,182,233,selected.known and selected.entry or nil,"creature")
+        drawCreatureLoot(detail,selected)
         local infoBody=scrollArea(detail,13,283,412,103,"creature-info",260)
         local y=paragraph(infoBody,5,7,367,
             selected.known and "Открыто в бестиарии" or "Ещё не встречено",
