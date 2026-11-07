@@ -317,8 +317,8 @@ static void LootPreview(Player* p, uint32 entry, uint32 page)
                 uint32 item=f[0].GetUInt32();
                 if (!sObjectMgr->GetItemTemplate(item)) continue;
                 // Chance is the database column, NOT the final drop probability.
-                Send(p,Trinity::StringFormat("LITEM|{}|{:.3f}|{}|{}|{}|{}|{}",
-                    item,f[1].GetFloat(),f[2].GetUInt32(),
+                Send(p,Trinity::StringFormat("LITEM|{}|{}|{:.3f}|{}|{}|{}|{}|{}",
+                    entry,item,f[1].GetFloat(),f[2].GetUInt32(),
                     f[3].GetUInt32(),f[4].GetUInt32(),
                     f[5].GetUInt32(),f[6].GetUInt32()));
             } while (rows->NextRow());
