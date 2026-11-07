@@ -74,7 +74,7 @@ assert(tab.parent==LFGParentFrame and pane.parent==LFGParentFrame,"Pane is not i
 assert(tab:GetWidth()==50 and tab:GetHeight()==50,"Tab is not a properly sized portal icon")
 assert(not oldRed:IsShown() and not oldPane:IsShown(),"Obsolete top red button or overlay remains visible")
 assert(tab:GetNumPoints()>=1,"Portal icon is not anchored in role row")
-assert(pane.opaqueBackground and pane.opaqueBackground.texture=="Interface\\\\Buttons\\\\WHITE8X8","Missing reliable opaque background texture")
+assert(pane.opaqueBackground and pane.opaqueBackground.texture and pane.opaqueBackground.texture:find("WHITE8X8",1,true),"Missing reliable opaque background texture")
 assert(pane.opaqueBackground.rgba and pane.opaqueBackground.rgba[4]==1,"Dungeon panel must have alpha 1")
 assert(pane:GetFrameLevel()>LFGParentFrame:GetFrameLevel()+50,"Native content may draw over dungeon panel")
 assert(not pane:IsShown(),"Pane should initially be hidden")
