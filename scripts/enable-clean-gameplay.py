@@ -91,7 +91,8 @@ def configure(before, model, candidate, folder, scaling=True):
                               scaling=SCALING_VERSION if scaling else None, backup=str(folder / 'install.json'))
     result['services']['worldserver']['environment'].update(
         FOREVER_ENCYCLOPEDIA_ENABLED='1', FOREVER_SCALING_ENABLED='1' if scaling else '0',
-        FOREVER_SCALING_DAMAGE_GUARD='1', FOREVER_SCALING_MIN_OFFSET='-9', FOREVER_SCALING_CREATURE_MAX_LEVEL='70')
+        FOREVER_SCALING_DAMAGE_GUARD='1', FOREVER_SCALING_MIN_OFFSET='-3',
+        FOREVER_DUNGEON_SCALING_ENABLED='0', FOREVER_DUNGEON_FINDER_ENABLED='0', FOREVER_SCALING_CREATURE_MAX_LEVEL='70')
     return target, result
 
 
