@@ -249,6 +249,14 @@ class AdvancementUITests(unittest.TestCase):
                 if status:self.fail(lib.lua_tolstring(state,-1,None).decode())
         finally:lib.lua_close(state)
 
+    def test_native_menu_remains_usable_on_the_current_server_without_donor_data(self):
+        self.lua(r'''
+open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CATALOG');parse('ENTRY 10 116 4 0 8');parse('TENTRY 398 3 10 1 0 8 11069');parse('END')
+selectedClass=8;selectedTab='Forever';refresh();assert(byId[10] and not byId[398]);assert(not xpShareButton:IsShown())
+local abilities,talents=visible();assert(#abilities==1 and #talents==0);advance();abilityNodes[1].scripts.OnClick(abilityNodes[1],'LeftButton');assert(sent[#sent]=='learn 10')
+parse('STATE 1 20 1 8');parse('ENTRY 10 116 4 1 8');parse('LEARNED 10');parse('END');assert(#byClass[8]==1)
+''')
+
     def test_real_catalog_menu_and_mixed_class_purchases_survive_filter_and_polls(self):
         self.lua(r'''
 open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
@@ -368,7 +376,7 @@ parse('STATE 8 20 0 8');parse('KNOWN 100 116');parse('END');refresh();local n=ab
 
     def test_talent_window_button_attaches_after_delayed_frame_load_and_uses_native_tooltip_id(self):
         self.lua(r"""
-open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG');parse('TENTRY 398 3 10 1 0 8 11069');parse('TALENT 398 2 12338');parse('END')
+open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE');parse('NATIVE 398 8 11069 10 1 3 500 0 native_rules_required');parse('TALENT 398 2 12338');parse('END')
 assert(compatible[398].spell==12338)
 PlayerTalentFrame=CreateFrame('Frame','PlayerTalentFrame',UIParent)
 for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED') end end

@@ -360,7 +360,7 @@ local function build()
  summary=label(window,"","GameFontHighlightSmall");summary:SetPoint("TOPLEFT",151,-49)
  selectedText=label(window,"","GameFontNormalLarge");selectedText:SetPoint("TOPLEFT",151,-114)
  activateButton=button(window,"Активировать",145,function() send("activate "..(state and selectedClass==state.primary and 0 or selectedClass)) end);activateButton:SetPoint("TOPRIGHT",-20,-108)
- xpShareButton=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");xpShareButton:SetSize(24,24);xpShareButton:SetPoint("TOPLEFT",151,-91)
+ xpShareButton=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");xpShareButton:SetSize(24,24);xpShareButton:SetPoint("TOPRIGHT",-435,-108)
  local xpLabel=label(xpShareButton,"Передавать 90% опыта подклассу","GameFontHighlightSmall");xpLabel:SetPoint("LEFT",xpShareButton,"RIGHT",3,0)
  xpShareButton:SetScript("OnClick",function(self) send("xpshare "..(self:GetChecked() and "1" or "0")) end);xpShareButton:Hide()
  progressText=label(window,"","GameFontHighlightSmall");progressText:SetPoint("TOPLEFT",151,-64);progressText:SetWidth(540);progressText:SetJustifyH("LEFT")
@@ -389,7 +389,7 @@ local function build()
   if not state then send("status");return end
   local candidates={}
   for id,d in pairs(compatible) do
-   if d.kind=="ability" and not customRule(byId[id]) and d.owner~=state.primary and d.level<=classLevel(d.owner) and not state.learned[id] and byId[id] then table.insert(candidates,id) end
+   if d.kind=="ability" and d.available~=false and not customRule(byId[id]) and d.owner~=state.primary and d.level<=classLevel(d.owner) and not state.learned[id] and byId[id] then table.insert(candidates,id) end
   end
   table.sort(candidates)
   local row=byId[candidates[1]]
@@ -430,8 +430,17 @@ local function parse(text)
  elseif kind=="CUSTOM" and pending then pending.custom[canonical(tonumber(words[2]))]={count=tonumber(words[5]) or 0,implemented=words[6]=="1"}
  elseif kind=="POWER" and pending then pending.powers[tonumber(words[2])]={current=tonumber(words[3]),maximum=tonumber(words[4])}
  elseif kind=="REGEN" and pending then pending.regen={normal=tonumber(words[2]),combat=tonumber(words[3])}
- elseif kind=="ENTRY" and pending and not nativeCatalog then compatible[tonumber(words[2])]={kind="ability",spell=tonumber(words[3]),level=tonumber(words[4]),owner=tonumber(words[6])}
- elseif kind=="TENTRY" and pending then compatible[tonumber(words[2])]={kind="talent",max=tonumber(words[3]),level=tonumber(words[4]),cost=tonumber(words[5]),investment=tonumber(words[6]),owner=tonumber(words[7]),spell=tonumber(words[8]),trait=tonumber(words[9]),traitEntry=tonumber(words[10])}
+ elseif kind=="ENTRY" and pending and not nativeCatalog then
+  -- 1.11 server compatibility: use only its verified native spell IDs, never donor names/trees.
+  local id,spell,level,owner=tonumber(words[2]),tonumber(words[3]),tonumber(words[4]),tonumber(words[6])
+  if classes[owner] then
+   if not byId[id] then
+    local row={ID=id,Class=classes[owner][1],Type="Ability",Tab="Forever",Spells={spell},RequiredLevel=level,Name="Spell "..spell}
+    byId[id]=row;table.insert(byClass[owner],row)
+   end
+   compatible[id]={kind="ability",spell=spell,level=level,owner=owner,available=true}
+  end
+ elseif kind=="TENTRY" and pending then -- legacy 3.3.5 tree stays hidden
  elseif kind=="TPOINTS" and pending then pending.talentFree=tonumber(words[2]);pending.talentSpent=tonumber(words[3]);pending.talentTotal=tonumber(words[4])
  elseif kind=="TALENT" and pending then
   local id=tonumber(words[2]);pending.talents[id]=tonumber(words[3]);if compatible[id] and words[4] then compatible[id].spell=tonumber(words[4]) end

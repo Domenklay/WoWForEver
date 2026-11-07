@@ -5,8 +5,10 @@ Only the verified backup is read. No live Compose, ports, paths, tags or databas
 are changed. Saved image IDs must already be local. Game-client login is not tested.
 """
 import argparse
+import copy
 from datetime import datetime, timezone
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -101,7 +103,7 @@ def checked_manifest(manifest):
 
 
 class ServicesTrial:
-    def __init__(self, manifest, folder, nonce):
+    def __init__(self, manifest, folder, nonce, candidate=None):
         if not re.fullmatch('[0-9a-f]{12}', nonce):
             raise ValueError('Invalid trial identity')
         self.manifest, self.folder, self.nonce = manifest, base.direct(folder), nonce
@@ -110,6 +112,11 @@ class ServicesTrial:
         self.names = {s: self.name + '-' + s for s in SERVICES}
         self.volumes = [self.name + '-world-logs', self.name + '-bnet-logs']
         self.db = sql.MysqlTrial(manifest['images']['mysql']['id'], folder, nonce)
+        self.images=copy.deepcopy(manifest['images'])
+        self.candidate=candidate
+        if candidate:
+            if not re.fullmatch('sha256:[0-9a-f]{64}',candidate): raise ValueError('Candidate requires an exact local image ID')
+            self.images['worldserver']['id']=candidate
         self.allocated = False
         self.password = secrets.token_hex(24)
         self.soap = secrets.token_hex(24)
@@ -146,6 +153,10 @@ class ServicesTrial:
                 self.advancement_version=labels.get('org.wowforever.advancement')
                 if self.advancement_version not in ('1.11.0','1.12.0') or any(labels.get(k) != v for k, v in expected.items()):
                     raise ValueError('Saved gameplay image labels differ from the backup')
+        if self.candidate:
+            item=base.game.adv.image(self.candidate)
+            base.game.check_image(item,{'core':self.manifest['core']},candidate=True)
+            self.advancement_version=base.game.adv.VERSION
         for kind, name, role in self.resources():
             if self.owned(kind, name, role):
                 raise ValueError('Trial resource already exists; no existing resource reused')
@@ -239,7 +250,7 @@ class ServicesTrial:
             args += ['--add-host', 'trinity.actual.battle.net:127.0.0.1']
         for mount in mounts:
             args += ['--mount', mount]
-        args += [self.manifest['images'][service]['id']]
+        args += [self.images[service]['id']]
         if service != 'web':
             args += [service]
         sql.docker(*args)
@@ -253,7 +264,7 @@ class ServicesTrial:
             raise ValueError('Trial service is missing')
         host = item['HostConfig']
         network = item.get('NetworkSettings', {}).get('Networks', {})
-        if (item['Image'] != self.manifest['images'][service]['id']
+        if (item['Image'] != self.images[service]['id']
                 or host.get('NetworkMode') != self.network or host.get('PortBindings')
                 or host.get('Binds') or host.get('Privileged') or set(network) != {self.network}
                 or host.get('RestartPolicy', {}).get('Name') != 'no'):
@@ -377,7 +388,7 @@ print(json.dumps(result))
             shutil.rmtree(fs)
 
 
-def run_check(backup, work_parent, timeout=600):
+def run_check(backup, work_parent, timeout=600, candidate=None):
     backup, work_parent = base.direct(backup), base.direct(work_parent)
     print('Verifying the existing server baseline...', flush=True)
     manifest = base.verify(backup)
@@ -395,10 +406,10 @@ def run_check(backup, work_parent, timeout=600):
     nonce = secrets.token_hex(6)
     folder = work_parent / (PREFIX + nonce)
     folder.mkdir(mode=0o700)
-    trial = ServicesTrial(manifest, folder, nonce)
+    trial = ServicesTrial(manifest, folder, nonce, candidate=candidate) if candidate else ServicesTrial(manifest, folder, nonce)
     report_path = folder / 'report.json'
     report = dict(format=FORMAT, nonce=nonce, backup=str(backup), images=manifest['images'],
-                  created_utc=datetime.now(timezone.utc).isoformat(), phase='prepared',
+                  created_utc=datetime.now(timezone.utc).isoformat(), phase='prepared', candidate_image=candidate,
                   database_verified=False, services_verified=False, cleanup_verified=False,
                   client_login_verified=False, image_archive_load_tested=False,
                   full_server_restore_verified=False)
@@ -416,12 +427,20 @@ def run_check(backup, work_parent, timeout=600):
         trial.db.restore(backup / 'databases-current.sql.gz')
         report['snapshot'], report['module_rows'] = sql.check_restored(trial.db, manifest['database_snapshot'])
         report['database_verified'] = True
+        if candidate:
+            trial.db.sql('USE characters;\n'+(base.game.ROOT/'mods/forever-advancement/sql/preferences.sql').read_text())
         report['phase'] = 'starting-services'; save()
         trial.attach_database()
         print('Starting restored world/login/web on an internal network; no host ports...', flush=True)
         for service in SERVICES:
             trial.create(service)
         report['world_readiness'] = trial.ready(timeout)
+        if candidate:
+            audit=trial.exec('worldserver','python3','-c',
+                "from pathlib import Path; p=Path('/opt/trinitycore/logs/ForeverAdvancement-catalog.tsv'); assert p.stat().st_size<32*1024*1024; print(p.read_text(),end='')")
+            audit_path=folder/'native-catalog.tsv'
+            audit_path.write_text(audit);audit_path.chmod(0o600)
+            report['native_catalog_audit']={'path':str(audit_path),'sha256':hashlib.sha256(audit.encode()).hexdigest(),'rows':max(0,len(audit.splitlines())-1)}
         deadline = time.monotonic() + 120
         while True:
             for service in SERVICES:
@@ -464,7 +483,7 @@ def run_check(backup, work_parent, timeout=600):
             report['phase'] = 'cleanup-needed'; save()
             print('Service trial cleanup needs attention. Report: ' + str(report_path), file=sys.stderr)
             raise
-    print('RESTORED SERVICES VERIFIED: ' + str(report_path), flush=True)
+    print(('CANDIDATE SERVICES VERIFIED: ' if candidate else 'RESTORED SERVICES VERIFIED: ') + str(report_path), flush=True)
     return report
 
 
@@ -488,6 +507,7 @@ def main():
     choice.add_argument('--backup', type=Path)
     choice.add_argument('--cleanup-report', type=Path)
     p.add_argument('--work-parent', type=Path, default=Path.home() / 'WoWForEver-restore-trials')
+    p.add_argument('--candidate-image', help='Trial an exact verified local gameplay image on a restored clone')
     p.add_argument('--timeout', type=int, default=600)
     args = p.parse_args()
     if not 60 <= args.timeout <= 1800:
@@ -500,7 +520,7 @@ def main():
         if args.cleanup_report:
             cleanup_report(args.cleanup_report)
         else:
-            run_check(args.backup, args.work_parent, args.timeout)
+            run_check(args.backup, args.work_parent, args.timeout, args.candidate_image)
 
 
 if __name__ == '__main__':

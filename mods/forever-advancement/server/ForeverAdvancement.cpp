@@ -375,6 +375,7 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
         for(auto const& [id,row]:NativeMenu)
         {
             auto d=row.kind==0?BestFor(p,s,id):nullptr;
+            if(!d&&Catalog.count(id)) d=&Catalog.at(id).front();
             Send(p,Trinity::StringFormat("NATIVE {} {} {} {} {} {} {} {} {}",id,row.owner,d?d->spell:row.spell,d?d->level:row.level,row.kind,row.max,row.traitEntry,row.available?1:0,row.reason));
         }
     }
@@ -437,12 +438,12 @@ static void Request(Player* p,std::string const& payload)
         if(result!=SPELL_CAST_OK) Send(p,Trinity::StringFormat("ERROR native_cast_{}",uint32(result)));
         return;
     }
-    if(p->IsInCombat()||!p->IsAlive()||p->HasUnitState(UNIT_STATE_CASTING)) { Error(p,"cannot_edit_now");return; }
     if(command=="xpshare")
     {
         if(arg>1) { Error(p,"invalid_request");return; }
         s.experienceEnabled=arg!=0;s.experienceCarry=0;Save(p,s);Snapshot(p,s);return;
     }
+    if(p->IsInCombat()||!p->IsAlive()||p->HasUnitState(UNIT_STATE_CASTING)) { Error(p,"cannot_edit_now");return; }
     if(command=="activate")
     {
         if(arg&&(!SupportedClass(arg)||arg==p->GetClass())) { Error(p,"invalid_subclass");return; }
@@ -756,13 +757,14 @@ public:
                 { definitions.push_back({id,owner,spell,std::max<uint32>(1,info->SpellLevel)});++accepted; }
             }
         }
+        for(auto& [id,rows]:Catalog) std::sort(rows.begin(),rows.end(),[](auto const& a,auto const& b){return a.level<b.level;});
         for(auto const& row:AscensionSourceEntries)
         {
             uint32 first=sSpellMgr->GetFirstSpellInChain(row.spell);if(!first) first=row.spell;
             uint32 id=1000000000+row.owner*10000000+first;
             auto info=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
             if(!ForeverAdvancementCustom::Find(row.id)&&Catalog.count(id)&&info&&SourceNameMatches(info,row.names)) LegacyAbilityIds.emplace(row.id,id);
-            record("legacy",row.owner,row.spell,Catalog.count(id)?"exact_native":"hidden_no_exact_native");
+            record("legacy",row.owner,row.spell,LegacyAbilityIds.count(row.id)?"exact_native":"hidden_no_exact_native");
         }
         // Browse actual class-tree definitions. Legacy purchases remain saved but are not replayed
         // as native talents. Native allocation must use real node/choice/currency/condition rules.
