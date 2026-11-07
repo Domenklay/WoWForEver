@@ -10,7 +10,7 @@
     "gameplay": "user confirmed general working gameplay; detailed acceptance incomplete",
     "backup_and_database_restore": "user-supplied BASELINE BACKUP VERIFIED and DATABASE RESTORE VERIFIED output on 2026-11-07; source 877b877",
     "restored_services": "user-supplied RESTORED SERVICES VERIFIED output on source b282fb2; world/modules, login TCP/TLS, web, SQL clone and cleanup passed",
-    "multiclass_ui": "User screenshots show Ascension 1.12 UI with backend 1.11 (XP update-server marker); read-only probes identify PlayerSpellsFrame with TabSystem, SpecFrame, TalentsFrame and SpellBookFrame"
+    "multiclass_ui": "User screenshot of 1.13 shows missing visible tab and /fa on a hidden retail page. Copied frame diagnostics confirm visible PlayerSpellsFrame.TalentsFrame.TabSystem=301x32; ButtonsParent=1212x641 is the node canvas. AddOn-only 1.13.1 fix awaits in-game confirmation."
   },
   "server": {
     "phase": "ready",
@@ -228,10 +228,12 @@
     "addon_catalog_ci_run": 42381723594,
     "addon_catalog_pinned_payloads_verified": true,
     "launcher_browser_ui_verified": true,
-    "multiclass_unit_suite_total": 488,
+    "multiclass_unit_suite_total": 490,
     "multiclass_unit_suite_skipped": 30,
     "advancement_native_core_ci_run": 42380875759,
-    "native_worker_ci_run": 42380875760
+    "native_worker_ci_run": 42380875760,
+    "multiclass_ui_tests": 27,
+    "multiclass_ui_fix_ci_run": 42384393223
   },
   "known_limits": [
     "Ability Essence economy is incomplete; purchase limit is used",
@@ -270,7 +272,7 @@
     "candidate_user_trial_verified": false,
     "source_commit": "ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2",
     "native_talents_validator": "TraitMgr::ValidateConfig with native conditions, dependencies, choices and currencies; unsupported mechanics remain blocked",
-    "native_talent_tab": "PlayerSpellsFrame:AddNamedTab",
+    "native_talent_tab": "Sibling tab after PlayerSpellsFrame.TalentsFrame.TabSystem (301x32), inside TalentsFrame and above ButtonsParent node canvas",
     "ability_list_scrolling": true,
     "excluded_classes": [
       12,
@@ -279,7 +281,9 @@
     "native_hunter_basics": true,
     "transient_class_equipment_proficiencies": true,
     "native_tab_user_verified": false,
-    "addon_catalog_ci_run": 42381723594,
-    "testing_release": "testing-70658-20261107-13"
+    "testing_release": "testing-70658-20261107-15",
+    "addon_version": "1.13.1",
+    "addon_source_commit": "9ae2d724fb9451812fc611501fb10a82d9590619",
+    "addon_only_fix_requires_server_rebuild": false
   }
 }

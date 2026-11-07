@@ -92,7 +92,7 @@ working baseline launcher remains 1.7.0, with previous verified release 1.7.1.
 
 Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
 catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
-sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has Ascension 1.13.0 and Encyclopedia 0.9.19-v2.1-archive-filters. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
+sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.13.1 and Encyclopedia 0.9.20-v2.1-archive-layout; server candidate remains Ascension 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
 and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
 synchronize the working branch. Catalogue CI 42359312577 checked the actual pinned
 Git payloads. Metadata-only catalogue edits need no launcher rebuild. Old
@@ -161,15 +161,22 @@ Native talent branches/grid/edges/ranks use TraitMgr::ValidateConfig for allocat
 and refund. Complex unsupported effects/resources remain blocked. Do not bypass
 native conditions/choices/currencies. Old purchases/ranks remain stored.
 
-User read-only probes identify PlayerSpellsFrame with TabSystem/SpecFrame/
-TalentsFrame/SpellBookFrame. Integration.lua uses AddNamedTab/SetTab to host
-multiclass INSIDE that native window. Preserve other native pages, inspect mode,
-Escape handling and the independently developed Encyclopedia native tab.
-Do not revive the old red shortcut or close native talents to open a separate frame.
-Guide: docs/MULTICLASS-1.13.ru.md. Pinned source ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2.
-CI 42380875759/42380875788/42380875760 passed; 488 local tests, 30 skips.
-These are exact-header syntax compilations and fixtures, not a full user-side build
-or gameplay acceptance. The new native tab has not yet been seen in the actual game.
+User screenshot confirmed the initial 1.13 AddNamedTab adapter FAILED in-game:
+it selected a hidden retail page but created no tab in the visible talent window.
+The copied diagnostic report distinguishes TWO TabSystems. The visible loadout
+strip is PlayerSpellsFrame.TalentsFrame.TabSystem (301x32). The outer
+PlayerSpellsFrame.TabSystem is hidden. ButtonsParent (1212x641) is a clipped,
+high-level node canvas, NEVER the tab's parent. AddOn-only 1.13.1 anchors a sibling
+tab after the INNER strip, keeps that strip visible, and restores native trees
+when selecting Primary/Secondary or closing the page. /fa selects the same native
+TalentsFrame page. Do not add a hidden outer tab or revive a separate window.
+AddOn source: 9ae2d724fb9451812fc611501fb10a82d9590619. Protocol remains 3.
+No server rebuild is needed for this UI fix; server 1.11 still lacks the new trees
+and other 1.13 mechanics. Keep Encyclopedia's independent pin unchanged.
+Guide: docs/MULTICLASS-1.13.ru.md. Server source ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2.
+Server CI 42380875759/42380875788/42380875760 passed. Full local suite: 490 tests,
+30 skips; final native tab UI suite: 27 tests. New visible tab still needs user
+confirmation in-game. User server remains 1.11 until an actual apply result.
 
 Use upgrade-clean-gameplay.py prepare for a full build + isolated restored-baseline
 candidate trial, then its exact record and same checkout for apply/rollback. Accepts
