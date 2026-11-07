@@ -19,7 +19,7 @@ def inject(core,module=None):
     target=loader.parent/'ForeverAdvancement'
     if target.is_symlink() or (loader.parent/'ForeverSubclass').is_symlink():raise ValueError('Symlinked module path')
     target.mkdir(exist_ok=True)
-    for name in ['ForeverAdvancement.cpp','AscensionCatalog.h','AscensionCustomCatalog.h','CustomAbilityRules.h']:
+    for name in ['ForeverAdvancement.cpp','AscensionCatalog.h','AscensionCustomCatalog.h','CustomAbilityRules.h','ExperienceShare.h']:
         shutil.copy2(module/'server'/name,target/name)
     legacy=loader.parent/'ForeverSubclass'
     if legacy.exists():shutil.rmtree(legacy)

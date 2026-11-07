@@ -96,7 +96,7 @@ def configure(before, model, candidate, folder, scaling=True):
 
 
 def wait_module(state, timeout=180):
-    patterns = list(adv.READY_PATTERNS) + ['ForeverEncyclopedia ready:']
+    patterns = list(adv.ready_patterns(state)) + ['ForeverEncyclopedia ready:']
     if state['gameplay'].get('scaling'): patterns.append('ForeverScaling ready: personal-virtual-v0.2 (enabled=true')
     return adv.module_readiness.wait(clean, state, patterns, timeout)
 
@@ -147,7 +147,7 @@ def install(root, jobs, scaling=True, reuse_built_image=False):
     if before.get('gameplay'):
         expected = SCALING_VERSION if scaling else None
         if before['gameplay']['source_sha256'] != source_id() or before['gameplay']['scaling'] != expected:
-            raise ValueError('Another gameplay profile is active; use its rollback before changing the profile')
+            raise ValueError('Another gameplay profile is active; use upgrade-clean-gameplay.py for a progress-preserving transition')
         wait_module(before); print('GAMEPLAY ALREADY ACTIVE; no changes.'); return
     if before['core'] != clean.CORE: raise ValueError('This release requires the pinned 70658 core')
     model_text = Path(before['compose']).read_text(); model = json.loads(model_text)
@@ -187,7 +187,7 @@ def install(root, jobs, scaling=True, reuse_built_image=False):
         clean.save(target); upgrade.private_text(root / 'server.sh', upgrade.control_text(root), 0o700)
         if record['previous_running']: clean.compose(target, 'up', '-d', '--no-build', '--no-deps', *record['previous_running'])
         checkpoint(record, 'active'); (root / MARKER).unlink()
-        print('GAMEPLAY ACTIVE: Ascension 1.11.0, Encyclopedia ' + BOOK_VERSION + ', Scaling ' + (SCALING_VERSION if scaling else 'disabled'))
+        print('GAMEPLAY ACTIVE: Ascension ' + adv.VERSION + ', Encyclopedia ' + BOOK_VERSION + ', Scaling ' + (SCALING_VERSION if scaling else 'disabled'))
         print('Backup/rollback record: ' + str(folder / 'install.json'))
     except Exception as original:
         # Preserve candidate evidence before rollback recreates its container.

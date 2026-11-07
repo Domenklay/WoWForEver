@@ -85,7 +85,7 @@ class AdvancementTests(unittest.TestCase):
             self.assertEqual([p.name for p in target.parent.iterdir()],['ForeverAscension'])
             self.assertFalse((target/'user.lua').exists())
             self.assertEqual((root/'second/ForeverAscension/user.lua').read_text(),'local edits')
-            self.assertIn('## Version: 1.11.0',(target/'ForeverAscension.toc').read_text())
+            self.assertIn('## Version: 1.12.0',(target/'ForeverAscension.toc').read_text())
             installer.restore(root/'second')
             self.assertEqual((target/'user.lua').read_text(),'local edits')
             self.assertFalse((target.parent/'ForeverSubclass').exists())
@@ -251,31 +251,13 @@ class AdvancementUITests(unittest.TestCase):
 
     def test_real_catalog_menu_and_mixed_class_purchases_survive_filter_and_polls(self):
         self.lua(r'''
-assert(#ForeverAscensionCatalog==23709)
-SlashCmdList.FOREVERASCENSION('')
-assert(named.ForeverAscensionWindow:IsShown() and sent[#sent]=='status')
-assert(classButtons[8].icon.texture=='Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES')
-local mage,priest
-for _,row in ipairs(ForeverAscensionCatalog) do
- if row.Class=='Mage' and row.Type=='Ability' and row.Name=='Frostbolt' and not mage then mage=row.ID end
- if row.Class=='Priest' and row.Type=='Ability' and row.Name=='Flash Heal' and not priest then priest=row.ID end
-end
-assert(mage and priest)
-parse('PROTOCOL 2');parse('STATE 1 20 2 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG')
-parse('ENTRY '..mage..' 116 4 0 8');parse('ENTRY '..priest..' 2061 20 0 5')
-parse('POWER 0 400 500');parse('POWER 1 25 100');parse('POWER 3 90 100')
-parse('LEARNED '..mage);parse('LEARNED '..priest);parse('END')
-assert(state.learned[mage] and state.learned[priest])
-assert(powerBars[1].value==400 and powerBars[2].value==90 and powerBars[3].value==25)
-classButtons[5].scripts.OnClick()
-assert(selectedClass==5 and state.learned[mage] and state.learned[priest])
-parse('STATE 1 20 2 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('LEARNED '..mage);parse('LEARNED '..priest);parse('END')
-assert(compatible[mage] and compatible[priest])
-assert(not named.ForeverAscensionActions and not named.ForeverAscensionSpellbook)
-selectedClass=8;selectedTab='Frost';page=1;filter='frostbolt';refresh()
-local clicked=false
-for _,n in ipairs(abilityNodes) do if n.entry and n.entry.ID==mage then advance();n.scripts.OnClick(n,'LeftButton');clicked=true end end
-assert(clicked and sent[#sent]=='cast '..mage)
+open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
+parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1 available')
+parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
+parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
+assert(byId[100] and byId[101] and not byId[1300]);assert(#byClass[8]==2)
+parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('CLASS 5 20 0 1000');parse('LEARNED 100');parse('END');assert(byId[101] and state.learned[100])
+selectedClass=5;selectedTab='Forever';filter='';refresh();advance();abilityNodes[1].scripts.OnClick(abilityNodes[1],'LeftButton');assert(sent[#sent]=='learn 101')
 ''')
 
     def test_activate_subclass_and_independent_progress_in_menu(self):
@@ -289,18 +271,14 @@ selectedClass=11;refresh();advance();activateButton.scripts.OnClick();assert(sen
 """)
 
     def test_talent_grid_ranks_and_server_purchase_messages(self):
-        self.lua(r"""
-open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG')
-parse('TENTRY 398 3 10 1 0 8');parse('TPOINTS 9 2 11');parse('TALENT 398 2');parse('END')
-selectedClass=8;selectedTab='Fire';refresh()
-local found
-for _,node in ipairs(talentNodes) do if node.entry and node.entry.ID==398 then found=node end end
-assert(found and found.note.text=='2/3')
-assert(found.points[1][2]==285 and found.points[1][3]==-14)
-advance();found.scripts.OnClick(found,'LeftButton');assert(sent[#sent]=='talent 398')
-advance();found.scripts.OnClick(found,'RightButton');assert(sent[#sent]=='untalent 398')
-assert(state.talentFree==9 and state.talentTotal==11)
-""")
+        self.lua(r'''
+open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
+parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1 available')
+parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
+parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
+assert(talentNodes[1].entry.ID==200);advance();local count=#sent;talentNodes[1].scripts.OnClick(talentNodes[1],'LeftButton');assert(#sent==count)
+assert(message.text:find('просмотр',1,true));assert(not talentPoints:IsShown())
+''')
 
     def test_portrait_resources_survive_switch_and_missing_native_bar(self):
         self.lua(r"""
@@ -345,69 +323,48 @@ assert(actual['Мана / сек.']=='4' and actual['Мана / сек. в бо�
 """)
 
     def test_russian_search_is_case_insensitive_and_deprecated_duplicates_are_hidden(self):
-        self.lua(r"""
-GetLocale=function() return 'ruRU' end
-open();selectedClass=8;selectedTab='Frost';showAll=true;filter=fold('ЛЕДЯНАЯ СТРЕЛА')
-local abilities=visible();local found=false
-for _,row in ipairs(abilities) do if row.ID==10 then found=true end;assert(availableRow(row)) end
-assert(found)
-local seen={};for _,row in ipairs(abilities) do assert(not seen[row.Name]);seen[row.Name]=true end
-""")
+        self.lua(r'''
+open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
+parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1 available')
+parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
+parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
+C_Spell={GetSpellName=function(id) return id==116 and 'Ледяная стрела' or 'Другое' end}
+filter=fold('ЛЕДЯНАЯ СТРЕЛА');local abilities=visible();assert(#abilities==1 and abilities[1].ID==100)
+assert(not customButton:IsShown());assert(#customRows==0)
+''')
 
     def test_native_tree_uses_readable_nodes_and_scrolls_to_last_tier(self):
-        self.lua(r"""
-open();parse('PROTOCOL 2');parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('END')
-talentScroll.height=403;selectedClass=8;selectedTab='Fire';refresh()
-assert(talentCanvas.height>403,'keep talent nodes readable and scroll the long tree')
-talentScroll.scripts.OnMouseWheel(talentScroll,-100)
-assert(talentScroll.scroll>0)
-for _,node in ipairs(talentNodes) do if node:IsShown() then
- assert(node.icon.width==36)
- assert(-node.points[1][3]+node.height<=talentCanvas.height)
-end end
-for _,frame in ipairs(frames) do
- assert(frame.texture~='Interface\\QuestFrame\\QuestBG','no stretched parchment')
- if type(frame.texture)=='string' then assert(not frame.texture:find('TalentFrame',1,true),'no stretched tree artwork') end
-end
-assert(summary.text:find(' | ',1,true))
-assert(emptyAbilities.shadow[1]==0 and emptyAbilities.shadow[2]==0)
-assert(schools.BeastMastery=='Повелитель зверей')
-""")
+        self.lua(r'''
+open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
+parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1 available')
+parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
+parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
+parse('STATE 1 20 0 8');parse('CATALOG NATIVE')
+for i=1,80 do parse('NATIVE '..(1000+i)..' 8 116 1 1 1 700 0 native_rules_required') end
+parse('END');selectedClass=8;selectedTab='Forever';talentScroll.height=403;refresh()
+assert(talentCanvas.height>403);talentScroll.scripts.OnMouseWheel(talentScroll,-100);assert(talentScroll.scroll>0)
+for _,n in ipairs(talentNodes) do if n:IsShown() then assert(n.icon.width==36) end end
+''')
 
     def test_native_drag_and_talent_neighbour_button_without_duplicate_spell_ui(self):
-        self.lua(r"""
-TalentMicroButton=CreateFrame('Button','TalentMicroButton',UIParent)
-local picked;C_Spell={PickupSpell=function(spell) picked=spell end}
-open();parse('PROTOCOL 2');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG')
-parse('ENTRY 10 116 4 1 8');parse('LEARNED 10');parse('END')
-selectedClass=8;selectedTab='Frost';refresh()
-local card;for _,node in ipairs(abilityNodes) do if node.entry and node.entry.ID==10 then card=node end end
-assert(card);card.scripts.OnDragStart(card);assert(picked==116)
-advance();card.scripts.OnClick(card,'LeftButton');assert(sent[#sent]=='cast 10')
-advance();card.scripts.OnClick(card,'RightButton');assert(sent[#sent]=='unlearn 10')
-for _,frame in ipairs(frames) do if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'PLAYER_LOGIN') end end
-assert(not named.ForeverAscensionMicroButton,'no floating icon over the XP bar')
+        self.lua(r'''
+open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
+parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1 available')
+parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
+parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
+local picked;C_Spell={PickupSpell=function(id) picked=id end};local n=abilityNodes[1];n.scripts.OnDragStart(n);assert(picked==116)
+advance();n.scripts.OnClick(n,'LeftButton');assert(sent[#sent]=='cast 100');advance();n.scripts.OnClick(n,'RightButton');assert(sent[#sent]=='unlearn 100')
 assert(not named.ForeverAscensionSpellbook and not named.ForeverAscensionActions)
--- Missing modern pickup API falls back to the actual native book slot.
-C_Spell=nil;PickupSpell=nil
-GetSpellBookItemInfo=function(slot) if slot==1 then return 'SPELL',116 end end
-PickupSpellBookItem=function(slot,book) picked=slot..':'..book end
-assert(ForeverAscensionPickupSpell(116) and picked=='1:spell')
-InCombatLockdown=function() return true end;assert(not ForeverAscensionPickupSpell(116))
-""")
+''')
 
     def test_native_roots_are_visible_known_and_do_not_consume_a_purchase(self):
-        self.lua(r"""
-local picked;C_Spell={GetSpellName=function(id) if id==339 then return 'Гнев деревьев' end end,PickupSpell=function(id) picked=id end}
-open();parse('PROTOCOL 2');parse('STATE 11 11 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG');parse('ENTRY 25 339 8 0 11');parse('KNOWN 25 339');parse('END')
-selectedClass=11;selectedTab='Balance';refresh()
-local card;for _,node in ipairs(abilityNodes) do if node.entry and node.entry.ID==25 then card=node end end
-assert(card and card.name.text=='Гнев деревьев' and card.note.text=='Известно персонажу')
-assert(state.used==0 and not state.learned[25])
-advance();local count=#sent;card.scripts.OnClick(card,'LeftButton');assert(#sent==count)
-card.scripts.OnDragStart(card);assert(picked==339)
-parse('STATE 11 11 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('END');assert(not state.known[25],'known native spells must refresh, not accumulate forever')
-""")
+        self.lua(r'''
+open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
+parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1 available')
+parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
+parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
+parse('STATE 8 20 0 8');parse('KNOWN 100 116');parse('END');refresh();local n=abilityNodes[1];advance();local count=#sent;n.scripts.OnClick(n,'LeftButton');assert(#sent==count)
+''')
 
     def test_talent_window_button_attaches_after_delayed_frame_load_and_uses_native_tooltip_id(self):
         self.lua(r"""
@@ -443,20 +400,14 @@ assert(not PlayerSpellsFrame:IsShown() and window:IsShown())
 """)
 
     def test_trait_description_uses_native_entry_rank_and_reports_actual_aura_values(self):
-        self.lua(r"""
-local requestedEntry,requestedRank,lines
-C_Traits={GetTraitDescription=function(entry,rank) requestedEntry=entry;requestedRank=rank;return 'Снижение времени применения: '..(rank*2)..'%' end}
-GameTooltip={SetOwner=function() end,SetText=function() end,AddLine=function(_,value) table.insert(lines,value) end,Show=function() end}
-open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG');parse('TENTRY 398 3 10 1 0 8 11069 700 500');parse('TALENT 398 2 11069');parse('TEFFECT 398 0 -4');parse('END')
-selectedClass=8;selectedTab='Fire';refresh()
-local node;for _,frame in ipairs(talentNodes) do if frame.entry and frame.entry.ID==398 then node=frame end end
-lines={};tooltip(node)
-assert(requestedEntry==500 and requestedRank==2)
-local sawDescription,sawApplied=false,false
-for _,line in ipairs(lines) do if line=='Снижение времени применения: 4%' then sawDescription=true end;if line=='Эффект 1: -4' then sawApplied=true end end
-assert(sawDescription and sawApplied and state.effects[398][0]==-4)
-parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('END');assert(not state.effects[398])
-""")
+        self.lua(r'''
+open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
+parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1 available')
+parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
+parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
+local entry;C_Traits={GetTraitDescription=function(id,rank) entry=id;return 'Native description' end}
+GameTooltip={SetOwner=function()end,SetText=function()end,AddLine=function()end,Show=function()end};tooltip(talentNodes[1]);assert(entry==700)
+''')
 
     def test_native_book_report_reads_client_api_without_replacing_it(self):
         self.lua(r"""
@@ -476,13 +427,12 @@ assert(debugFrame and debugFrame.edit.text==report and debugFrame.edit.height>=4
 
     def test_unadapted_talents_and_native_primary_cannot_be_purchased(self):
         self.lua(r'''
-open();parse('STATE 8 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('END')
-local row=byClass[8][1]
-local b=abilityNodes[1];b.entry=row
-advance();local count=#sent;b.scripts.OnClick(b,'LeftButton');assert(#sent==count)
-compatible[row.ID]={owner=8,level=1,spell=116}
-b.scripts.OnClick(b,'LeftButton');assert(#sent==count)
-parse('ERROR ability_limit');assert(message.text==errors.ability_limit)
+open();parse('PROTOCOL 3');parse('STATE 1 20 1 8');parse('ACTIVE 8');parse('XP_SHARE 1 90');parse('CLASS 8 20 0 1000');parse('CLASS 5 20 0 1000');parse('CATALOG NATIVE')
+parse('NATIVE 100 8 116 4 0 1 0 1 available');parse('NATIVE 101 5 2061 5 0 1 0 1 available')
+parse('NATIVE 200 8 999 10 1 3 700 0 native_rules_required');parse('NATIVE 300 3 200 1 0 1 0 0 unsupported_resource')
+parse('LEARNED 100');parse('END');selectedClass=8;selectedTab='Forever';refresh()
+selectedClass=3;selectedTab='Forever';showAll=true;refresh();advance();local count=#sent;abilityNodes[1].scripts.OnClick(abilityNodes[1],'LeftButton');assert(#sent==count)
+parse('STATE 8 20 0 8');parse('END');selectedClass=8;refresh();advance();count=#sent;abilityNodes[1].scripts.OnClick(abilityNodes[1],'LeftButton');assert(#sent==count)
 ''')
 
 

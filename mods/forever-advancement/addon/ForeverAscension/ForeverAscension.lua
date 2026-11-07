@@ -1,12 +1,15 @@
 local REQUEST,RESPONSE="FAC1","FAR1"
 local ABILITIES_PER_PAGE=8
-local order={11,3,8,2,5,4,7,9,1}
+local order={11,3,8,2,5,4,7,9,1,6,10,12,13}
 local classes={
  [1]={"Warrior","Воин","WARRIOR"},[2]={"Paladin","Паладин","PALADIN"},
  [3]={"Hunter","Охотник","HUNTER"},[4]={"Rogue","Разбойник","ROGUE"},
  [5]={"Priest","Жрец","PRIEST"},[7]={"Shaman","Шаман","SHAMAN"},
  [8]={"Mage","Маг","MAGE"},[9]={"Warlock","Чернокнижник","WARLOCK"},[11]={"Druid","Друид","DRUID"},
 }
+classes[6]={"DeathKnight","Рыцарь смерти","DEATHKNIGHT"};classes[10]={"Monk","Монах","MONK"}
+classes[12]={"DemonHunter","Охотник на демонов","DEMONHUNTER"};classes[13]={"Evoker","Пробудитель","EVOKER"}
+local nativeCatalog=false
 local classCoords={WARRIOR={0,0.25,0,0.25},MAGE={0.25,0.49609375,0,0.25},ROGUE={0.49609375,0.7421875,0,0.25},
  DRUID={0.7421875,0.98828125,0,0.25},HUNTER={0,0.25,0.25,0.5},SHAMAN={0.25,0.49609375,0.25,0.5},
  PRIEST={0.49609375,0.7421875,0.25,0.5},WARLOCK={0.7421875,0.98828125,0.25,0.5},PALADIN={0,0.25,0.5,0.75}}
@@ -28,15 +31,16 @@ local function canonical(id) return customRules[id] and customRules[id].entry or
 local byClass,byId={},{ }
 local customRows={}
 for id in pairs(classes) do byClass[id]={} end
-for _,entry in ipairs(ForeverAscensionCatalog or {}) do
+for _,entry in ipairs({}) do
  byId[entry.ID]=entry
- if not customRule(entry) then
+ if not customRule(entry) and entry.Type=="Ability" then
   for id,info in pairs(classes) do if entry.Class==info[1] then table.insert(byClass[id],entry);break end end
  elseif canonical(entry.ID)==entry.ID then table.insert(customRows,entry) end
 end
 local state,pending,compatible=nil,nil,{}
 local protocol=0
 local window,summary,message,search,previous,nextPage,pageText,selectedText,talentPoints,emptyAbilities,showAllButton
+local xpShareButton
 local activateButton,progressText,customButton,talentHeading,customHelp
 local talentScroll,talentCanvas
 local classButtons,tabButtons,abilityNodes,talentNodes,connectors={},{},{},{},{}
@@ -66,7 +70,7 @@ local function spellName(row)
  local known=state and state.known and state.known[row.ID]
  if known and C_Spell and C_Spell.GetSpellName then local text=C_Spell.GetSpellName(known);if text then return text end end
  if d and d.spell and C_Spell and C_Spell.GetSpellName then local text=C_Spell.GetSpellName(d.spell);if text then return text end end
- if GetLocale and GetLocale()=="ruRU" then local text=ForeverAscensionNamesRU[row.Spells and row.Spells[1]];if text then return text end end
+ if GetLocale and GetLocale()=="ruRU" then local text=(ForeverAscensionNamesRU or {})[row.Spells and row.Spells[1]];if text then return text end end
  if d and C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(d.spell or row.Spells[1]) or row.Name or tostring(row.ID) end
  return row.Name or ("Запись "..row.ID)
 end
@@ -136,6 +140,7 @@ local function tooltip(self)
  end
  if d and state and state.known[row.ID] and not state.learned[row.ID] then GameTooltip:AddLine("Это уже известное нативное заклинание. Перетащите иконку на панель; повторная покупка не нужна.",0.5,0.9,0.5,true)
  elseif d and state and d.owner==state.primary then GameTooltip:AddLine("Это ваш основной класс. Его способности и таланты изучаются штатно.",0.8,0.8,0.8,true)
+ elseif d and d.available==false then GameTooltip:AddLine(isTalent(row) and "Штатный талант Forever. Пока только просмотр: условия, выбор специализации и зависимости сохраняются за ядром." or "Штатная способность. Её ресурс пока не поддерживается мультиклассом.",0.9,0.7,0.4,true)
  elseif d then GameTooltip:AddLine(isTalent(row) and "ЛКМ - вложить очко. ПКМ - вернуть ранг." or "ЛКМ - изучить / применить. ПКМ - забыть. Изученную иконку можно перетащить.",0.5,0.9,0.5,true)
  else GameTooltip:AddLine("Запись каталога ещё не подключена к Forever: нет подтверждённого соответствия или её механика пока не поддерживается.",0.9,0.5,0.35,true) end
  GameTooltip:Show()
@@ -177,6 +182,7 @@ local function makeNode(parent,talent)
    return
   end
   local d=compatible[row.ID]
+  if d and d.available==false then message:SetText(isTalent(row) and "Штатный талант Forever: просмотр. Распределение подкласса требует проверки условий дерева." or "Ресурс или механика ещё не поддерживается мультиклассом.");return end
   if not d then message:SetText("Пока не подключено: "..spellName(row)..". Выберите «Только доступные».");return end
   if state.known[row.ID] and not state.learned[row.ID] then message:SetText("Это заклинание уже известно. Перетащите иконку или примените его из штатной книги.");return end
   if d.owner==state.primary then message:SetText("Способности основного класса изучаются штатно.");return end
@@ -196,7 +202,7 @@ local function visible()
  local canonical={}
  for _,row in ipairs(selectedClass==0 and customRows or byClass[selectedClass] or {}) do
   if availableRow(row) and (row.Type=="Ability" or isTalent(row)) then
-   local key=row.Type..":"..row.Tab..":"..tostring(row.Name or row.Spells[1] or row.ID)
+   local key=tostring(row.ID)
    local previousRow=canonical[key]
    if not previousRow or (compatible[row.ID] and not compatible[previousRow.ID]) or
       ((compatible[row.ID]~=nil)==(compatible[previousRow.ID]~=nil) and row.ID<previousRow.ID) then canonical[key]=row end
@@ -207,7 +213,7 @@ local function visible()
   local matches=not selectedTab or row.Tab==selectedTab
   if matches and (filter=="" or string.find(fold(spellName(row)),filter,1,true)) then
    if isTalent(row) then table.insert(talents,row)
-   elseif customRule(row) or showAll or compatible[row.ID] then table.insert(abilities,row) end
+   elseif showAll or (compatible[row.ID] and compatible[row.ID].available~=false) then table.insert(abilities,row) end
   end
  end
  local function sort(a,b) local x,y=a.RequiredLevel or 1,b.RequiredLevel or 1;return x==y and a.ID<b.ID or x<y end
@@ -246,7 +252,7 @@ local function renderTalents(rows)
  local nodeSize,iconSize=44,36
  for index,row in ipairs(rows) do
   local n=talentNodes[index] or makeNode(talentCanvas,true);talentNodes[index]=n;n.entry=row
-  local tier=math.floor((row.RequiredTEInvestment or 0)/3);local column=math.max(1,math.min(4,row.Column or 1))
+  local tier=math.floor((index-1)/4);local column=(index-1)%4+1
   maxTier=math.max(maxTier,tier)
   local x,y=35+(column-1)*125,-14-tier*rowStep
   n:ClearAllPoints();n:SetPoint("TOPLEFT",x,y);n:SetSize(nodeSize,nodeSize);n.icon:SetSize(iconSize,iconSize);n.border:SetSize(iconSize+15,iconSize+15)
@@ -254,7 +260,7 @@ local function renderTalents(rows)
   local d=compatible[row.ID];local rank=state and state.talents[row.ID] or 0
   local max=d and d.max or #row.Spells
   n.icon:SetTexture(icon(row));n.note:SetText(rank.."/"..max)
-  local locked=not d or not state or state.active~=d.owner or d.level>classLevel(d.owner) or lowerTierSpent(row)<(row.RequiredTEInvestment or 0)
+  local locked=not d or d.available==false or not state or state.active~=d.owner or d.level>classLevel(d.owner) or lowerTierSpent(row)<(row.RequiredTEInvestment or 0)
   if n.icon.SetDesaturated then n.icon:SetDesaturated(locked and true or false) end
   n:SetAlpha(d and 1 or 0.5);n.border:SetVertexColor(rank>0 and 0.3 or 0.85,rank>0 and 1 or 0.7,0.2)
   n.note:SetTextColor(rank==max and 0.3 or 1,rank==max and 1 or 0.82,rank==max and 0.3 or 0.2);n:Show()
@@ -282,13 +288,14 @@ refresh=function()
  if not window then return end
  local custom=selectedClass==0
  customButton:SetEnabled(not custom);activateButton:SetShown(not custom)
- talentScroll:SetShown(not custom);talentPoints:SetShown(not custom);customHelp:SetShown(custom)
- talentHeading:SetText(custom and "Кастомные способности" or "Таланты")
+ talentScroll:SetShown(not custom);talentPoints:Hide();customHelp:Hide()
+ talentHeading:SetText("Таланты Forever · просмотр")
  if state then
   summary:SetText("Основной класс: "..name(state.primary).."  |  Уровень "..state.level.."  |  Умения "..state.used.."/"..state.limit)
   local progress=state.classes and state.classes[selectedClass]
-  progressText:SetText("Опыт получает: "..name(state.active~=0 and state.active or state.primary)..(progress and (" | "..name(selectedClass)..": ур. "..progress.level.."/40, "..progress.xp.."/"..progress.next.." опыта") or ""))
-  activateButton:SetText(selectedClass==state.primary and "Опыт основному" or state.active==selectedClass and "Подкласс активен" or "Активировать")
+  progressText:SetText((state.xpShare==nil and "Распределение опыта: обновите сервер" or state.active~=0 and state.xpShare and "Опыт: 90% подклассу / 10% персонажу" or "Опыт: 100% персонажу")..(progress and (" | "..name(selectedClass)..": ур. "..progress.level.."/40, "..progress.xp.."/"..progress.next.." опыта") or ""))
+  xpShareButton:SetShown(state.xpShare~=nil);xpShareButton:SetChecked(state.xpShare==true)
+  activateButton:SetText(selectedClass==state.primary and "Основной класс" or state.active==selectedClass and "Подкласс активен" or "Активировать")
   activateButton:SetEnabled(state.active~=(selectedClass==state.primary and 0 or selectedClass))
   talentPoints:SetText("TE активного: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
  else summary:SetText("Ожидаем состояние персонажа...");talentPoints:SetText("TE мультикласса: —") end
@@ -334,9 +341,9 @@ local function build()
  window:SetScript("OnDragStart",window.StartMoving);window:SetScript("OnDragStop",window.StopMovingOrSizing)
  if UISpecialFrames then table.insert(UISpecialFrames,"ForeverAscensionWindow") end
  customButton=button(window,"Кастомное",116,function() selectedClass=0;selectedTab=nil;page=1;talentScroll:SetVerticalScroll(0);refresh() end)
- customButton:SetPoint("TOPLEFT",17,-49)
+ customButton:SetPoint("TOPLEFT",17,-49);customButton:Hide()
  for i,id in ipairs(order) do
-  local b=CreateFrame("Button",nil,window);b:SetSize(116,54);b:SetPoint("TOPLEFT",17,-89-(i-1)*59)
+  local b=CreateFrame("Button",nil,window);b:SetSize(116,38);b:SetPoint("TOPLEFT",17,-89-(i-1)*42)
   b.icon=b:CreateTexture(nil,"ARTWORK");b.icon:SetSize(38,38);b.icon:SetPoint("LEFT",4,0)
   b.icon:SetTexture("Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES")
   local coords=(CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classes[id][3]]) or classCoords[classes[id][3]];if coords then b.icon:SetTexCoord(unpack(coords)) else b.icon:SetTexture(134400) end
@@ -353,6 +360,9 @@ local function build()
  summary=label(window,"","GameFontHighlightSmall");summary:SetPoint("TOPLEFT",151,-49)
  selectedText=label(window,"","GameFontNormalLarge");selectedText:SetPoint("TOPLEFT",151,-114)
  activateButton=button(window,"Активировать",145,function() send("activate "..(state and selectedClass==state.primary and 0 or selectedClass)) end);activateButton:SetPoint("TOPRIGHT",-20,-108)
+ xpShareButton=CreateFrame("CheckButton",nil,window,"UICheckButtonTemplate");xpShareButton:SetSize(24,24);xpShareButton:SetPoint("TOPLEFT",151,-91)
+ local xpLabel=label(xpShareButton,"Передавать 90% опыта подклассу","GameFontHighlightSmall");xpLabel:SetPoint("LEFT",xpShareButton,"RIGHT",3,0)
+ xpShareButton:SetScript("OnClick",function(self) send("xpshare "..(self:GetChecked() and "1" or "0")) end);xpShareButton:Hide()
  progressText=label(window,"","GameFontHighlightSmall");progressText:SetPoint("TOPLEFT",151,-64);progressText:SetWidth(540);progressText:SetJustifyH("LEFT")
  search=CreateFrame("EditBox",nil,window,"InputBoxTemplate");search:SetSize(190,22);search:SetPoint("TOPRIGHT",-149,-46);search:SetAutoFocus(false)
  search:SetScript("OnTextChanged",function(self) filter=fold(self:GetText());page=1;refresh() end);search:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
@@ -406,12 +416,21 @@ local function parse(text)
  if kind=="ERROR" then if message then message:SetText(errors[words[2]] or text:sub(7)) end;return end
  if kind=="STATE" then pending={primary=tonumber(words[2]),level=tonumber(words[3]),used=tonumber(words[4]),limit=tonumber(words[5]),active=0,classes={},powers={},regen={},learned={},known={},talents={},effects={},custom={},talentFree=0,talentSpent=0,talentTotal=0}
  elseif kind=="ACTIVE" and pending then pending.active=tonumber(words[2]) or 0
+ elseif kind=="XP_SHARE" and pending then pending.xpShare=words[2]=="1"
  elseif kind=="CLASS" and pending then pending.classes[tonumber(words[2])]={level=tonumber(words[3]),xp=tonumber(words[4]),next=tonumber(words[5])}
- elseif kind=="CATALOG" and pending then compatible={}
+ elseif kind=="CATALOG" and pending then
+  compatible={};byId={};byClass={};for id in pairs(classes) do byClass[id]={} end;nativeCatalog=words[2]=="NATIVE"
+ elseif kind=="NATIVE" and pending and nativeCatalog then
+  local id,owner,spell=tonumber(words[2]),tonumber(words[3]),tonumber(words[4]);local talent=words[6]=="1"
+  if classes[owner] then
+   local row={ID=id,Class=classes[owner][1],Type=talent and "Talent" or "Ability",Tab="Forever",Spells={spell},RequiredLevel=tonumber(words[5]),RequiredTEInvestment=0,TECost=1,Name="Spell "..spell}
+   byId[id]=row;table.insert(byClass[owner],row)
+   compatible[id]={kind=talent and "talent" or "ability",owner=owner,spell=spell,level=row.RequiredLevel,max=tonumber(words[7]),traitEntry=tonumber(words[8]),available=words[9]=="1",reason=words[10]}
+  end
  elseif kind=="CUSTOM" and pending then pending.custom[canonical(tonumber(words[2]))]={count=tonumber(words[5]) or 0,implemented=words[6]=="1"}
  elseif kind=="POWER" and pending then pending.powers[tonumber(words[2])]={current=tonumber(words[3]),maximum=tonumber(words[4])}
  elseif kind=="REGEN" and pending then pending.regen={normal=tonumber(words[2]),combat=tonumber(words[3])}
- elseif kind=="ENTRY" and pending then compatible[tonumber(words[2])]={kind="ability",spell=tonumber(words[3]),level=tonumber(words[4]),owner=tonumber(words[6])}
+ elseif kind=="ENTRY" and pending and not nativeCatalog then compatible[tonumber(words[2])]={kind="ability",spell=tonumber(words[3]),level=tonumber(words[4]),owner=tonumber(words[6])}
  elseif kind=="TENTRY" and pending then compatible[tonumber(words[2])]={kind="talent",max=tonumber(words[3]),level=tonumber(words[4]),cost=tonumber(words[5]),investment=tonumber(words[6]),owner=tonumber(words[7]),spell=tonumber(words[8]),trait=tonumber(words[9]),traitEntry=tonumber(words[10])}
  elseif kind=="TPOINTS" and pending then pending.talentFree=tonumber(words[2]);pending.talentSpent=tonumber(words[3]);pending.talentTotal=tonumber(words[4])
  elseif kind=="TALENT" and pending then

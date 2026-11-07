@@ -77,7 +77,7 @@ class GameplayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); state, model, calls, compose, dump = self.run_install(root, previous_advancement=True)
             saved = game.clean.load_state(root / 'state.json')
-            self.assertEqual(saved['advancement']['version'], '1.11.0')
+            self.assertEqual(saved['advancement']['version'], '1.12.0')
             self.assertEqual(saved['gameplay']['encyclopedia'], game.BOOK_VERSION)
             self.assertEqual(saved['image'], 'candidate'); dump.assert_called_once()
             body = '\n'.join(calls)
@@ -133,7 +133,7 @@ class GameplayTests(unittest.TestCase):
 
     def test_a_matching_built_image_is_reused_without_compilation(self):
         state = dict(core=game.clean.CORE)
-        labels = {'org.wowforever.core':game.clean.CORE,'org.wowforever.advancement':'1.11.0',
+        labels = {'org.wowforever.core':game.clean.CORE,'org.wowforever.advancement':game.adv.VERSION,
                   'org.wowforever.advancement.source':game.adv.source_id(),
                   'org.wowforever.gameplay.source':game.source_id(),
                   'org.wowforever.encyclopedia':game.BOOK_VERSION,'org.wowforever.scaling':game.SCALING_VERSION}

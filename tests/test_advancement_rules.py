@@ -472,13 +472,14 @@ int main() {
     def test_subclass_xp_redirect_independent_progress_and_level_cap(self):
         source=SOURCE.read_text()
         code=r'''
+#include "ExperienceShare.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <map>
 using uint32=uint32_t;using uint64=uint64_t;
 struct ClassProgress {uint32 level=1;uint64 xp=0;};
-struct State {uint32 active=0;std::map<uint32,ClassProgress> classes;};
+struct State {bool experienceEnabled=true;uint32 experienceCarry=0;uint32 active=0;std::map<uint32,ClassProgress> classes;};
 struct Player {uint32 level=60,cls=11;uint32 GetLevel(){return level;}uint32 GetClass(){return cls;}};
 struct ObjectMgr {uint32 GetXPForLevel(uint32 level){return level*100;}} manager;
 auto sObjectMgr=&manager;
@@ -486,24 +487,23 @@ auto sObjectMgr=&manager;
 int main() {
  Player p;State s;uint32 amount=500;
  GrantClassXP(&p,s,amount);assert(amount==500&&s.classes.empty());
- s.active=8;GrantClassXP(&p,s,amount);assert(amount==0&&s.classes[8].level==3&&s.classes[8].xp==200);
- s.active=1;amount=50;GrantClassXP(&p,s,amount);
- assert(s.classes[1].level==1&&s.classes[1].xp==50&&s.classes[8].xp==200);
- auto restored=s;s=restored;s.active=8;amount=100;GrantClassXP(&p,s,amount);
- assert(s.classes[8].level==4&&s.classes[8].xp==0);
- amount=UINT32_MAX;GrantClassXP(&p,s,amount);
- assert(s.classes[8].level==40&&s.classes[8].xp==0&&ActiveLevel(&p,s)==40);
- amount=500;GrantClassXP(&p,s,amount);assert(amount==0&&s.classes[8].level==40);
- p.level=11;s.active=5;amount=UINT32_MAX;GrantClassXP(&p,s,amount);
- assert(s.classes[5].level==11&&s.classes[5].xp==0);
- p.level=12;amount=100;GrantClassXP(&p,s,amount);assert(s.classes[5].xp==100);
- assert(ClassLevel(&p,s,11)==12&&ClassLevel(&p,s,2)==1);
- assert(s.classes[1].xp==50&&s.classes[8].level==40);
+ s.active=8;GrantClassXP(&p,s,amount);assert(amount==50&&s.classes[8].level==3&&s.classes[8].xp==150);
+ s.experienceEnabled=false;amount=100;GrantClassXP(&p,s,amount);assert(amount==100&&s.classes[8].xp==150);
+ s.experienceEnabled=true;s.active=5;uint64 main=0;
+ for(int i=0;i<100;++i){amount=1;GrantClassXP(&p,s,amount);main+=amount;}
+ assert(main==10&&s.classes[5].xp==90);
+ s.active=8;s.classes[8]={39,3890};amount=1000;GrantClassXP(&p,s,amount);
+ assert(amount==990&&s.classes[8].level==40&&s.classes[8].xp==0&&ActiveLevel(&p,s)==40);
+ amount=500;GrantClassXP(&p,s,amount);assert(amount==500);
+ p.level=11;s.active=5;s.classes[5]={11,0};amount=UINT32_MAX;GrantClassXP(&p,s,amount);assert(amount==UINT32_MAX);
+ p.level=12;amount=100;GrantClassXP(&p,s,amount);assert(amount==10&&s.classes[5].xp==90);
+ s.active=1;amount=UINT32_MAX;GrantClassXP(&p,s,amount);assert(amount>0&&s.classes[1].level==12);
 }
+
 '''
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);(root/'test.cpp').write_text(code)
-            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            result=subprocess.run(['g++','-I',str(SOURCE.parent),'-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)
             subprocess.run([str(root/'test')],check=True,capture_output=True)
 

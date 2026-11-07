@@ -140,10 +140,11 @@ class ServicesTrial:
                 game = self.manifest['gameplay']
                 expected = {'org.wowforever.core': self.manifest['core'],
                             'org.wowforever.gameplay.source': game['source_sha256'],
-                            'org.wowforever.advancement': '1.11.0',
+                            'org.wowforever.advancement': labels.get('org.wowforever.advancement'),
                             'org.wowforever.encyclopedia': game['encyclopedia'],
                             'org.wowforever.scaling': '0.2.0'}
-                if any(labels.get(k) != v for k, v in expected.items()):
+                self.advancement_version=labels.get('org.wowforever.advancement')
+                if self.advancement_version not in ('1.11.0','1.12.0') or any(labels.get(k) != v for k, v in expected.items()):
                     raise ValueError('Saved gameplay image labels differ from the backup')
         for kind, name, role in self.resources():
             if self.owned(kind, name, role):
@@ -296,7 +297,7 @@ class ServicesTrial:
         first = None
         last = {}
         progress_at = 0
-        patterns = list(base.game.adv.READY_PATTERNS) + ['ForeverEncyclopedia ready:',
+        patterns = list(base.game.adv.ready_patterns({'advancement':{'version':self.advancement_version}})) + ['ForeverEncyclopedia ready:',
                     'ForeverScaling ready: personal-virtual-v0.2 (enabled=true']
         while time.monotonic() < deadline:
             item = self.check_container('worldserver')

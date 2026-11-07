@@ -16,7 +16,7 @@ RUN cmake -S /src/TrinityCore -B /src/TrinityCore/build \
 FROM ${CLEAN_RUNTIME_IMAGE} AS runtime
 ARG ADVANCEMENT_SOURCE
 ARG GAMEPLAY_SOURCE
-LABEL org.wowforever.baseline="gameplay" org.wowforever.advancement="1.11.0" \
+LABEL org.wowforever.baseline="gameplay" org.wowforever.advancement="1.12.0" \
       org.wowforever.advancement.source="${ADVANCEMENT_SOURCE}" \
       org.wowforever.encyclopedia="0.9.8-v2.1-smartai-abilities" org.wowforever.scaling="0.2.0" \
       org.wowforever.gameplay.source="${GAMEPLAY_SOURCE}"

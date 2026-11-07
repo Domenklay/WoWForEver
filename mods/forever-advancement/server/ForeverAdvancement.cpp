@@ -21,12 +21,15 @@
 #include "Util.h"
 #include "AscensionCatalog.h"
 #include "CustomAbilityRules.h"
+#include "ExperienceShare.h"
 #include <array>
 #include <chrono>
 #include <map>
 #include <mutex>
 #include <set>
 #include <sstream>
+#include <fstream>
+#include <string_view>
 
 namespace ForeverAdvancement
 {
@@ -40,6 +43,8 @@ struct ClassProgress { uint32 level=1;uint64 xp=0; };
 struct State
 {
     uint32 active=0;
+    bool experienceEnabled=true;
+    uint32 experienceCarry=0;
     std::map<uint32,ClassProgress> classes;
     std::set<uint32> learned;
     std::map<uint32,uint32> talents;
@@ -54,11 +59,14 @@ static std::recursive_mutex Mutex;
 static std::map<uint64,State> States;
 static std::map<uint32,std::vector<Definition>> Catalog;
 static std::map<uint32,std::vector<TalentDefinition>> TalentCatalog;
+struct NativeMenuRow { uint32 id,owner,spell,level,kind,max,traitEntry; bool available; char const* reason; };
+static std::map<uint32,NativeMenuRow> NativeMenu;
+static std::map<uint32,uint32> LegacyAbilityIds;
 static uint32 TalentCap=71;
 static bool Ready=false;
 static uint32 Limit=8;
 
-static bool SupportedClass(uint32 id) { return id==1||id==2||id==3||id==4||id==5||id==7||id==8||id==9||id==11; }
+static bool SupportedClass(uint32 id) { return id>=1&&id<=13; }
 static uint32 ClassLevel(Player* p,State const& s,uint32 owner)
 {
     if(owner==p->GetClass()) return p->GetLevel();
@@ -112,9 +120,13 @@ static State& Get(Player* p)
             do { auto f=rows->Fetch();uint32 id=f[0].GetUInt32();if(id==0||id==1||id==3) s.pools[Powers(id)]={int32(std::min<uint32>(f[1].GetUInt32(),1000000)),1000000,0}; } while(rows->NextRow());
         if(auto rows=CharacterDatabase.PQuery("SELECT class_id,level_value,xp_value FROM forever_advancement_class_progress WHERE guid={}",guid))
             do { auto f=rows->Fetch();uint32 owner=f[0].GetUInt32();if(SupportedClass(owner)&&owner!=p->GetClass()) s.classes[owner]={std::clamp<uint32>(f[1].GetUInt32(),1,40),f[2].GetUInt64()}; } while(rows->NextRow());
+        if(auto row=CharacterDatabase.PQuery("SELECT xp_enabled,xp_remainder FROM forever_advancement_preferences WHERE guid={}",guid))
+        { auto f=row->Fetch();s.experienceEnabled=f[0].GetUInt32()!=0;s.experienceCarry=f[1].GetUInt32()%100; }
         if(auto row=CharacterDatabase.PQuery("SELECT active_class FROM forever_advancement_class_state WHERE guid={}",guid))
         { uint32 owner=row->Fetch()[0].GetUInt32();if(SupportedClass(owner)&&owner!=p->GetClass()) s.active=owner; }
     }
+    // Keep old rows for rollback/history; attach only exact native identities to new entries.
+    if(inserted) for(auto const& [oldId,nativeId]:LegacyAbilityIds) if(s.learned.count(oldId)) s.learned.insert(nativeId);
     SyncTalents(p,s);SyncBookSchools(p,s);SyncSpellbook(p,s);Refresh(p,s);return s;
 }
 static void Save(Player* p,State const& s)
@@ -129,6 +141,7 @@ static void Save(Player* p,State const& s)
     tx->PAppend("REPLACE INTO forever_advancement_class_state (guid,active_class) VALUES ({},{})",guid,s.active);
     for(auto const& [owner,progress]:s.classes)
         tx->PAppend("REPLACE INTO forever_advancement_class_progress (guid,class_id,level_value,xp_value) VALUES ({},{},{},{})",guid,owner,progress.level,progress.xp);
+    tx->PAppend("REPLACE INTO forever_advancement_preferences (guid,xp_enabled,xp_remainder) VALUES ({},{},{})",guid,s.experienceEnabled?1:0,s.experienceCarry);
     CharacterDatabase.DirectCommitTransaction(tx);
 }
 static int32 Available(Player* p,State const& s,Powers power)
@@ -345,7 +358,8 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
     Send(p,"PROTOCOL 3");
     Send(p,Trinity::StringFormat("STATE {} {} {} {}",p->GetClass(),p->GetLevel(),Used(s),Limit));
     Send(p,Trinity::StringFormat("ACTIVE {}",s.active));
-    for(uint32 owner:{1u,2u,3u,4u,5u,7u,8u,9u,11u}) if(owner!=p->GetClass())
+    Send(p,Trinity::StringFormat("XP_SHARE {} 90",s.experienceEnabled?1:0));
+    for(uint32 owner=1;owner<=13;++owner) if(owner!=p->GetClass())
     {
         uint32 level=ClassLevel(p,s,owner);auto it=s.classes.find(owner);
         uint64 xp=it==s.classes.end()?0:it->second.xp;
@@ -355,10 +369,15 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
         Send(p,Trinity::StringFormat("POWER {} {} {}",uint32(power),Available(p,s,power),Native(p,power)?p->GetMaxPower(power)/Scale(power):s.pools.at(power).maximum));
     double regen=std::max(0.0,double(p->GetStat(STAT_SPIRIT)))*0.2;
     Send(p,Trinity::StringFormat("REGEN {} {}",regen,regen*0.3));
-    if(includeCatalog) Send(p,"CATALOG");
-    for(auto const& rule:ForeverAdvancementCustom::Rules)
-        Send(p,Trinity::StringFormat("CUSTOM {} {} {} {} {} {}",rule.entry,rule.spell,rule.requiredMagicClasses,
-            CustomMagicCount(p,s),rule.implemented?1:0,s.learned.count(rule.entry)?1:0));
+    if(includeCatalog)
+    {
+        Send(p,"CATALOG NATIVE");
+        for(auto const& [id,row]:NativeMenu)
+        {
+            auto d=row.kind==0?BestFor(p,s,id):nullptr;
+            Send(p,Trinity::StringFormat("NATIVE {} {} {} {} {} {} {} {} {}",id,row.owner,d?d->spell:row.spell,d?d->level:row.level,row.kind,row.max,row.traitEntry,row.available?1:0,row.reason));
+        }
+    }
     if(includeCatalog) for(auto const& [id,definitions]:Catalog)
     {
         auto const* d=BestFor(p,s,id);if(!d) d=&definitions.front();
@@ -397,7 +416,7 @@ static void Request(Player* p,std::string const& payload)
     if(payload.size()>96) return;
     auto& s=Get(p);auto now=Clock::now();if(now-s.request<std::chrono::milliseconds(150)) return;s.request=now;
     std::istringstream input(payload);std::string command,extra;uint32 arg=0;input>>command;
-    bool argument=command=="learn"||command=="unlearn"||command=="cast"||command=="talent"||command=="untalent"||command=="activate";
+    bool argument=command=="learn"||command=="unlearn"||command=="cast"||command=="talent"||command=="untalent"||command=="activate"||command=="xpshare";
     if((argument&&!(input>>arg))||(input>>extra)) { Error(p,"invalid_request");return; }
     if(command=="learn"||command=="unlearn"||command=="cast") arg=ForeverAdvancementCustom::Canonical(arg);
     if(command=="status") { Snapshot(p,s,true);return; }
@@ -419,6 +438,11 @@ static void Request(Player* p,std::string const& payload)
         return;
     }
     if(p->IsInCombat()||!p->IsAlive()||p->HasUnitState(UNIT_STATE_CASTING)) { Error(p,"cannot_edit_now");return; }
+    if(command=="xpshare")
+    {
+        if(arg>1) { Error(p,"invalid_request");return; }
+        s.experienceEnabled=arg!=0;s.experienceCarry=0;Save(p,s);Snapshot(p,s);return;
+    }
     if(command=="activate")
     {
         if(arg&&(!SupportedClass(arg)||arg==p->GetClass())) { Error(p,"invalid_subclass");return; }
@@ -446,6 +470,7 @@ static void Request(Player* p,std::string const& payload)
     else if(command=="unlearn")
     {
         auto candidate=s;candidate.learned.erase(arg);
+        for(auto const& [oldId,nativeId]:LegacyAbilityIds) if(nativeId==arg) candidate.learned.erase(oldId);
         for(auto entry:s.learned) if(entry!=arg)
             if(auto rule=ForeverAdvancementCustom::Find(entry);rule&&
                 ForeverAdvancementCustom::RequirementsMet(*rule,CustomMagicCount(p,s))&&
@@ -458,17 +483,10 @@ static void Request(Player* p,std::string const& payload)
 }
 static void GrantClassXP(Player* p,State& s,uint32& amount)
 {
-    if(!s.active) return;
-    auto& progress=s.classes[s.active];uint64 remaining=amount;amount=0;
-    uint32 cap=std::min<uint32>(40,p->GetLevel());
-    while(remaining&&progress.level<cap)
-    {
-        uint64 need=sObjectMgr->GetXPForLevel(progress.level);if(!need) break;
-        progress.xp=std::min(progress.xp,need-1);
-        uint64 take=std::min(remaining,need-progress.xp);progress.xp+=take;remaining-=take;
-        if(progress.xp==need) { ++progress.level;progress.xp=0; }
-    }
-    if(progress.level>=40) progress.xp=0;
+    if(!s.active||!s.experienceEnabled) return;
+    auto& progress=s.classes[s.active];
+    amount=ForeverAdvancementExperience::Grant(progress,std::min<uint32>(40,p->GetLevel()),amount,
+        s.experienceEnabled,s.experienceCarry,[](uint32 level) { return sObjectMgr->GetXPForLevel(level); });
 }
 class Players final:public PlayerScript
 {
@@ -488,7 +506,7 @@ public:
     void OnDelete(ObjectGuid guid,uint32) override
     {
         if(!Ready) return;std::lock_guard<std::recursive_mutex> lock(Mutex);States.erase(guid.GetCounter());auto tx=CharacterDatabase.BeginTransaction();
-        for(char const* table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents","forever_advancement_class_progress","forever_advancement_class_state"}) tx->Append(Trinity::StringFormat("DELETE FROM {} WHERE guid={}",table,guid.GetCounter()).c_str());
+        for(char const* table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents","forever_advancement_class_progress","forever_advancement_class_state","forever_advancement_preferences"}) tx->Append(Trinity::StringFormat("DELETE FROM {} WHERE guid={}",table,guid.GetCounter()).c_str());
         CharacterDatabase.DirectCommitTransaction(tx);
     }
     void OnAddonMessageSent(Player* p,uint32 type,std::string const& prefix,std::string const& text,Player* receiver) override
@@ -535,7 +553,7 @@ static std::string NativeNames(SpellInfo const* info)
 static uint32 ClassFamily(uint32 owner)
 {
     switch(owner) { case 1:return 4;case 2:return 10;case 3:return 9;case 4:return 8;
-        case 5:return 6;case 7:return 11;case 8:return 3;case 9:return 5;case 11:return 7;default:return 0; }
+        case 5:return 6;case 7:return 11;case 8:return 3;case 9:return 5;case 11:return 7;case 6:return 15;case 10:return 53;case 12:return 107;case 13:return 224;default:return 0; }
 }
 static SpellInfo const* NativeClassSpell(uint32 spell,uint32 owner)
 {
@@ -611,7 +629,7 @@ static NativeTraits LoadNativeTraits()
         auto classMask=classes.find(node->TraitTreeID);if(classMask==classes.end()) continue;
         auto definition=sTraitDefinitionStore.LookupEntry(entry->TraitDefinitionID);
         if(!definition||definition->ID>0x7fffff||definition->SpellID<=0) continue;
-        for(uint32 owner:{1u,2u,3u,4u,5u,7u,8u,9u,11u})
+        for(uint32 owner=1;owner<=13;++owner)
             if(classMask->second&(1u<<(owner-1)))
             {
                 NativeTrait trait{definition->ID,uint32(definition->SpellID),owner,uint32(entry->MaxRanks),entry->ID};
@@ -693,78 +711,77 @@ public:
         if(!sConfigMgr->GetBoolDefault("ForeverAdvancement.Enable",false)) return;
         TalentCap=std::clamp(sConfigMgr->GetIntDefault("ForeverAdvancement.MaxTalentEssence",71),0,1000);
         Limit=std::clamp(sConfigMgr->GetIntDefault("ForeverAdvancement.MaxAbilities",8),1,100);
-        for(auto table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents","forever_advancement_class_progress","forever_advancement_class_state"})
+        for(auto table:{"forever_advancement_spells","forever_advancement_resources","forever_advancement_talents","forever_advancement_class_progress","forever_advancement_class_state","forever_advancement_preferences"})
             if(!CharacterDatabase.Query(Trinity::StringFormat("SELECT COUNT(*) FROM {}",table).c_str())) { TC_LOG_ERROR("scripts","ForeverAdvancement schema missing: {}",table);return; }
         uint32 script=sObjectMgr->GetScriptId("spell_forever_advancement");std::set<uint32> claimed;
         if(!script) { TC_LOG_ERROR("scripts","ForeverAdvancement script registration missing");return; }
-        NameIndex names;uint32 remapped=0,nativeAbilities=0;std::set<uint32> examples;
-        std::array<uint32,TOTAL_LOCALES> localeCounts={};
-        for(auto entry:sSpellNameStore)
-            if(auto info=sSpellMgr->GetSpellInfo(entry->ID,DIFFICULTY_NONE))
-                for(uint32 locale=0;locale<TOTAL_LOCALES;++locale)
-                    if(auto name=entry->Name.Str[locale];name&&name[0]) { names[NameKey(name)].push_back(info);++localeCounts[locale]; }
-        for(uint32 locale=0;locale<TOTAL_LOCALES;++locale)
-            if(localeCounts[locale]) TC_LOG_INFO("scripts","ForeverAdvancement catalog locale: {} named spells={}",locale,localeCounts[locale]);
-        std::array<uint32,5> rejected={};
+        std::ofstream audit(sConfigMgr->GetStringDefault("LogsDir","logs")+"/ForeverAdvancement-catalog.tsv");
+        if(audit) audit<<"origin\tclass\tspell\tstatus\n";
+        auto record=[&](char const* origin,uint32 owner,uint32 spell,char const* status)
+        { if(audit) audit<<origin<<'\t'<<owner<<'\t'<<spell<<'\t'<<status<<'\n'; };
+        uint32 accepted=0,rejected=0;
+        for(auto ability:sSkillLineAbilityStore)
+        {
+            auto skill=sSkillLineStore.LookupEntry(ability->SkillLine);
+            if(!skill||skill->CategoryID!=SKILL_CATEGORY_CLASS||ability->Spell<=0) continue;
+            uint32 mask=uint32(ability->ClassMask);
+            if(!mask) for(auto info:sDB2Manager.GetSkillRaceClassInfo(skill->ID)) mask|=uint32(info->ClassMask);
+            for(uint32 owner=1;owner<=13;++owner) if(mask&(1u<<(owner-1)))
+            {
+                uint32 spell=uint32(ability->Spell);
+                auto info=sSpellMgr->GetSpellInfo(spell,DIFFICULTY_NONE);
+                char const* reason="available";
+                if(!info) reason="missing_spell";
+                else if(std::any_of(ForeverAdvancementCustom::Rules.begin(),ForeverAdvancementCustom::Rules.end(),[&](auto const& rule){return rule.spell==spell;})) reason="custom_removed";
+                else if(info->SpellFamilyName&&info->SpellFamilyName!=ClassFamily(owner)) reason="wrong_class";
+                else if(info->IsPassive()) reason="passive";
+                else if(ability->GetAcquireMethod()==SkillLineAbilityAcquireMethod::NeverLearned) reason="internal";
+                else if(!CompatibleCosts(info)) reason="unsupported_resource";
+                bool available=std::string_view(reason)=="available";
+                record("native",owner,spell,reason);
+                if(!info||std::string_view(reason)=="custom_removed"||std::string_view(reason)=="wrong_class"||std::string_view(reason)=="internal"||info->IsPassive()) continue;
+                if(spell>=10000000) continue; // deterministic namespace disjoint from donor IDs
+                uint32 first=sSpellMgr->GetFirstSpellInChain(spell);if(!first) first=spell;
+                uint32 id=1000000000+owner*10000000+first;
+                // A duplicate school must never downgrade a supported record.
+                auto it=NativeMenu.find(id);if(it!=NativeMenu.end()&&it->second.available&&!available) continue;
+                NativeMenu[id]={id,owner,spell,std::max<uint32>(1,info->SpellLevel),0,1,0,available,reason};
+                if(!available) { ++rejected;continue; }
+                sObjectMgr->RegisterForeverAdvancementBinding(spell,script);
+                bool bound=false;auto bounds=sObjectMgr->GetSpellScriptsBounds(spell);
+                for(auto bind=bounds.first;bind!=bounds.second;++bind) if(bind->second.first==script&&bind->second.second) bound=true;
+                if(!bound) { NativeMenu[id].available=false;NativeMenu[id].reason="binding_failed";continue; }
+                auto& definitions=Catalog[id];
+                if(std::none_of(definitions.begin(),definitions.end(),[&](auto const& d){return d.spell==spell;}))
+                { definitions.push_back({id,owner,spell,std::max<uint32>(1,info->SpellLevel)});++accepted; }
+            }
+        }
         for(auto const& row:AscensionSourceEntries)
         {
-            if(ForeverAdvancementCustom::Find(row.id)) continue;
-            auto info=NativeClassSpell(row.spell,row.owner);bool native=info!=nullptr;
-            if(!info) info=ResolveSpell(row.spell,row.owner,row.rank,row.names,names);
-            if(!info&&examples.size()<12&&!examples.count(row.id))
-            {
-                examples.insert(row.id);auto native=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
-                TC_LOG_INFO("scripts","ForeverAdvancement unresolved: entry={} source={} expected={} sourceRU={} native={} family={} expectedFamily={}",
-                    row.id,row.spell,row.names[0],row.names[6],NativeNames(native),native?native->SpellFamilyName:0,ClassFamily(row.owner));
-            }
-            if(!info) { ++rejected[0];continue; }
-            if(!CompatibleCosts(info)) { ++rejected[1];continue; }
-            if(info->IsPassive()) { ++rejected[2];continue; }
-            if(!native&&!SourceNameMatches(info,row.names)) { ++rejected[3];continue; }
-            sObjectMgr->RegisterForeverAdvancementBinding(info->Id,script);
-            bool bound=false;auto bounds=sObjectMgr->GetSpellScriptsBounds(info->Id);
-            for(auto it=bounds.first;it!=bounds.second;++it) if(it->second.first==script&&it->second.second) bound=true;
-            if(!bound) { ++rejected[4];continue; }
-            if(claimed.count(info->Id)) continue;
-            if(info->Id!=row.spell) ++remapped;
-            if(native) ++nativeAbilities;
-            Catalog[row.id].push_back({row.id,row.owner,info->Id,std::max(row.level,info->SpellLevel)});claimed.insert(info->Id);
+            uint32 first=sSpellMgr->GetFirstSpellInChain(row.spell);if(!first) first=row.spell;
+            uint32 id=1000000000+row.owner*10000000+first;
+            auto info=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
+            if(!ForeverAdvancementCustom::Find(row.id)&&Catalog.count(id)&&info&&SourceNameMatches(info,row.names)) LegacyAbilityIds.emplace(row.id,id);
+            record("legacy",row.owner,row.spell,Catalog.count(id)?"exact_native":"hidden_no_exact_native");
         }
-        TalentOwners talentOwners;
-        for(auto talent:sTalentStore)
+        // Browse actual class-tree definitions. Legacy purchases remain saved but are not replayed
+        // as native talents. Native allocation must use real node/choice/currency/condition rules.
+        auto traits=LoadNativeTraits();std::set<std::pair<uint32,uint32>> seenTraits;
+        for(auto const& [spell,rows]:traits) for(auto const& row:rows)
         {
-            if(!SupportedClass(talent->ClassID)) continue;
-            for(uint32 rank=0;rank<talent->SpellRank.size();++rank)
-                if(talent->SpellRank[rank]) talentOwners[talent->SpellRank[rank]].insert({uint32(talent->ClassID),rank+1});
-            if(talent->SpellID) talentOwners[talent->SpellID].insert({uint32(talent->ClassID),1});
+            if(!seenTraits.insert({row.owner,row.entry}).second||row.entry>=10000000) continue;
+            auto info=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
+            record("trait",row.owner,row.spell,info?"native_rules_required":"missing_spell");
+            if(!info) continue;
+            uint32 id=1500000000+row.owner*10000000+row.entry;
+            NativeMenu[id]={id,row.owner,row.spell,std::max<uint32>(1,info->SpellLevel),1,row.max,row.entry,false,"native_rules_required"};
         }
-        TC_LOG_INFO("scripts","ForeverAdvancement native abilities: {} ranks verified by class skill metadata",nativeAbilities);
-        auto nativeTraits=LoadNativeTraits();std::map<uint32,uint32> firstSpells;
-        for(auto const& row:AscensionTalentSourceEntries) if(row.rank==1) firstSpells[row.id]=row.spell;
-        std::map<uint32,uint32> talentSpells;uint32 nativeTalents=0,traitTalents=0,traitRejected=0,traitMissing=0,namedTraits=0;
-        for(auto const& row:AscensionTalentSourceEntries)
-        {
-            auto trait=ResolveTrait(firstSpells[row.id],row.owner,1,nativeTraits);
-            bool named=false;if(!trait) { trait=ResolveNamedTrait(row.owner,row.names,nativeTraits,names);named=trait!=nullptr; }
-            if(trait&&row.rank>trait->max) continue;
-            auto info=trait?sSpellMgr->GetSpellInfo(trait->spell,DIFFICULTY_NONE):ResolveNativeTalent(row.spell,row.owner,row.rank,talentOwners);
-            if(trait&&!info) { ++traitMissing;continue; }
-            bool native=info!=nullptr;
-            if(!info) info=ResolveSpell(row.spell,row.owner,row.rank,row.names,names);
-            if(!info||!CompatibleTalent(info)||(!native&&!SourceNameMatches(info,row.names))) { if(trait) ++traitRejected;continue; }
-            auto it=TalentCatalog.find(row.id);uint32 expected=it==TalentCatalog.end()?1:it->second.size()+1;
-            if(row.rank!=expected||(talentSpells.count(info->Id)&&talentSpells.at(info->Id)!=row.id)) continue;
-            TalentCatalog[row.id].push_back({row.id,row.owner,info->Id,row.rank,std::max(row.level,info->SpellLevel),row.cost,row.investment,row.tab,trait?trait->definition:0,trait?trait->entry:0});
-            talentSpells[info->Id]=row.id;if(native) ++nativeTalents;if(trait) ++traitTalents;if(named) ++namedTraits;
-        }
-        TC_LOG_INFO("scripts","ForeverAdvancement catalog rows rejected: missing={}, costs={}, passive={}, names={}, binding={}",rejected[0],rejected[1],rejected[2],rejected[3],rejected[4]);
-        TC_LOG_INFO("scripts","ForeverAdvancement catalog remapped: {} abilities by case-folded name, class family and native rank",remapped);
-        if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement compatible catalog empty; disabled");return; }
+        if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement native catalog empty; disabled");return; }
         PublishBookSchoolMetadata();PublishBookMetadata();
-        TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: accepted={}; rejected_effects={}; missing_spells={}",traitTalents,traitRejected,traitMissing);
-        TC_LOG_INFO("scripts","ForeverAdvancement named trait ranks: {} accepted by exact localized name and class tree",namedTraits);
-        TC_LOG_INFO("scripts","ForeverAdvancement talent metadata: {} native class/rank records accepted",nativeTalents);
-        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: {} canonical abilities; protocol=3; version=1.11.0",ForeverAdvancementCustom::Rules.size());
+        TC_LOG_INFO("scripts","ForeverAdvancement native catalogue: {} supported records; {} resource exclusions; {} native talent entries (browse only)",accepted,rejected,seenTraits.size());
+        TC_LOG_INFO("scripts","ForeverAdvancement catalog audit: {}; legacy talents hidden; no name substitutions",audit?"written to ForeverAdvancement-catalog.tsv":"could not open audit file");
+        TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: accepted=0; native browser active");
+        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: 0 visible abilities; protocol=3; version=1.12.0");
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} compatible Ascension abilities; {} passive talents; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }
 };

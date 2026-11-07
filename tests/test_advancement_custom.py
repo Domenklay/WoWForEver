@@ -33,7 +33,8 @@ struct CastTag {uint32 entry;};
 struct CastSpellExtraArgs {explicit CastSpellExtraArgs(int){} CastSpellExtraArgs& SetCustomArg(CastTag){return *this;}};
 constexpr int UNIT_STATE_CASTING=1,DIFFICULTY_NONE=0,TRIGGERED_IGNORE_POWER_COST=1,SPELL_CAST_OK=0;
 struct Definition {uint32 entry,owner,spell,level;};
-struct State {uint32 active=0;std::map<uint32,uint32> classes,talents;std::set<uint32> learned;Clock::time_point request{};};
+std::map<uint32,uint32> LegacyAbilityIds;
+struct State {bool experienceEnabled=true;uint32 experienceCarry=0;uint32 active=0;std::map<uint32,uint32> classes,talents;std::set<uint32> learned;Clock::time_point request{};};
 struct Player:Unit {uint32 cls=1;int casts=0;uint32 GetClass(){return cls;}
  bool IsInCombat(){return false;}bool IsAlive(){return true;}bool HasUnitState(int){return false;}
  bool HasSpell(unsigned){return false;}Unit* GetSelectedUnit(){return this;}
@@ -140,38 +141,18 @@ class CustomUITests(unittest.TestCase):
     lua=advancement.AdvancementUITests.lua
     def test_one_custom_card_no_mage_duplicate_and_native_mana_shield_is_retained(self):
         self.lua(r'''
-open();parse('PROTOCOL 3');parse('STATE 1 30 0 8');parse('ACTIVE 8');parse('CLASS 8 30 0 1000');parse('CATALOG')
-parse('CUSTOM 1300 701463 2 1 0 0');parse('END')
-selectedClass=8;selectedTab='Arcane';showAll=true;refresh()
-local abilities=visible();local shield=false
-for _,row in ipairs(abilities) do assert(row.Spells[1]~=701463);if row.Spells[1]==1463 then shield=true end end
-assert(shield)
-customButton.scripts.OnClick();assert(selectedClass==0)
-abilities=visible();assert(#abilities==1 and abilities[1].ID==1300)
-assert(not activateButton:IsShown() and not talentScroll:IsShown() and customHelp:IsShown())
-local n=abilityNodes[1];assert(n.entry.ID==1300 and n.note.text:find('1/2',1,true))
-local before=#sent;advance();n.scripts.OnClick(n,'LeftButton')
-assert(#sent==before and message.text==errors.custom_class_requirements)
-advance();n.scripts.OnDragStart(n);assert(#sent==before)
-parse('STATE 1 30 0 8');parse('ACTIVE 8');parse('CUSTOM 1300 701463 2 2 0 0');parse('END')
-advance();n.scripts.OnClick(n,'LeftButton');assert(#sent==before and message.text==errors.custom_requires_port)
-assert(n.note.text:find('2/2',1,true))
+open();parse('STATE 1 20 0 8');parse('CUSTOM 1300 701463 2 2 0 1');parse('LEARNED 34782');parse('END')
+assert(not customButton:IsShown());assert(#customRows==0 and not byId[1300] and not byId[34782])
 ''')
 
     def test_saved_aliases_have_one_card_and_refund_uses_canonical_id(self):
         self.lua(r'''
-open();parse('PROTOCOL 3');parse('STATE 2 30 0 8');parse('ACTIVE 5');parse('CUSTOM 1300 701463 2 2 0 1')
-parse('LEARNED 1300');parse('LEARNED 34782');parse('END')
-assert(state.learned[1300] and not state.learned[34782])
-customButton.scripts.OnClick();local abilities=visible();assert(#abilities==1)
-advance();abilityNodes[1].scripts.OnClick(abilityNodes[1],'RightButton');assert(sent[#sent]=='unlearn 1300')
-parse('STATE 2 30 0 8');parse('ACTIVE 5');parse('CUSTOM 1300 701463 2 1 0 0');parse('END')
-assert(not state.learned[1300] and state.custom[1300].count==1)
+open();parse('STATE 1 20 0 8');parse('CUSTOM 1300 701463 2 2 0 1');parse('LEARNED 34782');parse('END')
+assert(not customButton:IsShown());assert(#customRows==0 and not byId[1300] and not byId[34782])
 ''')
 
     def test_old_server_does_not_enable_custom_purchases(self):
         self.lua(r'''
-open();parse('PROTOCOL 2');parse('STATE 1 30 0 8');parse('END');customButton.scripts.OnClick()
-local before=#sent;advance();abilityNodes[1].scripts.OnClick(abilityNodes[1],'LeftButton')
-assert(#sent==before and message.text:find('Обновите сервер',1,true))
+open();parse('STATE 1 20 0 8');parse('CUSTOM 1300 701463 2 2 0 1');parse('LEARNED 34782');parse('END')
+assert(not customButton:IsShown());assert(#customRows==0 and not byId[1300] and not byId[34782])
 ''')

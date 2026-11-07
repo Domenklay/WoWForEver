@@ -25,7 +25,7 @@ network = module('advancement_network', 'repair-clean-network.py')
 clean = network.clean
 upgrade = module('advancement_snapshot', 'upgrade-forever-server.py')
 upgrade.clean = clean
-VERSION = '1.11.0'
+VERSION = '1.12.0'
 FORMAT = 'forever-clean-advancement-v1'
 OWN_SCRIPTS = ('spell_forever_subclass', 'spell_forever_advancement',
                'spell_forever_custom_mana_shield', 'aura_forever_custom_mana_shield')
@@ -104,7 +104,7 @@ def checkpoint(record, phase):
 
 def configure(before, model, candidate, directory):
     state = copy.deepcopy(before)
-    state.update(image=candidate, database_version='advancement-1.11.0@' + before.get('database_version', 'pristine-' + before['core'][:12]))
+    state.update(image=candidate, database_version='advancement-1.12.0@' + before.get('database_version', 'pristine-' + before['core'][:12]))
     state['advancement'] = dict(version=VERSION, protocol=3, source_sha256=source_id(), backup=str(directory / 'install.json'))
     model = copy.deepcopy(model)
     world = model['services']['worldserver']
@@ -116,12 +116,16 @@ def configure(before, model, candidate, directory):
     return state, model
 
 
-READY_PATTERNS = ('ForeverAdvancement ready:',
-                  'ForeverAdvancement custom rules: 1 canonical abilities; protocol=3; version=1.11.0')
+def ready_patterns(state):
+    version=state.get('advancement',{}).get('version',VERSION)
+    detail='1 canonical abilities' if version=='1.11.0' else '0 visible abilities'
+    return ('ForeverAdvancement ready:', 'ForeverAdvancement custom rules: '+detail+'; protocol=3; version='+version)
+
+READY_PATTERNS = ready_patterns({})
 
 
 def wait_module(state, timeout=180):
-    return module_readiness.wait(clean, state, READY_PATTERNS, timeout)
+    return module_readiness.wait(clean, state, ready_patterns(state), timeout)
 
 
 def load_backup(root, path):
@@ -217,7 +221,7 @@ def install(root, jobs):
             clean.compose(target, 'up', '-d', '--no-build', '--no-deps', *record['previous_running'])
         checkpoint(record, 'active')
         (root / MARKER).unlink()
-        print('ASCENSION ACTIVE: 70658, protocol 3, version 1.11.0. Accounts, characters, resources and CA retained.')
+        print('ASCENSION ACTIVE: 70658, protocol 3, version 1.12.0. Accounts, characters, resources and CA retained.')
         print('Backup/rollback record: ' + str(folder / 'install.json'))
     except Exception as original:
         try:
