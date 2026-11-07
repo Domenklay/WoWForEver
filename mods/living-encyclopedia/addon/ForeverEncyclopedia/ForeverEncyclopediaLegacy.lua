@@ -571,8 +571,7 @@ end
 
 local function drawZoneView()
     local base=frame(page,13,63,874,444,DEEP)
-    drawArchiveHeading(base,"Изученные локации",
-        "Открытия привязаны к учётной записи. Здесь показаны последние записи сервера.")
+    drawArchiveHeading(base,"Изученные локации","Последние открытия вашего аккаунта из серверного архива.")
     if not state.recentZonesLoaded then
         label(base,30,114,780,"Получаю список локаций…","GameFontHighlight",PALE)
         return
@@ -581,13 +580,23 @@ local function drawZoneView()
         label(base,30,114,780,"Пока нет изученных локаций.","GameFontNormal",MUTED)
         return
     end
+    local list=frame(base,18,94,835,271,BROWN)
+    local rows=scrollArea(list,10,8,811,254,"zone-list",
+                          math.max(254,math.ceil(#state.recentZones/2)*65+12))
     for i,rec in ipairs(state.recentZones) do
-        if i>10 then break end
         local col=(i-1)%2
         local row=math.floor((i-1)/2)
-        local title=bridge.AreaName(rec.entry) or ("Локация "..(rec.entry or 0))
-        category(base,20+col*425,99+row*56,408,50,title,
-                 "Открыта", "Interface\\Icons\\INV_Misc_Map_01",nil,false,true)
+        local title=bridge.AreaName(rec.entry) or ("Локация #"..(rec.entry or 0))
+        local tile=button(rows,8+col*387,8+row*65,375,57,"",false,function()
+            GameTooltip:Hide()
+        end)
+        font(tile,12,6,346,title,"GameFontHighlight",PALE)
+        font(tile,12,30,346,"Изучена • карта "..tostring(rec.map or 0),
+             "GameFontNormalSmall",GREEN)
+        tile:SetScript("OnEnter",function()
+            tooltip(tile,title,"Открыто для всей учётной записи.")
+        end)
+        tile:SetScript("OnLeave",function() GameTooltip:Hide() end)
     end
 end
 
@@ -609,7 +618,7 @@ end
 local function drawItemView()
     local base=frame(page,13,63,874,444,DEEP)
     drawArchiveHeading(base,"Коллекция предметов",
-        (state.items or 0).." уникальных предметов изучено. Ниже — 12 последних записей сервера.")
+        (state.items or 0).." предметов изучено. Последние записи поступают с сервера.")
     local list=frame(base,16,82,474,292,BROWN)
     local detail=frame(base,504,82,353,292,BROWN)
     if not state.recentItemsLoaded then
@@ -620,32 +629,38 @@ local function drawItemView()
         label(list,16,18,430,"Пока нет открытых предметов.","GameFontNormal",MUTED)
         return
     end
+    selectedItem=math.max(1,math.min(selectedItem,#state.recentItems))
+    local rows=scrollArea(list,9,8,453,277,"item-list",
+                          math.max(277,#state.recentItems*47+10))
     for i,rec in ipairs(state.recentItems) do
-        if i>12 then break end
-        local col=(i-1)%2
-        local row=math.floor((i-1)/2)
         local name,icon=itemInfo(rec.entry)
-        local b=button(list,7+col*235,8+row*46,229,42,"",i==selectedItem,function()
+        local b=button(rows,5,5+(i-1)*47,418,41,"",i==selectedItem,function()
             selectedItem=i
             _G.ForeverEncyclopediaLegacy.Refresh("view")
         end)
         local t=b:CreateTexture(nil,"ARTWORK")
         t:SetTexture(icon)
         t:SetPoint("TOPLEFT",b,"TOPLEFT",5,-5)
-        t:SetSize(32,32)
-        font(b,42,8,181,name,"GameFontNormalSmall",PALE)
-        font(b,42,25,181,"#"..rec.entry,"GameFontNormalSmall",MUTED)
+        t:SetSize(31,31)
+        local title=font(b,45,5,361,name,"GameFontNormalSmall",PALE)
+        if title.SetMaxLines then title:SetMaxLines(1) end
+        font(b,45,24,361,"Запись #"..rec.entry,"GameFontNormalSmall",MUTED)
     end
-    local rec=state.recentItems[selectedItem] or state.recentItems[1]
+    local rec=state.recentItems[selectedItem]
     if rec then
         local name,icon=itemInfo(rec.entry)
-        emblem(detail,20,20,95,95,icon)
-        label(detail,128,26,209,name,"GameFontHighlight",PALE)
-        label(detail,128,56,209,"Запись #"..rec.entry,"GameFontNormalSmall",GREEN)
+        emblem(detail,17,23,95,95,icon)
+        local itemTitle=font(detail,125,25,210,name,"GameFontHighlight",PALE)
+        if itemTitle.SetWordWrap then itemTitle:SetWordWrap(true) end
+        label(detail,125,97,210,"Запись #"..rec.entry,"GameFontNormalSmall",GREEN)
+        local body=scrollArea(detail,15,137,329,146,"item-detail",230)
         local where=bridge.AreaName(rec.zone) or ("Зона #"..tostring(rec.zone or 0))
-        label(detail,22,146,315,"Впервые найдено: "..where,"GameFontNormalSmall",MUTED)
-        label(detail,22,182,315,"Карта: "..tostring(rec.map or 0),"GameFontNormalSmall",MUTED)
-        label(detail,22,224,315,"Данные изучения принадлежат аккаунту.","GameFontNormalSmall",MUTED)
+        local y=paragraph(body,4,8,290,"Впервые найдено: "..where,"GameFontNormalSmall",MUTED)
+        y=paragraph(body,4,y,290,"Карта: "..tostring(rec.map or 0),
+                    "GameFontNormalSmall",MUTED)
+        y=paragraph(body,4,y,290,"Знания сохранены на учётной записи.",
+                    "GameFontNormalSmall",GREEN)
+        body:SetHeight(math.max(146,y+8))
     end
 end
 
