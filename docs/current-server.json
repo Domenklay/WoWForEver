@@ -6,11 +6,11 @@
   "working_branch": "codex/native-cdn-70658-20261106",
   "baseline_branch": "baseline/70658-working-20261106",
   "evidence": {
-    "runtime": "user-supplied filtered state, Compose mounts and controller on 2026-11-07",
+    "runtime": "User supplied filtered active 1.13 state and server.sh checkout a1bc54e3aed2aa2d08e4c0c41213b295cf01d987 on 2026-11-07; combined source fingerprint reproduced exactly before changes",
     "gameplay": "user confirmed general working gameplay; detailed acceptance incomplete",
     "backup_and_database_restore": "user-supplied BASELINE BACKUP VERIFIED and DATABASE RESTORE VERIFIED output on 2026-11-07; source 877b877",
     "restored_services": "user-supplied RESTORED SERVICES VERIFIED output on source b282fb2; world/modules, login TCP/TLS, web, SQL clone and cleanup passed",
-    "multiclass_ui": "User confirmed 1.13.1 tab is visible but rejected its undersized tab, nested gold dialog, shrunken text and empty black talent panel. 1.13.2 replaces it with native TabSystemButtonArtTemplate and full-size Presentation.lua layout; in-game visual acceptance pending."
+    "multiclass_ui": "User confirms native tab works; rejects flat style. Screenshots show mounts and duplicate schools. Copied Hunter nodes have GridX 50..53; 1.14 fixes relative layout, player-school catalogue and native background atlases; in-game acceptance pending."
   },
   "server": {
     "phase": "ready",
@@ -18,8 +18,8 @@
     "core_repository": "advocaite/TrinityCore",
     "core_branch": "forever",
     "core_commit": "b4e7b940593f6402a822d4fbcdf31331d16f73b6",
-    "image": "forever-trinitycore:gameplay-70658-4530bd4e14a1",
-    "database_version": "gameplay-1@pristine-b4e7b940593f",
+    "image": "forever-trinitycore:gameplay-70658-54f07b4ce9ca",
+    "database_version": "gameplay-1.13@pristine-b4e7b940593f",
     "realm_id": 70,
     "content_set_id": 137,
     "region_group": 8,
@@ -28,9 +28,9 @@
   },
   "modules": {
     "ascension": {
-      "version": "1.11.0",
+      "version": "1.13.0",
       "protocol": 3,
-      "source_sha256": "5fca3dc2eb4de36967900718016add6fb0e6834f316edcdb2f1249e996632309",
+      "source_sha256": "53c704ac9d98823769614008101390981bc9260fa879de87e6f512b285870520",
       "max_abilities": 8,
       "max_talent_essence_config": 71
     },
@@ -41,14 +41,21 @@
       "flying_book_model_verified": false
     },
     "scaling": {
-      "version": "0.2.0",
-      "source_commit": "8661b88f65126e17f9208628a06b01b1ae76eeba",
-      "rule": "clamp(max(max(1,original_npc_level),min(70,max(1,player_effective_level-9))),1,255)",
+      "version": "0.4.0",
+      "source_commit": "a1bc54e3aed2aa2d08e4c0c41213b295cf01d987",
+      "rule": "Active deployed 0.4 source uses personal NPC floor with -3 offset, neutral-enemy eligibility and five-player dungeon HP/damage snapshots; see ScalingPolicy.hpp/DungeonPolicy.hpp",
       "character_autolevel": false,
       "preserves_higher_original_level": true,
       "uses_effective_player_level": true
     },
-    "combined_source_sha256": "4530bd4e14a1193236e18203ca3e8977680cbea01804afdcd77630647889b1e1"
+    "combined_source_sha256": "54f07b4ce9cadef8561096e6074d400d2a80a9d983fc5e7815e74c18157a9f52",
+    "dungeonfinder": {
+      "version": "0.2.0",
+      "source_commit": "a1bc54e3aed2aa2d08e4c0c41213b295cf01d987",
+      "solo_enabled": true,
+      "group_enabled": true,
+      "gameplay_teleport_acceptance_verified": false
+    }
   },
   "paths": {
     "repository_wsl": "/home/Kayter/WoWForEver",
@@ -56,8 +63,8 @@
     "state_wsl": "/home/Kayter/WoWForEver-clean/state.json",
     "compose_wsl": "/home/Kayter/WoWForEver-clean/compose.private.json",
     "controller_wsl": "/home/Kayter/WoWForEver-clean/server.sh",
-    "controller_source_wsl": "/home/Kayter/WoWForEver-gameplay-tools.hReuvj/scripts/clean-forever-server.py",
-    "active_gameplay_tools_wsl": "/home/Kayter/WoWForEver-gameplay-tools.hReuvj",
+    "controller_source_wsl": "/home/Kayter/WoWForEver-dungeon-upgrade-70658/scripts/clean-forever-server.py",
+    "active_gameplay_tools_wsl": "/home/Kayter/WoWForEver-dungeon-upgrade-70658",
     "active_clean_tools_wsl": "/home/Kayter/WoWForEver-clean-tools.ZbyhNF",
     "data_wsl": "/home/Kayter/WoWForEver-clean/data",
     "state_data_directory_value": null,
@@ -69,7 +76,8 @@
     "reports_wsl": "/mnt/e/WoWForEver-work/reports",
     "launcher_settings_windows": "%APPDATA%\\forever-launcher-app\\settings.json",
     "launcher_private_session_windows": "%APPDATA%\\forever-launcher-app\\session.json",
-    "launcher_reports_windows": "%APPDATA%\\forever-launcher-app\\workshop\\reports"
+    "launcher_reports_windows": "%APPDATA%\\forever-launcher-app\\workshop\\reports",
+    "active_controller_commit": "a1bc54e3aed2aa2d08e4c0c41213b295cf01d987"
   },
   "services": {
     "mysql": {
@@ -83,7 +91,7 @@
       ]
     },
     "worldserver": {
-      "image": "forever-trinitycore:gameplay-70658-4530bd4e14a1",
+      "image": "forever-trinitycore:gameplay-70658-54f07b4ce9ca",
       "published_ports": [
         "127.0.0.1:8085:8085"
       ],
@@ -217,8 +225,8 @@
   "checks": {
     "launcher_windows": 81,
     "worker_windows": 224,
-    "combined_core_units": 14,
-    "combined_check_run": 42380875788,
+    "combined_core_units": 15,
+    "combined_check_run": 42398310377,
     "restore_unit_suite_total": 473,
     "restore_unit_suite_skipped": 30,
     "restore_real_mysql_fixture_verified": true,
@@ -228,11 +236,11 @@
     "addon_catalog_ci_run": 42387047953,
     "addon_catalog_pinned_payloads_verified": true,
     "launcher_browser_ui_verified": true,
-    "multiclass_unit_suite_total": 492,
+    "multiclass_unit_suite_total": 499,
     "multiclass_unit_suite_skipped": 30,
-    "advancement_native_core_ci_run": 42380875759,
+    "advancement_native_core_ci_run": 42398310341,
     "native_worker_ci_run": 42380875760,
-    "multiclass_ui_tests": 29,
+    "multiclass_ui_tests": 31,
     "multiclass_ui_fix_ci_run": 42384393223,
     "multiclass_presentation_ci_run": 42386733996
   },
@@ -242,7 +250,7 @@
     "Full talent/proc/pet catalogue is not supported",
     "Companion uses diagnostic template 1933; flying-book model unverified",
     "Scaling damage guard is per event, not a rolling window",
-    "Party-size dungeon and loot scaling are not implemented",
+    "Five-player dungeon HP/damage scaling is active; loot scaling and full gameplay acceptance remain incomplete",
     "Previous client ACCESS_VIOLATION root cause remains unproven",
     "Detailed gameplay acceptance, exact Multi 1.9 install/channel/autologin verification and full-server disaster recovery remain pending; AddOns page was seen in a user screenshot"
   ],
@@ -258,7 +266,7 @@
     ]
   },
   "development_candidate": {
-    "advancement_version": "1.13.0",
+    "advancement_version": "1.14.0",
     "installed_on_user_pc": false,
     "protocol": 3,
     "experience_share_percent": 90,
@@ -267,11 +275,11 @@
     "legacy_talents_hidden": true,
     "native_talents_browse_only": false,
     "native_talents_allocation_implemented": true,
-    "guide": "https://github.com/Domenklay/WoWForEver/blob/main/docs/MULTICLASS-1.13.ru.md",
+    "guide": "https://github.com/Domenklay/WoWForEver/blob/main/docs/MULTICLASS-1.14.ru.md",
     "transition_tool": "scripts/upgrade-clean-gameplay.py",
-    "trial_source_commit": "ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2",
+    "trial_source_commit": "c13cdbff6cc0623e24a8667d42f343b80f8005a8",
     "candidate_user_trial_verified": false,
-    "source_commit": "ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2",
+    "source_commit": "c13cdbff6cc0623e24a8667d42f343b80f8005a8",
     "native_talents_validator": "TraitMgr::ValidateConfig with native conditions, dependencies, choices and currencies; unsupported mechanics remain blocked",
     "native_talent_tab": "Sibling tab after PlayerSpellsFrame.TalentsFrame.TabSystem (301x32), inside TalentsFrame and above ButtonsParent node canvas",
     "ability_list_scrolling": true,
@@ -281,15 +289,23 @@
     ],
     "native_hunter_basics": true,
     "transient_class_equipment_proficiencies": true,
-    "native_tab_user_verified": false,
-    "testing_release": "testing-70658-20261107-18",
-    "addon_version": "1.13.2",
-    "addon_source_commit": "2622aa788142f1b26b5b78e74f3fc78b981f6b3c",
+    "native_tab_user_verified": true,
+    "testing_release": "testing-70658-20261107-20",
+    "addon_version": "1.14.0",
+    "addon_source_commit": "c13cdbff6cc0623e24a8667d42f343b80f8005a8",
     "addon_only_fix_requires_server_rebuild": false,
-    "addon_loaded_files": 6,
+    "addon_loaded_files": 7,
     "native_tab_1_13_1_user_visible": true,
     "presentation_user_verified": false,
-    "presentation": "Full native content area at scale 1; 14px ability/class names; shared Encyclopedia/Dungeon Finder palette; native tab artwork; primary-tree link on legacy server",
-    "addon_catalog_ci_run": 42387047953
+    "presentation": "Full native content area at scale 1; native tabs, inset panels and selected specialization talents-background atlas; real-game visual acceptance pending",
+    "player_school_catalogue": true,
+    "mounts_excluded": true,
+    "relative_talent_grid": true,
+    "native_background_atlases": true,
+    "three_class_schools_audit": true,
+    "preserves_scaling": "0.4.0",
+    "preserves_dungeonfinder": "0.2.0",
+    "active_previous_transition": "/home/Kayter/WoWForEver-clean/advancement/347c815174f8/transition.json",
+    "complete_catalogue_fix_requires_server_rebuild": true
   }
 }
