@@ -74,6 +74,20 @@ local function findButton(text)
         if v.kind=="Button" and v.text==text then return v end
     end
 end
+local search
+for _,v in ipairs(frames) do if v.kind=="EditBox" then search=v end end
+assert(search and search.scripts.OnTextChanged,"Missing in-window dungeon filter")
+search:SetText("зул")
+search.scripts.OnTextChanged(search)
+local filtered
+for _,v in ipairs(frames) do
+    if v.kind=="Button" and v.data and v.data.name=="Зул'Фаррак" and v:IsShown() then
+        filtered=v
+    end
+end
+assert(filtered,"Case-insensitive Cyrillic dungeon search failed")
+search:SetText("")
+search.scripts.OnTextChanged(search)
 local solo=findButton("Войти соло")
 local group=findButton("Группой")
 assert(solo and group,"In-pane action buttons missing")
