@@ -74,14 +74,49 @@ def save(record,phase):
     print('Gameplay transition: '+phase,flush=True)
 
 
-def prepare(root,backup,jobs,reuse=False):
+def reuse_verified_trial(path, backup, candidate_id):
+    """Reuse only a completed, isolated trial of THIS exact image and backup.
+
+    The trial must be inside the private restore-trials area, must already be
+    cleaned, and must prove its world, database, TLS, and service probes passed.
+    Neither this helper nor prepare touches the live database or Docker stack.
+    """
+    path=upgrade.direct(path)
+    parent=upgrade.direct(Path.home()/'WoWForEver-restore-trials')
+    if (path.name!='report.json' or path.parent.parent!=parent
+        or not re.fullmatch(r'forever-services-check-[0-9a-f]{12}',path.parent.name)):
+        raise ValueError('Verified trial report is outside the owned private trial folder')
+    report=json.loads(path.read_text())
+    if (report.get('format')!=trial.FORMAT or
+        report.get('nonce')!=path.parent.name.removeprefix('forever-services-check-')
+        or report.get('phase')!='verified'
+        or report.get('candidate_image')!=candidate_id
+        or report.get('backup')!=str(upgrade.direct(backup))
+        or not all(report.get(key) is True for key in
+                   ('database_verified','services_verified','cleanup_verified'))
+        or report.get('service_probes',{}).get('tls_verified') is not True
+        or not report.get('world_readiness',{}).get('lines')):
+        raise ValueError('Verified trial does not match this candidate image and backup')
+    markers='\\n'.join(report['world_readiness']['lines'])
+    for marker in ('ForeverScaling ready: personal-virtual-v0.4 (enabled=true',
+                   'ForeverDungeonFinder: direct-entry-v0.2 registered (enabled=true'):
+        if marker not in markers:
+            raise ValueError('Verified trial lacks a required enabled module marker')
+    print('REUSING VERIFIED CANDIDATE TRIAL: '+str(path),flush=True)
+    return report
+
+
+def prepare(root,backup,jobs,reuse=False,verified_trial=None):
     before=game.network.checked(root);text=Path(before['compose']).read_text();model=json.loads(text)
     check_before(before,model);game.check_image(adv.image(before['image']),before)
     game.wait_module(before)
     candidate=game.built_candidate(before,required=True) if reuse else game.build(before,jobs)
     item=adv.image(candidate);game.check_image(item,before,candidate=True)
     # Restored files and SQL belong exclusively to the labelled trial, with no host ports.
-    report=trial.run_check(backup,Path.home()/'WoWForEver-restore-trials',candidate=item['Id'])
+    if verified_trial and not reuse:
+        raise ValueError('--verified-trial requires --reuse-built-image')
+    report=(reuse_verified_trial(verified_trial,backup,item['Id']) if verified_trial else
+            trial.run_check(backup,Path.home()/'WoWForEver-restore-trials',candidate=item['Id']))
     if not report.get('services_verified') or not report.get('cleanup_verified') or report.get('candidate_image')!=item['Id']:
         raise ValueError('Candidate clone trial was not verified and cleaned')
     if clean.load_state(root/'state.json')!=before or Path(before['compose']).read_text()!=text:
@@ -190,6 +225,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=('prepare','apply','rollback'))
     p.add_argument('--root',type=Path,default=Path.home()/'WoWForEver-clean');p.add_argument('--baseline',type=Path)
     p.add_argument('--record',type=Path);p.add_argument('--jobs',type=int,default=2);p.add_argument('--reuse-built-image',action='store_true')
+    p.add_argument('--verified-trial',type=Path,help='Reuse a previously successful, cleaned trial of the exact cached image (prepare only)')
     args=p.parse_args();os.umask(0o077);root=upgrade.direct(args.root)
     if not 1<=args.jobs<=8:p.error('--jobs must be 1..8')
     lock_path=Path.home()/'.cache/forever-clean-control.lock';lock_path.parent.mkdir(exist_ok=True)
@@ -197,8 +233,9 @@ def main():
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         if args.action=='prepare':
             if not args.baseline:p.error('--baseline is required')
-            prepare(root,args.baseline,args.jobs,args.reuse_built_image)
+            prepare(root,args.baseline,args.jobs,args.reuse_built_image,args.verified_trial)
         else:
+            if args.verified_trial: p.error('--verified-trial is valid only for prepare')
             if not args.record:p.error('--record is required')
             record=load_record(root,args.record)
             (apply if args.action=='apply' else rollback)(root,record)
