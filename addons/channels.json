@@ -173,7 +173,7 @@
             {
               "name": "ForeverEncyclopediaGuard.lua",
               "size": 2434,
-              "sha256": "0a42e2ae73e0cd7f8955e0fe79854baf9be52b5b992dabeb173319c77090249"
+              "sha256": "0a42e2ae73e0cd7f8955d959f4cac1ef706ef0076edf1fe79854baf9be52ef85"
             },
             {
               "name": "ForeverEncyclopediaMovableDock.lua",
@@ -183,7 +183,7 @@
             {
               "name": "ForeverEncyclopediaSafeDock.lua",
               "size": 13823,
-              "sha256": "bcba97645bd0055e0fe59e6d765242acd9b01776833d2003b0cda8701a22e8"
+              "sha256": "bcba97645bd0055e0fe59e6d765242acd9b01776833d2003b0c9cda8701a22e8"
             },
             {
               "name": "ForeverEncyclopediaTalentData.lua",
