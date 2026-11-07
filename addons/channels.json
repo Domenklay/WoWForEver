@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107-legacy-loot-16",
+  "revision": "70658-20261107-legacy-loot-17",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,7 +102,7 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-16",
+      "release": "testing-70658-20261107-17",
       "clientBuild": 70658,
       "addons": [
         {
@@ -141,9 +141,9 @@
         },
         {
           "name": "ForeverEncyclopedia",
-          "version": "0.9.21-v2.1-loot-preview",
+          "version": "0.9.22-v2.1-loot-preview",
           "protocol": 1,
-          "sourceCommit": "669fc610291bb98f0b869e29cf4fd850686f2728",
+          "sourceCommit": "05d8d531f8f3348ee698bd1a786d97e027d57882",
           "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia",
           "files": [
             {
@@ -154,7 +154,7 @@
             {
               "name": "ForeverEncyclopedia.toc",
               "size": 651,
-              "sha256": "d0ed3610d9565ae31dfd5885b1faa03f46eaf7526617619d30859354ee3f70f5"
+              "sha256": "cea69b99ae6f913d3a35af2a876463ac9e61745f940997c900173d7f37d38fc6"
             },
             {
               "name": "ForeverEncyclopediaAbilities.lua",
@@ -193,8 +193,8 @@
             },
             {
               "name": "ForeverEncyclopediaV21.lua",
-              "size": 48747,
-              "sha256": "e7b744bcc6f37c0a730bfa73618bfb7c00de60e0cef0fcc243b22a5bf6a088c4"
+              "size": 49171,
+              "sha256": "c677a1702c78009175967b48cead2c10fe54bd2a5371e2f4ae9f29f58ad2a3bd"
             }
           ]
         }
