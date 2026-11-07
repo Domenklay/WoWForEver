@@ -1,7 +1,7 @@
 name: Encyclopedia native Legacy UI (70658)
 on:
   push:
-    branches: [feature/encyclopedia-legacy-ui-70658, feature/encyclopedia-legacy-ux-fix-70658, feature/encyclopedia-archive-filters-70658, feature/encyclopedia-archive-list-space-70658]
+    branches: [feature/encyclopedia-legacy-ui-70658, feature/encyclopedia-legacy-ux-fix-70658, feature/encyclopedia-archive-filters-70658, feature/encyclopedia-archive-list-space-70658, feature/encyclopedia-loot-panel-70658]
     paths:
       - 'mods/living-encyclopedia/addon/**'
       - 'mods/living-encyclopedia/server/ForeverEncyclopedia.cpp'
