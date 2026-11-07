@@ -102,6 +102,28 @@
           }
         ]
       }
+    },
+    {
+      "sourcePath": "mods/forever-dungeon-finder/addon/ForeverDungeonFinder",
+      "manifest": {
+        "format": "forever-addon-v1",
+        "name": "ForeverDungeonFinder",
+        "version": "0.2.0",
+        "protocol": 1,
+        "sourceCommit": "8c84a1028e9d2449d1ade46d0418297f03b4fccf",
+        "files": [
+          {
+            "name": "ForeverDungeonFinder.toc",
+            "size": 192,
+            "sha256": "629818f4e60dfcfa810a4d8a76c834a4913ab12eceba438596918f28055c97dd"
+          },
+          {
+            "name": "Core.lua",
+            "size": 26768,
+            "sha256": "602d7b77c54279f2269b9beb643a54082e7d99fce6fc0dbef23c6db7f83e2eb7"
+          }
+        ]
+      }
     }
   ],
   "serverModules": [
@@ -122,9 +144,16 @@
     {
       "name": "Forever Scaling",
       "stableVersion": "0.2.0",
-      "testVersion": "0.2.0",
+      "testVersion": "0.4.0 (candidate)",
       "status": "server-only",
-      "note": "Автолевелинг работает в ядре; клиентских Lua-файлов нет, изменения требуют отдельного обновления worldserver"
+      "note": "Новая версия с опытом для нейтралов и масштабированием подземелий подготовлена в PR #3; для работы нужна отдельная проверенная сборка worldserver"
+    },
+    {
+      "name": "Forever Dungeon Finder",
+      "stableVersion": "не установлен",
+      "testVersion": "0.2.0 (candidate)",
+      "status": "server-only",
+      "note": "Клиентская вкладка скачивается в тестовом канале; серверный телепорт требует отдельной сборки и явного включения, на действующем сервере не активен"
     }
   ]
 }
