@@ -257,6 +257,11 @@ static void ApplySkin(Player* player, RuntimeState& state, Creature* companion)
     uint32 display=SkinDisplay(state.appearanceKey);
     if (!display)
     {
+        // Restore the safe shell when a test-only creature/model does not
+        // exist in this exact DB/client instead of retaining the previous look.
+        if (CreatureTemplate const* safe=sObjectMgr->GetCreatureTemplate(SafeCompanionEntry))
+            if (CreatureModel const* model=safe->GetFirstValidModel())
+                companion->SetDisplayId(model->CreatureDisplayID,true);
         state.appliedDisplay=0;
         auto skin=ForeverEncyclopedia::Skins::Find(state.appearanceKey);
         SendEvent(player,"SKIN_MISSING",skin ? skin->creature : 0,0);
