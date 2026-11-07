@@ -169,8 +169,11 @@ local function install()
 
     hideOutdatedUi()
 
-    -- The approved design adds one square portal icon between the existing
-    -- crossed swords and flag, NOT a new long red button or detached window.
+    -- A fifth icon cannot fit into the client's 470px role row without
+    -- overwriting the sword/guide controls.  The Group Finder has a persistent
+    -- native right-hand strip of square navigation tabs on EVERY subpage.
+    -- Put our portal into that strip, immediately below the existing buttons.
+    -- Unlike the previous TOPLEFT x/y guess, this is never over the filters.
     portal = CreateFrame("CheckButton", "ForeverDungeonPortalTab", host)
     portal:SetSize(50, 50)
     portal:SetFrameLevel(host:GetFrameLevel() + 112)
@@ -179,10 +182,9 @@ local function install()
 
     local tile = plain(portal, "BACKGROUND", 0.115, 0.075, 0.040, 1)
     tile:SetAllPoints()
-
     local symbol = portal:CreateTexture(nil, "ARTWORK")
-    symbol:SetPoint("TOPLEFT", portal, "TOPLEFT", 6, -6)
-    symbol:SetPoint("BOTTOMRIGHT", portal, "BOTTOMRIGHT", -6, 6)
+    symbol:SetPoint("TOPLEFT", portal, "TOPLEFT", 5, -5)
+    symbol:SetPoint("BOTTOMRIGHT", portal, "BOTTOMRIGHT", -5, 5)
     symbol:SetTexture("Interface\\Icons\\Spell_Arcane_PortalStormWind")
     symbol:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
@@ -190,12 +192,10 @@ local function install()
     outer:SetAllPoints()
     outer:SetTexture("Interface\\Buttons\\UI-Quickslot2")
     outer:SetVertexColor(0.97, 0.77, 0.31, 1)
-
-    local trim = {}
-    trim[1] = border(portal, 2, 1, 46, 2)
-    trim[2] = border(portal, 2, 47, 46, 2)
-    trim[3] = border(portal, 1, 2, 2, 46)
-    trim[4] = border(portal, 47, 2, 2, 46)
+    border(portal, 2, 1, 46, 2)
+    border(portal, 2, 47, 46, 2)
+    border(portal, 1, 2, 2, 46)
+    border(portal, 47, 2, 2, 46)
 
     local selectedGlow = portal:CreateTexture(nil, "OVERLAY")
     selectedGlow:SetPoint("TOPLEFT", portal, "TOPLEFT", -12, 12)
@@ -205,24 +205,31 @@ local function install()
     selectedGlow:SetVertexColor(1, 0.70, 0.12, 0.85)
     selectedGlow:Hide()
 
-    local damage = _G.LFGListFrameRoleButtonDPS or _G.LFGFrameRoleCheckButtonDPS
-        or _G.LFDQueueFrameRoleButtonDPS or _G.LFGListFrameRoleButtonDamage
-    local guide = _G.LFGListFrameRoleButtonGuide or _G.LFGFrameRoleCheckButtonGuide
-        or _G.LFDQueueFrameRoleButtonGuide
-    local placed = false
-    if damage and guide and damage.GetCenter and guide.GetCenter then
-        local dx, dy = damage:GetCenter()
-        local gx, gy = guide:GetCenter()
-        if dx and gx and dy and gy and gx - dx >= 70 then
-            portal:SetPoint("CENTER", damage, "CENTER", (gx - dx) * 0.5, (gy - dy) * 0.5)
-            placed = true
+    -- For clients exposing the sidebar buttons, attach to the LAST one.
+    -- Check actual geometry: a similarly named bottom tab is not acceptable.
+    local candidates = {
+        _G.PVEFrameTab3, _G.LFGParentFrameTab3, _G.GroupFinderFrameTab3,
+        _G.LFGFrameTab3, _G.PVEFrameTab4, _G.LFGParentFrameTab4,
+    }
+    local anchored = false
+    for _, native in ipairs(candidates) do
+        if native and native.GetLeft and native.GetWidth and host.GetRight then
+            local left, right = native:GetLeft(), host:GetRight()
+            local width, height = native:GetWidth(), native:GetHeight()
+            if left and right and width and height
+                and left >= right - 12 and width >= 34 and width <= 72
+                and height >= 34 and height <= 72 then
+                portal:SetPoint("TOPLEFT", native, "BOTTOMLEFT", 0, -6)
+                anchored = true
+                break
+            end
         end
     end
-    if not placed then
-        -- The user's 70658 Group Finder is ~470 px wide with a 4-icon role row.
-        -- Reserve the gap between swords and flag, not the red top-bar area.
-        local x = math.floor(host:GetWidth() * 0.785)
-        portal:SetPoint("TOPLEFT", host, "TOPLEFT", x - 25, -58)
+    if not anchored then
+        -- Observed WoW Forever 70658: three sidebar icons to the right
+        -- of the 470px frame at roughly -95, -150 and -205 from its top.
+        -- Fourth icon follows underneath (not across the top filter bar).
+        portal:SetPoint("TOPLEFT", host, "TOPRIGHT", 4, -249)
     end
     portal:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
