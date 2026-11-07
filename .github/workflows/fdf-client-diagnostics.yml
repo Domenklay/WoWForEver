@@ -1,0 +1,30 @@
+name: FDF client diagnostics 70658
+on:
+  push:
+    branches:
+      - feature/dungeon-fdf-diagnostic-client-70658
+    paths:
+      - 'mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua'
+      - 'mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverEncyclopedia.toc'
+      - 'tests/fixtures/native-dungeon-tab.lua'
+      - 'tests/test_encyclopedia_legacy.py'
+      - '.github/workflows/fdf-client-diagnostics.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lua:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lua 5.1
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lua5.1
+      - name: Check Lua parser
+        run: |
+          luac -p mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
+          luac -p tests/fixtures/native-dungeon-tab.lua
+      - name: Verify real LFG page, 19 dungeons and FDF diagnostics
+        run: lua tests/fixtures/native-dungeon-tab.lua mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
+      - name: Preserve encyclopedia book, loot preview and server compatibility
+        run: python3 tests/test_encyclopedia_legacy.py
