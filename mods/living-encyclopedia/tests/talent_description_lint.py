@@ -85,7 +85,7 @@ assert "void OnHealBefore(Unit* healer, Unit* receiver, uint32& gain) override" 
 assert "void OnHeal(Unit* healer, Unit* receiver, uint32& gain) override" not in runtime
 assert "state->mana -= allowed;" in runtime
 assert "state->healReady = now +" in runtime
-assert "state->healPending = true;" in runtime
+assert "state.healPending = true;" in runtime
 injector = (root / "server/inject.py").read_text(encoding="utf-8")
 assert "sScriptMgr->OnHealBefore(healer, victim, addhealth);" in injector
 # Source-level order is checked against a generated core fixture in inject_test.py.
