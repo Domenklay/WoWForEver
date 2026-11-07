@@ -12,7 +12,7 @@ source = (ADDON / "ForeverEncyclopediaTalentData.lua").read_text(encoding="utf-8
 overrides = (ADDON / "ForeverEncyclopediaTalentOverrides.lua").read_text(encoding="utf-8")
 
 version = re.search(r"^## Version: (.+)$", toc, re.MULTILINE)
-assert version and version.group(1) == "0.9.17-v2.1-legacy-ux", version
+assert version and version.group(1) == "0.9.19-v2.1-archive-filters", version
 assert "## Interface: 16001" in toc
 entries = [line for line in toc.splitlines() if line and not line.startswith("#")]
 assert len(entries) == len(set(entries)), "Duplicate TOC file"
@@ -46,9 +46,42 @@ assert 'ToggleLegacySystemUI()' not in legacy, "Direct native page, no duplicate
 assert 'local notifyNative' in v21 and 'notifyNative=function(kind)' in v21
 assert '_G.ForeverEncyclopediaUIBridge' in v21
 assert 'SlashCmdList["FOREVERENCYCLOPEDIAV21"]=toggleEncyclopedia' in v21
-assert "bridge.RequestCreatureInfo(rec.entry)" in legacy
+assert "bridge.RequestCreatureInfo(selected.entry)" in legacy
 for key in ("protection", "healing", "support", "wisdom", "knowledge"):
     assert key in source
 assert "node.implemented" in overrides
-assert '0.9.17-v2.1-legacy-ux' not in source, "Server talents must remain version-independent"
-print("ENCYCLOPEDIA 0.9.13 NATIVE LEGACY RELEASE CHECK PASSED")
+assert '0.9.19-v2.1-archive-filters' not in source, "Server talents must remain version-independent"
+# Archive UX must use the entire current-zone catalogue, not legacy pages.
+creature_view=legacy.split("local function drawCreatureView()",1)[1].split("local function drawZoneView()",1)[0]
+assert 'local list=frame(base,16,82,318,292,BROWN)' in creature_view
+assert 'local detail=frame(base,345,82,511,292,BROWN)' in creature_view
+assert 'CreateFrame("EditBox"' in creature_view
+assert 'dropdown(list,9,44,142,creatureType,MONSTER_TYPES' in creature_view
+assert 'dropdown(list,159,44,147,creatureLocation,options' in creature_view
+assert 'filteredArchiveRecords(allRows)' in creature_view
+assert 'archiveRecordName(item)' in creature_view
+assert 'selectedCreatureEntry' in creature_view
+assert 'OnVerticalScroll' in creature_view and 'OnMouseWheel' in creature_view
+assert 'prev=button' not in creature_view and 'nextPage=button' not in creature_view
+assert 'bridge.RequestFullCatalog()' in legacy
+assert 'bridge.RequestFullArchive()' in legacy
+assert 'archiveRecords' in legacy and 'state.archiveAll' in legacy
+assert 'state.catalogAll' in legacy and 'state.catalogAllZone' in legacy
+assert 'locationChoices' in legacy and 'filteredArchiveRecords' in legacy
+assert 'catalogAllGeneration' in v21 and 'catalogAllSeen' in v21
+assert 'archiveGeneration' in v21 and 'archiveSeen' in v21
+assert 'state.archiveSupported=true' in v21
+assert '"ARHEAD|"' in v21 and '"AREND"' in v21
+assert 'queueCatalogRequest' in v21, "Server FEC1 is rate limited"
+assert '0.27,pump' in v21, "Pace all catalogue requests above server 150ms"
+# Account-wide source is opt-in; never fake other-zone unknown mobs.
+server=(ROOT / "mods/living-encyclopedia/server/ForeverEncyclopedia.cpp").read_text(encoding="utf-8")
+assert 'Send(p,"CAPS ARCHIVE1")' in server
+assert 'static void Archive(Player* p, uint32 page)' in server
+assert 'first_map,first_zone FROM forever_encyclopedia_discovery' in server
+assert 'WHERE account_id={} AND kind={}' in server
+assert 'if (cmd=="archive")' in server
+assert 'ARHEAD|' in server and 'AREND' in server
+assert 'first_zone is the place of first discovery' in server
+
+print("ENCYCLOPEDIA LEGACY ARCHIVE FILTERS / SERVER CAPABILITIES CHECK PASSED")

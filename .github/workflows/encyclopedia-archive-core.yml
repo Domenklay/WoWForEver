@@ -1,0 +1,58 @@
+name: Encyclopedia global archive protocol (70658)
+on:
+  push:
+    branches: [feature/encyclopedia-archive-filters-70658]
+    paths:
+      - 'mods/living-encyclopedia/server/ForeverEncyclopedia.cpp'
+      - 'mods/living-encyclopedia/addon/**'
+      - 'tests/test_encyclopedia_legacy.py'
+      - '.github/workflows/encyclopedia-archive-core.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pinned-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compiler and pinned core dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cmake g++ libboost-all-dev libmysqlclient-dev libssl-dev libbz2-dev libreadline-dev libncurses-dev
+      - name: Fetch pinned Forever 70658 TrinityCore
+        run: |
+          git init "$RUNNER_TEMP/core"
+          git -C "$RUNNER_TEMP/core" remote add origin https://github.com/advocaite/TrinityCore.git
+          git -C "$RUNNER_TEMP/core" sparse-checkout init --cone
+          git -C "$RUNNER_TEMP/core" sparse-checkout set src dep cmake
+          git -C "$RUNNER_TEMP/core" -c protocol.version=2 fetch --depth 1 --filter=blob:none origin b4e7b940593f6402a822d4fbcdf31331d16f73b6
+          git -C "$RUNNER_TEMP/core" checkout --detach FETCH_HEAD
+      - name: Inject all current gameplay modules without production deployment
+        run: |
+          git -C "$RUNNER_TEMP/core" apply "$GITHUB_WORKSPACE/docker/patches/0004-forever-subclass-server-addon-endpoint.patch"
+          python3 scripts/inject-gameplay.py "$RUNNER_TEMP/core"
+          python3 scripts/inject-gameplay.py "$RUNNER_TEMP/core"
+      - name: Configure pinned 70658 compiler
+        run: cmake -S "$RUNNER_TEMP/core" -B "$RUNNER_TEMP/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DTOOLS=0 -DSERVERS=1 -DUSE_COREPCH=0 -DUSE_SCRIPTPCH=0 -DWITH_WARNINGS=0
+      - name: Compile the actual injected Encyclopedia server translation unit
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,shlex,pathlib
+          build=pathlib.Path(os.environ['RUNNER_TEMP'])/'build'
+          commands=json.loads((build/'compile_commands.json').read_text())
+          match=[it for it in commands if pathlib.Path(it['file']).name=='ForeverEncyclopedia.cpp']
+          assert len(match)==1, f'Expected exactly one Encyclopedia.cpp, got {len(match)}'
+          entry=match[0]
+          original=entry.get('arguments') or shlex.split(entry['command'])
+          command=[]
+          skip=False
+          for part in original:
+              if skip: skip=False; continue
+              if part=='-o': skip=True; continue
+              if part=='-c': continue
+              command.append(part)
+          command.append('-fsyntax-only')
+          subprocess.run(command,cwd=entry['directory'],check=True)
+          print('Pinned worldserver Encyclopedia archive protocol compiles successfully')
+          PY
