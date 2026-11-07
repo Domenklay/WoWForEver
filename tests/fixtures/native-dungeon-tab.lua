@@ -9,6 +9,10 @@ function methods:GetNumPoints() return rawget(self,"points") or 0 end
 function methods:SetWidth(v) self.width=v end
 function methods:SetHeight(v) self.height=v end
 function methods:SetSize(w,h) self.width=w; self.height=h end
+function methods:SetFrameLevel(v) self.level=v end
+function methods:SetVertexColor(r,g,b,a) self.rgba={r,g,b,a} end
+function methods:SetTexture(v) self.texture=v end
+function methods:EnableMouse(v) self.mouseEnabled=v end
 function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1 end
 function methods:SetAllPoints() self.points=1 end
 function methods:SetText(v) self.text=v end
@@ -16,13 +20,16 @@ function methods:GetText() return self.text or "" end
 function methods:SetEnabled(v) self.enabled=v end
 function methods:SetScript(n,f) self.scripts[n]=f end
 function methods:HookScript(n,f) self.scripts[n]=f end
-function methods:Show() self.shown=true end
+function methods:Show() self.shown=true; if self.scripts.OnShow then self.scripts.OnShow(self) end end
 function methods:Hide() self.shown=false end
 function methods:IsShown() return self.shown and (not rawget(self,"parent") or self.parent:IsShown()) end
 function methods:SetChecked(v) self.checked=v end
 local function make(kind, name, parent)
     local o=setmetatable({kind=kind, name=name, parent=parent, shown=true, scripts={}, children={}},{
-        __index=function(_,key) return methods[key] or noop end,
+        __index=function(_,key)
+            if key=="foreverNativeHidden" then return nil end
+            return methods[key] or noop
+        end,
     })
     if parent then table.insert(parent.children, o) end
     if name then _G[name]=o end
@@ -52,6 +59,16 @@ C_ChatInfo={
 LFGParentFrame=make("Frame","LFGParentFrame",nil)
 LFGParentFrame:SetSize(470,580)
 LFGParentFrame:Hide()
+if arg[2]=="pve" then
+    PVEFrame=make("Frame","PVEFrame",nil)
+    PVEFrame:SetSize(470,580)
+    PVEFrame:Hide()
+end
+local expectedHost=PVEFrame or LFGParentFrame
+local oldRed=CreateFrame("Button","ForeverDungeonFinderGroupFinderTab",expectedHost)
+oldRed:SetText("Вход в подземелье")
+oldRed:SetSize(166,25)
+local oldPane=CreateFrame("Frame","ForeverDungeonFinderGroupFinderPane",expectedHost)
 function ShowUIPanel(frame) frame:Show() end
 
 local file=arg[1]
@@ -62,12 +79,20 @@ assert(not _G.ForeverDungeonFinderMinimapButton,"Old minimap button was recreate
 local tab=_G.ForeverDungeonPortalTab
 local pane=_G.ForeverDungeonFinderPane
 assert(tab and pane,"Native tab or embedded pane missing")
-assert(tab.parent==LFGParentFrame and pane.parent==LFGParentFrame,"Pane is not inside stock LFG")
-assert(tab:GetWidth()==43 and tab:GetHeight()==43,"Tab is not a square icon")
+assert(tab.parent==expectedHost and pane.parent==expectedHost,"Pane is not inside stock LFG")
+assert(tab:GetWidth()==50 and tab:GetHeight()==50,"Tab is not a properly sized portal icon")
+assert(not oldRed:IsShown() and not oldPane:IsShown(),"Obsolete top red button or overlay remains visible")
+assert(tab:GetNumPoints()>=1,"Portal icon is not anchored in role row")
+assert(pane.opaqueBackground and pane.opaqueBackground.texture and pane.opaqueBackground.texture:find("WHITE8X8",1,true),"Missing reliable opaque background texture")
+assert(pane.opaqueBackground.rgba and pane.opaqueBackground.rgba[4]==1,"Dungeon panel must have alpha 1")
+assert(pane:GetFrameLevel()>expectedHost:GetFrameLevel()+50,"Native content may draw over dungeon panel")
 assert(not pane:IsShown(),"Pane should initially be hidden")
 assert(type(SlashCmdList.FOREVERDUNGEONFINDER)=="function","/fd missing")
 SlashCmdList.FOREVERDUNGEONFINDER()
-assert(LFGParentFrame:IsShown() and pane:IsShown(),"Slash command did not open embedded pane")
+assert(expectedHost:IsShown() and pane:IsShown(),"Slash command did not open embedded pane")
+oldRed:Show()
+assert(not oldRed:IsShown(),"Old button revived after OnShow")
+assert(not oldRed:IsShown(),"Obsolete red header button must stay hidden after opening")
 assert(tab.checked,"Native square was not selected")
 local function findButton(text)
     for _,v in ipairs(frames) do

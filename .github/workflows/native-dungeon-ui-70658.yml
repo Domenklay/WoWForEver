@@ -1,7 +1,7 @@
 name: Native dungeon tab 70658
 on:
   push:
-    branches: [feature/native-dungeon-tab-70658]
+    branches: [feature/native-dungeon-tab-70658, feature/native-dungeon-tab-visual-fix-70658]
     paths:
       - 'mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua'
       - 'mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverEncyclopedia.toc'
@@ -23,4 +23,6 @@ jobs:
           luac -p mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
           luac -p tests/fixtures/native-dungeon-tab.lua
       - name: Exercise native Group Finder tab and FDF transport
-        run: lua tests/fixtures/native-dungeon-tab.lua mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
+        run: |
+          lua tests/fixtures/native-dungeon-tab.lua mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
+          lua tests/fixtures/native-dungeon-tab.lua mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua pve

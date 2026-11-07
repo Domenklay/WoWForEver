@@ -59,74 +59,97 @@ local function partyState()
 end
 
 
--- Integrated version: NO separate dungeon window, movable frame, minimap button
--- or retail LFG queue calls.  This is an in-place panel of the stock LFG window.
-local picked = DUNGEONS[1]
-local host, pane, tab, refresh
-local filterText, visible, page = "", {}, 0
-local perPage = 8
-local rows = {}
-local lastRequest = -100
 
-local function notify(message)
+-- In-place, opaque dungeon panel of Blizzard's existing Group Finder.
+-- The client only submits FDF requests; authority is retained server-side.
+local picked, host, pane, portal, redraw = DUNGEONS[1], nil, nil, nil, nil
+local entries, searchText, page = {}, "", 0
+local rows, PAGE_SIZE = {}, 9
+local lastRequest = -100
+local oldUiNames = {
+    "ForeverDungeonFinderFrame", "ForeverDungeonFinderMinimapButton",
+    "ForeverDungeonFinderGroupFinderTab", "ForeverDungeonFinderGroupFinderPane",
+}
+
+local function notice(message)
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage("|cffffd275[WoW Forever]|r " .. message)
     end
 end
 
-local function canRequest()
-    if not GetTime then return true end
-    if GetTime() - lastRequest < 2 then return false end
-    lastRequest = GetTime()
-    return true
+local function hideOutdatedUi()
+    -- Old standalone AddOns can remain on disk and reload after Encyclopedia.
+    -- Remove their visible duplicate frames, without touching user files.
+    for _, name in ipairs(oldUiNames) do
+        local old = _G[name]
+        if old and old.Hide and old ~= portal and old ~= pane then
+            old:Hide()
+            if old.EnableMouse then old:EnableMouse(false) end
+            if old.HookScript and not old.foreverNativeHidden then
+                old.foreverNativeHidden = true
+                old:HookScript("OnShow", function(f) f:Hide() end)
+            end
+        end
+    end
 end
 
-local function sendRequest(mode)
-    if not picked or not canRequest() then return end
+local function requestEntry(group)
+    if not picked then return end
+    if GetTime and GetTime() - lastRequest < 2 then return end
     local count, raid, leader = partyState()
-    if mode == "GROUP" and (count < 2 or count > 5 or raid or not leader) then
-        notify("Для входа группой нужен лидер обычной группы из 2–5 игроков.")
+    if group and (count < 2 or count > 5 or raid or not leader) then
+        notice("Вход группой доступен только лидеру обычной группы из 2–5 игроков.")
         return
     end
-    local name = UnitName("player")
-    if not name then return end
-    local ok
-    if mode == "SOLO" then
-        ok = sendAddon("SOLO:" .. picked.map, "WHISPER", name)
+    local player = UnitName("player")
+    if not player then return end
+    local mode = group and "GROUP:" or "SOLO:"
+    local result = sendAddon(mode .. picked.map, group and "PARTY" or "WHISPER", group and nil or player)
+    if result == false then
+        notice("Не удалось передать запрос в worldserver.")
     else
-        ok = sendAddon("GROUP:" .. picked.map, "PARTY")
-    end
-    if ok == false then
-        notify("Не удалось передать запрос на телепортацию.")
-    else
-        notify("Запрос входа отправлен. Если серверный модуль отключён, перенос не состоится.")
+        if GetTime then lastRequest = GetTime() end
+        notice("Запрос передан. Для переноса нужен включённый серверный модуль DungeonFinder.")
     end
 end
 
--- Prefer a stock Group Finder frame, not the custom full-screen dungeon frame.
--- Classic/Forever UI names differ, so installation is retried after lazy loads.
 local function findHost()
-    local frame = _G.PVEFrame or _G.LFGParentFrame or _G.GroupFinderFrame
+    local panel = _G.PVEFrame or _G.LFGParentFrame or _G.GroupFinderFrame
         or _G.LookingForGroupFrame or _G.LFGFrame
-    if frame and frame.GetWidth and frame.GetHeight then return frame end
-    if _G.LFGListFrame and _G.LFGListFrame.GetParent then
-        local parent = _G.LFGListFrame:GetParent()
-        return parent or _G.LFGListFrame
+    if panel and panel.GetWidth and panel.GetHeight and panel:GetWidth() >= 330 then
+        return panel
     end
 end
 
-local function font(parent, text, style, x, y, width, color)
-    local obj = parent:CreateFontString(nil, "OVERLAY", style)
-    obj:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-    obj:SetWidth(width)
-    obj:SetJustifyH("LEFT")
-    obj:SetText(text or "")
-    if color then obj:SetTextColor(color[1], color[2], color[3]) end
-    return obj
+local function plain(parent, layer, r, g, b, alpha)
+    -- WHITE8X8 is always present on client build 70658.  SetBackdrop is not
+    -- reliable for an opaque background on this client, so never depend on it.
+    local t = parent:CreateTexture(nil, layer or "BACKGROUND")
+    t:SetTexture("Interface\\Buttons\\WHITE8X8")
+    t:SetVertexColor(r, g, b, alpha or 1)
+    return t
 end
 
--- Lua 5.1 string.lower only handles ASCII in WoW; fold Russian UTF-8
--- as well so searching "зул" matches "Зул'Фаррак".
+local function label(parent, text, style, x, y, width, rgb)
+    local f = parent:CreateFontString(nil, "OVERLAY", style)
+    f:SetPoint("TOPLEFT", parent, "TOPLEFT", x, -y)
+    f:SetWidth(width)
+    f:SetJustifyH("LEFT")
+    f:SetText(text or "")
+    if rgb then f:SetTextColor(rgb[1], rgb[2], rgb[3]) end
+    return f
+end
+
+local GOLD, IVORY, GREY = {1, 0.80, 0.26}, {0.95, 0.88, 0.75}, {0.66, 0.72, 0.77}
+local function border(parent, x, y, width, height)
+    local t = plain(parent, "ARTWORK", 0.54, 0.37, 0.16, 0.83)
+    t:SetPoint("TOPLEFT", parent, "TOPLEFT", x, -y)
+    t:SetSize(width, height)
+    return t
+end
+
+-- Lua 5.1 string.lower does not fold Cyrillic text.  Match UTF-8 Russian
+-- dungeon names and regions without modifying game locale/global functions.
 local function foldRu(text)
     local result = string.lower(text or "")
     result = result:gsub("\208([\144-\159])", function(b)
@@ -138,283 +161,300 @@ local function foldRu(text)
     return result:gsub("Ё", "ё")
 end
 
-local GOLD = {1, 0.82, 0.19}
-local IVORY = {0.93, 0.88, 0.76}
-local MUTED = {0.69, 0.71, 0.74}
-
-local function decorate(frame)
-    if frame.SetBackdrop then
-        frame:SetBackdrop({
-            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true, tileSize = 32, edgeSize = 22,
-            insets = { left = 9, right = 9, top = 9, bottom = 9 },
-        })
-        frame:SetBackdropColor(0.05, 0.035, 0.025, 1)
-    else
-        local bg = frame:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints()
-        bg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
-    end
-end
-
 local function install()
-    if tab then return true end
-    local root = findHost()
-    if not root or not root.CreateTexture then return false end
-    if root.GetWidth and root:GetWidth() < 330 then return false end
-    host = root
+    if portal then return true end
+    local f = findHost()
+    if not f then return false end
+    host = f
 
-    tab = CreateFrame("CheckButton", "ForeverDungeonPortalTab", host)
-    tab:SetSize(43, 43)
-    tab:SetFrameLevel(host:GetFrameLevel() + 30)
-    tab:RegisterForClicks("LeftButtonUp")
-    tab:SetHitRectInsets(0, 0, 0, 0)
-    local icon = tab:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("TOPLEFT", 5, -5)
-    icon:SetPoint("BOTTOMRIGHT", -5, 5)
-    icon:SetTexture("Interface\\Icons\\Spell_Arcane_PortalStormWind")
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    local outline = tab:CreateTexture(nil, "OVERLAY")
-    outline:SetAllPoints()
-    outline:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-    local glow = tab:CreateTexture(nil, "OVERLAY")
-    glow:SetPoint("TOPLEFT", -8, 8)
-    glow:SetPoint("BOTTOMRIGHT", 8, -8)
-    glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
-    glow:SetBlendMode("ADD")
-    glow:SetVertexColor(1, 0.72, 0.10)
-    glow:Hide()
+    hideOutdatedUi()
 
-    -- Slot between the damage and guide role icons on Classic's LFG row.
-    -- Fall back to the same row's proportional position on other UIs.
+    -- The approved design adds one square portal icon between the existing
+    -- crossed swords and flag, NOT a new long red button or detached window.
+    portal = CreateFrame("CheckButton", "ForeverDungeonPortalTab", host)
+    portal:SetSize(50, 50)
+    portal:SetFrameLevel(host:GetFrameLevel() + 112)
+    portal:RegisterForClicks("LeftButtonUp")
+    portal:SetHitRectInsets(0, 0, 0, 0)
+
+    local tile = plain(portal, "BACKGROUND", 0.115, 0.075, 0.040, 1)
+    tile:SetAllPoints()
+
+    local symbol = portal:CreateTexture(nil, "ARTWORK")
+    symbol:SetPoint("TOPLEFT", portal, "TOPLEFT", 6, -6)
+    symbol:SetPoint("BOTTOMRIGHT", portal, "BOTTOMRIGHT", -6, 6)
+    symbol:SetTexture("Interface\\Icons\\Spell_Arcane_PortalStormWind")
+    symbol:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    local outer = portal:CreateTexture(nil, "OVERLAY")
+    outer:SetAllPoints()
+    outer:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    outer:SetVertexColor(0.97, 0.77, 0.31, 1)
+
+    local trim = {}
+    trim[1] = border(portal, 2, 1, 46, 2)
+    trim[2] = border(portal, 2, 47, 46, 2)
+    trim[3] = border(portal, 1, 2, 2, 46)
+    trim[4] = border(portal, 47, 2, 2, 46)
+
+    local selectedGlow = portal:CreateTexture(nil, "OVERLAY")
+    selectedGlow:SetPoint("TOPLEFT", portal, "TOPLEFT", -12, 12)
+    selectedGlow:SetPoint("BOTTOMRIGHT", portal, "BOTTOMRIGHT", 12, -12)
+    selectedGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    selectedGlow:SetBlendMode("ADD")
+    selectedGlow:SetVertexColor(1, 0.70, 0.12, 0.85)
+    selectedGlow:Hide()
+
     local damage = _G.LFGListFrameRoleButtonDPS or _G.LFGFrameRoleCheckButtonDPS
         or _G.LFDQueueFrameRoleButtonDPS or _G.LFGListFrameRoleButtonDamage
     local guide = _G.LFGListFrameRoleButtonGuide or _G.LFGFrameRoleCheckButtonGuide
         or _G.LFDQueueFrameRoleButtonGuide
+    local placed = false
     if damage and guide and damage.GetCenter and guide.GetCenter then
         local dx, dy = damage:GetCenter()
         local gx, gy = guide:GetCenter()
-        if dx and gx and dy and gy and gx > dx and gx - dx > 57 then
-            tab:SetPoint("CENTER", damage, "CENTER", (gx - dx) / 2, (gy - dy) / 2)
+        if dx and gx and dy and gy and gx - dx >= 70 then
+            portal:SetPoint("CENTER", damage, "CENTER", (gx - dx) * 0.5, (gy - dy) * 0.5)
+            placed = true
         end
     end
-    if not tab:GetNumPoints() or tab:GetNumPoints() == 0 then
-        tab:SetPoint("TOPLEFT", host, "TOPLEFT", math.max(290, math.min(355, math.floor(host:GetWidth() * 0.745))), -78)
+    if not placed then
+        -- The user's 70658 Group Finder is ~470 px wide with a 4-icon role row.
+        -- Reserve the gap between swords and flag, not the red top-bar area.
+        local x = math.floor(host:GetWidth() * 0.785)
+        portal:SetPoint("TOPLEFT", host, "TOPLEFT", x - 25, -58)
     end
-
-    tab:SetScript("OnEnter", function(self)
+    portal:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Вход в подземелье", 1, 0.82, 0.19)
-        GameTooltip:AddLine("Соло или готовой группой, без очереди", 0.93, 0.88, 0.76)
+        GameTooltip:AddLine("Вход в подземелье", 1, 0.80, 0.26)
+        GameTooltip:AddLine("Соло или текущей группой, без очереди", 0.93, 0.88, 0.76)
         GameTooltip:Show()
     end)
-    tab:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    portal:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- All finder content stays INSIDE its parent and below the native role row.
+    -- A full opaque panel is crucial: the old version was transparent and
+    -- rendered over the native "Подземелья / Зоны и задания" categories.
     pane = CreateFrame("Frame", "ForeverDungeonFinderPane", host)
-    pane:SetPoint("TOPLEFT", host, "TOPLEFT", 20, -166)
-    pane:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -19, 51)
-    pane:SetFrameLevel(host:GetFrameLevel() + 22)
+    pane:SetPoint("TOPLEFT", host, "TOPLEFT", 18, -135)
+    pane:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -17, 48)
+    pane:SetFrameLevel(host:GetFrameLevel() + 100)
     pane:EnableMouse(true)
     pane:EnableMouseWheel(true)
-    decorate(pane)
-    pane:Hide()
 
-    -- Column sizes are based on the stock 470-wide Group Finder layout.
-    local splitX = math.floor(math.max(345, host:GetWidth() - 40) * 0.46)
-    local leftW = splitX - 24
-    local rightX = splitX + 15
-    local rightW = math.max(145, host:GetWidth() - 68 - rightX)
+    local bg = plain(pane, "BACKGROUND", 0.070, 0.046, 0.031, 1)
+    bg:SetAllPoints()
+    pane.opaqueBackground = bg -- testable and independent of legacy SetBackdrop
+
+    local inner = plain(pane, "BORDER", 0.115, 0.071, 0.037, 1)
+    inner:SetPoint("TOPLEFT", pane, "TOPLEFT", 4, -4)
+    inner:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -4, 4)
+
+    -- Natural WoW gold trim around the complete native-content rectangle.
+    local width = math.max(325, host:GetWidth() - 35)
+    local height = math.max(270, host:GetHeight() - 183)
+    border(pane, 4, 3, width - 8, 2)
+    border(pane, 4, height - 6, width - 8, 2)
+    border(pane, 3, 4, 2, height - 8)
+    border(pane, width - 5, 4, 2, height - 8)
+
+    local split = math.floor(width * 0.455)
+    local leftW = split - 31
+    local rightX = split + 12
+    local rightW = width - rightX - 18
+    if rightW < 130 then rightW = 130 end
+
+    local listBg = plain(pane, "ARTWORK", 0.050, 0.036, 0.025, 0.97)
+    listBg:SetPoint("TOPLEFT", pane, "TOPLEFT", 10, -65)
+    listBg:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 10, 43)
+    listBg:SetWidth(split - 15)
+    local rule = plain(pane, "ARTWORK", 0.52, 0.35, 0.15, 0.81)
+    rule:SetPoint("TOPLEFT", pane, "TOPLEFT", split + 1, -11)
+    rule:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", split + 1, 11)
+    rule:SetWidth(1)
 
     local search = CreateFrame("EditBox", nil, pane, "InputBoxTemplate")
-    search:SetSize(leftW, 24)
-    search:SetPoint("TOPLEFT", 19, -18)
+    search:SetSize(leftW, 23)
+    search:SetPoint("TOPLEFT", pane, "TOPLEFT", 17, -15)
     search:SetAutoFocus(false)
     search:SetMaxLetters(48)
     if search.SetTextInsets then search:SetTextInsets(6, 6, 0, 0) end
-    local searchHint = font(pane, "Поиск...", "GameFontDisableSmall", 29, -25, leftW - 20, MUTED)
-    if searchHint.EnableMouse then searchHint:EnableMouse(false) end
+    local hint = label(pane, "Поиск...", "GameFontDisableSmall", 27, 21, leftW - 15, GREY)
+    if hint.EnableMouse then hint:EnableMouse(false) end
+    label(pane, "ДОСТУПНЫЕ ПОДЗЕМЕЛЬЯ", "GameFontNormalSmall", 15, 49, split - 16, GOLD)
 
-    font(pane, "ПОДЗЕМЕЛЬЯ", "GameFontNormalSmall", 20, -54, leftW, GOLD)
-    local divider = pane:CreateTexture(nil, "ARTWORK")
-    divider:SetTexture("Interface\\Buttons\\WHITE8X8")
-    divider:SetVertexColor(0.53, 0.35, 0.15, 0.75)
-    divider:SetPoint("TOPLEFT", pane, "TOPLEFT", splitX, -18)
-    divider:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", splitX, 13)
-    divider:SetWidth(1)
-
-    for i = 1, perPage do
+    for i = 1, PAGE_SIZE do
         local row = CreateFrame("Button", nil, pane)
-        row:SetPoint("TOPLEFT", 18, -78 - (i - 1) * 25)
-        row:SetSize(leftW + 3, 24)
+        row:SetSize(split - 20, 24)
+        row:SetPoint("TOPLEFT", pane, "TOPLEFT", 13, -70 - (i - 1) * 25)
         row:SetFrameLevel(pane:GetFrameLevel() + 2)
-        local bg = row:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints()
-        bg:SetTexture("Interface\\Buttons\\WHITE8X8")
-        local title = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        title:SetPoint("LEFT", row, "LEFT", 4, 0)
-        title:SetPoint("RIGHT", row, "RIGHT", -42, 0)
-        title:SetJustifyH("LEFT")
-        local level = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        level:SetPoint("RIGHT", row, "RIGHT", -3, 0)
-        row.background, row.title, row.level = bg, title, level
+        local shade = plain(row, "BACKGROUND", 0.11, 0.075, 0.049, 0.58)
+        shade:SetAllPoints()
+        local rowName = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        rowName:SetPoint("LEFT", row, "LEFT", 4, 0)
+        rowName:SetPoint("RIGHT", row, "RIGHT", -42, 0)
+        rowName:SetJustifyH("LEFT")
+        local rowLvl = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        rowLvl:SetPoint("RIGHT", row, "RIGHT", -3, 0)
+        row.shade, row.title, row.level = shade, rowName, rowLvl
         rows[i] = row
     end
 
-    local leftPrev = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
-    leftPrev:SetSize(64, 23)
-    leftPrev:SetPoint("BOTTOMLEFT", 18, 16)
-    leftPrev:SetText("Назад")
-    local leftNext = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
-    leftNext:SetSize(64, 23)
-    leftNext:SetPoint("LEFT", leftPrev, "RIGHT", 6, 0)
-    leftNext:SetText("Далее")
+    local prev = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
+    prev:SetSize(64, 22)
+    prev:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 14, 13)
+    prev:SetText("Назад")
+    local nextButton = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
+    nextButton:SetSize(64, 22)
+    nextButton:SetPoint("LEFT", prev, "RIGHT", 5, 0)
+    nextButton:SetText("Далее")
+    local pagesLabel = label(pane, "", "GameFontDisableSmall", 147, height - 39, 40, GREY)
 
-    local detailName = font(pane, "", "GameFontNormalLarge", rightX, -22, rightW, GOLD)
-    local detailZone = font(pane, "", "GameFontHighlightSmall", rightX, -53, rightW, MUTED)
-    local rule = pane:CreateTexture(nil, "ARTWORK")
-    rule:SetTexture("Interface\\Buttons\\WHITE8X8")
-    rule:SetVertexColor(0.53, 0.35, 0.15, 0.75)
-    rule:SetPoint("TOPLEFT", pane, "TOPLEFT", rightX, -80)
-    rule:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -15, -80)
-    rule:SetHeight(1)
-
-    local detailRange = font(pane, "", "GameFontNormalSmall", rightX, -95, rightW, IVORY)
-    local detailDesc = font(pane, "", "GameFontHighlightSmall", rightX, -125, rightW, IVORY)
-    detailDesc:SetJustifyV("TOP")
-    local scaling = font(pane, "Уровень противника подстраивается под игрока.", "GameFontHighlightSmall", rightX, -172, rightW, MUTED)
+    local dungeonName = label(pane, "", "GameFontNormalLarge", rightX, 19, rightW, GOLD)
+    local region = label(pane, "", "GameFontHighlightSmall", rightX, 49, rightW, GREY)
+    border(pane, rightX, 77, rightW, 1)
+    local levelText = label(pane, "", "GameFontNormalSmall", rightX, 91, rightW, IVORY)
+    local description = label(pane, "", "GameFontHighlightSmall", rightX, 118, rightW, IVORY)
+    description:SetJustifyV("TOP")
+    local scaling = label(pane, "Уровни противников подстраиваются под персонажа.", "GameFontHighlightSmall", rightX, 166, rightW, GREY)
     scaling:SetJustifyV("TOP")
 
     local party = CreateFrame("Frame", nil, pane)
-    party:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", rightX - 4, 77)
-    party:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -12, 77)
-    party:SetHeight(66)
-    decorate(party)
-    font(party, "ТЕКУЩИЙ СОСТАВ", "GameFontNormalSmall", 12, -8, rightW - 12, GOLD)
-    local partyInfo = font(party, "", "GameFontHighlightSmall", 12, -27, rightW - 15, IVORY)
+    party:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", rightX - 4, 74)
+    party:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -12, 74)
+    party:SetHeight(61)
+    party:SetFrameLevel(pane:GetFrameLevel() + 2)
+    local partyFill = plain(party, "BACKGROUND", 0.083, 0.061, 0.040, 1)
+    partyFill:SetAllPoints()
+    local partyEdge = plain(party, "ARTWORK", 0.46, 0.33, 0.17, 1)
+    partyEdge:SetPoint("TOPLEFT", 0, 0)
+    partyEdge:SetPoint("TOPRIGHT", 0, 0)
+    partyEdge:SetHeight(1)
+    label(party, "ТЕКУЩИЙ СОСТАВ", "GameFontNormalSmall", 8, 7, rightW - 14, GOLD)
+    local partyInfo = label(party, "", "GameFontHighlightSmall", 8, 27, rightW - 15, IVORY)
     partyInfo:SetJustifyV("TOP")
 
     local solo = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
-    solo:SetSize(math.max(83, math.floor((rightW - 8) / 2)), 27)
-    solo:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", rightX, 23)
+    solo:SetSize(math.max(75, math.floor((rightW - 6) / 2)), 29)
+    solo:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", rightX, 21)
     solo:SetText("Войти соло")
-    local group = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
-    group:SetSize(math.max(84, math.floor((rightW - 8) / 2)), 27)
-    group:SetPoint("LEFT", solo, "RIGHT", 5, 0)
-    group:SetText("Группой")
+    local together = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
+    together:SetSize(math.max(75, math.floor((rightW - 6) / 2)), 29)
+    together:SetPoint("LEFT", solo, "RIGHT", 5, 0)
+    together:SetText("Группой")
 
-    local function refreshRows()
-        wipe(visible)
-        local needle = foldRu(filterText)
-        for _, entry in ipairs(DUNGEONS) do
-            if needle == "" or string.find(foldRu(entry.name .. " " .. entry.zone), needle, 1, true) then
-                table.insert(visible, entry)
+    local function update()
+        wipe(entries)
+        local query = foldRu(searchText)
+        for _, dungeon in ipairs(DUNGEONS) do
+            if query == "" or string.find(foldRu(dungeon.name .. " " .. dungeon.zone), query, 1, true) then
+                table.insert(entries, dungeon)
             end
         end
-        local pages = math.max(1, math.ceil(#visible / perPage))
+        local pages = math.max(1, math.ceil(#entries / PAGE_SIZE))
         page = math.max(0, math.min(page, pages - 1))
-        leftPrev:SetEnabled(page > 0)
-        leftNext:SetEnabled(page < pages - 1)
+        prev:SetEnabled(page > 0)
+        nextButton:SetEnabled(page < pages - 1)
+        pagesLabel:SetText(tostring(page + 1) .. "/" .. tostring(pages))
         for i, row in ipairs(rows) do
-            local entry = visible[page * perPage + i]
-            row.data = entry
-            if entry then
+            local d = entries[page * PAGE_SIZE + i]
+            row.data = d
+            if d then
                 row:Show()
-                row.title:SetText(entry.name)
-                row.level:SetText(entry.range)
-                if entry == picked then
-                    row.background:SetVertexColor(0.14, 0.27, 0.41, 0.98)
-                    row.title:SetTextColor(1, 0.83, 0.29)
+                row.title:SetText(d.name)
+                row.level:SetText(d.range)
+                if d == picked then
+                    row.shade:SetVertexColor(0.14, 0.27, 0.42, 1)
+                    row.title:SetTextColor(1, 0.82, 0.28)
                 else
-                    row.background:SetVertexColor(0.12, 0.08, 0.06, i % 2 == 0 and 0.72 or 0.40)
-                    row.title:SetTextColor(0.93, 0.88, 0.76)
+                    row.shade:SetVertexColor(0.11, 0.075, 0.049, i % 2 == 0 and 0.90 or 0.62)
+                    row.title:SetTextColor(0.95, 0.88, 0.77)
                 end
             else
                 row:Hide()
             end
         end
-        detailName:SetText(picked.name)
-        detailZone:SetText(picked.zone)
-        detailRange:SetText("Исходный уровень: " .. picked.range)
-        detailDesc:SetText(picked.desc)
 
-        local count, raid, leader = partyState()
+        dungeonName:SetText(picked.name)
+        region:SetText(picked.zone)
+        levelText:SetText("Уровень: " .. picked.range)
+        description:SetText(picked.desc)
+
+        local n, raid, leader = partyState()
         if raid then
-            partyInfo:SetText("Рейд: только одиночный вход.")
-        elseif count <= 1 then
-            partyInfo:SetText("Без группы. Доступен вход соло.")
+            partyInfo:SetText("Рейд: только соло.")
+        elseif n <= 1 then
+            partyInfo:SetText("Вы без группы. Доступен вход соло.")
         elseif not leader then
-            partyInfo:SetText("В группе " .. count .. " чел. Ждём лидера.")
+            partyInfo:SetText("Игроков: " .. n .. ". Нужен лидер.")
         else
-            partyInfo:SetText("Группа " .. count .. " чел. Можно войти вместе.")
+            partyInfo:SetText("Группа: " .. n .. ". Можно войти вместе.")
         end
-        group:SetEnabled(count >= 2 and count <= 5 and not raid and leader)
+        together:SetEnabled(n >= 2 and n <= 5 and not raid and leader)
     end
-    refresh = refreshRows
+    redraw = update
 
-    for i, row in ipairs(rows) do
+    for _, row in ipairs(rows) do
         row:SetScript("OnClick", function(self)
-            if self.data then picked = self.data; refreshRows() end
+            if self.data then picked = self.data; update() end
         end)
         row:SetScript("OnEnter", function(self)
-            if self.data and self.data ~= picked then
-                self.background:SetVertexColor(0.24, 0.20, 0.12, 0.88)
+            if self.data ~= picked and self.data then
+                self.shade:SetVertexColor(0.31, 0.25, 0.14, 0.9)
             end
         end)
-        row:SetScript("OnLeave", function() refreshRows() end)
+        row:SetScript("OnLeave", function() update() end)
     end
     search:SetScript("OnTextChanged", function(self)
-        filterText = self:GetText() or ""
-        if filterText == "" then searchHint:Show() else searchHint:Hide() end
+        searchText = self:GetText() or ""
+        if searchText == "" then hint:Show() else hint:Hide() end
         page = 0
-        refreshRows()
+        update()
     end)
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    leftPrev:SetScript("OnClick", function() page = page - 1; refreshRows() end)
-    leftNext:SetScript("OnClick", function() page = page + 1; refreshRows() end)
+    prev:SetScript("OnClick", function() page = page - 1; update() end)
+    nextButton:SetScript("OnClick", function() page = page + 1; update() end)
     pane:SetScript("OnMouseWheel", function(_, delta)
         page = page - (delta > 0 and 1 or -1)
-        refreshRows()
+        update()
     end)
-    solo:SetScript("OnClick", function() sendRequest("SOLO") end)
-    group:SetScript("OnClick", function() sendRequest("GROUP") end)
+    solo:SetScript("OnClick", function() requestEntry(false) end)
+    together:SetScript("OnClick", function() requestEntry(true) end)
 
-    local function closePane()
+    local function close()
         pane:Hide()
-        tab:SetChecked(false)
-        glow:Hide()
+        portal:SetChecked(false)
+        selectedGlow:Hide()
     end
-    local function openPane()
-        refreshRows()
+    local function open()
+        hideOutdatedUi()
+        update()
         pane:Show()
-        tab:SetChecked(true)
-        glow:Show()
+        portal:SetChecked(true)
+        selectedGlow:Show()
     end
-    tab:SetScript("OnClick", function()
-        if pane:IsShown() then closePane() else openPane() end
+    pane.open = open
+    pane.close = close
+    portal:SetScript("OnClick", function()
+        if pane:IsShown() then close() else open() end
     end)
-    host:HookScript("OnHide", closePane)
+    host:HookScript("OnHide", close)
     for _, name in ipairs({
         "PVEFrameTab1", "PVEFrameTab2", "PVEFrameTab3",
         "LFGParentFrameTab1", "LFGParentFrameTab2", "LFGParentFrameTab3",
         "GroupFinderFrameGroupButton", "GroupFinderFrameLFGListBrowserButton",
     }) do
-        local native = _G[name]
-        if native and native.HookScript then
-            native:HookScript("OnClick", closePane)
-        end
+        local other = _G[name]
+        if other and other.HookScript then other:HookScript("OnClick", close) end
     end
-    pane.openPane = openPane
-    pane.closePane = closePane
-    refreshRows()
+    pane:Hide()
+    hideOutdatedUi()
+    update()
     return true
 end
 
 local function openNative()
     if not install() then
-        -- Blizzard can load GroupFinder lazily; request its frame on demand.
         if C_AddOns and C_AddOns.LoadAddOn then
             pcall(C_AddOns.LoadAddOn, "Blizzard_GroupFinder")
         elseif LoadAddOn then
@@ -422,41 +462,15 @@ local function openNative()
         end
     end
     if not install() then
-        notify("Откройте стандартное окно «Поиск группы» и попробуйте /fd ещё раз.")
+        notice("Откройте «Поиск группы», затем повторите /fd.")
         return
     end
     if not host:IsShown() then
-        if PVEFrame_ShowFrame then
-            pcall(PVEFrame_ShowFrame, "GroupFinderFrame")
-        end
-        if not host:IsShown() and ShowUIPanel then
-            ShowUIPanel(host)
-        end
+        if PVEFrame_ShowFrame then pcall(PVEFrame_ShowFrame, "GroupFinderFrame") end
+        if not host:IsShown() and ShowUIPanel then ShowUIPanel(host) end
         if not host:IsShown() then host:Show() end
     end
-    pane.openPane()
-end
-
--- A previous testing channel could have left the old standalone addon in
--- Interface/AddOns.  Keep that folder intact, but suppress its obsolete UI
--- in favor of the native Group Finder tab.
-local function suppressLegacyFrame()
-    local old = _G.ForeverDungeonFinderFrame
-    if old and old.Hide then
-        old:Hide()
-        if not old.foreverNativeSuppressed and old.HookScript then
-            old.foreverNativeSuppressed = true
-            old:HookScript("OnShow", function(self) self:Hide() end)
-        end
-    end
-    local mini = _G.ForeverDungeonFinderMinimapButton
-    if mini and mini.Hide then
-        mini:Hide()
-        if mini.EnableMouse then mini:EnableMouse(false) end
-    end
-    -- An independently loaded old addon may have registered the same /fd
-    -- slash binding before or after the Encyclopedia.  Prefer native UI.
-    SlashCmdList.FOREVERDUNGEONFINDER = openNative
+    pane.open()
 end
 
 SLASH_FOREVERDUNGEONFINDER1 = "/fd"
@@ -469,14 +483,18 @@ events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("GROUP_ROSTER_UPDATE")
 events:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_LOGIN" then
-        registerPrefix()
-    end
+    if event == "PLAYER_LOGIN" then registerPrefix() end
     if event == "GROUP_ROSTER_UPDATE" then
-        if pane and pane:IsShown() and refresh then refresh() end
+        if pane and pane:IsShown() and redraw then redraw() end
     else
         install()
     end
-    suppressLegacyFrame()
+    hideOutdatedUi()
+    -- Old addon scripts can overwrite the common slash binding after load.
+    SlashCmdList.FOREVERDUNGEONFINDER = openNative
 end)
-if IsLoggedIn and IsLoggedIn() then registerPrefix(); install(); suppressLegacyFrame() end
+if IsLoggedIn and IsLoggedIn() then
+    registerPrefix()
+    install()
+    hideOutdatedUi()
+end
