@@ -38,6 +38,56 @@ class TransitionTests(unittest.TestCase):
             compose.assert_not_called();self.assertEqual(before,(root/'compose.private.json').read_bytes())
             self.assertEqual(t.clean.load_state(root/'state.json'),state)
 
+    def test_reuse_verified_trial_rejects_wrong_image_and_incomplete_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home=Path(temp); backed=home/'baseline';backed.mkdir()
+            folder=home/'WoWForEver-restore-trials'/'forever-services-check-123456abcdef'
+            folder.mkdir(parents=True);report_path=folder/'report.json'
+            report=dict(format=t.trial.FORMAT,nonce='123456abcdef',phase='verified',
+                        candidate_image='sha256:'+'a'*64,backup=str(backed),
+                        database_verified=True,services_verified=True,cleanup_verified=True,
+                        service_probes={'tls_verified':True},
+                        world_readiness={'lines':[
+                            'ForeverScaling ready: personal-virtual-v0.4 (enabled=true',
+                            'ForeverDungeonFinder: direct-entry-v0.2 registered (enabled=true']})
+            report_path.write_text(json.dumps(report))
+            with patch.object(t.Path,'home',return_value=home):
+                self.assertEqual(t.reuse_verified_trial(report_path,backed,report['candidate_image']),report)
+                with self.assertRaisesRegex(ValueError,'match'):
+                    t.reuse_verified_trial(report_path,backed,'sha256:'+'b'*64)
+                report['cleanup_verified']=False;report_path.write_text(json.dumps(report))
+                with self.assertRaisesRegex(ValueError,'match'):
+                    t.reuse_verified_trial(report_path,backed,report['candidate_image'])
+                report['cleanup_verified']=True;report['world_readiness']['lines']=[]
+                report_path.write_text(json.dumps(report))
+                with self.assertRaisesRegex(ValueError,'match'):
+                    t.reuse_verified_trial(report_path,backed,report['candidate_image'])
+
+    def test_prepare_writes_record_after_existing_trial_without_recompilation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);state,model=self.state(root)
+            original=(root/'compose.private.json').read_bytes()
+            candidate='sha256:'+'a'*64
+            report=dict(services_verified=True,cleanup_verified=True,candidate_image=candidate)
+            verified=Path('/private/verified/report.json')
+            with patch.object(t.game.network,'checked',return_value=state), \
+                 patch.object(t.game,'wait_module'),patch.object(t.game,'check_image'), \
+                 patch.object(t.adv,'image',return_value={'Id':candidate}), \
+                 patch.object(t.game,'built_candidate',return_value='candidate') as cached, \
+                 patch.object(t,'reuse_verified_trial',return_value=report) as reused, \
+                 patch.object(t.trial,'run_check') as trial, patch.object(t.game,'build') as build, \
+                 patch.object(t.clean,'compose') as compose:
+                record=t.prepare(root,root/'baseline',2,True,verified)
+            cached.assert_called_once()
+            reused.assert_called_once_with(verified,root/'baseline',candidate)
+            trial.assert_not_called();build.assert_not_called();compose.assert_not_called()
+            self.assertEqual(record['phase'],'prepared')
+            path=Path(record['directory'])/'transition.json'
+            self.assertTrue(path.is_file())
+            self.assertEqual(t.load_record(root,path)['candidate'],candidate)
+            self.assertEqual((root/'compose.private.json').read_bytes(),original)
+            self.assertEqual(t.clean.load_state(root/'state.json'),state)
+
     def test_rollback_restores_only_runtime_files_and_never_imports_old_sql(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);state,model=self.state(root);directory=root/'advancement/abcdef123456';directory.mkdir(parents=True)
