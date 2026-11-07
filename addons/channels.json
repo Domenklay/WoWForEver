@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107-native-scroll-11",
+  "revision": "70658-20261107-archive-filters-12",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,7 +102,7 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-11",
+      "release": "testing-70658-20261107-12",
       "clientBuild": 70658,
       "addons": [
         {
@@ -141,10 +141,9 @@
         },
         {
           "name": "ForeverEncyclopedia",
-          "version": "0.9.18-v2.1-dungeon-scroll",
+          "version": "0.9.19-v2.1-archive-filters",
           "protocol": 1,
-          "sourceCommit": "e00e7d31f5c762ba36f1e2aee2fab29b9b2d7ebb",
-          "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia",
+          "sourceCommit": "4efd20a9d6cccc93e794c2ed9ad2d110ef7c798a",
           "files": [
             {
               "name": "ForeverDungeonFinder.lua",
@@ -153,8 +152,8 @@
             },
             {
               "name": "ForeverEncyclopedia.toc",
-              "size": 653,
-              "sha256": "26af378a23c34b5521595ea1e7167edd01735c055b49ea9938656a9b489bc952"
+              "size": 654,
+              "sha256": "3f093ee182b331257a2773310096ad2bbdab681ba5d6395732be033d6b7406d4"
             },
             {
               "name": "ForeverEncyclopediaAbilities.lua",
@@ -168,8 +167,8 @@
             },
             {
               "name": "ForeverEncyclopediaLegacy.lua",
-              "size": 36892,
-              "sha256": "727f52cb3d1148545ed7c77d6bc523de08e0c7365acfb11b5701cf3530a01d8c"
+              "size": 49584,
+              "sha256": "2a2a4c879072c216514b8d1f94091de5271f68add0c80bde36bc990a8221a75b"
             },
             {
               "name": "ForeverEncyclopediaMovableDock.lua",
@@ -193,10 +192,11 @@
             },
             {
               "name": "ForeverEncyclopediaV21.lua",
-              "size": 39729,
-              "sha256": "e7ccf7034f05d65cda060b4d5db605990b90ed0c8eb48cc269403f594c13eb8a"
+              "size": 45621,
+              "sha256": "c06d5788f52e1a9b1e05aba04985b8164b7f0417be5fa715382363b738f4ca28"
             }
-          ]
+          ],
+          "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia"
         }
       ]
     }
