@@ -16,17 +16,12 @@ class AddonChannelTests(unittest.TestCase):
         import re
         ids=re.findall(r'\bid="([^"]+)"',(ROOT/'app/ui/index.html').read_text())
         self.assertEqual(len(ids),len(set(ids)))
-    def test_initial_channels_are_real_complete_compatible_payloads(self):
-        c=tool.validate(self.catalog())
-        self.assertEqual(c['channels']['stable']['addons'],c['channels']['testing']['addons'])
-        for m in c['channels']['stable']['addons']:
-            folder=ROOT/m['sourcePath']
-            toc=(folder/(m['name']+'.toc')).read_text()
-            loaded={line.strip().replace('\\','/') for line in toc.splitlines() if line.strip() and not line.startswith('#')}
-            self.assertEqual(loaded|{m['name']+'.toc'},{f['name'] for f in m['files']})
-            for f in m['files']:
-                body=(folder/f['name']).read_bytes()
-                self.assertEqual(len(body),f['size']);self.assertEqual(hashlib.sha256(body).hexdigest(),f['sha256'])
+    def test_channels_are_complete_and_can_have_different_versions(self):
+        c=self.catalog();c['channels']['testing']['addons'][0]['version']='1.11.0-test'
+        tool.validate(c)
+        for release in c['channels'].values():
+            self.assertEqual({m['name'] for m in release['addons']},set(tool.PATHS))
+        self.assertNotEqual(c['channels']['stable']['addons'],c['channels']['testing']['addons'])
     def test_unsafe_or_incompatible_sets_fail_validation(self):
         for kind in ('protocol','build','branch','path','duplicate','traversal','executable'):
             with self.subTest(kind=kind):

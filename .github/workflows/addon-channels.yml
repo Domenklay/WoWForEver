@@ -1,0 +1,41 @@
+name: AddOn release catalogue
+on:
+  push:
+    branches: [main, codex/native-cdn-70658-20261106]
+    paths: [addons/**, scripts/update-addon-channel.py, tests/test_addon_channels.py, .github/workflows/addon-channels.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-pinned-payloads:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/native-cdn-70658-20261106
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate exactly the catalogue from this push
+        env:
+          CANDIDATE_COMMIT: ${{ github.sha }}
+        run: |
+          git fetch --no-tags origin "$CANDIDATE_COMMIT"
+          git show FETCH_HEAD:addons/channels.json > "$RUNNER_TEMP/channels.json"
+          python3 scripts/update-addon-channel.py --catalog "$RUNNER_TEMP/channels.json" check
+      - name: Fetch exact source commits and verify all pinned payload bytes
+        env:
+          CATALOGUE_FILE: ${{ runner.temp }}/channels.json
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          c=json.loads(Path(os.environ['CATALOGUE_FILE']).read_text())
+          commits={m['sourceCommit'] for release in c['channels'].values() for m in release['addons']}
+          for commit in sorted(commits):
+              subprocess.run(['git','fetch','--depth','1','--no-tags','origin',commit],check=True)
+          PY
+          python3 scripts/update-addon-channel.py --catalog "$RUNNER_TEMP/channels.json" check --verify-git
+      - name: Test release tooling with generated Git fixtures
+        run: python3 -m unittest discover -s tests -p test_addon_channels.py -v

@@ -138,14 +138,17 @@ class CleanAdvancementTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'interrupted module'):
                 adv.clean.execute(SimpleNamespace(action='start', root=root))
 
-    def test_launcher_manifest_matches_the_actual_addon_files(self):
-        manifest = json.loads((ROOT / 'app/src-tauri/addons/forever-ascension.json').read_text())
-        folder = ROOT / 'mods/forever-advancement/addon/ForeverAscension'
-        self.assertEqual({item['name'] for item in manifest['files']}, {p.name for p in folder.iterdir() if p.is_file()})
-        for item in manifest['files']:
-            body = (folder / item['name']).read_bytes()
-            self.assertEqual(len(body), item['size'])
-            self.assertEqual(hashlib.sha256(body).hexdigest(), item['sha256'])
+    def test_launcher_channels_keep_pinned_ascension_protocol_before_game_spawn(self):
+        # Payload bytes are checked against immutable Git objects by addon-channels.yml,
+        # not against mutable source folders or the obsolete 1.7 bundled manifests.
+        spec=importlib.util.spec_from_file_location('adv_channel_check',ROOT/'scripts/update-addon-channel.py')
+        channel_tool=importlib.util.module_from_spec(spec);spec.loader.exec_module(channel_tool)
+        catalog=channel_tool.validate(json.loads((ROOT/'addons/channels.json').read_text()))
+        for release in catalog['channels'].values():
+            manifest=next(m for m in release['addons'] if m['name']=='ForeverAscension')
+            self.assertEqual(manifest['protocol'],3)
+            self.assertEqual(manifest['sourcePath'],'mods/forever-advancement/addon/ForeverAscension')
+            self.assertIn('ForeverAscension.toc',{f['name'] for f in manifest['files']})
         lib = (ROOT / 'app/src-tauri/src/lib.rs').read_text()
         self.assertLess(lib.index('addon::ensure('), lib.index('launch(app, settings).await'))
 

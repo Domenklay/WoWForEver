@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [codex/launcher-forever-multi-20261105, codex/launcher-official-20261106, codex/forever-upgrades-70707-20261106, codex/native-cdn-70658-20261106]
-    paths: [addons/**, scripts/update-addon-channel.py, tests/test_addon_channels.py, app/**, tools/forever-casc-worker/**, scripts/inspect-forever-installation.ps1, tests/fixtures/official-installation.ps1, tests/fixtures/launcher-content-ui.js, docs/CLIENT-70707.ru.md, docs/SERVER-UPGRADES.ru.md, .github/workflows/launcher-multi.yml]
+    paths: [app/**, tools/forever-casc-worker/**, scripts/inspect-forever-installation.ps1, tests/fixtures/official-installation.ps1, tests/fixtures/launcher-content-ui.js, docs/CLIENT-70707.ru.md, docs/SERVER-UPGRADES.ru.md, .github/workflows/launcher-multi.yml]
 
 permissions:
   contents: read

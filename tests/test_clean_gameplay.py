@@ -105,15 +105,15 @@ class GameplayTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'enable-clean-gameplay'):
                 game.clean.execute(SimpleNamespace(action='start', root=root))
 
-    def test_book_manifest_covers_exactly_the_toc_and_all_loaded_lua_files(self):
-        manifest = json.loads((ROOT / 'app/src-tauri/addons/forever-encyclopedia.json').read_text())
-        folder = ROOT / 'mods/living-encyclopedia/addon/ForeverEncyclopedia'
-        names = {line.strip() for line in (folder / 'ForeverEncyclopedia.toc').read_text().splitlines() if line.strip() and not line.startswith('#')}
-        names.add('ForeverEncyclopedia.toc')
-        self.assertEqual({f['name'] for f in manifest['files']}, names)
-        for f in manifest['files']:
-            body = (folder / f['name']).read_bytes()
-            self.assertEqual(len(body), f['size']); self.assertEqual(hashlib.sha256(body).hexdigest(), f['sha256'])
+    def test_both_launcher_channels_include_the_compatible_pinned_book(self):
+        spec=importlib.util.spec_from_file_location('book_channel_check',ROOT/'scripts/update-addon-channel.py')
+        channel_tool=importlib.util.module_from_spec(spec);spec.loader.exec_module(channel_tool)
+        catalog=channel_tool.validate(json.loads((ROOT/'addons/channels.json').read_text()))
+        for release in catalog['channels'].values():
+            manifest=next(m for m in release['addons'] if m['name']=='ForeverEncyclopedia')
+            self.assertEqual(manifest['protocol'],1)
+            self.assertEqual(manifest['sourcePath'],'mods/living-encyclopedia/addon/ForeverEncyclopedia')
+            self.assertIn('ForeverEncyclopedia.toc',{f['name'] for f in manifest['files']})
 
     def test_readiness_requires_the_current_world_initialization_and_enabled_scaling(self):
         state = {'gameplay': {'scaling':'0.2.0'}}

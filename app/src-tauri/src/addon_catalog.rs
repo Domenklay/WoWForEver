@@ -50,7 +50,7 @@ pub fn parse(text:&str)->Result<Catalog,String>{
 pub fn url(m:&Manifest,f:&Entry)->String{format!("https://raw.githubusercontent.com/Domenklay/WoWForEver/{}/{}/{}",m.source_commit,m.source_path,f.name)}
 #[cfg(test)]mod tests{
  use super::*;
- #[test]fn initial_testing_set_uses_real_approved_payloads_and_protocols(){let c=parse(BUNDLED).unwrap();let a=&c.channels["stable"];let b=&c.channels["testing"];assert_eq!(a.addons.len(),2);assert_eq!(serde_json::to_value(&a.addons).unwrap(),serde_json::to_value(&b.addons).unwrap());}
+ #[test]fn both_channels_are_complete_and_compatible_even_when_their_payloads_differ(){let mut c:serde_json::Value=serde_json::from_str(BUNDLED).unwrap();c["channels"]["testing"]["addons"][0]["version"]="1.11.0-test".into();let c=parse(&c.to_string()).unwrap();for r in c.channels.values(){assert_eq!(r.addons.len(),2);assert_eq!(r.client_build,70658);}}
  #[test]fn invalid_channel_paths_versions_and_protocols_are_rejected(){
   let base:serde_json::Value=serde_json::from_str(BUNDLED).unwrap();
   for (key,value) in [("sourceCommit","main"),("sourcePath","../../outside"),("version","bad/version")]{let mut c=base.clone();c["channels"]["testing"]["addons"][0][key]=value.into();assert!(parse(&c.to_string()).is_err());}
