@@ -256,17 +256,17 @@ local function drawLine(parent,x,y,w,h,on)
 end
 
 local function drawLink(parent,from,to,enabled)
-    -- Square elbow connectors, in the same direction as the native Legacy tree.
-    local aY=-from.y-25
-    local bY=-to.y+25
-    local mid=(aY+bY)/2
-    local top=math.min(aY,mid)
-    local bottom=math.max(aY,mid)
-    drawLine(parent,from.x-1,-bottom,2,bottom-top,enabled)
-    drawLine(parent,math.min(from.x,to.x),-mid,math.abs(from.x-to.x),2,enabled)
-    local top2=math.min(mid,bY)
-    local bottom2=math.max(mid,bY)
-    drawLine(parent,to.x-1,-bottom2,2,bottom2-top2,enabled)
+    -- Connect nodes *around* their icon bounds rather than through labels.
+    if to.y>from.y+12 then
+        local y1=from.y+25
+        local y2=to.y-25
+        local mid=(y1+y2)/2
+        drawLine(parent,from.x-1,y1,2,math.max(2,mid-y1),enabled)
+        drawLine(parent,math.min(from.x,to.x),mid,math.abs(from.x-to.x),2,enabled)
+        drawLine(parent,to.x-1,mid,2,math.max(2,y2-mid),enabled)
+    elseif math.abs(to.y-from.y)<16 then
+        drawLine(parent,math.min(from.x,to.x)+25,from.y-1,math.max(2,math.abs(from.x-to.x)-50),2,enabled)
+    end
 end
 
 local function node(parent,x,y,n)
@@ -390,77 +390,94 @@ local function selectedTalentDetail(parent,x,y,w)
     end
     if not n then return end
     local rank=state.ranks[n.key] or 0
-    local cost=rank<n.max and ForeverEncyclopediaTalentCost(n,rank) or 0
+    local maxed=rank>=n.max
     local meets=checkPrereq(n)
-    label(parent,x,y,w,n.name,"GameFontHighlight",PALE)
+    local cost=not maxed and ForeverEncyclopediaTalentCost(n,rank) or nil
     local now,nextValue="",""
     if catalog.EffectPreview then now,nextValue=catalog.EffectPreview(n,rank,state.ranks,state.maxMana) end
-    label(parent,x,y+27,w,"Ранг "..rank.."/"..n.max.. "  •  "..tostring(now),
-          "GameFontNormalSmall",GREEN)
-    local detail=label(parent,x,y+54,w,n.desc,"GameFontNormalSmall",MUTED)
-    detail:SetHeight(55)
+    local y0=y
+    y=paragraph(parent,x,y,w,n.name,"GameFontHighlight",PALE,12)
+    y=paragraph(parent,x,y,w,"Ранг "..rank.."/"..n.max,"GameFontNormalSmall",GOLD,5)
+    y=paragraph(parent,x,y,w,"Сейчас: "..tostring(now),"GameFontNormalSmall",GREEN,10)
+    if not maxed then
+        y=paragraph(parent,x,y,w,"Следующий ранг: "..tostring(nextValue),
+                    "GameFontNormalSmall",GREEN,12)
+    end
+    y=paragraph(parent,x,y,w,n.desc,"GameFontNormalSmall",MUTED,15)
     if n.req then
         local requirement=talent(n.req)
-        label(parent,x,y+114,w,"Нужно: "..(requirement and requirement.name or n.req).." ("..(n.reqRank or 1)..")",
-              "GameFontNormalSmall",MUTED)
+        y=paragraph(parent,x,y,w,"Требуется: "..(requirement and requirement.name or n.req)..
+                    " ("..(n.reqRank or 1)..")","GameFontNormalSmall",MUTED,11)
     end
-    local status
-    if not n.implemented then status="В разработке"
-    elseif rank>=n.max then status="Максимальный ранг"
-    elseif not meets then status="Требуется предыдущий талант"
-    elseif state.knowledgeAvailable<cost then status="Не хватает знаний"
-    elseif pendingBuy then status="Ожидание ответа сервера"
-    else status="След. ранг: "..tostring(nextValue).."  •  цена "..cost end
-    label(parent,x,y+143,w,status,"GameFontNormalSmall",n.implemented and GREEN or RED)
-    local buy=button(parent,x+5,y+169,w-10,26,"Изучить за "..cost.." знаний",false,function()
-        if pendingBuy or not n.implemented or rank>=n.max or not meets or state.knowledgeAvailable<cost then return end
-        pendingBuy=true
-        bridge.BuyTalent(n.key) -- server validates prerequisite, budget, rank and combat restrictions
-        _G.ForeverEncyclopediaLegacy.Refresh("view")
-    end)
-    if not n.implemented or rank>=n.max or not meets or state.knowledgeAvailable<cost or pendingBuy then buy:Disable() end
+    if not n.implemented then
+        y=paragraph(parent,x,y,w,"В разработке. Покупка закрыта.","GameFontNormalSmall",RED,12)
+    elseif maxed then
+        y=paragraph(parent,x,y,w,"Максимальный ранг изучен.","GameFontNormalSmall",GREEN,12)
+    elseif not meets then
+        y=paragraph(parent,x,y,w,"Не выполнено требование предыдущего таланта.","GameFontNormalSmall",RED,12)
+    elseif state.knowledgeAvailable<cost then
+        y=paragraph(parent,x,y,w,"Недостаточно знаний. Нужно: "..cost,"GameFontNormalSmall",RED,12)
+    elseif pendingBuy then
+        y=paragraph(parent,x,y,w,"Ожидание подтверждения сервера…","GameFontNormalSmall",GOLD,12)
+    else
+        y=paragraph(parent,x,y,w,"Стоимость: "..cost.." знаний","GameFontNormalSmall",PALE,9)
+        button(parent,x,y,w-6,32,"Изучить за "..cost.." знаний",false,function()
+            if pendingBuy or rank>=n.max or not n.implemented or not meets or state.knowledgeAvailable<cost then return end
+            pendingBuy=true
+            bridge.BuyTalent(n.key)
+            _G.ForeverEncyclopediaLegacy.Refresh("view")
+        end)
+        y=y+40
+    end
+    return math.max(220,y-y0+18)
 end
 
 local function drawTalentView()
     local left=frame(page,13,63,554,444,DEEP)
     local right=frame(page,580,63,307,444,DEEP)
     heading(left,12,10,530,"Таланты книги")
-    label(left,18,38,520,"Выберите одну из пяти веток. Каждый узел — настоящий талант.",
+    label(left,18,38,516,"Пять веток знаний. Прокрутите древо вниз для изучения.",
           "GameFontNormalSmall",MUTED)
     for i,key in ipairs(catalog.order) do
         local d=catalog.branches[key]
         local x=9+(i-1)*108
-        local b=button(left,x,61,103,52,"",key==branch,function()
+        local b=button(left,x,61,103,53,"",key==branch,function()
             branch=key
             selectedNode=nil
             pendingBuy=false
+            scrollPositions["talent-"..key]=0
             _G.ForeverEncyclopediaLegacy.Refresh("view")
         end)
         local icon=b:CreateTexture(nil,"ARTWORK")
-        icon:SetSize(27,27); icon:SetPoint("TOP",b,"TOP",0,-2)
+        icon:SetSize(25,25)
+        icon:SetPoint("TOP",b,"TOP",0,-3)
         icon:SetTexture(d.icon)
-        font(b,0,31,103,d.name,"GameFontNormalSmall",PALE,"CENTER")
-        -- The top icon is visual; click target is the full 103x52 tab.
+        font(b,3,31,97,d.name,"GameFontNormalSmall",PALE,"CENTER")
     end
-    local xPositions={102,276,450}
+
+    local nodes=scrollArea(left,14,127,525,301,"talent-"..branch,659)
+    local xPositions={83,247,410}
     local positions={}
     for _,n in ipairs(catalog.nodes) do
         if n.branch==branch then
-            positions[n.key]={x=xPositions[n.col],y=151+(n.tier-1)*60}
+            positions[n.key]={x=xPositions[n.col],y=43+(n.tier-1)*111}
         end
     end
     for _,n in ipairs(catalog.nodes) do
         if n.branch==branch and n.req and positions[n.req] and positions[n.key] then
-            drawLink(left,positions[n.req],positions[n.key],checkPrereq(n))
+            drawLink(nodes,positions[n.req],positions[n.key],checkPrereq(n))
         end
     end
     for _,n in ipairs(catalog.nodes) do
         if n.branch==branch and positions[n.key] then
-            node(left,positions[n.key].x,positions[n.key].y,n)
+            node(nodes,positions[n.key].x,positions[n.key].y,n)
         end
     end
+
     smallCollections(right,10,8)
-    selectedTalentDetail(right,17,213,274)
+    local details,viewport=scrollArea(right,17,218,282,215,"detail-"..branch,560)
+    local height=selectedTalentDetail(details,3,7,238)
+    if height then details:SetHeight(math.max(215,height)) end
 end
 
 local function drawCollectionView()
