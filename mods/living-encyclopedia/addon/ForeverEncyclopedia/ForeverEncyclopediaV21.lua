@@ -515,8 +515,9 @@ local function parseBase(msg)
         elseif tag=="CAPS" and a=="ARCHIVE1" then
             if not state.archiveSupported then
                 state.archiveSupported=true
-                -- Refresh the archive even if status arrives after the native tab opens.
-                requestFullArchive()
+                -- Do not download the account archive on every login. The
+                -- visible creature pane requests it explicitly on demand.
+                notifyNative("capabilities")
             end
         elseif tag=="BOOK" and state.maxMana<=100 then state.mana=tonumber(a) or 0; state.maxMana=tonumber(b) or 100
         elseif tag=="REC" and tonumber(a)==3 then state.recentZones[#state.recentZones+1]={entry=tonumber(b) or 0,map=tonumber(c) or 0,zone=tonumber(d) or 0}
