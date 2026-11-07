@@ -41,7 +41,8 @@ constexpr float CompanionFollowDistance = 1.0f;
 constexpr float CompanionFollowAngle = 1.65f;
 constexpr uint32 SafeCompanionEntry = 1933; // stable diagnostic shell until book display is client-verified
 
-static std::mutex RuntimeMutex;
+// Native instant casts can synchronously dispatch healing callbacks.
+static std::recursive_mutex RuntimeMutex;
 using RankMap = std::unordered_map<std::string, uint16>;
 
 struct RuntimeState
@@ -60,6 +61,8 @@ struct RuntimeState
     bool castsEnabled = false;
     bool wantShield = false;
     bool wantHeal = false;
+    bool healPending = false;
+    Clock::time_point healCastStarted{};
     uint32 regenCarry = 0;
     ObjectGuid companionGuid;
 
@@ -210,12 +213,19 @@ static void ClearPendingShield(RuntimeState& state)
     state.pendingShieldStarted = Clock::time_point{};
 }
 
+static void ClearPendingHeal(RuntimeState& state)
+{
+    state.healPending = false;
+    state.healCastStarted = Clock::time_point{};
+}
+
 static void DespawnCompanion(Player* player, RuntimeState& state)
 {
     if (Creature* companion = Companion(player, state))
         companion->DespawnOrUnsummon();
     state.companionGuid.Clear();
     ClearPendingShield(state);
+    ClearPendingHeal(state);
 }
 
 static uint32 SpendableMana(RuntimeState const& state)
@@ -509,9 +519,10 @@ static bool FinalizeShield(Player* player, RuntimeState& state, Creature* compan
 
 static bool StartHealCast(Player* player, RuntimeState& state, Creature* companion)
 {
-    if (!state.castsEnabled || !player || !companion || companion->IsNonMeleeSpellCast(false))
+    if (!state.castsEnabled || !state.healEnabled || !GetRank(state.ranks, "mend_unlock")
+        || !player || !companion || !AllowedPvE(player) || companion->IsNonMeleeSpellCast(false))
         return false;
-    if (Clock::now() < state.healReady || !SpendableMana(state))
+    if (state.healPending || Clock::now() < state.healReady || !SpendableMana(state))
         return false;
 
     uint32 spellId = ResolveHealSpell(player);
@@ -526,13 +537,17 @@ static bool StartHealCast(Player* player, RuntimeState& state, Creature* compani
     companion->SetFacingToObject(player);
     companion->SetPower(POWER_MANA, companion->GetMaxPower(POWER_MANA));
 
+    // Authorise the next native heal BEFORE CastSpell; instant casts can be synchronous.
+    state.healPending = true;
+    state.healCastStarted = Clock::now();
+    state.wantHeal = false;
+
     CastSpellExtraArgs args(CompanionCastFlags());
     args.AddSpellMod(SPELLVALUE_CRIT_CHANCE, SpellEffectValue(0));
     companion->CastSpell(player, spellId, args);
 
-    // Cost/CD are intentionally NOT paid here. UnitScript::OnHeal clamps the real native heal
-    // and charges exactly the effective HP amount. Interrupted/failed casts therefore cost 0.
-    state.wantHeal = false;
+    // Core OnHeal is post-application. Our OnHealBefore clamps healing
+    // and charges mana before Unit::ModifyHealth runs.
     SendEvent(player, "CAST_HEAL", spellId, SpendableMana(state));
     return true;
 }
@@ -553,7 +568,6 @@ static void TestCast(Player* player, RuntimeState& state, std::string const& whi
     }
     else
     {
-        state.healReady = Clock::time_point{};
         state.wantHeal = true;
         StartHealCast(player, state, companion);
     }
@@ -574,7 +588,7 @@ public:
         if (IsPlayerControlled(attacker) || !AllowedPvE(player))
             return;
 
-        std::lock_guard<std::mutex> guard(RuntimeMutex);
+        std::lock_guard<std::recursive_mutex> guard(RuntimeMutex);
         RuntimeState* state = FindRuntimeLocked(player);
         if (!state || !state->castsEnabled || !state->companionEnabled)
             return;
@@ -588,24 +602,36 @@ public:
             state->wantShield = true;
 
         if (state->healEnabled && GetRank(state->ranks, "mend_unlock")
-            && now >= state->healReady && predictedPct <= EffectiveHealThreshold(*state))
+            && !state->healPending && now >= state->healReady && predictedPct <= EffectiveHealThreshold(*state))
             state->wantHeal = true;
     }
 
-    void OnHeal(Unit* healer, Unit* receiver, uint32& gain) override
+    void OnHealBefore(Unit* healer, Unit* receiver, uint32& gain) override
     {
         if (!healer || !receiver || receiver->GetTypeId() != TYPEID_PLAYER || !gain)
             return;
 
         Player* player = static_cast<Player*>(receiver);
-        std::lock_guard<std::mutex> guard(RuntimeMutex);
+        std::lock_guard<std::recursive_mutex> guard(RuntimeMutex);
         RuntimeState* state = FindRuntimeLocked(player);
-        if (!state || !state->castsEnabled || !state->companionEnabled)
+        if (!state)
             return;
 
         Creature* companion = Companion(player, *state);
         if (!companion || healer->GetGUID() != companion->GetGUID())
             return;
+
+        // The companion must never heal without an authorised pending cast.
+        auto now = Clock::now();
+        if (!state->healPending || now - state->healCastStarted > std::chrono::seconds(4)
+            || !state->castsEnabled || !state->companionEnabled || !state->healEnabled
+            || !GetRank(state->ranks, "mend_unlock") || !AllowedPvE(player)
+            || now < state->healReady)
+        {
+            gain = 0;
+            ClearPendingHeal(*state);
+            return;
+        }
 
         uint32 missing = uint32(std::min<uint64>(UINT32_MAX, player->GetMaxHealth() - player->GetHealth()));
         uint32 cap = player->CountPctFromMaxHealth(HealCapPct(*state));
@@ -614,12 +640,16 @@ public:
             GetRank(state->ranks, "mend_power"));
         uint32 allowed = std::min({ amplified, missing, cap, spendable });
 
+        // This runs before ModifyHealth: free, excessive and unaffordable
+        // native healing is blocked rather than modified after the fact.
         gain = allowed;
+        ClearPendingHeal(*state);
         if (!allowed)
             return;
 
-        state->mana -= allowed; // strict 1 mana == 1 actually healed HP
-        state->healReady = Clock::now() + std::chrono::seconds(HealCooldownSeconds(*state));
+        state->mana -= allowed; // one mana equals one actually healed HP
+        state->healReady = now + std::chrono::seconds(HealCooldownSeconds(*state));
+        state->wantHeal = false;
         state->dirty = true;
         SendEvent(player, "HEAL_DONE", allowed, 0);
         SendBook(player, *state);
@@ -635,13 +665,13 @@ public:
     {
         if (!sConfigMgr->GetBoolDefault("ForeverEncyclopedia.Enable", false))
             return;
-        std::lock_guard<std::mutex> guard(RuntimeMutex);
+        std::lock_guard<std::recursive_mutex> guard(RuntimeMutex);
         Runtime[Guid(player)] = LoadRuntime(player);
     }
 
     void OnLogout(Player* player) override
     {
-        std::lock_guard<std::mutex> guard(RuntimeMutex);
+        std::lock_guard<std::recursive_mutex> guard(RuntimeMutex);
         auto it = Runtime.find(Guid(player));
         if (it == Runtime.end())
             return;
@@ -659,7 +689,7 @@ public:
         std::istringstream in(text);
         std::string cmd, arg;
         in >> cmd >> arg;
-        std::lock_guard<std::mutex> guard(RuntimeMutex);
+        std::lock_guard<std::recursive_mutex> guard(RuntimeMutex);
         RuntimeState* state = FindRuntimeLocked(player);
         if (!state)
             state = &Runtime.insert_or_assign(Guid(player), LoadRuntime(player)).first->second;
@@ -699,7 +729,10 @@ public:
             state->wantShield = false;
             state->wantHeal = false;
             if (!enable)
+            {
                 ClearPendingShield(*state);
+                ClearPendingHeal(*state);
+            }
             SendEvent(player, enable ? "CASTS_ON" : "CASTS_OFF", 0, 0);
             SendBook(player, *state);
             return;
@@ -734,7 +767,7 @@ public:
             if (!player)
                 continue;
 
-            std::lock_guard<std::mutex> guard(RuntimeMutex);
+            std::lock_guard<std::recursive_mutex> guard(RuntimeMutex);
             RuntimeState* state = FindRuntimeLocked(player);
             if (!state)
                 continue;
@@ -751,6 +784,8 @@ public:
                 if (companion)
                 {
                     FinalizeShield(player, *state, companion);
+                    if (state->healPending && now - state->healCastStarted >= std::chrono::seconds(4))
+                        ClearPendingHeal(*state);
 
                     if (!AllowedPvE(player))
                     {
