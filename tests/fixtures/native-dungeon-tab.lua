@@ -56,10 +56,16 @@ C_ChatInfo={
 LFGParentFrame=make("Frame","LFGParentFrame",nil)
 LFGParentFrame:SetSize(470,580)
 LFGParentFrame:Hide()
-local oldRed=CreateFrame("Button","ForeverDungeonFinderGroupFinderTab",LFGParentFrame)
+if arg[2]=="pve" then
+    PVEFrame=make("Frame","PVEFrame",nil)
+    PVEFrame:SetSize(470,580)
+    PVEFrame:Hide()
+end
+local expectedHost=PVEFrame or LFGParentFrame
+local oldRed=CreateFrame("Button","ForeverDungeonFinderGroupFinderTab",expectedHost)
 oldRed:SetText("Вход в подземелье")
 oldRed:SetSize(166,25)
-local oldPane=CreateFrame("Frame","ForeverDungeonFinderGroupFinderPane",LFGParentFrame)
+local oldPane=CreateFrame("Frame","ForeverDungeonFinderGroupFinderPane",expectedHost)
 function ShowUIPanel(frame) frame:Show() end
 
 local file=arg[1]
@@ -70,17 +76,19 @@ assert(not _G.ForeverDungeonFinderMinimapButton,"Old minimap button was recreate
 local tab=_G.ForeverDungeonPortalTab
 local pane=_G.ForeverDungeonFinderPane
 assert(tab and pane,"Native tab or embedded pane missing")
-assert(tab.parent==LFGParentFrame and pane.parent==LFGParentFrame,"Pane is not inside stock LFG")
+assert(tab.parent==expectedHost and pane.parent==expectedHost,"Pane is not inside stock LFG")
 assert(tab:GetWidth()==50 and tab:GetHeight()==50,"Tab is not a properly sized portal icon")
 assert(not oldRed:IsShown() and not oldPane:IsShown(),"Obsolete top red button or overlay remains visible")
 assert(tab:GetNumPoints()>=1,"Portal icon is not anchored in role row")
 assert(pane.opaqueBackground and pane.opaqueBackground.texture and pane.opaqueBackground.texture:find("WHITE8X8",1,true),"Missing reliable opaque background texture")
 assert(pane.opaqueBackground.rgba and pane.opaqueBackground.rgba[4]==1,"Dungeon panel must have alpha 1")
-assert(pane:GetFrameLevel()>LFGParentFrame:GetFrameLevel()+50,"Native content may draw over dungeon panel")
+assert(pane:GetFrameLevel()>expectedHost:GetFrameLevel()+50,"Native content may draw over dungeon panel")
 assert(not pane:IsShown(),"Pane should initially be hidden")
 assert(type(SlashCmdList.FOREVERDUNGEONFINDER)=="function","/fd missing")
 SlashCmdList.FOREVERDUNGEONFINDER()
-assert(LFGParentFrame:IsShown() and pane:IsShown(),"Slash command did not open embedded pane")
+assert(expectedHost:IsShown() and pane:IsShown(),"Slash command did not open embedded pane")
+oldRed:Show()
+assert(not oldRed:IsShown(),"Old button revived after OnShow")
 assert(not oldRed:IsShown(),"Obsolete red header button must stay hidden after opening")
 assert(tab.checked,"Native square was not selected")
 local function findButton(text)
