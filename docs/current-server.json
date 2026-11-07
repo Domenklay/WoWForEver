@@ -233,13 +233,13 @@
     "services_restore_fixture_ci_run": 42301993948,
     "services_restore_fixture_verified": true,
     "services_restore_test_source": "464c9313d2f4a44aae19b08dee41d262714a2d97",
-    "addon_catalog_ci_run": 42387047953,
+    "addon_catalog_ci_run": 42399343781,
     "addon_catalog_pinned_payloads_verified": true,
     "launcher_browser_ui_verified": true,
     "multiclass_unit_suite_total": 499,
     "multiclass_unit_suite_skipped": 30,
     "advancement_native_core_ci_run": 42398310341,
-    "native_worker_ci_run": 42380875760,
+    "native_worker_ci_run": 42398310384,
     "multiclass_ui_tests": 31,
     "multiclass_ui_fix_ci_run": 42384393223,
     "multiclass_presentation_ci_run": 42386733996
@@ -306,6 +306,7 @@
     "preserves_scaling": "0.4.0",
     "preserves_dungeonfinder": "0.2.0",
     "active_previous_transition": "/home/Kayter/WoWForEver-clean/advancement/347c815174f8/transition.json",
-    "complete_catalogue_fix_requires_server_rebuild": true
+    "complete_catalogue_fix_requires_server_rebuild": true,
+    "addon_catalog_ci_run": 42399343781
   }
 }
