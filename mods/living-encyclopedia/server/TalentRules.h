@@ -82,6 +82,15 @@ inline uint32_t AmplifiedHeal(uint32_t rawHeal, uint16_t powerRank)
     return uint32_t(std::min<uint64_t>(amount, UINT32_MAX));
 }
 
+// Called before the pinned core applies native healing. The incoming spell
+// amount must be capped by missing HP, the talent limit and spendable mana.
+// Returns zero on empty mana, including when the entire pool is reserved.
+inline uint32_t AffordableNativeHeal(uint32_t raw, uint32_t missing, uint32_t cap,
+    uint32_t spendableMana, uint16_t powerRank)
+{
+    return std::min({ AmplifiedHeal(raw, powerRank), missing, cap, spendableMana });
+}
+
 inline uint32_t ReservePercent(uint16_t rank)
 {
     return std::min<uint32_t>(25, uint32_t(rank) * 5);
