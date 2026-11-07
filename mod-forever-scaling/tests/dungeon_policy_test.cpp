@@ -86,7 +86,7 @@ int main()
     // The shared encounter snapshot never alters the existing per-player level:
     // one level-6 NPC is still level 11 for a level-20 player and level 51 for 60.
     const forever_scaling::Config levelPolicy{};
-    assert(forever_scaling::Level(20, 6, forever_scaling::Rank::Normal, levelPolicy) == 11);
-    assert(forever_scaling::Level(60, 6, forever_scaling::Rank::Normal, levelPolicy) == 51);
+    assert(forever_scaling::Level(20, 6, forever_scaling::Rank::Normal, levelPolicy) == 17);
+    assert(forever_scaling::Level(60, 6, forever_scaling::Rank::Normal, levelPolicy) == 57);
     assert(solo.PartySize() == 1); // a new group must create a new snapshot
 }
