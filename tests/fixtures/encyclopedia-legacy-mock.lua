@@ -92,15 +92,17 @@ local state={
     selectedAppearance="living_book",
     catalogPage=1,catalogPages=2,catalogTotal=42,catalogKnown=9,catalogLoaded=true,
     infoLevel=2,creatureInfo={},recentZones={{entry=7}},recentZonesLoaded=true,
+    recentItems={{entry=19019,map=0,zone=7}},recentItemsLoaded=true,
     catalog={{entry=33,known=true,name="Волк",creatureType=1,class=0},
              {entry=42,known=false,name="",creatureType=0,class=0}},
 }
-local calls={status=0,catalog=0,zones=0,buy={},info={},appearance={}}
+local calls={status=0,catalog=0,zones=0,items=0,buy={},info={},appearance={}}
 ForeverEncyclopediaUIBridge={
     state=state,catalog=catalog,
     RequestStatus=function()calls.status=calls.status+1 end,
     RequestCatalog=function(n)calls.catalog=calls.catalog+1 end,
     RequestZones=function()calls.zones=calls.zones+1 end,
+    RequestItems=function()calls.items=calls.items+1 end,
     RequestCreatureInfo=function(n)calls.info[#calls.info+1]=n end,
     BuyTalent=function(key)calls.buy[#calls.buy+1]=key end,
     SelectAppearance=function(key)calls.appearance[#calls.appearance+1]=key end,
@@ -165,6 +167,7 @@ assert(click("Локации"),"Zone category missing")
 assert(calls.zones>=1)
 assert(click("Назад к коллекции"))
 assert(click("Предметы"),"Items category missing")
+assert(calls.items>=1,"Clicking items must request existing server REC 2 protocol")
 assert(click("Назад к коллекции"))
 api.Refresh("mana")
 assert(legacy.Pages[4]:IsShown(),"Status refresh must not close the page")
