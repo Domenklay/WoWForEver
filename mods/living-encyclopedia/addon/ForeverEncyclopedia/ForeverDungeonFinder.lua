@@ -106,7 +106,7 @@ end
 -- Prefer a stock Group Finder frame, not the custom full-screen dungeon frame.
 -- Classic/Forever UI names differ, so installation is retried after lazy loads.
 local function findHost()
-    local frame = _G.LFGParentFrame or _G.PVEFrame or _G.GroupFinderFrame
+    local frame = _G.PVEFrame or _G.LFGParentFrame or _G.GroupFinderFrame
         or _G.LookingForGroupFrame or _G.LFGFrame
     if frame and frame.GetWidth and frame.GetHeight then return frame end
     if _G.LFGListFrame and _G.LFGListFrame.GetParent then
