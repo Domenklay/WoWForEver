@@ -15,7 +15,7 @@ RUN cmake -S /src/TrinityCore -B /src/TrinityCore/build \
 
 FROM ${CLEAN_RUNTIME_IMAGE} AS runtime
 ARG ADVANCEMENT_SOURCE
-LABEL org.wowforever.baseline="advancement" org.wowforever.advancement="1.13.0" \
+LABEL org.wowforever.baseline="advancement" org.wowforever.advancement="1.14.0" \
       org.wowforever.advancement.source="${ADVANCEMENT_SOURCE}"
 COPY --from=build /opt/trinitycore /opt/trinitycore
 COPY docker/clean/entrypoint.py /usr/local/bin/forever-clean-entrypoint.py

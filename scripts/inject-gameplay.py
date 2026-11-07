@@ -22,6 +22,10 @@ def inject(core, scaling=True):
     if scaling:
         adapter = read_module('gameplay_scaling', ROOT / 'scripts/inject-forever-scaling.py')
         adapter.inject(core, ROOT / 'mod-forever-scaling')
+        dungeon = read_module('gameplay_dungeon', ROOT / 'scripts/inject-forever-dungeons.py')
+        dungeon.inject(core, ROOT / 'mod-forever-scaling')
+    finder = read_module('gameplay_dungeon_finder', ROOT / 'scripts/inject-forever-dungeon-finder.py')
+    finder.inject(core, ROOT / 'mods/forever-dungeon-finder')
 
 
 if __name__ == '__main__':

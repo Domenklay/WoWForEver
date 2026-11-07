@@ -34,6 +34,32 @@ void wstrToLower(std::wstring& text) {
 
 @unittest.skipUnless(shutil.which('g++'),'C++20 compiler required')
 class AdvancementRuleTests(unittest.TestCase):
+    def test_player_school_and_ability_policy_rejects_mounts_pets_and_generic_quest_spells(self):
+        source=SOURCE.read_text()
+        code=r'''#include <cassert>
+using uint32=unsigned;using int32=int;constexpr int SKILL_CATEGORY_CLASS=7;
+'''+function(source,'static bool PlayerClassSchool(')+function(source,'static uint32 ClassFamily(')+function(source,'static bool PlayerClassAbility(')+r'''
+int main() {
+ assert(PlayerClassSchool(7,1040));assert(PlayerClassSchool(7,66576));
+ assert(!PlayerClassSchool(7,0)); // pet-family skill
+ assert(!PlayerClassSchool(7,2)); // mounts and companions share category CLASS
+ assert(!PlayerClassSchool(7,1040|0x800));assert(!PlayerClassSchool(11,1040));
+ for(auto owner:{2u,3u,8u}) {
+  assert(!PlayerClassAbility(owner,6648,0,true));
+  assert(!PlayerClassAbility(owner,470,0,false));
+  assert(!PlayerClassAbility(owner,999,0,false));
+ }
+ assert(PlayerClassAbility(3,1515,9,false));assert(PlayerClassAbility(3,75,0,false));
+ assert(PlayerClassAbility(9,126,0,false));assert(!PlayerClassAbility(8,1515,9,false));
+ assert(!PlayerClassAbility(2,13819,10,true));
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-include','initializer_list','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
     def test_name_resolution_rejects_wrong_class_rank_and_ambiguity(self):
         source=SOURCE.read_text()
         code=r'''#include <algorithm>
@@ -368,7 +394,7 @@ template<class T> struct Store {
  auto begin()const{return rows.begin();}auto end()const{return rows.end();}
  T const* LookupEntry(uint32 id){for(auto row:rows)if(row->ID==id)return row;return nullptr;}
 };
-struct Skill {uint32 ID;int CategoryID;};Store<Skill> sSkillLineStore;
+struct Skill {uint32 ID;int CategoryID;uint32 Flags=1040;};Store<Skill> sSkillLineStore;
 struct SkillTree {uint32 ID,SkillLineID,TraitTreeID;};Store<SkillTree> sSkillLineXTraitTreeStore;
 struct Info {int ClassMask;};
 struct Manager {std::map<uint32,std::vector<Info const*>> infos;auto GetSkillRaceClassInfo(uint32 id){return infos[id];}} sDB2Manager;
@@ -376,11 +402,12 @@ struct NodeLink {uint32 ID,TraitNodeID,TraitNodeEntryID;int Index=0;};Store<Node
 struct Node {uint32 ID,TraitTreeID;int PosX=0,PosY=0;};Store<Node> sTraitNodeStore;
 struct Entry {uint32 ID;int MaxRanks,TraitDefinitionID;};Store<Entry> sTraitNodeEntryStore;
 struct Definition {uint32 ID;int SpellID,VisibleSpellID;};Store<Definition> sTraitDefinitionStore;
-'''+source[source.index('struct NativeTrait {'):source.index('static void PublishBookMetadata()')]+r'''
+'''+function(source,'static bool PlayerClassSchool(')+function(source,'static uint32 SchoolClassMask(')+source[source.index('struct NativeTrait {'):source.index('static void PublishBookMetadata()')]+r'''
 int main() {
- Skill mage{237,7},profession{200,11};sSkillLineStore.rows={&mage,&profession};
+ Skill mage{237,7},profession{200,11},pet{188,7,0};sSkillLineStore.rows={&mage,&profession,&pet};
  Info mageClass{128};sDB2Manager.infos[237]={&mageClass};sDB2Manager.infos[200]={&mageClass};
- SkillTree combat{1,237,500},trade{2,200,501};sSkillLineXTraitTreeStore.rows={&combat,&trade};
+ sDB2Manager.infos[188]={&mageClass};
+ SkillTree combat{1,237,500},trade{2,200,501},petTree{3,188,501};sSkillLineXTraitTreeStore.rows={&combat,&trade,&petTree};
  Node node{10,500},tradeNode{11,501};sTraitNodeStore.rows={&node,&tradeNode};
  Entry entry{20,3,30},tradeEntry{21,5,31},invalidRank{22,128,32};sTraitNodeEntryStore.rows={&entry,&tradeEntry,&invalidRank};
  Definition definition{30,11069,0},tradeDef{31,900,0},invalidDef{32,901,0};sTraitDefinitionStore.rows={&definition,&tradeDef,&invalidDef};

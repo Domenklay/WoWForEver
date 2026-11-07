@@ -3,6 +3,8 @@ local ABILITIES_PER_PAGE=8 -- legacy wire compatibility; the list now scrolls
 local ABILITY_ROW_HEIGHT=60
 local presentation=ForeverAscensionPresentation
 local uiRefs={}
+local nativeSchools=ForeverAscensionSchools
+local rawTrees,branchInfo={},{}
 local order={11,3,8,2,5,4,7,9,1,6,10}
 local classes={
  [1]={"Warrior","Воин","WARRIOR"},[2]={"Paladin","Паладин","PALADIN"},
@@ -210,7 +212,7 @@ end
 local function visible()
  local canonical={}
  for _,row in ipairs(selectedClass==0 and customRows or byClass[selectedClass] or {}) do
-  if availableRow(row) and (row.Type=="Ability" or isTalent(row)) then
+  if not row.hiddenSchool and not (nativeSchools and row.Type=="Ability" and nativeSchools.IsMount((compatible[row.ID] or {}).spell)) and availableRow(row) and (row.Type=="Ability" or isTalent(row)) then
    local key=tostring(row.ID)
    local previousRow=canonical[key]
    if not previousRow or (compatible[row.ID] and not compatible[previousRow.ID]) or
@@ -219,7 +221,7 @@ local function visible()
  end
  local abilities,talents={},{}
  for _,row in pairs(canonical) do
-  local matches=not isTalent(row) or not selectedTab or row.Tab==selectedTab
+  local matches=not isTalent(row) or not selectedTab or row.Tab==selectedTab or (branchInfo[row.Tab] and branchInfo[row.Tab].key==selectedTab)
   if matches and (filter=="" or string.find(fold(spellName(row)),filter,1,true)) then
    if isTalent(row) then table.insert(talents,row)
    elseif showAll or (compatible[row.ID] and compatible[row.ID].available~=false) then table.insert(abilities,row) end
@@ -261,8 +263,10 @@ local function renderAbilities(rows)
  end
 end
 local function renderTalents(rows)
- local maxTier,maxColumn=0,4;local positions={}
- for _,row in ipairs(rows) do maxTier=math.max(maxTier,math.floor((row.RequiredTEInvestment or 0)/3));maxColumn=math.max(maxColumn,(row.GridX or 0)+1) end
+ local maxTier,maxColumn,minColumn,minRow=0,0,math.huge,math.huge;local positions={}
+ for _,row in ipairs(rows) do maxTier=math.max(maxTier,math.floor((row.RequiredTEInvestment or 0)/3));maxColumn=math.max(maxColumn,row.GridX or 0);minColumn=math.min(minColumn,row.GridX or 0);minRow=math.min(minRow,row.GridY or 0) end
+ if #rows==0 then minColumn,minRow,maxColumn=0,0,3 end
+ maxColumn=math.max(1,maxColumn-minColumn+1)
  local viewport=math.max(300,talentScroll:GetHeight() or 403)
  local rowStep=52
  local nodeSize,iconSize=44,36
@@ -270,7 +274,7 @@ local function renderTalents(rows)
  local left=math.max(20,((uiRefs.talentWidth or 545)-((maxColumn-1)*spacing+nodeSize))/2)
  for index,row in ipairs(rows) do
   local n=talentNodes[index] or makeNode(talentCanvas,true);talentNodes[index]=n;n.entry=row
-  local tier=row.GridY or math.floor((index-1)/4);local column=row.GridX and (row.GridX+1) or (index-1)%4+1
+  local tier=row.GridY and row.GridY-minRow or math.floor((index-1)/4);local column=row.GridX and (row.GridX-minColumn+1) or (index-1)%4+1
   maxTier=math.max(maxTier,tier)
   local x,y=left+(column-1)*spacing,-14-tier*rowStep
   n:ClearAllPoints();n:SetPoint("TOPLEFT",x,y);n:SetSize(nodeSize,nodeSize);n.icon:SetSize(iconSize,iconSize);n.border:SetSize(iconSize+15,iconSize+15)
@@ -320,8 +324,11 @@ refresh=function()
   talentPoints:SetText("Очки активного: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
  else summary:SetText("Ожидаем состояние персонажа...");talentPoints:SetText("TE мультикласса: —") end
  local tabs,seen={},{ }
- for _,row in ipairs(custom and {} or byClass[selectedClass] or {}) do if isTalent(row) and availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
- table.sort(tabs,function(a,b) return tostring(a)<tostring(b) end)
+ for _,row in ipairs(custom and {} or byClass[selectedClass] or {}) do if isTalent(row) and not row.hiddenSchool and availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
+ table.sort(tabs,function(a,b) local x,y=branchInfo[a],branchInfo[b];if x and y then return x.order<y.order end;return tostring(a)<tostring(b) end)
+ if selectedTab and not seen[selectedTab] then
+  for tag,school in pairs(branchInfo) do if school.owner==selectedClass and school.key==selectedTab then selectedTab=tag;break end end
+ end
  if not selectedTab or not seen[selectedTab] then selectedTab=tabs[1] end
  for i,b in ipairs(tabButtons) do local tab=tabs[i];b.tab=tab;if tab then b:SetText(treeNames[tab] or schools[tab] or tab);b:ClearAllPoints();b:SetSize(math.min(160,520/math.max(1,#tabs)-4),24);b:SetPoint("TOPLEFT",447+(i-1)*(math.min(164,520/math.max(1,#tabs))),-85);b:SetEnabled(tab~=selectedTab);b:Show() else b:Hide() end end
  for id,b in pairs(classButtons) do
@@ -343,7 +350,7 @@ refresh=function()
  showAllButton:SetText(showAll and "Только доступные" or "Все умения")
  showAllButton:SetShown(not custom)
  if state and protocol<2 then message:SetText(protocol==0 and "Ожидаем ответ сервера…" or "Некоторые функции недоступны в текущей версии сервера.") end
- if presentation then presentation.Refresh(uiRefs,{talents=#talents,native=nativeCatalog,primary=state and selectedClass==state.primary,branches=#tabs,selectedTab=selectedTab,coords=(CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classes[selectedClass] and classes[selectedClass][3]]) or classCoords[classes[selectedClass] and classes[selectedClass][3]]}) end
+ if presentation then presentation.Refresh(uiRefs,{talents=#talents,native=nativeCatalog,primary=state and selectedClass==state.primary,branches=#tabs,selectedTab=selectedTab,owner=selectedClass,school=branchInfo[selectedTab] or (nativeSchools and nativeSchools.schools[selectedClass] and nativeSchools.schools[selectedClass][1]),coords=(CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classes[selectedClass] and classes[selectedClass][3]]) or classCoords[classes[selectedClass] and classes[selectedClass][3]]}) end
  updatePowers()
 end
 local function panel(parent,x,y,width,height)
@@ -380,7 +387,8 @@ local function build()
   b:SetScript("OnClick",function() selectedClass=id;selectedTab=nil;page=1;abilityScroll:SetVerticalScroll(0);talentScroll:SetVerticalScroll(0);refresh() end);classButtons[id]=b
  end
  for i=1,8 do
-  local b=button(window,"",160,function(self) selectedTab=self.tab;page=1;talentScroll:SetVerticalScroll(0);refresh() end)
+  local choose=function(self) selectedTab=self.tab;page=1;talentScroll:SetVerticalScroll(0);refresh() end
+  local b=presentation and presentation.BranchButton(window,choose) or button(window,"",160,choose)
   b:SetPoint("TOPLEFT",147+(i-1)*164,-79);tabButtons[i]=b
  end
  summary=label(window,"","GameFontHighlightSmall");summary:SetPoint("TOPLEFT",151,-49)
@@ -465,6 +473,26 @@ SlashCmdList.FOREVERASCENSION=function(text)
  if text=="bookdebug" then ForeverAscensionShowNativeBookReport()
  elseif not text or text=="" then open() else send(text) end
 end
+local function canonicalTalentSchools()
+ if not nativeSchools then return end
+ branchInfo={}
+ local best={}
+ for owner,list in pairs(byClass) do
+  for _,row in ipairs(list) do if isTalent(row) then
+   local raw=row.rawTab or row.Tab;local meta=rawTrees[raw] or {}
+   local school=nativeSchools.Resolve(owner,raw,meta.title or treeNames[raw],meta.skill)
+   row.hiddenSchool=false
+   if school then
+    row.rawTab=raw;row.Tab=owner.."-school-"..school.key;treeNames[row.Tab]=school.name;branchInfo[row.Tab]=school
+    local spell=(compatible[row.ID] or {}).spell or row.Spells[1]
+    local key=owner..":"..school.key..":"..spell;local previous=best[key]
+    if not previous then best[key]=row
+    elseif (state.talents[row.ID] or 0)>(state.talents[previous.ID] or 0) then previous.hiddenSchool=true;best[key]=row
+    else row.hiddenSchool=true end
+   elseif type(raw)=="string" and raw:match("^%d+%-") then row.hiddenSchool=true end
+  end end
+ end
+end
 local function parse(text)
  local words={};for w in tostring(text):gmatch("%S+") do table.insert(words,w) end;local kind=words[1]
  if kind=="PROTOCOL" then protocol=tonumber(words[2]) or 0;return end
@@ -474,7 +502,7 @@ local function parse(text)
  elseif kind=="XP_SHARE" and pending then pending.xpShare=words[2]=="1"
  elseif kind=="CLASS" and pending then pending.classes[tonumber(words[2])]={level=tonumber(words[3]),xp=tonumber(words[4]),next=tonumber(words[5])}
  elseif kind=="CATALOG" and pending then
-  compatible={};byId={};byClass={};for id in pairs(classes) do byClass[id]={} end;nativeCatalog=words[2]=="NATIVE"
+  compatible={};byId={};byClass={};rawTrees={};branchInfo={};for id in pairs(classes) do byClass[id]={} end;nativeCatalog=words[2]=="NATIVE"
  elseif kind=="NATIVE" and pending and nativeCatalog then
   local id,owner,spell=tonumber(words[2]),tonumber(words[3]),tonumber(words[4]);local talent=words[6]=="1"
   if classes[owner] then
@@ -496,10 +524,11 @@ local function parse(text)
    compatible[id]={kind="ability",spell=spell,level=level,owner=owner,available=true}
   end
  elseif kind=="TREES" and pending then pending.nativeTalents=true
+ elseif kind=="SCHOOLS" and pending then pending.nativeSchools=words[2]=="1"
  elseif kind=="TREE" and pending then
-  local key=words[2];local text=(words[3] or ""):gsub("%x%x",function(v) return string.char(tonumber(v,16)) end);treeNames[key]=text
+  local key=words[2];local text=(words[3] or ""):gsub("%x%x",function(v) return string.char(tonumber(v,16)) end);treeNames[key]=text;rawTrees[key]={title=text,skill=tonumber(words[4]),tree=tonumber(words[5])}
  elseif kind=="TNODE" and pending then
-  local row=byId[tonumber(words[2])];if row then row.Tab=words[3];row.GridX=tonumber(words[4]);row.GridY=tonumber(words[5]);row.RequiredIDs={} end
+  local row=byId[tonumber(words[2])];if row then row.Tab=words[3];row.rawTab=words[3];row.GridX=tonumber(words[4]);row.GridY=tonumber(words[5]);row.RequiredIDs={} end
  elseif kind=="TEDGE" and pending then
   local row=byId[tonumber(words[2])];if row then table.insert(row.RequiredIDs,tonumber(words[3])) end
  elseif kind=="TREADY" and pending then
@@ -512,7 +541,7 @@ local function parse(text)
   local id=tonumber(words[2]);pending.effects[id]=pending.effects[id] or {};pending.effects[id][tonumber(words[3])]=tonumber(words[4])
  elseif kind=="KNOWN" and pending then pending.known[tonumber(words[2])]=tonumber(words[3])
  elseif kind=="LEARNED" and pending then pending.learned[canonical(tonumber(words[2]))]=true
- elseif kind=="END" and pending then state=pending;pending=nil;waiting=false;refresh() end
+ elseif kind=="END" and pending then state=pending;pending=nil;waiting=false;canonicalTalentSchools();refresh() end
 end
 local events=CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN");events:RegisterEvent("CHAT_MSG_ADDON");events:RegisterEvent("UNIT_POWER_UPDATE");events:RegisterEvent("UNIT_MAXPOWER")

@@ -77,40 +77,51 @@ struct Layout {uint32 node,tree;int32 x,y;float offset=0,col=0,row=0;std::string
 static std::map<uint32,Layout> TalentLayout;
 static std::string Hex(std::string const& text)
 {static char const* digits="0123456789abcdef";std::string out;for(unsigned char c:text.substr(0,80)) {out+=digits[c>>4];out+=digits[c&15];}return out;}
+// Only player class schools: mounts/companions and pet-family skills are also
+// category CLASS in Forever, so CategoryID alone is not an ownership check.
+static bool PlayerClassSchool(int32 category,uint32 flags)
+{
+    return category==SKILL_CATEGORY_CLASS&&(flags&0x400)&&!(flags&(0x2|0x800));
+}
+static uint32 SchoolClassMask(uint32 skill)
+{
+    uint32 mask=0;for(auto row:sDB2Manager.GetSkillRaceClassInfo(skill)) mask|=uint32(row->ClassMask);
+    return mask&0x7ff;
+}
+static uint32 TalentSchool(uint32 tree,uint32 owner,uint32 spell)
+{
+    std::set<uint32> roots;
+    for(auto link:sSkillLineXTraitTreeStore) if(uint32(link->TraitTreeID)==tree)
+        if(auto skill=sSkillLineStore.LookupEntry(link->SkillLineID);skill&&PlayerClassSchool(skill->CategoryID,skill->Flags)&&(SchoolClassMask(skill->ID)&(1u<<(owner-1)))) roots.insert(skill->ID);
+    if(roots.size()==1) return *roots.begin();
+    std::set<uint32> matches;auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(spell);
+    for(auto it=bounds.first;it!=bounds.second;++it) if(roots.count(it->second->SkillLine)) matches.insert(it->second->SkillLine);
+    return matches.size()==1?*matches.begin():0;
+}
+static std::map<std::string,uint32> BranchSchools,BranchTrees;
 static void BuildTalentLayout()
 {
-    std::map<std::pair<uint32,uint32>,std::set<int32>> columns;
-    for(auto const& [id,l]:TalentLayout) columns[{NativeMenu.at(id).owner,l.tree}].insert(l.x);
+    std::map<std::string,std::set<int32>> columns,rows;
     for(auto& [id,l]:TalentLayout)
     {
-        auto const& xs=columns.at({NativeMenu.at(id).owner,l.tree});int32 step=0,previous=0;bool first=true;
-        for(auto x:xs) {if(!first&&x>previous) step=step?std::min(step,x-previous):x-previous;previous=x;first=false;}
-        int group=0,col=0;first=true;
-        for(auto x:xs) {if(!first&&step&&x-previous>step*3) {++group;col=0;} if(x==l.x) break;++col;previous=x;first=false;}
-        l.tag=std::to_string(NativeMenu.at(id).owner)+"-"+std::to_string(l.tree)+"-"+std::to_string(group);
-        l.col=col+l.offset;
-        std::set<int32> ys;for(auto const& [otherId,other]:TalentLayout) if(other.tree==l.tree&&NativeMenu.at(otherId).owner==NativeMenu.at(id).owner) ys.insert(other.y);
-        l.row=std::distance(ys.begin(),ys.find(l.y));
-        if(!TreeTitles.count(l.tree)||TreeTitles[l.tree].empty()) TreeTitles[l.tree]="Ветка "+std::to_string(l.tree);
+        auto const& menu=NativeMenu.at(id);uint32 school=TalentSchool(l.tree,menu.owner,menu.spell);
+        l.tag=std::to_string(menu.owner)+(school?"-school-":"-tree-")+std::to_string(school?school:l.tree);
+        BranchSchools[l.tag]=school;BranchTrees[l.tag]=l.tree;
+        columns[l.tag].insert(l.x);rows[l.tag].insert(l.y);
+        std::string title;
+        if(auto skill=sSkillLineStore.LookupEntry(school)) for(uint32 locale:{8u,0u}) if(auto text=skill->DisplayName.Str[locale];text&&text[0]) {title=text;break;}
+        if(title.empty()&&TreeTitles.count(l.tree)) title=TreeTitles[l.tree];
+        BranchTitles[l.tag]=title;
     }
-    std::map<std::string,std::map<std::string,uint32>> names;
-    for(auto const& [id,l]:TalentLayout)
+    for(auto& [id,l]:TalentLayout)
     {
-        auto const& menu=NativeMenu.at(id);auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(menu.spell);
-        for(auto it=bounds.first;it!=bounds.second;++it)
-        {
-            auto skill=sSkillLineStore.LookupEntry(it->second->SkillLine);if(!skill||skill->CategoryID!=SKILL_CATEGORY_CLASS) continue;
-            bool root=false;for(auto link:sSkillLineXTraitTreeStore) if(link->TraitTreeID==l.tree&&link->SkillLineID==skill->ID) root=true;
-            if(root) continue;
-            for(uint32 locale:{8u,0u}) if(auto title=skill->DisplayName.Str[locale];title&&title[0]) {++names[l.tag][title];break;}
-        }
-        if(!BranchTitles.count(l.tag)) BranchTitles[l.tag]=TreeTitles[l.tree];
+        auto const& xs=columns[l.tag];auto const& ys=rows[l.tag];
+        l.col=std::distance(xs.begin(),xs.find(l.x))+l.offset;
+        l.row=std::distance(ys.begin(),ys.find(l.y));
     }
-    for(auto const& [tag,counts]:names)
-    {uint32 best=0;for(auto const& [name,count]:counts) if(count>best) {BranchTitles[tag]=name;best=count;}}
     for(auto edge:sTraitEdgeStore) for(auto const& [child,layout]:TalentLayout)
         if(layout.node==uint32(edge->RightTraitNodeID)) for(auto const& [parent,p]:TalentLayout)
-            if(p.node==edge->LeftTraitNodeID&&NativeMenu.at(child).owner==NativeMenu.at(parent).owner) TalentParents[child].push_back(parent);
+            if(p.node==edge->LeftTraitNodeID&&layout.tag==p.tag) TalentParents[child].push_back(parent);
 }
 static bool TalentBuildValid(Player* p,State const& s);
 static uint32 TalentCap=71;
@@ -442,7 +453,7 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
     Send(p,Trinity::StringFormat("STATE {} {} {} {}",p->GetClass(),p->GetLevel(),Used(s),Limit));
     Send(p,Trinity::StringFormat("ACTIVE {}",s.active));
     Send(p,Trinity::StringFormat("XP_SHARE {} 90",s.experienceEnabled?1:0));
-    Send(p,"TREES");Send(p,"GEAR 1");
+    Send(p,"TREES");Send(p,"SCHOOLS 1");Send(p,"GEAR 1");
     for(uint32 owner=1;owner<=11;++owner) if(owner!=p->GetClass())
     {
         uint32 level=ClassLevel(p,s,owner);auto it=s.classes.find(owner);
@@ -468,7 +479,7 @@ static void Snapshot(Player* p,State& s,bool includeCatalog=false)
         std::set<std::string> sent;
         for(auto const& [id,l]:TalentLayout)
         {
-            if(sent.insert(l.tag).second) Send(p,Trinity::StringFormat("TREE {} {}",l.tag,Hex(BranchTitles[l.tag])));
+            if(sent.insert(l.tag).second) Send(p,Trinity::StringFormat("TREE {} {} {} {}",l.tag,Hex(BranchTitles[l.tag]),BranchSchools[l.tag],BranchTrees[l.tag]));
             Send(p,Trinity::StringFormat("TNODE {} {} {} {}",id,l.tag,l.col,l.row));
         }
         for(auto const& [id,parents]:TalentParents) for(auto parent:parents) Send(p,Trinity::StringFormat("TEDGE {} {}",id,parent));
@@ -670,6 +681,15 @@ static uint32 ClassFamily(uint32 owner)
     switch(owner) { case 1:return 4;case 2:return 10;case 3:return 9;case 4:return 8;
         case 5:return 6;case 7:return 11;case 8:return 3;case 9:return 5;case 11:return 7;case 6:return 15;case 10:return 53;case 12:return 107;case 13:return 224;default:return 0; }
 }
+static bool PlayerClassAbility(uint32 owner,uint32 spell,uint32 family,bool mounted)
+{
+    if(mounted) return false;
+    if(family==ClassFamily(owner)) return true;
+    if(family!=0) return false;
+    // Reviewed generic utility exceptions; generic collection/quest spells
+    // never become class abilities just because a broad SkillLine lists them.
+    return (owner==3&&(spell==75||spell==883||spell==1515||spell==2641||spell==982||spell==6991||spell==136))||(owner==9&&spell==126);
+}
 static SpellInfo const* NativeClassSpell(uint32 spell,uint32 owner)
 {
     auto info=sSpellMgr->GetSpellInfo(spell,DIFFICULTY_NONE);
@@ -732,8 +752,8 @@ static NativeTraits LoadNativeTraits()
     for(auto link:sSkillLineXTraitTreeStore)
     {
         auto skill=sSkillLineStore.LookupEntry(link->SkillLineID);
-        if(!skill||skill->CategoryID!=SKILL_CATEGORY_CLASS) continue;
-        for(auto info:sDB2Manager.GetSkillRaceClassInfo(skill->ID)) classes[link->TraitTreeID]|=uint32(info->ClassMask);
+        if(!skill||!PlayerClassSchool(skill->CategoryID,skill->Flags)) continue;
+        classes[link->TraitTreeID]|=SchoolClassMask(skill->ID);
     }
     NativeTraits traits;
     for(auto link:sTraitNodeXTraitNodeEntryStore)
@@ -838,9 +858,9 @@ public:
         for(auto ability:sSkillLineAbilityStore)
         {
             auto skill=sSkillLineStore.LookupEntry(ability->SkillLine);
-            if(!skill||skill->CategoryID!=SKILL_CATEGORY_CLASS||ability->Spell<=0) continue;
-            uint32 mask=uint32(ability->ClassMask);
-            if(!mask) for(auto info:sDB2Manager.GetSkillRaceClassInfo(skill->ID)) mask|=uint32(info->ClassMask);
+            if(!skill||!PlayerClassSchool(skill->CategoryID,skill->Flags)||ability->Spell<=0) continue;
+            uint32 schoolMask=SchoolClassMask(skill->ID);
+            uint32 mask=ability->ClassMask?(uint32(ability->ClassMask)&schoolMask):schoolMask;
             for(uint32 owner=1;owner<=11;++owner) if(mask&(1u<<(owner-1)))
             {
                 uint32 spell=uint32(ability->Spell);
@@ -848,13 +868,14 @@ public:
                 char const* reason="available";
                 if(!info) reason="missing_spell";
                 else if(std::any_of(ForeverAdvancementCustom::Rules.begin(),ForeverAdvancementCustom::Rules.end(),[&](auto const& rule){return rule.spell==spell;})) reason="custom_removed";
-                else if(info->SpellFamilyName&&info->SpellFamilyName!=ClassFamily(owner)) reason="wrong_class";
+                else if(info->HasAura(SPELL_AURA_MOUNTED)) reason="collection_spell";
+                else if(!PlayerClassAbility(owner,spell,info->SpellFamilyName,false)) reason="wrong_class";
                 else if(info->IsPassive()) reason="passive";
                 else if(ability->GetAcquireMethod()==SkillLineAbilityAcquireMethod::NeverLearned&&spell!=75&&spell!=883&&spell!=1515&&spell!=2641&&spell!=982&&spell!=6991&&spell!=136) reason="internal";
                 else if(!CompatibleCosts(info)) reason="unsupported_resource";
                 bool available=std::string_view(reason)=="available";
                 record("native",owner,spell,reason);
-                if(!info||std::string_view(reason)=="custom_removed"||std::string_view(reason)=="wrong_class"||std::string_view(reason)=="internal"||info->IsPassive()) continue;
+                if(!info||std::string_view(reason)=="custom_removed"||std::string_view(reason)=="collection_spell"||std::string_view(reason)=="wrong_class"||std::string_view(reason)=="internal"||info->IsPassive()) continue;
                 if(spell>=10000000) continue; // deterministic namespace disjoint from donor IDs
                 uint32 first=sSpellMgr->GetFirstSpellInChain(spell);if(!first) first=spell;
                 uint32 id=1000000000+owner*10000000+first;
@@ -872,7 +893,7 @@ public:
             }
         }
         for(uint32 spell:{75u,883u,1515u,2641u,982u,6991u,136u})
-            if(auto info=sSpellMgr->GetSpellInfo(spell,DIFFICULTY_NONE);info&&info->SpellFamilyName==ClassFamily(3)&&CompatibleCosts(info))
+            if(auto info=sSpellMgr->GetSpellInfo(spell,DIFFICULTY_NONE);info&&(info->SpellFamilyName==ClassFamily(3)||info->SpellFamilyName==0)&&CompatibleCosts(info)&&!info->HasAura(SPELL_AURA_MOUNTED))
             {
                 uint32 id=1030000000+spell;sObjectMgr->RegisterForeverAdvancementBinding(spell,script);
                 Catalog[id]={{id,3,spell,std::max<uint32>(1,info->SpellLevel)}};
@@ -898,13 +919,14 @@ public:
         }
         // Browse actual class-tree definitions. Legacy purchases remain saved but are not replayed
         // as native talents. Native allocation must use real node/choice/currency/condition rules.
-        auto traits=LoadNativeTraits();std::set<std::pair<uint32,uint32>> seenTraits;
+        auto traits=LoadNativeTraits();std::set<std::pair<uint32,uint32>> seenTraits;std::set<uint32> nativeClasses;
         for(auto const& [spell,rows]:traits) for(auto const& row:rows)
         {
             if(!seenTraits.insert({row.owner,row.entry}).second||row.entry>=10000000) continue;
             auto info=sSpellMgr->GetSpellInfo(row.spell,DIFFICULTY_NONE);
             record("trait",row.owner,row.spell,info?"native_rules_required":"missing_spell");
-            if(!info) continue;
+            if(!info||(info->SpellFamilyName&&info->SpellFamilyName!=ClassFamily(row.owner))) continue;
+            nativeClasses.insert(row.owner);
             uint32 id=1500000000+row.owner*10000000+row.entry;
             bool supported=CompatibleCosts(info)&&TraitMgr::GetConfigTypeForTree(row.tree)==TraitConfigType::Combat;
             auto safeCost=[](int32 id){auto cost=sTraitCostStore.LookupEntry(id);if(!cost||cost->Amount<=0) return true;auto currency=sTraitCurrencyStore.LookupEntry(cost->TraitCurrencyID);return currency&&currency->GetType()==TraitCurrencyType::TraitSourced;};
@@ -926,7 +948,7 @@ public:
         // Read that client/core store, never the donor's AscensionTalentSourceEntries.
         for(auto talent:sTalentStore)
         {
-            uint32 owner=talent->ClassID;if(!SupportedClass(owner)||talent->ID>=10000000) continue;
+            uint32 owner=talent->ClassID;if(!SupportedClass(owner)||nativeClasses.count(owner)||talent->ID>=10000000) continue;
             uint32 spell=talent->SpellID,max=0;
             for(auto rank:talent->SpellRank) if(rank) { if(!max) spell=rank;++max; }
             if(!spell) continue;if(!max) max=1;
@@ -939,11 +961,19 @@ public:
         }
         if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement native catalog empty; disabled");return; }
         TC_LOG_INFO("scripts","ForeverAdvancement equipment metadata: {} proficiency skill records",EquipmentCatalog.size());
-        BuildTalentLayout();PublishBookSchoolMetadata();PublishBookMetadata();
+        BuildTalentLayout();
+        for(uint32 owner:{1u,2u,3u,4u,5u,7u,8u,9u,11u})
+        {
+            std::set<uint32> schools;
+            for(auto const& [id,layout]:TalentLayout) if(NativeMenu.at(id).owner==owner&&BranchSchools[layout.tag]) schools.insert(BranchSchools[layout.tag]);
+            if(schools.size()!=3) {TC_LOG_ERROR("scripts","ForeverAdvancement player school audit failed: class {} has {} schools, expected 3; original runtime must be retained",owner,schools.size());return;}
+        }
+        TC_LOG_INFO("scripts","ForeverAdvancement player school audit passed: three native schools for each classic class; pets and collections excluded");
+        PublishBookSchoolMetadata();PublishBookMetadata();
         TC_LOG_INFO("scripts","ForeverAdvancement native catalogue: {} supported records; {} resource exclusions; {} native trait entries",accepted,rejected,seenTraits.size());
         TC_LOG_INFO("scripts","ForeverAdvancement catalog audit: {}; legacy talents hidden; no name substitutions",audit?"written to ForeverAdvancement-catalog.tsv":"could not open audit file");
         TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: {} purchasable native nodes; native TraitMgr validation",TalentCatalog.size());
-        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: 0 visible abilities; protocol=3; version=1.13.0");
+        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: 0 visible abilities; protocol=3; version=1.14.0");
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} native ability entries; {} native talent nodes; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }
 };

@@ -35,16 +35,22 @@ local function surface(f,color,outline)
  end
 end
 function P.Button(parent,text,width,fn)
- local b=CreateFrame("Button",nil,parent);b:SetSize(width,28)
- surface(b,BROWN,true)
- b.Text=b:CreateFontString(nil,"OVERLAY","GameFontHighlight");b.Text:SetPoint("CENTER");font(b.Text,13,PALE)
- b:SetFontString(b.Text);b:SetText(text);b:SetScript("OnClick",fn)
- b:SetScript("OnEnter",function() b.foreverFill:SetVertexColor(0.22,0.14,0.07,1) end)
- b:SetScript("OnLeave",function() b.foreverFill:SetVertexColor(unpack(BROWN)) end)
+ local b=CreateFrame("Button",nil,parent,"UIPanelButtonTemplate");b:SetSize(width,28)
+ local word=b.GetFontString and b:GetFontString()
+ if type(word)~="table" and type(word)~="userdata" then word=b:CreateFontString(nil,"OVERLAY","GameFontHighlight");word:SetPoint("CENTER");b:SetFontString(word) end
+ b.Text=word;font(word,13,PALE);b:SetText(text);b:SetScript("OnClick",fn)
+ return b
+end
+function P.BranchButton(parent,fn)
+ local ok,b=pcall(CreateFrame,"Button",nil,parent,"TabSystemButtonArtTemplate")
+ if not ok then return P.Button(parent,"",160,fn) end
+ b.isTabOnTop=true;b.selectedFontObject=GameFontHighlight or "GameFontHighlight";b.unselectedFontObject=GameFontNormal or "GameFontNormal"
+ if b.HandleRotation then b:HandleRotation() end
+ b:SetSize(160,32);b:SetText("");b:SetScript("OnClick",fn);b.foreverNativeArt=true
  return b
 end
 function P.Panel(parent,x,y,w,h)
- local f=CreateFrame("Frame",nil,parent);place(f,parent,x,-y,w,h);surface(f,BROWN,true);return f
+ local f=CreateFrame("Frame",nil,parent,"InsetFrameTemplate");place(f,parent,x,-y,w,h);surface(f,BROWN,false);return f
 end
 function P.ClassButton(b,selected,active)
  if not b.foreverFill then
@@ -82,13 +88,15 @@ function P.Apply(w,r,width,height)
  place(r.sidebar,w,margin,bodyY,sidebar,bodyH)
  place(r.abilities,w,ax,bodyY,ability,bodyH)
  place(r.talents,w,tx,bodyY,tw,bodyH)
- surface(r.sidebar,{0.070,0.047,0.028},false)
- surface(r.abilities,BROWN,true);surface(r.talents,{0.077,0.052,0.033},true)
+ surface(r.sidebar,{0.015,0.012,0.010,0.78},false)
+ surface(r.abilities,{0.01,0.01,0.01,0.80},false);surface(r.talents,{0.01,0.01,0.01,0.40},false)
  if not r.pageTitle then
   r.pageTitle=w:CreateFontString(nil,"OVERLAY","GameFontNormalLarge");r.pageTitle:SetText("Мультикласс")
   r.classTitle=r.sidebar:CreateFontString(nil,"OVERLAY","GameFontNormal");r.classTitle:SetText("КЛАССЫ")
   r.searchHint=r.search:CreateFontString(nil,"OVERLAY","GameFontHighlight");r.searchHint:SetPoint("LEFT",8,0);r.searchHint:SetText("Поиск способности");font(r.searchHint,13,MUTED)
   r.footer=solid(w,"BACKGROUND",BROWN);r.footer:SetPoint("BOTTOMLEFT",0,0);r.footer:SetPoint("BOTTOMRIGHT",0,0);r.footer:SetHeight(34)
+  r.classArt={};for i=1,3 do local t=w:CreateTexture(nil,"BACKGROUND",nil,1);r.classArt[i]=t end
+  r.nativeBackground=r.talents:CreateTexture(nil,"BACKGROUND",nil,1);r.nativeBackground:SetAllPoints();r.nativeBackground:SetAlpha(0.85)
   r.watermark=r.talents:CreateTexture(nil,"BACKGROUND");r.watermark:SetTexture("Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES");r.watermark:SetSize(220,220);r.watermark:SetPoint("BOTTOMRIGHT",-24,40);r.watermark:SetAlpha(0.075)
   r.emptyCard=CreateFrame("Frame",nil,r.talents)
   r.emptyIcon=r.emptyCard:CreateTexture(nil,"ARTWORK");r.emptyIcon:SetTexture("Interface\\Icons\\INV_Misc_Book_11");r.emptyIcon:SetSize(46,46);r.emptyIcon:SetPoint("TOP",0,0)
@@ -125,6 +133,7 @@ function P.Apply(w,r,width,height)
  r.points:ClearAllPoints();r.points:SetPoint("TOPRIGHT",r.talents,"TOPRIGHT",-16,-20);font(r.points,12,PALE)
  r.talentScroll:ClearAllPoints();r.talentScroll:SetPoint("TOPLEFT",r.talents,"TOPLEFT",12,-82);r.talentScroll:SetPoint("BOTTOMRIGHT",r.talents,"BOTTOMRIGHT",-30,45)
  r.talentCanvas:SetWidth(r.talentWidth)
+ for i,t in ipairs(r.classArt) do place(t,w,(i-1)*width/3,bodyY,width/3,bodyH) end
  r.emptyCard:ClearAllPoints();r.emptyCard:SetPoint("CENTER",r.talents,"CENTER",0,-4);r.emptyCard:SetSize(math.min(440,tw-56),236)
  r.emptyText:SetWidth(math.min(420,tw-64));r.emptyText:SetHeight(74)
  r.emptyTitle:SetWidth(tw-60);r.emptyTitle:SetJustifyH("CENTER")
@@ -132,7 +141,15 @@ function P.Apply(w,r,width,height)
 end
 function P.Refresh(r,context)
  if not r.width then return end
- if context.coords then r.watermark:SetTexCoord(unpack(context.coords)) end
+ r.watermark:Hide()
+ local schools=ForeverAscensionSchools
+ local atlas=schools and schools.Background(context.school)
+ if atlas then r.nativeBackground:SetAtlas(atlas);r.nativeBackground:Show() else r.nativeBackground:Hide() end
+ for i,t in ipairs(r.classArt) do
+  local row=schools and schools.schools[context.owner] and schools.schools[context.owner][i]
+  local art=schools and schools.Background(row)
+  if art then t:SetAtlas(art);t:SetAlpha(0.70);t:Show() else t:Hide() end
+ end
  local empty=context.talents==0
  r.emptyCard:SetShown(empty);r.talentScroll:SetShown(not empty)
  r.oldEmpty:Hide()
@@ -147,9 +164,10 @@ function P.Refresh(r,context)
   if b.tab then
    b:SetParent(r.talents)
    local tabWidth=math.min(160,(r.talentWidth+8)/math.max(1,context.branches)-6)
-   place(b,r.talents,16+(i-1)*(tabWidth+6),47,tabWidth,26)
+   place(b,r.talents,16+(i-1)*(tabWidth+6),47,tabWidth,32)
    local selected=b.tab==context.selectedTab
-   b.foreverFill:SetVertexColor(selected and 0.25 or BROWN[1],selected and 0.16 or BROWN[2],selected and 0.065 or BROWN[3],1)
+   if b.foreverNativeArt and b.SetTabSelected then b:SetTabSelected(selected) end
+   if b.Text then font(b.Text,13,PALE);b.Text:SetWidth(tabWidth-18);b.Text:SetHeight(18) end
   end
  end
  for _,n in ipairs(r.rows) do P.Row(n,r.abilityWidth) end

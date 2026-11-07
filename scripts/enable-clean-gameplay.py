@@ -19,16 +19,17 @@ clean, network, upgrade = adv.clean, adv.network, adv.upgrade
 FORMAT = 'forever-clean-gameplay-v1'
 MARKER = '.gameplay-in-progress.json'
 BOOK_VERSION = '0.9.8-v2.1-smartai-abilities'
-SCALING_VERSION = '0.2.0'
+SCALING_VERSION = '0.4.0'
+FINDER_VERSION = '0.2.0'
 CURRENT_ROOT = None
 
 
 def source_id():
     paths = [p for folder in ('mods/forever-advancement/server', 'mods/forever-advancement/sql',
-             'mods/living-encyclopedia/server', 'mods/living-encyclopedia/sql', 'mod-forever-scaling/server')
+             'mods/living-encyclopedia/server', 'mods/living-encyclopedia/sql', 'mod-forever-scaling/server', 'mods/forever-dungeon-finder/server')
              for p in sorted((ROOT / folder).glob('*')) if p.is_file()]
     paths += [ROOT / p for p in ('scripts/inject-advancement.py', 'scripts/inject-gameplay.py',
-              'scripts/inject-forever-scaling.py', 'docker/gameplay/Dockerfile', 'docker/clean/entrypoint.py',
+              'scripts/inject-forever-scaling.py', 'scripts/inject-forever-dungeons.py', 'scripts/inject-forever-dungeon-finder.py', 'docker/gameplay/Dockerfile', 'docker/clean/entrypoint.py',
               'docker/patches/0004-forever-subclass-server-addon-endpoint.patch')]
     digest = hashlib.sha256()
     for p in paths: digest.update(str(p.relative_to(ROOT)).encode() + b'\0' + p.read_bytes() + b'\0')
@@ -47,7 +48,8 @@ def check_image(item, state, candidate=False):
         if (labels.get('org.wowforever.gameplay.source') != source_id()
             or labels.get('org.wowforever.advancement.source') != adv.source_id()
             or labels.get('org.wowforever.encyclopedia') != BOOK_VERSION
-            or labels.get('org.wowforever.scaling') != SCALING_VERSION):
+            or labels.get('org.wowforever.scaling') != SCALING_VERSION
+            or labels.get('org.wowforever.dungeonfinder') != FINDER_VERSION):
             raise ValueError('Candidate module source/version labels do not match')
     elif previous and labels.get('org.wowforever.advancement.source') != previous['source_sha256']:
         raise ValueError('Active Advancement image differs from its saved identity')
@@ -88,16 +90,19 @@ def configure(before, model, candidate, folder, scaling=True):
     target, result = adv.configure(before, model, candidate, folder)
     target['database_version'] = 'gameplay-1@' + before.get('database_version', 'pristine-' + before['core'][:12])
     target['gameplay'] = dict(version=1, source_sha256=source_id(), encyclopedia=BOOK_VERSION,
-                              scaling=SCALING_VERSION if scaling else None, backup=str(folder / 'install.json'))
+                              scaling=SCALING_VERSION if scaling else None, dungeonfinder=FINDER_VERSION, backup=str(folder / 'install.json'))
     result['services']['worldserver']['environment'].update(
         FOREVER_ENCYCLOPEDIA_ENABLED='1', FOREVER_SCALING_ENABLED='1' if scaling else '0',
-        FOREVER_SCALING_DAMAGE_GUARD='1', FOREVER_SCALING_MIN_OFFSET='-9', FOREVER_SCALING_CREATURE_MAX_LEVEL='70')
+        FOREVER_SCALING_DAMAGE_GUARD='1', FOREVER_SCALING_MIN_OFFSET='-3',
+        FOREVER_DUNGEON_SCALING_ENABLED='0', FOREVER_DUNGEON_FINDER_ENABLED='0', FOREVER_SCALING_CREATURE_MAX_LEVEL='70')
     return target, result
 
 
 def wait_module(state, timeout=180):
     patterns = list(adv.ready_patterns(state)) + ['ForeverEncyclopedia ready:']
-    if state['gameplay'].get('scaling'): patterns.append('ForeverScaling ready: personal-virtual-v0.2 (enabled=true')
+    if state['gameplay'].get('scaling'):
+        version = state['gameplay']['scaling'].rsplit('.', 1)[0]
+        patterns.append('ForeverScaling ready: personal-virtual-v' + version + ' (enabled=true')
     return adv.module_readiness.wait(clean, state, patterns, timeout)
 
 

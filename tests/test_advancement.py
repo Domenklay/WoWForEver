@@ -85,7 +85,7 @@ class AdvancementTests(unittest.TestCase):
             self.assertEqual([p.name for p in target.parent.iterdir()],['ForeverAscension'])
             self.assertFalse((target/'user.lua').exists())
             self.assertEqual((root/'second/ForeverAscension/user.lua').read_text(),'local edits')
-            self.assertIn('## Version: 1.13.2',(target/'ForeverAscension.toc').read_text())
+            self.assertIn('## Version: 1.14.0',(target/'ForeverAscension.toc').read_text())
             installer.restore(root/'second')
             self.assertEqual((target/'user.lua').read_text(),'local edits')
             self.assertFalse((target.parent/'ForeverSubclass').exists())
@@ -262,6 +262,7 @@ class AdvancementUITests(unittest.TestCase):
                           (MODULE/'addon/ForeverAscension/Portrait.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/CharacterStats.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/Integration.lua').read_text(),
+                          (MODULE/'addon/ForeverAscension/TalentSchools.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/Presentation.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/ForeverAscension.lua').read_text()+'\n'+assertions]:
                 status=lib.luaL_loadstring(state,chunk.encode())
@@ -289,6 +290,39 @@ open();parse('STATE 1 20 0 8');parse('ACTIVE 8');parse('CLASS 8 20 0 1000');pars
 selectedClass=8;selectedTab='Forever';refresh();assert(byId[10] and not byId[398]);assert(not xpShareButton:IsShown())
 local abilities,talents=visible();assert(#abilities==1 and #talents==0);advance();abilityNodes[1].scripts.OnClick(abilityNodes[1],'LeftButton');assert(sent[#sent]=='learn 10')
 parse('STATE 1 20 1 8');parse('ENTRY 10 116 4 1 8');parse('LEARNED 10');parse('END');assert(#byClass[8]==1)
+''')
+
+    def test_live_absolute_columns_mount_pollution_and_duplicate_school_names(self):
+        self.lua(r'''
+C_MountJournal={GetMountFromSpell=function(id) if id==6648 then return 1 end end}
+open();parse('STATE 8 21 0 8');parse('ACTIVE 2');parse('CLASS 2 10 0 1000');parse('CATALOG NATIVE');parse('TREES')
+parse('NATIVE 1 2 6648 1 0 1 0 1 available');parse('NATIVE 2 2 635 1 0 1 0 1 available')
+parse('NATIVE 100 2 2000 10 1 5 700 1 available');parse('NATIVE 101 2 2001 10 1 5 701 1 available')
+parse('TREE 2-100-0 d0a1d0b2d0b5d182');parse('TREE 2-101-0 d0a1d0b2d0b5d182')
+parse('TNODE 100 2-100-0 50 6');parse('TNODE 101 2-101-0 53 8');parse('END')
+selectedClass=2;selectedTab=nil;refresh();local abilities,talents=visible()
+assert(#abilities==1 and abilities[1].ID==2,'mounts must not be offered as hunter/paladin combat skills')
+assert(#talents==2 and tabButtons[1]:IsShown() and not tabButtons[2]:IsShown(),'same school must not create duplicate tabs')
+for _,n in ipairs(talentNodes) do if n:IsShown() then
+ assert(n.points[1][2]>=0 and n.points[1][2]<545,'live columns 50..53 must fit the viewport')
+ assert(-n.points[1][3]<300,'native absolute tier starts at the visible branch origin')
+end end
+''')
+
+    def test_native_school_metadata_selects_real_background_and_excludes_pet_trees(self):
+        self.lua(r'''
+C_Texture={GetAtlasInfo=function() return {width=512,height=1024} end}
+function getAtlas(self,atlas) self.atlas=atlas end
+local parent=CreateFrame('Frame',nil,UIParent);parent:SetSize(1208,635);ForeverAscensionShowIn(parent)
+uiRefs.nativeBackground.SetAtlas=getAtlas
+parse('STATE 8 21 0 8');parse('ACTIVE 3');parse('CLASS 3 10 0 1000');parse('CATALOG NATIVE');parse('TREES');parse('SCHOOLS 1')
+parse('NATIVE 100 3 2000 10 1 5 700 1 available');parse('NATIVE 101 3 2001 10 1 5 701 1 available')
+parse('TREE 3-school-50 d09fd0bed0b2d0b5d0bbd0b8d182d0b5d0bbd18c20d0b7d0b2d0b5d180d0b5d0b9 50 1091')
+parse('TREE 3-pet d09fd0b8d182d0bed0bcd0b5d186202d20d0bbd18ed0b1d0bed0b9')
+parse('TNODE 100 3-school-50 0 0');parse('TNODE 101 3-pet 0 0');parse('END')
+selectedClass=3;selectedTab=nil;refresh();local _,talents=visible()
+assert(#talents==1 and talents[1].ID==100)
+assert(uiRefs.nativeBackground.atlas=='talents-background-hunter-beastmastery')
 ''')
 
     def test_real_catalog_menu_and_mixed_class_purchases_survive_filter_and_polls(self):

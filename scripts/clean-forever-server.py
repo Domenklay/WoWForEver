@@ -218,7 +218,11 @@ def model(state, *, published=False):
     if state.get('gameplay'):
         services['worldserver']['environment'].update(FOREVER_ENCYCLOPEDIA_ENABLED='1', FOREVER_RELEASE_MANAGED='1',
             FOREVER_SCALING_ENABLED='1' if state['gameplay'].get('scaling') else '0',
-            FOREVER_SCALING_DAMAGE_GUARD='1', FOREVER_SCALING_MIN_OFFSET='-9', FOREVER_SCALING_CREATURE_MAX_LEVEL='70')
+            FOREVER_SCALING_DAMAGE_GUARD='1',
+             FOREVER_SCALING_MIN_OFFSET='-3' if state['gameplay'].get('scaling') == '0.4.0' else '-9',
+             FOREVER_DUNGEON_SCALING_ENABLED='1' if state['gameplay'].get('dungeon_solo_enabled') else '0',
+             FOREVER_DUNGEON_FINDER_ENABLED='1' if state['gameplay'].get('dungeon_finder_enabled') else '0',
+             FOREVER_SCALING_CREATURE_MAX_LEVEL='70')
     if state.get('release'):
         # Database changes run explicitly on the isolated clone, never implicitly
         # through normal starts. Missing clone tables must not trigger fresh setup.
@@ -306,7 +310,9 @@ def wait_world(state, timeout):
         gameplay = state.get('gameplay')
         if gameplay and (labels.get('org.wowforever.gameplay.source') != gameplay['source_sha256']
                 or labels.get('org.wowforever.encyclopedia') != gameplay['encyclopedia']
-                or labels.get('org.wowforever.scaling') != '0.2.0'):
+                or labels.get('org.wowforever.scaling') != gameplay.get('scaling')
+                 or (gameplay.get('dungeonfinder') and
+                     labels.get('org.wowforever.dungeonfinder') != gameplay.get('dungeonfinder'))):
             raise RuntimeError('Unexpected combined gameplay image identity')
         # A log tail is not a readiness signal: CLI prompts can evict the line,
         # and a previous process's ready message can survive a later restart.
@@ -603,14 +609,17 @@ def load_state(path):
     if Path(state['compose']) != path.parent.resolve() / 'compose.private.json':
         raise ValueError('Unexpected Compose path')
     advancement = state.get('advancement')
-    if advancement and (advancement.get('version') not in ('1.11.0','1.12.0','1.13.0') or advancement.get('protocol') != 3
+    if advancement and (advancement.get('version') not in ('1.11.0','1.12.0','1.13.0','1.14.0') or advancement.get('protocol') != 3
         or not re.fullmatch('[0-9a-f]{64}', advancement.get('source_sha256', ''))
         or not re.fullmatch(re.escape(str(path.parent.resolve() / 'advancement')) + r'/[0-9a-f]{12}/install.json', advancement.get('backup', ''))):
         raise ValueError('Unsupported Advancement state identity')
     gameplay = state.get('gameplay')
     if gameplay and (not advancement or gameplay.get('version') != 1
         or gameplay.get('encyclopedia') != '0.9.8-v2.1-smartai-abilities'
-        or gameplay.get('scaling') not in (None, '0.2.0')
+        or gameplay.get('scaling') not in (None, '0.2.0', '0.4.0')
+        or gameplay.get('dungeonfinder') not in (None, '0.2.0')
+        or (gameplay.get('dungeon_solo_enabled') and gameplay.get('scaling') != '0.4.0')
+        or (gameplay.get('dungeon_finder_enabled') and gameplay.get('dungeonfinder') != '0.2.0')
         or not re.fullmatch('[0-9a-f]{64}', gameplay.get('source_sha256', ''))
         or gameplay.get('backup') != advancement['backup']):
         raise ValueError('Unsupported combined gameplay state identity')
