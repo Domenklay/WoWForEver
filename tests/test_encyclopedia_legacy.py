@@ -62,7 +62,15 @@ assert 'filteredArchiveRecords(allRows)' in creature_view
 assert 'local rowSize=30' in creature_view, "Compact rows must show more monsters"
 assert 'local viewHeight=286' in creature_view, "List must reclaim wasted vertical space"
 assert 'button(base,16,5,135,28,"К коллекции"' in creature_view
-assert 'modelPreview(detail,14,39,411,233' in creature_view
+assert 'modelPreview(detail,12,39,182,233' in creature_view
+assert 'drawCreatureLoot(detail,selected)' in creature_view
+assert 'local panel=frame(parent,202,39,223,233,BROWN)' in legacy
+assert 'GameTooltip:SetHyperlink("item:"..item.entry)' in legacy
+assert 'rawChanceLabel(item)' in legacy
+assert 'lootItemPresentation(item.entry)' in legacy
+assert 'Interface\\\\DialogFrame\\\\UI-DialogBox-Border' in legacy
+assert 'Interface\\\\AchievementFrame\\\\UI-Achievement-AchievementBackground' in legacy
+assert 'BackdropTemplate' in legacy
 assert 'infoBody=scrollArea(detail,13,283,412,103' in creature_view
 assert 'font(list,11,265' not in creature_view, "No reserved footer space"
 assert 'currentName.." v"' in legacy, "Dropdown symbols must be readable in client 70658"
@@ -78,6 +86,9 @@ assert 'locationChoices' in legacy and 'filteredArchiveRecords' in legacy
 assert 'catalogAllGeneration' in v21 and 'catalogAllSeen' in v21
 assert 'archiveGeneration' in v21 and 'archiveSeen' in v21
 assert 'state.archiveSupported=true' in v21
+assert 'state.lootSupported=true' in v21
+assert '"LHEAD|"' in v21 and '"LITEM|"' in v21 and '"LEND|"' in v21
+assert 'RequestCreatureLoot=requestCreatureLoot' in v21
 assert '"ARHEAD|"' in v21 and '"AREND"' in v21
 assert 'queueCatalogRequest' in v21, "Server FEC1 is rate limited"
 assert '0.27,pump' in v21, "Pace all catalogue requests above server 150ms"
@@ -90,5 +101,11 @@ assert 'WHERE account_id={} AND kind={}' in server
 assert 'if (cmd=="archive")' in server
 assert 'ARHEAD|' in server and 'AREND' in server
 assert 'first_zone is the place of first discovery' in server
+assert 'Send(p,"CAPS LOOT1")' in server
+assert 'static void LootPreview(Player* p, uint32 entry, uint32 page)' in server
+assert 'creature_template_difficulty' in server and 'creature_loot_template' in server
+assert 'ItemType=0 AND Item<>0' in server
+assert 'creature not discovered' in server
+assert 'LITEM|' in server and 'LHEAD|' in server and 'LEND|' in server
 
-print("ENCYCLOPEDIA 0.9.20 FULL HEIGHT CREATURE ARCHIVE AND SERVER CAPABILITIES CHECK PASSED")
+print("ENCYCLOPEDIA 0.9.21 LOOT PANEL / HOVER / SERVER CAPABILITIES CHECK PASSED")
