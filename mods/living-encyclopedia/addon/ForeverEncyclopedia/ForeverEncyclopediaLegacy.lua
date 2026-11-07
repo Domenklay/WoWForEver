@@ -238,6 +238,9 @@ local function tooltip(owner,name,description,more)
 end
 
 local function selectMode(nextMode)
+    if mode=="creatures" and nextMode~="creatures" and bridge.CancelArchiveLoads then
+        bridge.CancelArchiveLoads()
+    end
     mode=nextMode
     pendingBuy=false
     if mode=="collection" then bridge.RequestStatus() end
@@ -537,6 +540,16 @@ local MONSTER_TYPES = {
     {value=11,name="Тотемы"},
     {value=12,name="Спутники"},
 }
+local RU_CAPS={"А","Б","В","Г","Д","Е","Ё","Ж","З","И","Й","К","Л","М","Н","О","П","Р","С","Т","У","Ф","Х","Ц","Ч","Ш","Щ","Ъ","Ы","Ь","Э","Ю","Я"}
+local RU_LOWER={"а","б","в","г","д","е","ё","ж","з","и","й","к","л","м","н","о","п","р","с","т","у","ф","х","ц","ч","ш","щ","ъ","ы","ь","э","ю","я"}
+local function lowerName(value)
+    local result=string.lower(tostring(value or ""))
+    for i=1,#RU_CAPS do
+        result=result:gsub(RU_CAPS[i],RU_LOWER[i])
+    end
+    return result
+end
+
 local function archiveRecordName(rec)
     if not rec.known then return "???" end
     return rec.name and rec.name~="" and rec.name or ("Запись #"..tostring(rec.entry))
@@ -577,8 +590,8 @@ local function archiveRecords()
     end
     table.sort(result,function(a,b)
         if a.known~=b.known then return a.known end
-        local an=string.lower(archiveRecordName(a))
-        local bn=string.lower(archiveRecordName(b))
+        local an=lowerName(archiveRecordName(a))
+        local bn=lowerName(archiveRecordName(b))
         if an~=bn then return an<bn end
         return a.entry<b.entry
     end)
@@ -612,7 +625,7 @@ local function locationChoices(rows)
 end
 local function filteredArchiveRecords(rows)
     local result={}
-    local search=string.lower(creatureSearch)
+    local search=lowerName(creatureSearch)
     for _,rec in ipairs(rows) do
         local matches=creatureType==0 or rec.creatureType==creatureType
         if matches and creatureLocation~=0 then
@@ -625,7 +638,7 @@ local function filteredArchiveRecords(rows)
         if matches and activeMonsterFilter=="known" and not rec.known then matches=false end
         if matches and activeMonsterFilter=="unknown" and rec.known then matches=false end
         if matches and search~="" then
-            matches=string.find(string.lower(archiveRecordName(rec)),search,1,true)~=nil
+            matches=string.find(lowerName(archiveRecordName(rec)),search,1,true)~=nil
                 or string.find(tostring(rec.entry),search,1,true)~=nil
         end
         if matches then result[#result+1]=rec end
