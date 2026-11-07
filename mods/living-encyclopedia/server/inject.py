@@ -96,6 +96,7 @@ def inject(core: Path, module: Path) -> None:
         ("ForeverEncyclopediaRuntimeV5.cpp", "ForeverEncyclopediaRuntime.cpp"),
         ("ForeverEncyclopediaAbilities.cpp", "ForeverEncyclopediaAbilities.cpp"),
         ("TalentRules.h", "TalentRules.h"),
+        ("AppearanceSkins.h", "AppearanceSkins.h"),
     )
     for source_name, target_name in copies:
         source = module / "server" / source_name
@@ -133,6 +134,7 @@ def self_test() -> None:
         server.joinpath("ForeverEncyclopediaRuntimeV5.cpp").write_text("// runtime v5 test\n")
         server.joinpath("ForeverEncyclopediaAbilities.cpp").write_text("// abilities test\n")
         server.joinpath("TalentRules.h").write_text("// rules test\n")
+        server.joinpath("AppearanceSkins.h").write_text("// skins test\n")
 
         inject(core, module)
         inject(core, module)
@@ -150,6 +152,7 @@ def self_test() -> None:
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaRuntime.cpp").read_text() == "// runtime v5 test\n"
         assert (loader.parent / "ForeverEncyclopedia/ForeverEncyclopediaAbilities.cpp").read_text() == "// abilities test\n"
         assert (loader.parent / "ForeverEncyclopedia/TalentRules.h").read_text() == "// rules test\n"
+        assert (loader.parent / "ForeverEncyclopedia/AppearanceSkins.h").read_text() == "// skins test\n"
     print("ForeverEncyclopedia injector self-test passed")
 
 
