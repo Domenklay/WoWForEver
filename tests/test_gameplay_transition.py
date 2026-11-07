@@ -16,7 +16,7 @@ class TransitionTests(unittest.TestCase):
     def state(self,root):
         state,model=fixture(root)
         state['advancement']=dict(version='1.11.0',protocol=3,source_sha256='b'*64,backup=str(root/'advancement/aaaaaaaaaaaa/install.json'))
-        state['gameplay']=dict(version=1,source_sha256='c'*64,encyclopedia=t.game.BOOK_VERSION,scaling=t.game.SCALING_VERSION,backup=state['advancement']['backup'])
+        state['gameplay']=dict(version=1,source_sha256='c'*64,encyclopedia=t.game.BOOK_VERSION,scaling=t.ORIGINAL_SCALING_VERSION,backup=state['advancement']['backup'])
         t.clean.save(state)
         return state,model
 
@@ -72,13 +72,22 @@ class TransitionTests(unittest.TestCase):
             sql_calls=[]
             def sql(state,body):
                 sql_calls.append(body);return '0' if 'SUM(DATA_LENGTH' in body else ''
-            with patch.object(t.adv,'image',return_value={'Id':record['candidate']}),patch.object(t.game,'check_image'),patch.object(t.game,'wait_module'),patch.object(t.upgrade,'stop_running',return_value=['worldserver','bnetserver','web']),patch.object(t.clean,'compose'),patch.object(t.clean,'container',return_value={'State':{'Running':False}}),patch.object(t.upgrade,'snapshot',return_value={'counts':[1,2,3]}),patch.object(t,'fingerprints',return_value={'module':'1234'}),patch.object(t.upgrade,'dump_databases',return_value='a'*64),patch.object(t.clean,'sql',side_effect=sql),patch.object(t.shutil,'disk_usage',return_value=SimpleNamespace(free=10**12)):
+            with patch.object(t.adv,'image',return_value={'Id':record['candidate']}),patch.object(t.game,'check_image'),patch.object(t.game,'wait_module'),patch.object(t.adv.module_readiness,'wait'),patch.object(t.upgrade,'stop_running',return_value=['worldserver','bnetserver','web']),patch.object(t.clean,'compose'),patch.object(t.clean,'container',return_value={'State':{'Running':False}}),patch.object(t.upgrade,'snapshot',return_value={'counts':[1,2,3]}),patch.object(t,'fingerprints',return_value={'module':'1234'}),patch.object(t.upgrade,'dump_databases',return_value='a'*64),patch.object(t.clean,'sql',side_effect=sql),patch.object(t.shutil,'disk_usage',return_value=SimpleNamespace(free=10**12)):
                 t.apply(root,record)
             current=json.loads((root/'compose.private.json').read_text())
             for service in ('mysql','bnetserver','web'):self.assertEqual(current['services'][service],model['services'][service])
             old_world=copy.deepcopy(model['services']['worldserver']);old_world['image']='candidate'
+            old_world['environment'].update(
+                FOREVER_SCALING_ENABLED='1', FOREVER_SCALING_DAMAGE_GUARD='1',
+                FOREVER_SCALING_MIN_OFFSET='-3', FOREVER_SCALING_CREATURE_MAX_LEVEL='70',
+                FOREVER_DUNGEON_SCALING_ENABLED='1', FOREVER_DUNGEON_FINDER_ENABLED='1')
             self.assertEqual(current['services']['worldserver'],old_world)
             self.assertEqual(len(sql_calls),2);self.assertIn('CREATE TABLE IF NOT EXISTS forever_advancement_preferences',sql_calls[1])
             self.assertNotIn('DROP ',sql_calls[1]);self.assertNotIn('DELETE ',sql_calls[1])
-            self.assertEqual(t.clean.load_state(root/'state.json')['advancement']['version'],'1.13.0')
+            saved=t.clean.load_state(root/'state.json')
+            self.assertEqual(saved['advancement']['version'],'1.13.0')
+            self.assertEqual(saved['gameplay']['scaling'],'0.4.0')
+            self.assertEqual(saved['gameplay']['dungeonfinder'],'0.2.0')
+            self.assertTrue(saved['gameplay']['dungeon_solo_enabled'])
+            self.assertTrue(saved['gameplay']['dungeon_finder_enabled'])
             self.assertFalse((root/t.MARKER).exists())
