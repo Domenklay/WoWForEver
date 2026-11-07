@@ -505,49 +505,64 @@ end
 
 local function drawCreatureView()
     local base=frame(page,13,63,874,444,DEEP)
-    drawArchiveHeading(base,"Архив существ","Показываются только записи, доступные через серверный каталог.")
+    drawArchiveHeading(base,"Архив существ","Изученные существа. Выберите запись для 3D-просмотра и сведений.")
     local list=frame(base,16,82,465,292,BROWN)
     local detail=frame(base,496,82,360,292,BROWN)
     if not state.catalogLoaded then
-        label(list,18,18,420,"Получаю записи с сервера…","GameFontHighlight",PALE)
+        label(list,18,18,416,"Синхронизация каталога…","GameFontHighlight",PALE)
         return
     end
-    for i,rec in ipairs(state.catalog or {}) do
-        if i>7 then break end
-        local name=rec.known and (rec.name~="" and rec.name or "Запись "..rec.entry) or "???"
-        local b=button(list,10,8+(i-1)*39,445,34,name,i==selectedCreature,function()
+    local records=state.catalog or {}
+    selectedCreature=math.max(1,math.min(selectedCreature,#records))
+    local rows=scrollArea(list,9,8,445,277,"creature-list",math.max(277,#records*43+10))
+    for i,rec in ipairs(records) do
+        local name=rec.known and (rec.name~="" and rec.name or "Запись #"..rec.entry) or "???"
+        local b=button(rows,3,4+(i-1)*43,410,38,"",i==selectedCreature,function()
             selectedCreature=i
             if rec.known then bridge.RequestCreatureInfo(rec.entry) end
             _G.ForeverEncyclopediaLegacy.Refresh("view")
         end)
-        local badge=font(b,333,9,105,rec.known and "Встречено" or "Неизвестно",
-                         "GameFontNormalSmall",rec.known and GREEN or MUTED,"RIGHT")
+        local title=font(b,9,9,265,name,"GameFontNormalSmall",rec.known and PALE or MUTED)
+        if title.SetMaxLines then title:SetMaxLines(1) end
+        font(b,280,9,123,rec.known and "Встречено" or "Неизвестно",
+             "GameFontNormalSmall",rec.known and GREEN or MUTED,"RIGHT")
     end
-    local rec=state.catalog[selectedCreature]
+    local rec=records[selectedCreature]
     if rec then
         local info=state.creatureInfo[rec.entry] or {}
-        label(detail,16,18,326,rec.known and (rec.name or "Запись") or "Неизвестное существо",
-              "GameFontHighlight",PALE)
-        label(detail,16,61,326,rec.known and "Открыто в бестиарии" or "Не встречено",
-              "GameFontNormal",rec.known and GREEN or MUTED)
-        label(detail,16,93,326,rec.known and ("Номер записи: "..rec.entry) or "Сведения скрыты до открытия",
-              "GameFontNormalSmall",MUTED)
-        if rec.known and state.infoLevel>=3 then
-            label(detail,16,127,326,"Уровни: "..(info.minLevel or "?").."–"..(info.maxLevel or "?"),
-                  "GameFontNormalSmall",MUTED)
+        local name=rec.known and (rec.name or "Запись") or "Неизвестное существо"
+        local title=label(detail,13,8,333,name,"GameFontHighlight",PALE,"CENTER")
+        if rec.known then
+            modelPreview(detail,12,37,336,164,rec.entry,"creature")
         else
-            label(detail,16,127,326,"Дополнительные сведения открываются талантами Познания.",
-                  "GameFontNormalSmall",MUTED)
+            modelPreview(detail,12,37,336,164,nil,"creature")
         end
+        local infoBody=scrollArea(detail,12,211,336,73,"creature-info",252)
+        local y=paragraph(infoBody,3,6,299,rec.known and "Открыто в бестиарии" or
+            "Ещё не встречено","GameFontNormalSmall",rec.known and GREEN or MUTED)
+        y=paragraph(infoBody,3,y,299,rec.known and ("Номер записи: "..rec.entry) or
+            "Дополнительные сведения скрыты.","GameFontNormalSmall",MUTED)
+        if rec.known then
+            if state.infoLevel>=3 then
+                y=paragraph(infoBody,3,y,299,"Уровни: "..tostring(info.minLevel or "?")..
+                    "–"..tostring(info.maxLevel or "?"),"GameFontNormalSmall",PALE)
+                y=paragraph(infoBody,3,y,299,"Семейство: "..tostring(info.family or "?"),
+                    "GameFontNormalSmall",MUTED)
+            else
+                y=paragraph(infoBody,3,y,299,"Подробности открываются талантами Познания.",
+                    "GameFontNormalSmall",MUTED)
+            end
+        end
+        infoBody:SetHeight(math.max(73,y+8))
     else
-        label(detail,16,16,326,"Пока нет записей на этой странице.","GameFontNormal",MUTED)
+        label(detail,16,17,324,"На этой странице пока нет записей.","GameFontNormal",MUTED)
     end
-    label(base,286,394,270,"Страница "..(state.catalogPage or 1).." из "..(state.catalogPages or 1),
-          "GameFontNormalSmall",MUTED,"CENTER")
-    local prev=button(base,575,382,125,33,"Назад",false,function()
+    label(base,281,391,279,"Страница "..(state.catalogPage or 1).." из "..
+        (state.catalogPages or 1),"GameFontNormalSmall",MUTED,"CENTER")
+    local prev=button(base,581,382,120,33,"Назад",false,function()
         if state.catalogPage>1 then bridge.RequestCatalog(state.catalogPage-1) end
     end)
-    local nextPage=button(base,709,382,125,33,"Далее",false,function()
+    local nextPage=button(base,712,382,120,33,"Далее",false,function()
         if state.catalogPage<state.catalogPages then bridge.RequestCatalog(state.catalogPage+1) end
     end)
     if state.catalogPage<=1 then prev:Disable() end
