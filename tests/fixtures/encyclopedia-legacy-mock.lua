@@ -257,6 +257,27 @@ local otherZoneModel=visibleModels()
 assert(otherZoneModel[#otherZoneModel].modelId==500,"Wrong model after location filtering")
 assert(click("Зона 88  ▾"),"Location selection should show chosen zone")
 assert(click("Все доступные зоны"),"Unable to reset zone filter")
+-- Long archives must be virtualised, not create a button per monster.
+for id=10001,11001 do
+    state.archiveAll[#state.archiveAll+1]={
+        entry=id,known=true,name="Бестиарий "..id,creatureType=1,
+        classification=0,map=1,zone=7
+    }
+end
+local previousFrameCount=#Frames
+api.Refresh("archive")
+assert(#Frames-previousFrameCount<140,"Archive renders too many GUI rows for 1000 discoveries")
+local monsterScroller
+for _,f in ipairs(Frames) do
+    if f.type=="ScrollFrame" and currentlyVisible(f) and f.scrollChild
+        and f.scrollChild:GetHeight()>20000 then
+        monsterScroller=f
+    end
+end
+assert(monsterScroller and monsterScroller.scripts.OnMouseWheel,
+       "Full archive needs a virtualized wheel-scrollable monster list")
+monsterScroller.scripts.OnMouseWheel(monsterScroller,-1)
+assert(monsterScroller:GetVerticalScroll()>0)
 assert(click("Назад к коллекции"),"The in-window archive back button is missing")
 assert(click("Локации"),"Zone category missing")
 assert(calls.zones>=1)
