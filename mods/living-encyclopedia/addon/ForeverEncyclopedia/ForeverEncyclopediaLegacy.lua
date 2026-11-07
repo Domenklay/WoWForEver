@@ -1097,6 +1097,11 @@ _G.ForeverEncyclopediaLegacy = {
             end
         else
             if kind=="talents" then pendingBuy=false end
+            if kind=="zone" and mode=="creatures" and bridge.RequestFullCatalog then
+                -- Refresh the full current-zone list after a zone transition.
+                bridge.RequestFullCatalog()
+                creatureLocation=0
+            end
             render()
         end
     end,
