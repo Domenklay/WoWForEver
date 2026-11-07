@@ -32,7 +32,7 @@ if len(appender) >= 5 and appender[3] == 'Server.log' and appender[4] == 'w':
             status = 'current-process-file'
             with path.open(errors='replace') as stream:
                 for line in stream:
-                    if re.search(r'Forever(?:Advancement|Encyclopedia|Scaling)',line): lines.append(line.rstrip()[:1024])
+                    if re.search(r'Forever(?:Advancement|Encyclopedia|Scaling|DungeonFinder)',line): lines.append(line.rstrip()[:1024])
 else: status = 'not-truncate-mode'
 print(json.dumps(dict(settings=settings,serverLogStatus=status,lines=list(lines))))
 '''
@@ -54,7 +54,7 @@ def snapshot(clean, state, item, *, allow_stopped=False):
     console = clean.run(['docker','logs','--since',item['State']['StartedAt'],'--tail','5000',item['Id']],
                         capture=True, merge_log_streams=True)
     result['lines'] = [line[:1024] for line in console.splitlines()
-                       if re.search(r'Forever(?:Advancement|Encyclopedia|Scaling)',line)][-256:]
+                       if re.search(r'Forever(?:Advancement|Encyclopedia|Scaling|DungeonFinder)',line)][-256:]
     try:
         if not item['State']['Running']: raise RuntimeError('Cannot exec a stopped container')
         raw = clean.compose(state,'exec','-T','worldserver','python3','-c',PROBE,
