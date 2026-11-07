@@ -124,6 +124,7 @@ static void Snapshot(Player* p)
     Send(p, Trinity::StringFormat("STATE {} {} {} {}", c.total,c.creatures,c.items,c.zones));
     Send(p, Trinity::StringFormat("KNOW {} {} {} {}", v.total,v.spent,available,v.discoveries));
     Send(p, Trinity::StringFormat("CURRENT {} {} {}", p->GetMapId(),p->GetZoneId(),p->GetAreaId()));
+    Send(p,"CAPS ARCHIVE1"); // optional, older clients ignore this safe extra status line
     Send(p, Trinity::StringFormat("BOOK {} {} 0 0 0 0", std::min(LoadMana(p),BaseMaxMana),BaseMaxMana));
     Send(p,"END");
 }
@@ -211,6 +212,52 @@ static void Catalog(Player* p,uint32 page,uint32 knownFilter,uint32 typeFilter,i
     Send(p,"CATEND");
 }
 
+
+/*
+ * Account-wide known creature archive, independent of the player's map.
+ * The original "catalog" still includes discovered and undiscovered entries
+ * in the CURRENT zone. This archive exposes only the account's own discoveries.
+ * first_zone is the place of first discovery, not a claim about all habitats.
+ * Bounded paging keeps addon messages below transport limits and DB reads small.
+ */
+static void Archive(Player* p, uint32 page)
+{
+    uint32 account = Account(p);
+    if (!account) { Error(p,"no account"); return; }
+    if (!page || page > 100000) { Error(p,"invalid archive page"); return; }
+
+    uint32 total = 0;
+    if (QueryResult rows = CharacterDatabase.PQuery(
+            "SELECT COUNT(*) FROM forever_encyclopedia_discovery WHERE account_id={} AND kind={}",
+            account, uint32(KIND_CREATURE)))
+        total = rows->Fetch()[0].GetUInt32();
+
+    uint32 pages = std::max<uint32>(1,(total + CatalogPageSize - 1)/CatalogPageSize);
+    page = std::min(page,pages);
+    Send(p,Trinity::StringFormat("ARHEAD|{}|{}|{}",page,pages,total));
+
+    uint32 offset = (page-1)*CatalogPageSize;
+    if (QueryResult rows = CharacterDatabase.PQuery(
+            "SELECT entry,first_map,first_zone FROM forever_encyclopedia_discovery "
+            "WHERE account_id={} AND kind={} ORDER BY entry LIMIT {},{}",
+            account,uint32(KIND_CREATURE),offset,CatalogPageSize))
+    {
+        do
+        {
+            Field* f=rows->Fetch();
+            uint32 entry=f[0].GetUInt32();
+            uint32 map=f[1].GetUInt32(),zone=f[2].GetUInt32();
+            CreatureTemplate const* t=sObjectMgr->GetCreatureTemplate(entry);
+            uint32 type=t?t->type:0,classification=t?t->Classification:0;
+            // Do not send fake names or records from other accounts.
+            std::string name=t?ProtocolText(t->Name):std::string();
+            Send(p,Trinity::StringFormat("AR|{}|{}|{}|{}|{}|{}",
+                entry,type,classification,name,map,zone));
+        } while (rows->NextRow());
+    }
+    Send(p,"AREND");
+}
+
 static void Request(Player* p,std::string const& text)
 {
     if (!Ready) { Error(p,"module disabled"); return; } if (text.size()>96) return;
@@ -218,6 +265,12 @@ static void Request(Player* p,std::string const& text)
     std::istringstream in(text); std::string cmd; in>>cmd;
     if (cmd.empty() || cmd=="status") { Snapshot(p); return; }
     if (cmd=="recent") { uint32 kind=0; std::string extra; if (!(in>>kind)||(in>>extra)) { Error(p,"invalid recent request"); return; } Recent(p,kind); return; }
+    if (cmd=="archive")
+    {
+        uint32 page=0; std::string extra;
+        if (!(in>>page) || (in>>extra)) { Error(p,"invalid archive request"); return; }
+        Archive(p,page); return;
+    }
     if (cmd=="catalog")
     {
         uint32 page=1,known=0,type=0; int32 cls=-1; std::string extra;
