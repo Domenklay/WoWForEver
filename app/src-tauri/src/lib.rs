@@ -1,5 +1,6 @@
 mod api;
 mod addon;
+mod addon_catalog;
 mod config;
 mod packages;
 mod client;
@@ -213,6 +214,8 @@ fn package_guard(state: &AppState) -> Result<PackageGuard<'_>,String> {
     #[allow(unreachable_code)] Ok(guard)
 }
 #[tauri::command]
+async fn addon_channels(refresh:bool)->Result<serde_json::Value,String>{addon::channel_summary(&config::config_dir().join("addon-cache"),refresh).await}
+#[tauri::command]
 fn content_catalog() -> serde_json::Value {
     serde_json::from_str(include_str!("../../../content/packages/catalog.json")).expect("embedded content catalog")
 }
@@ -230,6 +233,7 @@ async fn inspect_content(game_dir: String,package_dir: String) -> Result<package
 }
 #[tauri::command]
 async fn install_content(state:State<'_,AppState>,game_dir:String,package_dir:String) -> Result<packages::Status,String> {
+    state.settings.lock().unwrap().allow_client_work("install_content")?;
     official::allow_file_operation(state.settings.lock().unwrap().protect_client_files, "install_content")?;
     let _guard=package_guard(&state)?;
     tokio::task::spawn_blocking(move|| {
@@ -240,6 +244,7 @@ async fn install_content(state:State<'_,AppState>,game_dir:String,package_dir:St
 }
 #[tauri::command]
 async fn rollback_content(state:State<'_,AppState>,game_dir:String) -> Result<packages::Status,String> {
+    state.settings.lock().unwrap().allow_client_work("rollback_content")?;
     official::allow_file_operation(state.settings.lock().unwrap().protect_client_files, "rollback_content")?;
     let _guard=package_guard(&state)?;
     tokio::task::spawn_blocking(move||packages::rollback(std::path::Path::new(&game_dir)).map_err(package_error))
@@ -253,6 +258,7 @@ fn cancel_client_work(state: State<AppState>) {
 
 #[tauri::command]
 async fn native_client_work(app:AppHandle,state:State<'_,AppState>,request:native::Request)->Result<serde_json::Value,String>{
+    state.settings.lock().unwrap().allow_client_work(&request.action)?;
     if state.playing.swap(true,Ordering::SeqCst){return Err(t("already_running").into());}
     let _guard=PackageGuard(&state.playing);
     #[cfg(not(target_os="macos"))]
@@ -275,6 +281,7 @@ fn inspect_client_locations(game_dir:String,reference_dir:String)->Result<client
 
 #[tauri::command]
 async fn client_work(app: AppHandle, state: State<'_, AppState>, request: client::Request) -> Result<client::Report, client::Error> {
+    state.settings.lock().unwrap().allow_client_work(&request.action).map_err(|detail|client::Error{code:"updates_paused",detail})?;
     official::allow_file_operation(state.settings.lock().unwrap().protect_client_files, &request.action)
         .map_err(|detail| client::Error { code:"protected", detail })?;
     if state.playing.swap(true, Ordering::SeqCst) { return Err(client::Error { code:"busy", detail:String::new() }); }
@@ -310,6 +317,15 @@ async fn play(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> 
     result
 }
 
+fn game_account_for_login(email:&str, login:&api::LauncherLogin)->Result<String,String>{
+    if !email.eq_ignore_ascii_case(&login.email) || login.login_ticket.is_empty() || login.login_ticket.len()>4096 || login.login_ticket.chars().any(|c|c.is_control()) {
+        return Err(t("login_account_mismatch").into());
+    }
+    let account=login.game_accounts.first().ok_or_else(||t("login_no_game_account").to_string())?.name.clone();
+    if account.is_empty()||account.len()>128||account.chars().any(|c|c.is_control()||matches!(c,'"'|'\\')){return Err(t("login_no_game_account").into());}
+    Ok(account)
+}
+
 async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
     if !settings.game_found() {
         return Err(t("game_not_found").into());
@@ -333,6 +349,9 @@ async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
     let session = Session::load().ok_or(t("login_first"))?;
     emit(app, "step", t("step_connecting"));
     let api = api::Api::new(&settings.server).await?;
+
+    emit(app, "step", t("step_preparing"));
+    addon::ensure(std::path::Path::new(&settings.game_dir), settings.addon_updates_enabled, settings.addon_development_mode, &settings.addon_channel, settings.server.client_build, &config::config_dir().join("addon-cache"), |message| emit(app, "log", message)).await?;
     let login = match api.launcher_login(&session.token).await {
         Err(e) if e == "expired" => {
             Session::clear();
@@ -341,19 +360,17 @@ async fn start(app: &AppHandle, settings: Settings) -> Result<(), String> {
         other => other?,
     };
 
-    emit(app, "step", t("step_preparing"));
-    addon::ensure(std::path::Path::new(&settings.game_dir), settings.addon_development_mode, |message| emit(app, "log", message)).await?;
+    let account = game_account_for_login(&session.email, &login)?;
     let s = settings.clone();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         game::write_wtf(&s)?;
         #[cfg(target_os = "linux")]
         system::install_ca_in_prefix(&s)?;
-        let account = login.game_accounts.first().map(|a| a.name.clone()).unwrap_or_else(|| "WoW1".into());
         let portal = format!("{}:{}", s.server.portal, s.server.bnet_port);
         #[cfg(not(target_os = "macos"))]
         if s.automatic_game_login() { game::write_launch_options(&s, &portal, &login.login_ticket, &account)?; }
         #[cfg(target_os = "macos")]
-        macos::write_launch_options(&portal, &login.login_ticket, &account)?;
+        if s.automatic_game_login() { macos::write_launch_options(&portal, &login.login_ticket, &account)?; }
         Ok(())
     })
     .await
@@ -463,9 +480,17 @@ pub fn run() {
         .manage(AppState { settings: Mutex::new(Settings::load()), playing: AtomicBool::new(false), client_cancel: std::sync::Arc::new(AtomicBool::new(false)) })
         .invoke_handler(tauri::generate_handler![
             get_state, save_settings, set_language, detect_locale, inspect_official_client, login, logout, server_status, news, checks, repair, play,
-            content_catalog, content_status, inspect_content, install_content, rollback_content
+            addon_channels, content_catalog, content_status, inspect_content, install_content, rollback_content
             , client_work, native_client_work, cancel_client_work, inspect_client_locations
         ])
         .run(tauri::generate_context!())
         .expect("error while running Forever Launcher");
+}
+
+#[cfg(test)]mod game_login_tests {
+ use super::*;
+ fn reply(email:&str,accounts:&[&str])->api::LauncherLogin{api::LauncherLogin{email:email.into(),login_ticket:"TC-synthetic-ticket".into(),game_accounts:accounts.iter().map(|n|api::GameAccount{name:(*n).into()}).collect()}}
+ #[test]fn automatic_login_uses_the_authenticated_users_game_account(){let r=reply("player@example.test",&["WoW1"]);assert_eq!(game_account_for_login("PLAYER@example.test",&r).unwrap(),"WoW1");}
+ #[test]fn stale_or_wrong_account_and_missing_game_account_cannot_fall_back_to_wow1(){assert!(game_account_for_login("other@example.test",&reply("player@example.test",&["WoW1"])).is_err());assert!(game_account_for_login("player@example.test",&reply("player@example.test",&[])).is_err());let mut r=reply("player@example.test",&["WoW1"]);r.login_ticket.clear();assert!(game_account_for_login("player@example.test",&r).is_err());}
+ #[test]fn ticket_refresh_happens_after_potentially_long_addon_updates(){let source=include_str!("lib.rs");let start=source.split("async fn start(app:").nth(1).unwrap().split("/// macOS:").next().unwrap();assert!(start.find("addon::ensure(").unwrap()<start.find("api.launcher_login(").unwrap());}
 }

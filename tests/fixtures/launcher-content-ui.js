@@ -19,6 +19,7 @@ let officialReply={gameDir:'E:/Battle.net/World of Warcraft/_forever_',executabl
 const state={settings:{gameDir:'E:/client/_classic_beta_',language:'en',locale:'ruRU',server:{website:'',name:'Forever'}},gameFound:true,gameVersion:'1.60.1.70532',email:null,platform:'windows',version:'test',locales:['ruRU'],runners:[],playing:false};
 async function invoke(cmd,args){
   calls.push({cmd,args});
+  if(cmd==='addon_channels'){const c=JSON.parse(fs.readFileSync(path.join(root,'addons/channels.json'),'utf8'));return {revision:c.revision,channels:c.channels};}
   if(cmd==='get_state')return structuredClone(state);
   if(cmd==='inspect_official_client')return structuredClone(officialReply);
   if(cmd==='server_status')return {online:true,login:true};
@@ -187,5 +188,38 @@ vm.runInContext(fs.readFileSync(path.join(root,'app/ui/app.js'),'utf8'),context)
   await get('save-settings').handlers.click();
   assert.equal(state.settings.addonDevelopmentMode,false);
   assert.equal(get('addon-dev-notice').hidden,true);
+  // Release-set selection, pause controls and ticket login are independent and persist.
+  vm.runInContext('openSettings()',context);
+  assert.equal(get('s-auto-game-login').checked,true);
+  assert.equal(get('s-addon-updates').checked,true);
+  assert.equal(get('s-client-updates').checked,true);
+  get('s-addon-channel').value='testing';
+  get('s-client-updates').checked=false;
+  await get('save-settings').handlers.click();
+  assert.equal(state.settings.addonChannel,'testing');
+  assert.equal(state.settings.clientUpdatesEnabled,false);
+  assert.equal(state.settings.addonUpdatesEnabled,true);
+  assert.match(get('addon-channel-notice').textContent,/testing/);
+  const pausedCalls=calls.filter(c=>['native_client_work','client_work','install_content','rollback_content'].includes(c.cmd)).length;
+  await get('n-download').handlers.click();await get('n-repair').handlers.click();
+  await get('w-repair').handlers.click();await get('content-install').handlers.click();
+  assert.equal(calls.filter(c=>['native_client_work','client_work','install_content','rollback_content'].includes(c.cmd)).length,pausedCalls);
+  assert.equal(get('n-download').disabled,true);assert.equal(get('n-repair').disabled,true);
+  vm.runInContext('openSettings()',context);
+  assert.equal(get('s-addon-channel').value,'testing');
+  get('s-addon-updates').checked=false;await get('s-addon-updates').handlers.change();
+  assert.equal(get('s-addon-channel').disabled,true);
+  get('s-auto-game-login').checked=false;
+  await get('save-settings').handlers.click();
+  assert.equal(state.settings.addonUpdatesEnabled,false);assert.equal(state.settings.autoGameLogin,false);
+  assert.match(get('addon-channel-notice').textContent,/disabled/);
+  vm.runInContext('openSettings()',context);
+  get('s-addon-updates').checked=true;get('s-addon-channel').value='stable';
+  await get('cancel-settings').handlers.click();
+  assert.equal(state.settings.addonUpdatesEnabled,false);assert.equal(state.settings.addonChannel,'testing');
+  await get('addon-channel-refresh').handlers.click();
+  assert.match(get('addon-channel-details').textContent,/ForeverAscension/);
+  assert.match(get('addon-channel-details').textContent,/ForeverEncyclopedia/);
+  vm.runInContext(`for(const key of ['addonStable','addonTesting','addonChannel','addonUpdates','clientUpdates','clientUpdatesHint','autoGameLogin','autoGameLoginHint'])for(const locale of Object.keys(TEXTS))if(!TEXTS[locale][key])throw Error(locale+':'+key)`,context);
   console.log('Launcher UI: five languages, AddOn development save/cancel, official EXE mismatch, protected installation, legacy workshop and busy-game gates passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});

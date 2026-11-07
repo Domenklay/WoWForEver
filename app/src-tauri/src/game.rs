@@ -72,9 +72,11 @@ mod tests {
     }
     #[test]
     #[cfg(not(target_os = "macos"))]
-    fn wowf_uses_explicit_config_without_beta_registry_login() {
+    fn wowf_uses_ticket_login_with_an_explicit_config_and_can_opt_out() {
         let settings = Settings { game_dir: "missing-client/_forever_".into(), ..Default::default() };
-        assert_eq!(launch_args(&settings), vec!["-config", WTF_NAME]);
+        assert_eq!(launch_args(&settings), vec!["-launcherlogin", "-config", WTF_NAME]);
+        let manual = Settings { auto_game_login:false, ..settings };
+        assert_eq!(launch_args(&manual), vec!["-config", WTF_NAME]);
     }
 
     #[test]

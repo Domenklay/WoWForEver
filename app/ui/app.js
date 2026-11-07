@@ -1,3 +1,4 @@
+let addonChannelCatalog = null;
 // Forever Launcher UI. Everything privileged happens in Rust (src-tauri); this file only calls its commands.
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -48,6 +49,10 @@ function setLanguage(setting) {
 
 async function refresh() {
   state = await invoke('get_state');
+  state.settings.addonChannel ||= 'stable';
+  state.settings.addonUpdatesEnabled ??= true;
+  state.settings.clientUpdatesEnabled ??= true;
+  state.settings.autoGameLogin ??= true;
   state.settings.workshop ||= { referenceDir: '', manifestSource: '' };
   setLanguage(state.settings.language);
   $('realm-field').textContent = t('realm', { name: state.settings.server.name || 'Forever' });
@@ -60,7 +65,8 @@ async function refresh() {
   const actualVersion = state.officialClient?.version || state.gameVersion;
   $('game-field').textContent = `WoW Forever${actualVersion ? ` ${actualVersion}` : ''}`;
   $('game-login-mode').textContent = t(state.gameAutoLogin ? 'automaticGameLogin' : 'manualGameLogin');
-  $('addon-dev-notice').hidden = !state.settings.addonDevelopmentMode;
+  $('addon-dev-notice').hidden = !state.settings.addonDevelopmentMode || !state.settings.addonUpdatesEnabled;
+  $('addon-channel-notice').textContent = t(!state.settings.addonUpdatesEnabled ? 'addonUpdatesPaused' : state.settings.addonDevelopmentMode ? 'addonDevActive' : state.settings.addonChannel === 'testing' ? 'addonTestingActive' : 'addonStableActive');
   if (logged) {
     $('account-email').textContent = state.email;
     $('avatar').textContent = state.email[0].toUpperCase();
@@ -77,6 +83,7 @@ function updatePlayButton() {
   play.textContent = workshopBusy ? t('working') : state.playing ? t('inGame') : t('play');
   updateContentActions();
   updateWorkshopActions();
+  for (const id of ['n-download','n-repair']) $(id).disabled = nativeBusy || workshopBusy || contentBusy || !!state.playing || state.settings.clientUpdatesEnabled === false;
   if (!state.gameFound && !state.playing) setStep(t('chooseGameDir'), 'err');
   else if (incompatible && !state.playing) setStep(officialMessage(state.officialClient), 'err');
   for (const id of ['quick-download', 'quick-repair']) $(id).hidden = false;
@@ -218,6 +225,14 @@ function fillSettings() {
   draft = structuredClone(state.settings);
   $('s-game-dir').value = draft.gameDir;
   $('s-addon-development').checked = !!draft.addonDevelopmentMode;
+  $('s-auto-game-login').checked = draft.autoGameLogin !== false;
+  $('s-client-updates').checked = draft.clientUpdatesEnabled !== false;
+  $('s-addon-updates').checked = draft.addonUpdatesEnabled !== false;
+  $('s-addon-channel').replaceChildren();
+  option($('s-addon-channel'), 'stable', t('addonStable'));
+  option($('s-addon-channel'), 'testing', t('addonTesting'));
+  $('s-addon-channel').value = draft.addonChannel || 'stable';
+  updateAddonChannelControls(); loadAddonChannels(false);
   const loc = $('s-locale');
   loc.replaceChildren();
   state.locales.forEach((l) => option(loc, l, l));
@@ -312,8 +327,8 @@ function updateContentActions() {
   const busy = nativeBusy || contentBusy || !!state?.playing;
   const gameDir = $('s-game-dir').value.trim();
   $('content-choose').disabled = busy || !gameDir;
-  $('content-install').disabled = busy || !!state?.settings.protectClientFiles || !contentSelection?.preview.ready || contentSelection.gameDir !== gameDir;
-  $('content-rollback').disabled = busy || !!state?.settings.protectClientFiles || !contentState?.installed;
+  $('content-install').disabled = busy || state?.settings.clientUpdatesEnabled === false || !!state?.settings.protectClientFiles || !contentSelection?.preview.ready || contentSelection.gameDir !== gameDir;
+  $('content-rollback').disabled = busy || state?.settings.clientUpdatesEnabled === false || !!state?.settings.protectClientFiles || !contentState?.installed;
 }
 function resetContent() {
   contentSelection = null; contentState = null;
@@ -360,6 +375,7 @@ $('content-choose').addEventListener('click', async () => {
   finally { contentWorking(false); }
 });
 $('content-install').addEventListener('click', async () => {
+  if (state?.settings.clientUpdatesEnabled === false) { toast(t('clientUpdatesPaused')); return; }
   if (state?.settings.protectClientFiles) { toast(t('official_protected')); return; }
   if (!contentSelection?.preview.ready || contentSelection.gameDir !== $('s-game-dir').value.trim()) return;
   const selected = contentSelection;
@@ -371,6 +387,7 @@ $('content-install').addEventListener('click', async () => {
   finally { contentWorking(false); await refresh(); }
 });
 $('content-rollback').addEventListener('click', async () => {
+  if (state?.settings.clientUpdatesEnabled === false) { toast(t('clientUpdatesPaused')); return; }
   if (state?.settings.protectClientFiles) { toast(t('official_protected')); return; }
   contentWorking(true);
   try {
@@ -415,6 +432,10 @@ function settingsFromForm() {
   settings.locale = $('s-locale').value;
   settings.language = $('s-language').value;
   settings.addonDevelopmentMode = $('s-addon-development').checked;
+  settings.autoGameLogin = $('s-auto-game-login').checked;
+  settings.clientUpdatesEnabled = $('s-client-updates').checked;
+  settings.addonUpdatesEnabled = $('s-addon-updates').checked;
+  settings.addonChannel = $('s-addon-channel').value || 'stable';
   if (state.platform === 'linux') {
     settings.linux.runner = $('s-runner').value;
     settings.linux.prefix = $('s-prefix').value.trim();
@@ -548,7 +569,7 @@ function updateWorkshopActions() {
   for (const id of ['w-download','w-verify','w-repair','w-recover']) $(id).disabled = busy;
   for (const id of ['w-download','w-repair','w-recover']) {
     $(id).hidden = !!state?.settings.protectClientFiles;
-    if (state?.settings.protectClientFiles) $(id).disabled = true;
+    if (state?.settings.protectClientFiles || state?.settings.clientUpdatesEnabled === false) $(id).disabled = true;
   }
   $('w-blocked').hidden = !(state?.playing || (contentBusy && !workshopBusy));
   $('w-blocked').textContent = t(state?.playing ? 'wErr_running' : 'wErr_busy');
@@ -566,6 +587,7 @@ function workshopWorking(value) {
   $('w-status-panel').dataset.busy = String(value);
 }
 async function runWorkshop(action) {
+  if (action !== 'verify' && state?.settings.clientUpdatesEnabled === false) { toast(t('clientUpdatesPaused')); return; }
   if (state?.settings.protectClientFiles && action !== 'verify') {
     toast(t('official_protected')); return;
   }
@@ -675,6 +697,7 @@ function nativeWorking(value) {
   updatePlayButton();
 }
 async function runNative(action) {
+  if (action !== 'verify' && state?.settings.clientUpdatesEnabled === false) { toast(t('clientUpdatesPaused')); return; }
   if (nativeBusy || workshopBusy || contentBusy || state?.playing) { toast(t('wErr_busy')); return; }
   const directory = $('n-dir').value.trim();
   if (!directory) { $('n-status').textContent = t('nNeedFolder'); return; }
@@ -748,3 +771,27 @@ rotateBackground();
   if (state.email) refreshChecks();
   setInterval(refreshStatus, 20000);
 })();
+
+// The version list is public metadata; refreshing it never installs an AddOn.
+function updateAddonChannelControls() {
+  $('s-addon-channel').disabled = !$('s-addon-updates').checked || $('s-addon-development').checked;
+  if (!addonChannelCatalog) return;
+  const lines = [t('addonCatalogRevision', { revision: addonChannelCatalog.revision })];
+  for (const key of ['stable','testing']) {
+    const set = addonChannelCatalog.channels[key];
+    if (set) lines.push(`${t(key === 'testing' ? 'addonTesting' : 'addonStable')}: ${set.release}`, ...set.addons.map(a => `  ${a.name} ${a.version}`));
+  }
+  $('addon-channel-details').textContent = lines.join('\n');
+}
+async function loadAddonChannels(refresh) {
+  $('addon-channel-refresh').disabled = true;
+  try {
+    addonChannelCatalog = await invoke('addon_channels', { refresh });
+    updateAddonChannelControls();
+  } catch (e) { $('addon-channel-details').textContent = t('addonCatalogUnavailable'); }
+  finally { $('addon-channel-refresh').disabled = false; }
+}
+$('s-addon-updates').addEventListener('change', updateAddonChannelControls);
+$('s-addon-development').addEventListener('change', updateAddonChannelControls);
+$('s-addon-channel').addEventListener('change', updateAddonChannelControls);
+$('addon-channel-refresh').addEventListener('click', () => loadAddonChannels(true));

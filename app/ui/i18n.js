@@ -1347,3 +1347,113 @@ Object.assign(TEXTS.pt, {
   "addonDevActive": "Desenvolvimento de addons ativado — as alterações locais são preservadas.",
   "addonDevHint": "As pastas existentes de Ascension e Encyclopedia permanecem intactas. As ausentes são instaladas automaticamente. Desative para voltar às versões publicadas; as pastas substituídas são guardadas em backup."
 });
+
+Object.assign(TEXTS.ru, {
+  "updateSettings": "Обновления игры",
+  "clientUpdates": "Разрешить загрузку и исправление WoW",
+  "clientUpdatesHint": "Управляет операциями Multi с файлами игры. Проверка без изменений и запуск доступны. Обновления Battle.net настраиваются отдельно.",
+  "clientUpdatesPaused": "Загрузка и изменение файлов WoW отключены в настройках.",
+  "addonUpdates": "Обновлять аддоны перед запуском",
+  "addonChannel": "Набор аддонов",
+  "addonStable": "Утверждённые",
+  "addonTesting": "Тестовые",
+  "addonChannelHint": "Комплект устанавливается целиком. Прежние папки сохраняются в резервной копии. Выбор применяется при следующем запуске.",
+  "addonChannelRefresh": "Обновить список версий",
+  "addonCatalogRevision": "Список версий: {revision}",
+  "addonCatalogUnavailable": "Не удалось получить список версий. Подробности появятся в журнале запуска.",
+  "addonUpdatesPaused": "Обновления аддонов отключены.",
+  "addonTestingActive": "Аддоны: тестовый комплект.",
+  "addonStableActive": "Аддоны: утверждённый комплект.",
+  "wErr_updates_paused": "Загрузка и изменение файлов WoW отключены в настройках.",
+  "addonDevHint": "Сохранять существующие локальные папки без проверки версий. Отсутствующие устанавливаются из выбранного комплекта. Для установки утверждённого или тестового комплекта целиком выключите разработку."
+});
+
+Object.assign(TEXTS.en, {
+  "updateSettings": "Game updates",
+  "clientUpdates": "Allow WoW downloads and repairs",
+  "clientUpdatesHint": "Controls Multi file operations. Read-only checks and launching remain available. Battle.net updates are configured separately.",
+  "clientUpdatesPaused": "WoW downloads and file changes are disabled in Settings.",
+  "addonUpdates": "Update AddOns before launching",
+  "addonChannel": "AddOn release set",
+  "addonStable": "Approved",
+  "addonTesting": "Testing",
+  "addonChannelHint": "The complete set is installed together. Previous folders are backed up. The selection applies at the next launch.",
+  "addonChannelRefresh": "Refresh version list",
+  "addonCatalogRevision": "Version list: {revision}",
+  "addonCatalogUnavailable": "Could not read the version list. Check the launch log for details.",
+  "addonUpdatesPaused": "AddOn updates are disabled.",
+  "addonTestingActive": "AddOns: testing set.",
+  "addonStableActive": "AddOns: approved set.",
+  "wErr_updates_paused": "WoW downloads and file changes are disabled in Settings.",
+  "addonDevHint": "Preserve existing local folders without version checks. Missing folders come from the selected set. Turn development off to install the complete approved or testing set."
+});
+
+Object.assign(TEXTS.fr, {
+  "updateSettings": "Mises à jour du jeu",
+  "clientUpdates": "Autoriser les téléchargements et réparations de WoW",
+  "clientUpdatesHint": "Contrôle les opérations de Multi sur les fichiers du jeu. La vérification en lecture seule et le lancement restent disponibles. Les mises à jour Battle.net se règlent séparément.",
+  "clientUpdatesPaused": "Les téléchargements et modifications de WoW sont désactivés dans les paramètres.",
+  "addonUpdates": "Mettre les addons à jour avant le lancement",
+  "addonChannel": "Ensemble des addons",
+  "addonStable": "Approuvés",
+  "addonTesting": "Tests",
+  "addonChannelHint": "L’ensemble est installé en une seule opération. Les anciens dossiers sont sauvegardés. Le choix s’applique au prochain lancement.",
+  "addonChannelRefresh": "Actualiser les versions",
+  "addonCatalogRevision": "Liste des versions : {revision}",
+  "addonCatalogUnavailable": "Impossible de lire les versions. Consultez le journal du lancement.",
+  "addonUpdatesPaused": "Les mises à jour des addons sont désactivées.",
+  "addonTestingActive": "Addons : ensemble de test.",
+  "addonStableActive": "Addons : ensemble approuvé.",
+  "wErr_updates_paused": "Les téléchargements et modifications de WoW sont désactivés dans les paramètres.",
+  "addonDevHint": "Conserve les dossiers locaux existants sans vérifier leur version. Les dossiers absents proviennent de l’ensemble choisi. Désactivez le développement pour installer tout l’ensemble approuvé ou de test."
+});
+
+Object.assign(TEXTS.es, {
+  "updateSettings": "Actualizaciones del juego",
+  "clientUpdates": "Permitir descargas y reparaciones de WoW",
+  "clientUpdatesHint": "Controla las operaciones de Multi sobre los archivos del juego. La comprobación de solo lectura y el inicio siguen disponibles. Las actualizaciones de Battle.net se configuran por separado.",
+  "clientUpdatesPaused": "Las descargas y modificaciones de WoW están desactivadas en Ajustes.",
+  "addonUpdates": "Actualizar addons antes de iniciar",
+  "addonChannel": "Conjunto de addons",
+  "addonStable": "Aprobados",
+  "addonTesting": "Pruebas",
+  "addonChannelHint": "Se instala el conjunto completo. Se guardan copias de las carpetas anteriores. La selección se aplica en el próximo inicio.",
+  "addonChannelRefresh": "Actualizar lista de versiones",
+  "addonCatalogRevision": "Lista de versiones: {revision}",
+  "addonCatalogUnavailable": "No se pudo leer la lista de versiones. Consulta el registro de inicio.",
+  "addonUpdatesPaused": "Las actualizaciones de addons están desactivadas.",
+  "addonTestingActive": "Addons: conjunto de pruebas.",
+  "addonStableActive": "Addons: conjunto aprobado.",
+  "wErr_updates_paused": "Las descargas y modificaciones de WoW están desactivadas en Ajustes.",
+  "addonDevHint": "Conserva las carpetas locales existentes sin comprobar versiones. Las que falten se obtienen del conjunto elegido. Desactiva el desarrollo para instalar todo el conjunto aprobado o de pruebas."
+});
+
+Object.assign(TEXTS.pt, {
+  "updateSettings": "Atualizações do jogo",
+  "clientUpdates": "Permitir downloads e reparações do WoW",
+  "clientUpdatesHint": "Controla as operações do Multi nos arquivos do jogo. A verificação somente leitura e a inicialização continuam disponíveis. As atualizações do Battle.net são configuradas separadamente.",
+  "clientUpdatesPaused": "Os downloads e alterações do WoW estão desativados nas Configurações.",
+  "addonUpdates": "Atualizar addons antes de iniciar",
+  "addonChannel": "Conjunto de addons",
+  "addonStable": "Aprovados",
+  "addonTesting": "Testes",
+  "addonChannelHint": "O conjunto completo é instalado junto. As pastas anteriores são guardadas em backup. A seleção aplica-se na próxima inicialização.",
+  "addonChannelRefresh": "Atualizar lista de versões",
+  "addonCatalogRevision": "Lista de versões: {revision}",
+  "addonCatalogUnavailable": "Não foi possível ler as versões. Consulte o registro de inicialização.",
+  "addonUpdatesPaused": "As atualizações dos addons estão desativadas.",
+  "addonTestingActive": "Addons: conjunto de testes.",
+  "addonStableActive": "Addons: conjunto aprovado.",
+  "wErr_updates_paused": "Os downloads e alterações do WoW estão desativados nas Configurações.",
+  "addonDevHint": "Preserva as pastas locais existentes sem verificar versões. As ausentes vêm do conjunto escolhido. Desative o desenvolvimento para instalar o conjunto aprovado ou de testes completo."
+});
+
+Object.assign(TEXTS.ru, {"autoGameLogin": "Входить в игру под аккаунтом лаунчера", "autoGameLoginHint": "Свежий серверный билет выполняет вход в первый игровой аккаунт. Пароль не записывается в настройки игры.", "automaticGameLogin": "Автоматический вход в игру под аккаунтом лаунчера", "manualGameLogin": "Ручной вход в игру включён в настройках."});
+
+Object.assign(TEXTS.en, {"autoGameLogin": "Sign into the game with my launcher account", "autoGameLoginHint": "A fresh server ticket signs into your first game account. Your password is never stored in game settings.", "automaticGameLogin": "Automatic game login with the launcher account", "manualGameLogin": "Manual game login is selected in Settings."});
+
+Object.assign(TEXTS.fr, {"autoGameLogin": "Se connecter au jeu avec le compte du lanceur", "autoGameLoginHint": "Un nouveau ticket du serveur connecte votre premier compte de jeu. Le mot de passe n’est pas enregistré dans le jeu.", "automaticGameLogin": "Connexion automatique au jeu avec le compte du lanceur", "manualGameLogin": "Connexion manuelle sélectionnée dans les paramètres."});
+
+Object.assign(TEXTS.es, {"autoGameLogin": "Entrar al juego con mi cuenta del lanzador", "autoGameLoginHint": "Un ticket nuevo del servidor inicia sesión en tu primera cuenta de juego. La contraseña no se guarda en la configuración del juego.", "automaticGameLogin": "Inicio automático en el juego con la cuenta del lanzador", "manualGameLogin": "Se ha seleccionado el inicio manual en Ajustes."});
+
+Object.assign(TEXTS.pt, {"autoGameLogin": "Entrar no jogo com minha conta do launcher", "autoGameLoginHint": "Um novo ticket do servidor entra na sua primeira conta de jogo. A senha não é guardada nas configurações do jogo.", "automaticGameLogin": "Entrada automática no jogo com a conta do launcher", "manualGameLogin": "A entrada manual foi selecionada nas Configurações."});

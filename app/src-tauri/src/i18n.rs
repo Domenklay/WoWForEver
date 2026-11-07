@@ -56,11 +56,22 @@ type Texts = [&'static str; 4];
 
 #[rustfmt::skip]
 const MESSAGES: &[(&str, Texts)] = &[
+    ("login_no_game_account", ["Aucun compte de jeu disponible.", "No game account is available for this login.", "No hay una cuenta de juego disponible.", "Nenhuma conta de jogo disponível."]),
+    ("login_account_mismatch", ["Le serveur n’a pas confirmé le compte. Reconnectez-vous.", "The server did not confirm the launcher account. Sign in again.", "El servidor no confirmó la cuenta. Inicia sesión de nuevo.", "O servidor não confirmou a conta. Entre novamente."]),
+    ("addon_paused", ["Mises à jour des addons désactivées : fichiers locaux conservés.", "AddOn updates are disabled: local files are preserved.", "Actualizaciones de addons desactivadas: se conservan los archivos locales.", "Atualizações dos addons desativadas: arquivos locais preservados."]),
+    ("addon_catalog_offline", ["Catalogue hors ligne ; utilisation du catalogue enregistré.", "AddOn catalogue is offline; using a saved catalogue.", "Catálogo sin conexión; se usa el catálogo guardado.", "Catálogo offline; usando o catálogo salvo."]),
+    ("addon_catalog_cached", ["Catalogue des addons enregistré : {}", "Saved AddOn catalogue: {}", "Catálogo de addons guardado: {}", "Catálogo de addons salvo: {}"]),
+    ("addon_catalog_bundled", ["Utilisation du catalogue inclus dans le lanceur.", "Using the AddOn catalogue bundled with this launcher.", "Se usa el catálogo incluido en el lanzador.", "Usando o catálogo incluído no launcher."]),
+    ("addon_channel", ["Canal des addons : {} ; ensemble : {}", "AddOn channel: {}; release set: {}", "Canal de addons: {}; conjunto: {}", "Canal de addons: {}; conjunto: {}"]),
+    ("addon_ready_set", ["Ensemble des addons vérifié et installé : {}", "AddOn release set verified and installed: {}", "Conjunto de addons verificado e instalado: {}", "Conjunto de addons verificado e instalado: {}"]),
+    ("addon_busy", ["Une autre instance met les addons à jour.", "Another launcher instance is updating AddOns.", "Otra instancia está actualizando los addons.", "Outra instância está atualizando os addons."]),
+    ("addon_recover", ["Récupération des addons après une mise à jour interrompue.", "Recovering the AddOn set after an interrupted update.", "Recuperando los addons tras una actualización interrumpida.", "Recuperando os addons após uma atualização interrompida."]),
+    ("client_updates_paused", ["Les téléchargements et modifications de WoW sont désactivés dans les paramètres.", "WoW downloads and file changes are disabled in Settings.", "Las descargas y modificaciones de WoW están desactivadas en Ajustes.", "Os downloads e alterações do WoW estão desativados nas Configurações."]),
     ("addon_dev_mode", ["Développement des addons actif : les fichiers locaux sont conservés.", "AddOn development is enabled: local files are preserved.", "Desarrollo de addons activado: se conservan los archivos locales.", "Desenvolvimento de addons ativado: os arquivos locais são preservados."]),
     ("addon_dev_preserved", ["Dossier local {} conservé sans mise à jour.", "Keeping local folder {} without updating it.", "Se conserva la carpeta local {} sin actualizarla.", "Pasta local {} preservada sem atualização."]),
     ("addon_checking", ["Vérification des extensions de jeu…", "Checking game AddOns…", "Comprobando complementos del juego…", "Verificando addons do jogo…"]),
     ("addon_ready", ["Extension installée et vérifiée.", "AddOn is installed and verified.", "Complemento instalado y verificado.", "Addon instalado e verificado."]),
-    ("addon_downloading", ["Téléchargement de Forever Ascension : {}", "Downloading Forever Ascension: {}", "Descargando Forever Ascension: {}", "Baixando Forever Ascension: {}"]),
+    ("addon_downloading", ["Téléchargement de l’addon : {}", "Downloading AddOn file: {}", "Descargando archivo del addon: {}", "Baixando arquivo do addon: {}"]),
     ("addon_backup", ["Ancien addon sauvegardé : {}", "Previous AddOn backed up: {}", "Copia del addon anterior: {}", "Backup do addon anterior: {}"]),
     ("addon_failed", ["Installation de l’extension impossible : {}", "Could not install game AddOn: {}", "No se pudo instalar el complemento: {}", "Não foi possível instalar o addon: {}"]),
     ("addon_link", ["Le chemin de l’addon contient un lien.", "The AddOn path contains a link or reparse point.", "La ruta del addon contiene un enlace.", "O caminho do addon contém um link."]),
@@ -172,6 +183,17 @@ const MESSAGES: &[(&str, Texts)] = &[
 
 #[rustfmt::skip]
 const RUSSIAN: &[(&str,&str)] = &[
+    ("login_no_game_account", "У аккаунта нет доступной игровой учётной записи."),
+    ("login_account_mismatch", "Сервер не подтвердил аккаунт лаунчера. Войдите заново."),
+    ("addon_paused", "Обновления аддонов отключены: локальные файлы сохранены."),
+    ("addon_catalog_offline", "Список аддонов недоступен в сети; используем сохранённый список."),
+    ("addon_catalog_cached", "Сохранённый список аддонов: {}"),
+    ("addon_catalog_bundled", "Используем список аддонов из сборки лаунчера."),
+    ("addon_channel", "Канал аддонов: {}; комплект: {}"),
+    ("addon_ready_set", "Комплект аддонов проверен и установлен: {}"),
+    ("addon_busy", "Другая копия лаунчера обновляет аддоны."),
+    ("addon_recover", "Восстанавливаем комплект после прерванного обновления аддонов."),
+    ("client_updates_paused", "Загрузка и изменение файлов WoW отключены в настройках."),
     ("addon_dev_mode", "Режим разработки аддонов включён: локальные файлы сохраняются."),
     ("addon_dev_preserved", "Оставляем локальную папку {} без обновления."),
     ("addon_checking", "Проверяем игровые дополнения…"),

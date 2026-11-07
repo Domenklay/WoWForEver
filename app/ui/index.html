@@ -40,6 +40,7 @@
           <strong id="game-field">WoW Forever</strong><div class="realm-row"><span class="realm-dot"></span><span id="realm-field">Realm Forever</span></div>
           <p class="small muted" id="game-login-mode"></p>
           <div class="play-group"><button class="btn play" id="play" disabled>Play</button><button class="btn play-gear" id="play-settings" data-i18n-title="gameSettings" title="Game settings" aria-label="Game settings"><span class="sprite gear" aria-hidden="true"></span></button></div>
+          <p class="small" id="addon-channel-notice"></p>
           <p class="small" id="addon-dev-notice" data-i18n="addonDevActive" hidden>AddOn development is enabled — local changes are preserved.</p>
           <p class="step" id="step" aria-live="polite"></p><a class="small log-link" href="#" id="toggle-log" data-i18n="journal">Log</a>
         </section>
@@ -71,6 +72,8 @@
       <div class="workshop-grid"><section class="panel workshop-config">
         <label><span data-i18n="nFolder">New managed installation folder</span><span class="row"><input id="n-dir" type="text" spellcheck="false" placeholder="E:\WoWForEver-work\clients\70658"><button id="n-pick" class="btn small" data-i18n="browse">Browse</button></span></label>
         <p class="small muted" data-i18n="nFolderHint">Choose a new empty folder. Original installations and previous copies are protected.</p>
+        <label class="row"><input id="s-auto-game-login" type="checkbox"><span data-i18n="autoGameLogin">Sign into the game with my launcher account</span></label>
+        <p class="small muted" data-i18n="autoGameLoginHint">A fresh server ticket signs into your first game account. Your password is never stored in the game.</p>
         <label><span data-i18n="gameLocale">Game language</span><select id="n-locale"><option value="ruRU">Русский</option><option value="enUS">English</option><option value="deDE">Deutsch</option><option value="frFR">Français</option><option value="esES">Español</option><option value="esMX">Español (Latinoamérica)</option><option value="ptBR">Português</option><option value="itIT">Italiano</option><option value="koKR">한국어</option><option value="zhCN">简体中文</option><option value="zhTW">繁體中文</option></select></label>
         <label class="row"><input id="n-hd" type="checkbox"><span data-i18n="nHD">Download high-resolution models and textures</span></label>
         <p class="small muted" data-i18n="nScope">Game files: Nvord CDN. Login: your configured server, certificate and public key.</p>
@@ -103,12 +106,24 @@
         <button class="btn primary" id="official-connect" data-i18n="officialConnect">Check and connect this installation</button>
         <pre id="official-result" class="layout-hint" aria-live="polite"></pre>
         <p class="small muted" data-i18n="officialScope">Game archives, indices and executables stay managed by Battle.net. Multi uses a separate connection profile and a server key in process memory.</p>
+        <label class="row"><input id="s-auto-game-login" type="checkbox"><span data-i18n="autoGameLogin">Sign into the game with my launcher account</span></label>
+        <p class="small muted" data-i18n="autoGameLoginHint">A fresh server ticket signs into your first game account. Your password is never stored in the game.</p>
         <label><span data-i18n="gameLocale">Game language</span><select id="s-locale"></select></label>
         <label><span data-i18n="language">Launcher language</span><select id="s-language"></select></label>
       </fieldset>
 
       <fieldset>
+        <legend data-i18n="updateSettings">Game updates</legend>
+        <label class="row"><input id="s-client-updates" type="checkbox"><span data-i18n="clientUpdates">Allow WoW downloads and repairs</span></label>
+        <p class="small muted" data-i18n="clientUpdatesHint">Controls Multi file operations. Read-only checks and launching remain available. Battle.net has its own update settings.</p>
+      </fieldset>
+      <fieldset>
         <legend data-i18n="addonSettings">Game AddOns</legend>
+        <label class="row"><input id="s-addon-updates" type="checkbox"><span data-i18n="addonUpdates">Update AddOns before launching</span></label>
+        <label><span data-i18n="addonChannel">AddOn release set</span><select id="s-addon-channel"></select></label>
+        <p class="small muted" data-i18n="addonChannelHint">Approved and testing sets are installed as a complete group. Previous folders are backed up. Changing the set takes effect on the next launch.</p>
+        <pre class="layout-hint" id="addon-channel-details" aria-live="polite"></pre>
+        <button class="btn small" id="addon-channel-refresh" data-i18n="addonChannelRefresh">Refresh version list</button>
         <label class="row"><input id="s-addon-development" type="checkbox" aria-describedby="addon-dev-hint"><span data-i18n="addonDevMode">AddOn development</span></label>
         <p class="small muted" id="addon-dev-hint" data-i18n="addonDevHint">Keep existing Ascension and Encyclopedia folders unchanged. Missing folders are installed automatically. Turn this off to return to published versions; replaced folders are backed up.</p>
       </fieldset>

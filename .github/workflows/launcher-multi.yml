@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [codex/launcher-forever-multi-20261105, codex/launcher-official-20261106, codex/forever-upgrades-70707-20261106, codex/native-cdn-70658-20261106]
-    paths: [app/**, tools/forever-casc-worker/**, scripts/inspect-forever-installation.ps1, tests/fixtures/official-installation.ps1, tests/fixtures/launcher-content-ui.js, docs/CLIENT-70707.ru.md, docs/SERVER-UPGRADES.ru.md, .github/workflows/launcher-multi.yml]
+    paths: [addons/**, scripts/update-addon-channel.py, tests/test_addon_channels.py, app/**, tools/forever-casc-worker/**, scripts/inspect-forever-installation.ps1, tests/fixtures/official-installation.ps1, tests/fixtures/launcher-content-ui.js, docs/CLIENT-70707.ru.md, docs/SERVER-UPGRADES.ru.md, .github/workflows/launcher-multi.yml]
 
 permissions:
   contents: read
@@ -73,10 +73,13 @@ jobs:
           }
           $readme = [System.IO.File]::ReadAllText("$pwd/app/README-MULTI.ru.md")
           $readme = $readme.Replace("../docs/NATIVE-CDN.ru.md", "NATIVE-CDN.ru.md").Replace("../docs/RESTORE-70658.ru.md", "RESTORE-70658.ru.md").Replace("../docs/CLIENT-WORKSHOP.ru.md", "CLIENT-WORKSHOP.ru.md").Replace("../docs/CLIENT-70707.ru.md", "CLIENT-70707.ru.md").Replace("../docs/SERVER-UPGRADES.ru.md", "SERVER-UPGRADES.ru.md").Replace("../docs/screenshots/", "https://raw.githubusercontent.com/Domenklay/WoWForEver/codex/launcher-forever-multi-20261105/docs/screenshots/")
+          $readme = $readme.Replace("../docs/ADDON-CHANNELS.ru.md", "ADDON-CHANNELS.ru.md")
           $readme = $readme.Replace("../docs/BOOTSTRAP-AUDIT.ru.md", "BOOTSTRAP-AUDIT.ru.md").Replace("../docs/GAMEPLAY-70658.ru.md", "GAMEPLAY-70658.ru.md")
           [System.IO.File]::WriteAllText("$pwd/dist/README.ru.md", $readme)
           $guide = [System.IO.File]::ReadAllText("$pwd/docs/CLIENT-WORKSHOP.ru.md").Replace("../content/client-manifest.schema.json", "client-manifest.schema.json")
           [System.IO.File]::WriteAllText("$pwd/dist/CLIENT-WORKSHOP.ru.md", $guide)
+          Copy-Item docs/ADDON-CHANNELS.ru.md dist/ADDON-CHANNELS.ru.md
+          Copy-Item addons/channels.json dist/addon-channels.json
           Copy-Item docs/ASCENSION-70658.ru.md dist/ASCENSION-70658.ru.md
           Copy-Item docs/GAMEPLAY-70658.ru.md dist/GAMEPLAY-70658.ru.md
           Copy-Item docs/OFFICIAL-CLIENT.ru.md dist/OFFICIAL-CLIENT.ru.md
@@ -95,7 +98,7 @@ jobs:
             Set-Content dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: WoW-Forever-Multi-Windows-1.7.1
+          name: WoW-Forever-Multi-Windows-1.8.0
           path: dist/*
           if-no-files-found: error
           retention-days: 14

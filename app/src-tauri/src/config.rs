@@ -97,13 +97,17 @@ pub struct Settings {
     pub native_client_dir: String,
     /// Preserve existing project AddOn folders while developing them locally.
     pub addon_development_mode: bool,
+    pub addon_updates_enabled: bool,
+    pub auto_game_login: bool,
+    pub client_updates_enabled: bool,
+    pub addon_channel: crate::addon_catalog::Channel,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self { server: Server::default(), game_dir: String::new(), locale: String::new(),
             language: String::new(), linux: LinuxSettings::default(), workshop: crate::client::Settings::default(),
-            protect_client_files: true, native_client_dir: String::new(), addon_development_mode: false }
+            protect_client_files: true, native_client_dir: String::new(), addon_development_mode: false, addon_updates_enabled:true, auto_game_login:true, client_updates_enabled:true, addon_channel:crate::addon_catalog::Channel::Stable }
     }
 }
 
@@ -146,6 +150,10 @@ fn write_private(path: &Path, data: &[u8]) -> std::io::Result<()> {
 }
 
 impl Settings {
+    pub fn allow_client_work(&self, action:&str)->Result<(),String>{
+        if !self.client_updates_enabled && action!="verify" {return Err(t("client_updates_paused").into());}
+        Ok(())
+    }
     pub fn load() -> Self {
         let mut s: Settings = read_json(&config_dir().join("settings.json")).unwrap_or_default();
         if s.game_dir.is_empty() {
@@ -186,7 +194,7 @@ impl Settings {
 
     /// The wowf launch-options registry contract is not yet verified. Match the successful manual-login probe.
     pub fn automatic_game_login(&self) -> bool {
-        cfg!(target_os = "macos") || self.exe().file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case("WowB.exe"))
+        self.auto_game_login
     }
 }
 
@@ -223,7 +231,7 @@ mod tests {
         }
         let settings = Settings { game_dir: game.to_string_lossy().into_owned(), ..Default::default() };
         assert!(settings.game_found());
-        assert!(!settings.automatic_game_login());
+        assert!(settings.automatic_game_login());
         #[cfg(not(target_os = "macos"))]
         assert_eq!(settings.exe(), game.join("Wow.exe"));
     }
@@ -510,4 +518,10 @@ fn detect_game_dir() -> Option<String> {
         }
     }
     candidates.into_iter().find(|p| game_binary(p).exists()).map(|p| p.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]mod channel_settings_tests {
+ use super::*;
+ #[test]fn old_settings_default_to_approved_addon_and_enabled_client_updates(){let s:Settings=serde_json::from_str("{}").unwrap();assert!(s.client_updates_enabled);assert!(s.addon_updates_enabled);assert_eq!(s.addon_channel,crate::addon_catalog::Channel::Stable);}
+ #[test]fn paused_updates_and_testing_choice_survive_serialization_independently(){let mut s=Settings::default();s.addon_channel=crate::addon_catalog::Channel::Testing;s.client_updates_enabled=false;s.addon_updates_enabled=false;let r:Settings=serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();assert!(!r.client_updates_enabled);assert!(!r.addon_updates_enabled);assert_eq!(r.addon_channel,crate::addon_catalog::Channel::Testing);assert!(r.allow_client_work("verify").is_ok());for action in ["download","repair","recover","install_content","rollback_content"]{assert!(r.allow_client_work(action).is_err());}assert_eq!(r.server.portal,s.server.portal);assert_eq!(r.server.client_build,70658);}
 }

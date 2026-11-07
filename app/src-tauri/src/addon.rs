@@ -1,33 +1,9 @@
-//! Install the pinned project AddOns before the game is spawned.
-//! No client archives, settings, SavedVariables or other AddOns are modified.
-use std::{fs, path::{Path, PathBuf}, time::Duration};
-use serde::Deserialize;
-use sha2::{Digest, Sha256};
-use crate::i18n::{t, tf};
-
-#[derive(Deserialize)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-struct Manifest {format:String, name:String, version:String, protocol:u32, source_commit:String, files:Vec<Entry>}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Entry {name:String, size:u64, sha256:String}
-fn manifest()->Result<Manifest,String>{
- parse_manifest(include_str!("../addons/forever-ascension.json"))
-}
-fn parse_manifest(text:&str)->Result<Manifest,String>{
- let m:Manifest=serde_json::from_str(text).map_err(|e|e.to_string())?;
- let valid_version=match m.name.as_str(){"ForeverAscension"=>m.version=="1.11.0"&&m.protocol==3,"ForeverEncyclopedia"=>m.version=="0.9.8-v2.1-smartai-abilities"&&m.protocol==1,_=>false};
- if m.format!="forever-addon-v1" || !valid_version || m.source_commit.len()!=40 || !m.source_commit.bytes().all(|c|c.is_ascii_hexdigit()) || m.files.is_empty(){return Err("Invalid bundled AddOn manifest".into());}
- let mut seen=std::collections::HashSet::new();
- for f in &m.files {if f.name.is_empty() || f.name.chars().any(|c|matches!(c, '/'|'\\'|':')) || f.name.starts_with('.') || !seen.insert(&f.name) || f.size>32*1024*1024 || f.sha256.len()!=64 || !f.sha256.bytes().all(|c|c.is_ascii_hexdigit()){return Err("Unsafe AddOn file manifest".into());}}
- Ok(m)
-}
-fn manifests()->Result<Vec<Manifest>,String>{Ok(vec![manifest()?,parse_manifest(include_str!("../addons/forever-encyclopedia.json"))?])}
-fn source_path(m:&Manifest)->Result<&'static str,String>{match m.name.as_str(){
- "ForeverAscension"=>Ok("mods/forever-advancement/addon/ForeverAscension"),
- "ForeverEncyclopedia"=>Ok("mods/living-encyclopedia/addon/ForeverEncyclopedia"),
- _=>Err("Unsupported project AddOn".into()),
-}}
+//! Whole-set AddOn updates with verified staging, backups and interrupted-run recovery.
+use std::{fs,fs::OpenOptions,io::Write,path::{Path,PathBuf},time::Duration,future::Future};
+use serde::{Deserialize,Serialize};
+use sha2::{Digest,Sha256};
+use fs2::FileExt;
+use crate::{i18n::{t,tf},addon_catalog::{self as catalog,Channel,Catalog,Manifest,Entry,Release}};
 fn direct(path:&Path)->Result<(),String>{
  for p in path.ancestors(){match fs::symlink_metadata(p){
   Ok(meta)=>{if meta.file_type().is_symlink(){return Err(t("addon_link").into());}
@@ -47,6 +23,7 @@ fn commit(game:&Path,stage:&Path,target:&Path,id:&str)->Result<Option<PathBuf>,S
  direct(stage)?;direct(target)?;
  let name=target.file_name().ok_or("Invalid AddOn destination")?;
  let backup=game.join(".forever-multi/addon-backups").join(id).join(name);
+ if backup.exists(){return Err("AddOn backup destination already exists".into());}
  let previous=target.exists();
  if previous {direct(&backup)?;fs::create_dir_all(backup.parent().unwrap()).map_err(|e|e.to_string())?;fs::rename(target,&backup).map_err(|e|e.to_string())?;}
  if let Err(e)=fs::rename(stage,target){
@@ -61,45 +38,137 @@ fn preserve_development_folder(target:&Path,development_mode:bool)->Result<bool,
  if !target.is_dir(){return Err("AddOn destination is not a directory".into());}
  Ok(true)
 }
-pub async fn ensure(game:&Path,development_mode:bool,mut log:impl FnMut(String))->Result<(),String>{
- if development_mode {log(t("addon_dev_mode").into());}
- for m in manifests()? {ensure_one(game,&m,development_mode,&mut log).await?;}
+fn write_json(path:&Path,value:&impl Serialize)->Result<(),String>{
+ direct(path)?;fs::create_dir_all(path.parent().ok_or("Invalid metadata path")?).map_err(|e|e.to_string())?;
+ let temp=path.with_extension(format!("{:032x}.tmp",rand::random::<u128>()));direct(&temp)?;
+ let mut options=OpenOptions::new();options.write(true).create_new(true);
+ #[cfg(unix)]{use std::os::unix::fs::OpenOptionsExt;options.mode(0o600);}
+ let result=(||{let mut f=options.open(&temp).map_err(|e|e.to_string())?;f.write_all(&serde_json::to_vec_pretty(value).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;f.sync_all().map_err(|e|e.to_string())?;fs::rename(&temp,path).map_err(|e|e.to_string())})();
+ if temp.exists(){let _=fs::remove_file(&temp);}result
+}
+async fn download(client:&reqwest::Client,url:&str,limit:u64)->Result<Vec<u8>,String>{
+ let mut response=client.get(url).send().await.map_err(|e|e.to_string())?.error_for_status().map_err(|e|e.to_string())?;
+ let mut body=Vec::new();while let Some(chunk)=response.chunk().await.map_err(|e|e.to_string())?{if body.len().saturating_add(chunk.len())as u64>limit{return Err("AddOn response exceeds size limit".into());}body.extend_from_slice(&chunk);}Ok(body)
+}
+fn cached(path:&Path)->Result<Option<Catalog>,String>{direct(path)?;if !path.exists(){return Ok(None);}let size=fs::metadata(path).map_err(|e|e.to_string())?.len();if size>catalog::LIMIT{return Err("Cached catalogue exceeds size limit".into());}catalog::parse(&fs::read_to_string(path).map_err(|e|e.to_string())?).map(Some)}
+async fn resolve_catalog(cache:&Path,client:&reqwest::Client,development:bool,log:&mut impl FnMut(String))->Result<Catalog,String>{
+ let path=cache.join("channels.json");
+ if !development {
+  match download(client,catalog::URL,catalog::LIMIT).await {
+   Ok(body)=>{let text=std::str::from_utf8(&body).map_err(|e|e.to_string())?;let c=catalog::parse(text)?;write_json(&path,&c)?;return Ok(c);},
+   Err(_)=>{log(t("addon_catalog_offline").into());}
+  }
+ }
+ if let Some(c)=cached(&path)?{log(tf("addon_catalog_cached",&[&c.revision]));return Ok(c);}
+ log(t("addon_catalog_bundled").into());catalog::parse(catalog::BUNDLED)
+}
+#[derive(Clone,Serialize,Deserialize)]
+#[serde(rename_all="camelCase",deny_unknown_fields)]
+struct Receipt {format:String,revision:String,channel:Channel,release:Release,preserved:Vec<String>}
+#[derive(Serialize,Deserialize)]
+#[serde(rename_all="camelCase",deny_unknown_fields)]
+struct Change {name:String,had_previous:bool}
+#[derive(Serialize,Deserialize)]
+#[serde(rename_all="camelCase",deny_unknown_fields)]
+struct Journal {format:String,id:String,installed:bool,changes:Vec<Change>,receipt:Receipt}
+fn stage(game:&Path,id:&str,name:&str)->PathBuf{game.join("Interface/AddOns").join(format!(".{name}-install-{id}"))}
+fn journal_path(game:&Path)->PathBuf{game.join(".forever-multi/addon-transaction.json")}
+fn validate_journal(j:&Journal)->Result<(),String>{
+ if j.format!="forever-addon-transaction-v1"||j.id.len()!=32||!j.id.bytes().all(|c|c.is_ascii_hexdigit())||j.changes.is_empty()||j.changes.len()>2{return Err("Invalid AddOn recovery journal".into());}
+ let mut seen=std::collections::HashSet::new();for c in &j.changes{catalog::source_path(&c.name)?;if !seen.insert(&c.name){return Err("Duplicate recovery target".into());}}
+ if j.receipt.format!="forever-addon-installed-v1"||j.receipt.release.addons.len()!=2||j.receipt.release.client_build!=70658{return Err("Invalid AddOn recovery receipt".into());}
+ let mut names=std::collections::HashSet::new();for m in &j.receipt.release.addons{catalog::validate_manifest(m)?;if !names.insert(&m.name){return Err("Duplicate receipt AddOn".into());}}
+ if j.receipt.preserved.iter().any(|n|!names.contains(n)){return Err("Unknown preserved AddOn".into());}
  Ok(())
 }
-async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl FnMut(String))->Result<(),String>{
- direct(game)?;
- if !game.join("Wow.exe").is_file()&&!game.join("WowB.exe").is_file(){return Err(t("game_not_found").into());}
- let addons=game.join("Interface/AddOns");let target=addons.join(&m.name);direct(&addons)?;
- if preserve_development_folder(&target,development_mode)? {
-  log(tf("addon_dev_preserved",&[&m.name]));
-  return Ok(());
+fn recover(game:&Path)->Result<(),String>{
+ let path=journal_path(game);direct(&path)?;if !path.exists(){return Ok(());}
+ if fs::metadata(&path).map_err(|e|e.to_string())?.len()>catalog::LIMIT{return Err("AddOn recovery journal is too large".into());}
+ let j:Journal=serde_json::from_slice(&fs::read(&path).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;validate_journal(&j)?;
+ if j.installed {
+  for m in &j.receipt.release.addons{if !j.receipt.preserved.contains(&m.name)&&!current(&game.join("Interface/AddOns").join(&m.name),m)?{return Err("Completed AddOn set differs; recovery retained".into());}}
+  write_json(&game.join(".forever-multi/addon-installed.json"),&j.receipt)?;
+ }else{
+  for c in j.changes.iter().rev(){
+   let target=game.join("Interface/AddOns").join(&c.name);let staged=stage(game,&j.id,&c.name);
+   let backup=game.join(".forever-multi/addon-backups").join(&j.id).join(&c.name);
+   direct(&target)?;direct(&staged)?;direct(&backup)?;
+   if c.had_previous&&backup.exists(){
+    // Preserve an interrupted new folder as well, rather than discard possible edits.
+    if target.exists(){let failed=game.join(".forever-multi/addon-failed").join(&j.id).join(&c.name);direct(&failed)?;if failed.exists(){return Err("AddOn recovery destination already exists".into());}fs::create_dir_all(failed.parent().unwrap()).map_err(|e|e.to_string())?;fs::rename(&target,failed).map_err(|e|e.to_string())?;}
+    fs::rename(backup,&target).map_err(|e|e.to_string())?;
+   }else if c.had_previous&&!target.exists(){return Err("Previous AddOn folder is missing; recovery retained".into());}
+   else if !c.had_previous&&!staged.exists()&&target.exists(){let failed=game.join(".forever-multi/addon-failed").join(&j.id).join(&c.name);direct(&failed)?;fs::create_dir_all(failed.parent().unwrap()).map_err(|e|e.to_string())?;if failed.exists(){return Err("AddOn recovery destination already exists".into());}fs::rename(&target,failed).map_err(|e|e.to_string())?;}
+  }
  }
- log(format!("{} ({})",t("addon_checking"),m.name));
- if current(&target,m)? {log(format!("{} ({})",t("addon_ready"),m.name));return Ok(());}
- // Download and verify the entire new folder before touching an existing one.
+ for c in &j.changes{let p=stage(game,&j.id,&c.name);direct(&p)?;if p.exists(){fs::remove_dir_all(p).map_err(|e|e.to_string())?;}}
+ fs::remove_file(path).map_err(|e|e.to_string())
+}
+fn apply(game:&Path,j:&mut Journal,mut replace:impl FnMut(&Path,&Path,&Path,&str)->Result<Option<PathBuf>,String>)->Result<(),String>{
+ write_json(&journal_path(game),j)?;
+ for c in &j.changes {
+  let target=game.join("Interface/AddOns").join(&c.name);let s=stage(game,&j.id,&c.name);
+  if let Err(error)=replace(game,&s,&target,&j.id){recover(game).map_err(|e|format!("{error}; recovery: {e}"))?;return Err(error);}
+ }
+ j.installed=true;write_json(&journal_path(game),j)?;recover(game)
+}
+async fn ensure_set<F,Fut>(game:&Path,c:&Catalog,channel:&Channel,development:bool,log:&mut impl FnMut(String),mut fetch:F)->Result<(),String>
+where F:FnMut(String,u64)->Fut,Fut:Future<Output=Result<Vec<u8>,String>>{
+ let release=c.channels.get(channel.key()).ok_or("AddOn channel is missing")?;
+ log(tf("addon_channel",&[channel.key(),&release.release]));
+ let addons=game.join("Interface/AddOns");direct(&addons)?;
+ let mut changed=Vec::new();let mut preserved=Vec::new();
+ for m in &release.addons{let target=addons.join(&m.name);
+  if preserve_development_folder(&target,development)?{log(tf("addon_dev_preserved",&[&m.name]));preserved.push(m.name.clone());continue;}
+  if !current(&target,m)?{changed.push(m);}
+ }
+ let receipt=Receipt{format:"forever-addon-installed-v1".into(),revision:c.revision.clone(),channel:channel.clone(),release:release.clone(),preserved};
+ if changed.is_empty(){if !development{write_json(&game.join(".forever-multi/addon-installed.json"),&receipt)?;}return Ok(());}
  fs::create_dir_all(&addons).map_err(|e|e.to_string())?;
  let id=format!("{:032x}",rand::random::<u128>());
- let stage=addons.join(format!(".{}-install-{id}",m.name));
- fs::create_dir(&stage).map_err(|e|e.to_string())?;
+ let mut changes=Vec::new();
  let result=async {
-  let client=reqwest::Client::builder().connect_timeout(Duration::from_secs(10)).timeout(Duration::from_secs(180)).user_agent("WoWForeverMulti-AddOns").build().map_err(|e|e.to_string())?;
-  for f in &m.files {
-   log(tf("addon_downloading", &[&f.name]));
-   let url=format!("https://raw.githubusercontent.com/Domenklay/WoWForEver/{}/{}/{}",m.source_commit,source_path(m)?,f.name);
-   let mut response=client.get(url).send().await.map_err(|e|e.to_string())?.error_for_status().map_err(|e|e.to_string())?;
-   let mut body=Vec::new();
-   while let Some(chunk)=response.chunk().await.map_err(|e|e.to_string())? {if body.len().saturating_add(chunk.len())as u64>f.size{return Err("AddOn response exceeds manifest size".into());}body.extend_from_slice(&chunk);}
-   if !matches(&body,f){return Err(format!("AddOn checksum mismatch: {}",f.name));}
-   fs::write(stage.join(&f.name),body).map_err(|e|e.to_string())?;
+  for m in &changed {
+   let folder=stage(game,&id,&m.name);direct(&folder)?;fs::create_dir(&folder).map_err(|e|e.to_string())?;
+   for f in &m.files{log(tf("addon_downloading",&[&format!("{}/{}",m.name,f.name)]));let body=fetch(catalog::url(m,f),f.size).await?;if !matches(&body,f){return Err(format!("AddOn checksum mismatch: {}/{}",m.name,f.name));}let p=folder.join(&f.name);direct(&p)?;fs::create_dir_all(p.parent().unwrap()).map_err(|e|e.to_string())?;fs::write(p,body).map_err(|e|e.to_string())?;}
+   if !current(&folder,m)?{return Err("Staged AddOn verification failed".into());}
+   changes.push(Change{name:m.name.clone(),had_previous:addons.join(&m.name).exists()});
   }
-  if !current(&stage,m)? {return Err("Staged AddOn verification failed".into());}
-  if let Some(path)=commit(game,&stage,&target,&id)?{log(tf("addon_backup",&[&path.display()]));}
-  log(format!("{} ({})",t("addon_ready"),m.name));Ok(())
+  // No live folder is renamed until every changed AddOn is staged and verified.
+  let mut j=Journal{format:"forever-addon-transaction-v1".into(),id:id.clone(),installed:false,changes,receipt};
+  validate_journal(&j)?;
+  apply(game,&mut j,commit)?;
+  log(tf("addon_ready_set",&[&release.release]));
+  log(tf("addon_backup",&[&game.join(".forever-multi/addon-backups").join(&id).display()]));Ok(())
  }.await;
- if stage.exists(){let _=fs::remove_dir_all(&stage);}
- result.map_err(|e:String|tf("addon_failed",&[&e]))
+ // A retained recovery journal owns its staging folders until recovery succeeds.
+ if !journal_path(game).exists(){for m in &changed{let p=stage(game,&id,&m.name);if p.exists(){let _=fs::remove_dir_all(p);}}}
+ result
 }
-
+pub async fn ensure(game:&Path,updates:bool,development:bool,channel:&Channel,client_build:u32,cache:&Path,mut log:impl FnMut(String))->Result<(),String>{
+ direct(game)?;
+ if !game.join("Wow.exe").is_file()&&!game.join("WowB.exe").is_file(){return Err(t("game_not_found").into());}
+ direct(&journal_path(game))?;
+ if !updates{if journal_path(game).exists(){return Err("Interrupted AddOn update: enable updates to recover the set".into());}log(t("addon_paused").into());return Ok(());}
+ if client_build!=70658{return Err("AddOn channels require server build 70658".into());}
+ if development {log(t("addon_dev_mode").into());
+  let bundled=catalog::parse(catalog::BUNDLED)?;
+  if !journal_path(game).exists()&&bundled.channels[channel.key()].addons.iter().all(|m|preserve_development_folder(&game.join("Interface/AddOns").join(&m.name),true).unwrap_or(false)){
+   for m in &bundled.channels[channel.key()].addons{log(tf("addon_dev_preserved",&[&m.name]));}return Ok(());
+  }
+ }
+ let root=game.join(".forever-multi");direct(&root)?;fs::create_dir_all(&root).map_err(|e|e.to_string())?;
+ let lock_path=root.join("addon.lock");direct(&lock_path)?;
+ let lock=OpenOptions::new().create(true).truncate(false).read(true).write(true).open(lock_path).map_err(|e|e.to_string())?;
+ lock.try_lock_exclusive().map_err(|_|t("addon_busy").to_string())?;
+ if journal_path(game).exists(){log(t("addon_recover").into());recover(game)?;}
+ let client=reqwest::Client::builder().connect_timeout(Duration::from_secs(10)).timeout(Duration::from_secs(180)).redirect(reqwest::redirect::Policy::none()).user_agent("WoWForeverMulti-AddOns/1.8").build().map_err(|e|e.to_string())?;
+ let c=resolve_catalog(cache,&client,development,&mut log).await?;
+ ensure_set(game,&c,channel,development,&mut log,|url,size|{let client=client.clone();async move{download(&client,&url,size).await}}).await.map_err(|e|tf("addon_failed",&[&e]))
+}
+#[cfg(test)]fn manifests()->Result<Vec<Manifest>,String>{Ok(catalog::parse(catalog::BUNDLED)?.channels["stable"].addons.clone())}
+#[cfg(test)]fn manifest()->Result<Manifest,String>{Ok(manifests()?.remove(0))}
+#[cfg(test)]fn source_path(m:&Manifest)->Result<&'static str,String>{catalog::source_path(&m.name)}
 #[cfg(test)]mod tests{
  use super::*;
  #[tokio::test]
@@ -110,7 +179,7 @@ async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl F
   fs::create_dir_all(&ascension).unwrap();fs::create_dir_all(&book).unwrap();
   fs::write(ascension.join("Catalog.lua"),b"local development edits").unwrap();
   fs::write(book.join("unfinished.lua"),b"work in progress without a TOC").unwrap();
-  let mut logs=Vec::new();ensure(&temp.0,true,|line|logs.push(line)).await.unwrap();
+  let mut logs=Vec::new();ensure(&temp.0,true,true,&Channel::Stable,70658,&temp.0.join("cache"),|line|logs.push(line)).await.unwrap();
   assert_eq!(fs::read(ascension.join("Catalog.lua")).unwrap(),b"local development edits");
   assert_eq!(fs::read(book.join("unfinished.lua")).unwrap(),b"work in progress without a TOC");
   assert_eq!(fs::read_dir(&ascension).unwrap().count(),1);assert_eq!(fs::read_dir(&book).unwrap().count(),1);
@@ -141,4 +210,58 @@ async fn ensure_one(game:&Path,m:&Manifest,development_mode:bool,log:&mut impl F
  #[test]fn replacing_an_addon_retains_edits_and_other_addons(){let temp=Temp::new();let addons=temp.0.join("Interface/AddOns");let target=addons.join("ForeverAscension");fs::create_dir_all(&target).unwrap();fs::write(target.join("custom.lua"),b"user edits").unwrap();let other=addons.join("OtherAddon");fs::create_dir(&other).unwrap();fs::write(other.join("file.lua"),b"keep").unwrap();let stage=addons.join(".stage");fs::create_dir(&stage).unwrap();fs::write(stage.join("new.lua"),b"new").unwrap();let backup=commit(&temp.0,&stage,&target,"test").unwrap().unwrap();assert_eq!(fs::read(backup.join("custom.lua")).unwrap(),b"user edits");assert_eq!(fs::read(other.join("file.lua")).unwrap(),b"keep");assert!(target.join("new.lua").is_file());}
  #[test]fn failed_commit_restores_the_original_addon(){let temp=Temp::new();let target=temp.0.join("ForeverAscension");fs::create_dir(&target).unwrap();fs::write(target.join("user.lua"),b"keep").unwrap();assert!(commit(&temp.0,&temp.0.join("missing-stage"),&target,"test").is_err());assert_eq!(fs::read(target.join("user.lua")).unwrap(),b"keep");}
  #[cfg(unix)]#[test]fn linked_addons_cannot_redirect_writes(){let temp=Temp::new();let outside=Temp::new();std::os::unix::fs::symlink(&outside.0,temp.0.join("linked")).unwrap();assert!(current(&temp.0.join("linked"),&manifest().unwrap()).is_err());assert!(fs::read_dir(&outside.0).unwrap().next().is_none());}
+}
+
+pub async fn channel_summary(cache:&Path,refresh:bool)->Result<serde_json::Value,String>{
+ let client=reqwest::Client::builder().connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(15)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
+ let mut messages=Vec::new();let c=resolve_catalog(cache,&client,!refresh,&mut |m|messages.push(m)).await?;
+ let mut sets=serde_json::Map::new();for(key,r)in &c.channels{sets.insert(key.clone(),serde_json::json!({"release":r.release,"clientBuild":r.client_build,"addons":r.addons.iter().map(|m|serde_json::json!({"name":m.name,"version":m.version})).collect::<Vec<_>>()}));}
+ Ok(serde_json::json!({"revision":c.revision,"channels":sets,"messages":messages}))
+}
+
+#[cfg(test)]mod channel_install_tests {
+ use super::*;
+ struct Temp(PathBuf);impl Temp{fn new()->Self{let p=std::env::temp_dir().join(format!("forever-channel-{:032x}",rand::random::<u128>()));fs::create_dir(&p).unwrap();fs::write(p.join("Wow.exe"),b"fixture").unwrap();Self(p)}}impl Drop for Temp{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}
+ fn fixture()->Catalog{let mut c=catalog::parse(catalog::BUNDLED).unwrap();for(key,r)in c.channels.iter_mut(){let body=if key=="stable"{b"approved".as_slice()}else{b"testing".as_slice()};for m in &mut r.addons{m.files=vec![Entry{name:format!("{}.toc",m.name),size:body.len()as u64,sha256:hex::encode(Sha256::digest(body))}];}}c}
+ fn folder(game:&Path,name:&str)->PathBuf{game.join("Interface/AddOns").join(name)}
+ fn fill(game:&Path,body:&[u8]){for name in ["ForeverAscension","ForeverEncyclopedia"]{let p=folder(game,name);fs::create_dir_all(&p).unwrap();fs::write(p.join(format!("{name}.toc")),body).unwrap();}}
+ fn unchanged(game:&Path,body:&[u8]){for name in ["ForeverAscension","ForeverEncyclopedia"]{assert_eq!(fs::read(folder(game,name).join(format!("{name}.toc"))).unwrap(),body);}}
+ fn journal(c:&Catalog,id:&str)->Journal{Journal{format:"forever-addon-transaction-v1".into(),id:id.into(),installed:false,changes:c.channels["testing"].addons.iter().map(|m|Change{name:m.name.clone(),had_previous:true}).collect(),receipt:Receipt{format:"forever-addon-installed-v1".into(),revision:c.revision.clone(),channel:Channel::Testing,release:c.channels["testing"].clone(),preserved:vec![]}}}
+ #[tokio::test]async fn switching_both_directions_installs_the_whole_set_and_keeps_previous_folders(){
+  let temp=Temp::new();fill(&temp.0,b"local edits");let c=fixture();
+  for(channel,body)in [(Channel::Testing,b"testing".as_slice()),(Channel::Stable,b"approved".as_slice())]{
+   ensure_set(&temp.0,&c,&channel,false,&mut |_|{},|_,_|async move{Ok(body.to_vec())}).await.unwrap();unchanged(&temp.0,body);
+   let receipt:Receipt=serde_json::from_slice(&fs::read(temp.0.join(".forever-multi/addon-installed.json")).unwrap()).unwrap();assert_eq!(receipt.channel,channel);assert!(!journal_path(&temp.0).exists());
+  }
+  assert_eq!(fs::read_dir(temp.0.join(".forever-multi/addon-backups")).unwrap().count(),2);
+ }
+ #[tokio::test]async fn failure_in_second_download_cannot_mix_old_and_new_addons(){
+  let temp=Temp::new();fill(&temp.0,b"previous");let c=fixture();let mut count=0;
+  let result=ensure_set(&temp.0,&c,&Channel::Testing,false,&mut |_|{},|_,_|{count+=1;let body=if count==1{b"testing".to_vec()}else{b"corrupted".to_vec()};async move{Ok(body)}}).await;
+  assert!(result.is_err());unchanged(&temp.0,b"previous");assert!(!temp.0.join(".forever-multi/addon-backups").exists());assert!(!journal_path(&temp.0).exists());assert_eq!(fs::read_dir(temp.0.join("Interface/AddOns")).unwrap().count(),2);
+ }
+ #[test]fn failure_during_second_folder_commit_restores_both_originals(){
+  let temp=Temp::new();fill(&temp.0,b"previous");let c=fixture();let mut j=journal(&c,&"a".repeat(32));
+  for m in &j.receipt.release.addons{let s=stage(&temp.0,&j.id,&m.name);fs::create_dir(&s).unwrap();fs::write(s.join(&m.files[0].name),b"testing").unwrap();}
+  let mut count=0;let result=apply(&temp.0,&mut j,|g,s,t,id|{count+=1;if count==2{Err("disk full".into())}else{commit(g,s,t,id)}});
+  assert!(result.is_err());unchanged(&temp.0,b"previous");assert!(!journal_path(&temp.0).exists());
+  assert!(temp.0.join(".forever-multi/addon-failed").join(&j.id).join("ForeverAscension").is_dir());
+ }
+ #[test]fn interrupted_between_backup_and_install_is_recoverable_and_repeatable(){
+  let temp=Temp::new();fill(&temp.0,b"previous");let c=fixture();let j=journal(&c,&"b".repeat(32));write_json(&journal_path(&temp.0),&j).unwrap();
+  let m=&j.receipt.release.addons[0];let backup=temp.0.join(".forever-multi/addon-backups").join(&j.id).join(&m.name);fs::create_dir_all(backup.parent().unwrap()).unwrap();fs::rename(folder(&temp.0,&m.name),backup).unwrap();
+  recover(&temp.0).unwrap();recover(&temp.0).unwrap();unchanged(&temp.0,b"previous");assert!(!journal_path(&temp.0).exists());
+ }
+ #[test]fn interruption_after_whole_set_install_finishes_receipt_instead_of_rolling_back(){
+  let temp=Temp::new();fill(&temp.0,b"testing");let c=fixture();let mut j=journal(&c,&"c".repeat(32));j.installed=true;write_json(&journal_path(&temp.0),&j).unwrap();recover(&temp.0).unwrap();unchanged(&temp.0,b"testing");assert!(!journal_path(&temp.0).exists());assert!(temp.0.join(".forever-multi/addon-installed.json").is_file());
+ }
+ #[tokio::test]async fn paused_addons_do_not_access_catalogue_or_install_even_missing_folders(){
+  let temp=Temp::new();ensure(&temp.0,false,false,&Channel::Testing,70658,&temp.0.join("no-cache"),|_|{}).await.unwrap();assert!(!temp.0.join("Interface").exists());assert!(!temp.0.join(".forever-multi").exists());
+ }
+ #[tokio::test]async fn local_development_can_install_a_missing_addon_without_overwriting_edits(){
+  let temp=Temp::new();let p=folder(&temp.0,"ForeverAscension");fs::create_dir_all(&p).unwrap();fs::write(p.join("my.lua"),b"local").unwrap();let c=fixture();
+  ensure_set(&temp.0,&c,&Channel::Testing,true,&mut |_|{},|_,_|async{Ok(b"testing".to_vec())}).await.unwrap();assert_eq!(fs::read(p.join("my.lua")).unwrap(),b"local");assert_eq!(fs::read(folder(&temp.0,"ForeverEncyclopedia").join("ForeverEncyclopedia.toc")).unwrap(),b"testing");assert!(!journal_path(&temp.0).exists());
+ }
+ #[test]fn corrupted_cache_cannot_be_used_as_a_release_set(){let temp=Temp::new();let p=temp.0.join("channels.json");fs::write(&p,b"not json").unwrap();assert!(cached(&p).is_err());}
+ #[test]fn recovery_rejects_a_path_injected_target(){let c=fixture();let mut j=journal(&c,&"d".repeat(32));j.changes[0].name="../../WTF".into();assert!(validate_journal(&j).is_err());}
 }

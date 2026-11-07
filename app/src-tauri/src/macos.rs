@@ -177,7 +177,7 @@ pub fn spawn(settings: &Settings, copy: &Path) -> Result<(Child, PathBuf), Strin
         .arg("--env").arg(format!("FOREVER_REGION_GROUP={}", server.region_group))
         .arg("--env").arg(format!("FOREVER_PATCH_LOG={}", log.display()))
         .arg("-a").arg(copy)
-        .args(["--args", "-launcherlogin", "-config", WTF_NAME])
+        .args(if settings.automatic_game_login(){vec!["--args", "-launcherlogin", "-config", WTF_NAME]}else{vec!["--args", "-config", WTF_NAME]})
         .spawn()
         .map_err(|e| tf("launch_failed", &[&"World of Warcraft", &e]))?;
     Ok((child, log))

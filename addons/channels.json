@@ -1,0 +1,204 @@
+{
+  "format": "forever-addon-channels-v1",
+  "revision": "70658-20261107-1",
+  "channels": {
+    "stable": {
+      "release": "stable-70658-20261107-1",
+      "clientBuild": 70658,
+      "addons": [
+        {
+          "name": "ForeverAscension",
+          "version": "1.11.0",
+          "protocol": 3,
+          "sourceCommit": "9437cf505cf0d2c697403c3c8191d031252ed4a2",
+          "files": [
+            {
+              "name": "Catalog.lua",
+              "size": 10098530,
+              "sha256": "313f9006bac84edeece333dbb4972c49774b5595a11d7f6b9188a585d6ad980e"
+            },
+            {
+              "name": "CharacterStats.lua",
+              "size": 7792,
+              "sha256": "3de4b3c7ab77f808f47129b74a3b4b8d5b14adb18bfc0ebb2bb26ca24ae5fa94"
+            },
+            {
+              "name": "CustomRules.lua",
+              "size": 470,
+              "sha256": "dcc3dbfffa1eef314836caa5a74e478a1f164c715d13bc96d8f6b54b11e0a4fd"
+            },
+            {
+              "name": "ForeverAscension.lua",
+              "size": 36397,
+              "sha256": "9cd87a60127468ede94510df4c4e36672c765d7ccc099d4003bd7685c7563e35"
+            },
+            {
+              "name": "ForeverAscension.toc",
+              "size": 331,
+              "sha256": "79773f1a62de4dc959905b9bd89099e6c281fc04060d6c436d99b654eba6f821"
+            },
+            {
+              "name": "Integration.lua",
+              "size": 9169,
+              "sha256": "d0956aa6239f01e1c409c8c467a501bcc71bc9de53044945e4a7e6fa408ad7a7"
+            },
+            {
+              "name": "Portrait.lua",
+              "size": 4465,
+              "sha256": "f595bbc1c553cd3b7d5db230bbafa25d44d98b2759824d1c58dd35aec9c815f2"
+            }
+          ],
+          "sourcePath": "mods/forever-advancement/addon/ForeverAscension"
+        },
+        {
+          "name": "ForeverEncyclopedia",
+          "version": "0.9.8-v2.1-smartai-abilities",
+          "protocol": 1,
+          "sourceCommit": "ed0ce9b9bed2ecd6ff13c36b49700b66ad979b52",
+          "files": [
+            {
+              "name": "ForeverEncyclopedia.toc",
+              "size": 600,
+              "sha256": "202b4fdbdb18d5cee78d8a5671490dd8aae464121953ceaa38c4917e260252bf"
+            },
+            {
+              "name": "ForeverEncyclopediaTalentData.lua",
+              "size": 14806,
+              "sha256": "014914ff90993a5409d75228fdfb403146824022f0efed3ac4a60814cd5b2aaa"
+            },
+            {
+              "name": "ForeverEncyclopediaTalentOverrides.lua",
+              "size": 2663,
+              "sha256": "0475bf94ffb7c1872af9998be31d4d510665d78320183649eb5fd338cf0342b3"
+            },
+            {
+              "name": "ForeverEncyclopediaV21.lua",
+              "size": 35929,
+              "sha256": "c81c6f30178129ed68e1fb32927373ae6edc9aa31f237b5f3180b35f7c1ca3c5"
+            },
+            {
+              "name": "ForeverEncyclopediaAbilities.lua",
+              "size": 10537,
+              "sha256": "db9e0d1aaad0b8fac52e2b632fc5aa1fad67446db5180a5b2932b68d35ab3cd6"
+            },
+            {
+              "name": "ForeverEncyclopediaSafeDock.lua",
+              "size": 13355,
+              "sha256": "4c66b061bc3ba84e7557231b989e3aee4226000872e767567644a15e26623793"
+            },
+            {
+              "name": "ForeverEncyclopediaMovableDock.lua",
+              "size": 8746,
+              "sha256": "e18937020106990e293fa607875d4b2c2440f20766e04b524cef320cb6dd2912"
+            },
+            {
+              "name": "ForeverEncyclopediaGuard.lua",
+              "size": 2434,
+              "sha256": "0a42e2ae73e0cd7f8955d959f4cac1ef706ef0076edf1fe79854baf9be52ef85"
+            }
+          ],
+          "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia"
+        }
+      ]
+    },
+    "testing": {
+      "release": "testing-70658-20261107-1",
+      "clientBuild": 70658,
+      "addons": [
+        {
+          "name": "ForeverAscension",
+          "version": "1.11.0",
+          "protocol": 3,
+          "sourceCommit": "9437cf505cf0d2c697403c3c8191d031252ed4a2",
+          "files": [
+            {
+              "name": "Catalog.lua",
+              "size": 10098530,
+              "sha256": "313f9006bac84edeece333dbb4972c49774b5595a11d7f6b9188a585d6ad980e"
+            },
+            {
+              "name": "CharacterStats.lua",
+              "size": 7792,
+              "sha256": "3de4b3c7ab77f808f47129b74a3b4b8d5b14adb18bfc0ebb2bb26ca24ae5fa94"
+            },
+            {
+              "name": "CustomRules.lua",
+              "size": 470,
+              "sha256": "dcc3dbfffa1eef314836caa5a74e478a1f164c715d13bc96d8f6b54b11e0a4fd"
+            },
+            {
+              "name": "ForeverAscension.lua",
+              "size": 36397,
+              "sha256": "9cd87a60127468ede94510df4c4e36672c765d7ccc099d4003bd7685c7563e35"
+            },
+            {
+              "name": "ForeverAscension.toc",
+              "size": 331,
+              "sha256": "79773f1a62de4dc959905b9bd89099e6c281fc04060d6c436d99b654eba6f821"
+            },
+            {
+              "name": "Integration.lua",
+              "size": 9169,
+              "sha256": "d0956aa6239f01e1c409c8c467a501bcc71bc9de53044945e4a7e6fa408ad7a7"
+            },
+            {
+              "name": "Portrait.lua",
+              "size": 4465,
+              "sha256": "f595bbc1c553cd3b7d5db230bbafa25d44d98b2759824d1c58dd35aec9c815f2"
+            }
+          ],
+          "sourcePath": "mods/forever-advancement/addon/ForeverAscension"
+        },
+        {
+          "name": "ForeverEncyclopedia",
+          "version": "0.9.8-v2.1-smartai-abilities",
+          "protocol": 1,
+          "sourceCommit": "ed0ce9b9bed2ecd6ff13c36b49700b66ad979b52",
+          "files": [
+            {
+              "name": "ForeverEncyclopedia.toc",
+              "size": 600,
+              "sha256": "202b4fdbdb18d5cee78d8a5671490dd8aae464121953ceaa38c4917e260252bf"
+            },
+            {
+              "name": "ForeverEncyclopediaTalentData.lua",
+              "size": 14806,
+              "sha256": "014914ff90993a5409d75228fdfb403146824022f0efed3ac4a60814cd5b2aaa"
+            },
+            {
+              "name": "ForeverEncyclopediaTalentOverrides.lua",
+              "size": 2663,
+              "sha256": "0475bf94ffb7c1872af9998be31d4d510665d78320183649eb5fd338cf0342b3"
+            },
+            {
+              "name": "ForeverEncyclopediaV21.lua",
+              "size": 35929,
+              "sha256": "c81c6f30178129ed68e1fb32927373ae6edc9aa31f237b5f3180b35f7c1ca3c5"
+            },
+            {
+              "name": "ForeverEncyclopediaAbilities.lua",
+              "size": 10537,
+              "sha256": "db9e0d1aaad0b8fac52e2b632fc5aa1fad67446db5180a5b2932b68d35ab3cd6"
+            },
+            {
+              "name": "ForeverEncyclopediaSafeDock.lua",
+              "size": 13355,
+              "sha256": "4c66b061bc3ba84e7557231b989e3aee4226000872e767567644a15e26623793"
+            },
+            {
+              "name": "ForeverEncyclopediaMovableDock.lua",
+              "size": 8746,
+              "sha256": "e18937020106990e293fa607875d4b2c2440f20766e04b524cef320cb6dd2912"
+            },
+            {
+              "name": "ForeverEncyclopediaGuard.lua",
+              "size": 2434,
+              "sha256": "0a42e2ae73e0cd7f8955d959f4cac1ef706ef0076edf1fe79854baf9be52ef85"
+            }
+          ],
+          "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia"
+        }
+      ]
+    }
+  }
+}
