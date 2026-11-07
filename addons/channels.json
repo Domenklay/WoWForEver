@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107-archive-list-space-14",
+  "revision": "70658-20261107T150344403739Z",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,14 +102,14 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-14",
+      "release": "testing-70658-20261107-15",
       "clientBuild": 70658,
       "addons": [
         {
           "name": "ForeverAscension",
-          "version": "1.13.0",
+          "version": "1.13.1",
           "protocol": 3,
-          "sourceCommit": "ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2",
+          "sourceCommit": "9ae2d724fb9451812fc611501fb10a82d9590619",
           "sourcePath": "mods/forever-advancement/addon/ForeverAscension",
           "files": [
             {
@@ -119,18 +119,18 @@
             },
             {
               "name": "ForeverAscension.lua",
-              "size": 43210,
-              "sha256": "a648734d7f97be3bb42c27fc2a38742a5d2a5824387919d62feef1bb2ddcabdd"
+              "size": 43216,
+              "sha256": "fcecda76f182241632e8fb1b483dc9d70a3de8b19ff618ff7b786cb96d8f115c"
             },
             {
               "name": "ForeverAscension.toc",
               "size": 325,
-              "sha256": "c7d226acbc55da616a96e859e60f4f62625aa93a6e45af4fd9f60ad53805c94d"
+              "sha256": "57f9cb83146e0d7b334153561d6506f89ff95a52f6958d25a9d8dd8679334bfd"
             },
             {
               "name": "Integration.lua",
-              "size": 12662,
-              "sha256": "71f2c0c983d0e2e1532e540b06670bc58b79a35748f6a1b476b35cc28ff50df1"
+              "size": 18709,
+              "sha256": "6c33cdfe175bad12edb21e876a9f3e1a3144a4488476a8fc7420cbea2bd49e76"
             },
             {
               "name": "Portrait.lua",
