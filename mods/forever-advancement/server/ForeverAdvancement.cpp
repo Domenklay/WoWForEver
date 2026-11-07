@@ -26,6 +26,7 @@
 #include "TraitPacketsCommon.h"
 #include "Item.h"
 #include "Pet.h"
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <map>
@@ -88,23 +89,76 @@ static uint32 SchoolClassMask(uint32 skill)
     uint32 mask=0;for(auto row:sDB2Manager.GetSkillRaceClassInfo(skill)) mask|=uint32(row->ClassMask);
     return mask&0x7ff;
 }
+// A SkillLineXTraitTree root identifies the CLASS tree, not its three schools.
+// Resolve exact spell metadata first; never label a whole tree with its root skill.
+static uint32 ClassSchoolForSpec(uint32 owner,uint32 spec)
+{
+    // Stable native spec IDs; order indices differ (e.g. Restoration druid is 3).
+    static std::map<uint32,std::pair<uint32,uint32>> const schools={
+        {71,{1,26}},{72,{1,256}},{73,{1,257}},
+        {65,{2,56}},{66,{2,267}},{70,{2,184}},
+        {253,{3,50}},{254,{3,163}},{255,{3,51}},
+        {259,{4,253}},{260,{4,38}},{261,{4,39}},
+        {256,{5,613}},{257,{5,594}},{258,{5,78}},
+        {262,{7,375}},{263,{7,373}},{264,{7,374}},
+        {62,{8,237}},{63,{8,8}},{64,{8,6}},
+        {265,{9,355}},{266,{9,354}},{267,{9,593}},
+        {102,{11,574}},{103,{11,134}},{105,{11,573}}};
+    auto it=schools.find(spec);return it!=schools.end()&&it->second.first==owner?it->second.second:0;
+}
+static bool OwnedSchool(uint32 school,uint32 owner)
+{
+    auto skill=sSkillLineStore.LookupEntry(school);
+    return owner>=1&&owner<=11&&skill&&PlayerClassSchool(skill->CategoryID,skill->Flags)&&(SchoolClassMask(school)&(1u<<(owner-1)));
+}
 static uint32 TalentSchool(uint32 tree,uint32 owner,uint32 spell)
 {
-    std::set<uint32> roots;
-    for(auto link:sSkillLineXTraitTreeStore) if(uint32(link->TraitTreeID)==tree)
-        if(auto skill=sSkillLineStore.LookupEntry(link->SkillLineID);skill&&PlayerClassSchool(skill->CategoryID,skill->Flags)&&(SchoolClassMask(skill->ID)&(1u<<(owner-1)))) roots.insert(skill->ID);
-    if(roots.size()==1) return *roots.begin();
+    // The tree has already been checked for class ownership in LoadNativeTraits.
+    (void)tree;
     std::set<uint32> matches;auto bounds=sSpellMgr->GetSkillLineAbilityMapBounds(spell);
-    for(auto it=bounds.first;it!=bounds.second;++it) if(roots.count(it->second->SkillLine)) matches.insert(it->second->SkillLine);
+    for(auto it=bounds.first;it!=bounds.second;++it)
+        if(OwnedSchool(it->second->SkillLine,owner)) matches.insert(it->second->SkillLine);
+    // Talent.db2 supplies school metadata for passive/rank spells absent from SLA.
+    // It never creates a second talent node or changes TraitMgr allocation rules.
+    std::set<uint32> talents;
+    for(auto talent:sTalentStore) if(uint32(talent->ClassID)==owner)
+    {
+        bool exact=talent->SpellID==spell||std::find(talent->SpellRank.begin(),talent->SpellRank.end(),spell)!=talent->SpellRank.end();
+        if(!exact) continue;
+        uint32 school=0;
+        if(OwnedSchool(talent->TabID,owner)) school=talent->TabID;
+        else if(auto spec=sChrSpecializationStore.LookupEntry(talent->SpecID);spec&&uint32(spec->ClassID)==owner)
+            school=ClassSchoolForSpec(owner,spec->ID);
+        if(OwnedSchool(school,owner)) talents.insert(school);
+    }
+    if(talents.size()==1&&(matches.empty()||matches.count(*talents.begin()))) return *talents.begin();
     return matches.size()==1?*matches.begin():0;
 }
 static std::map<std::string,uint32> BranchSchools,BranchTrees;
 static void BuildTalentLayout()
 {
+    std::map<uint32,uint32> schools;
+    std::map<uint32,std::set<uint32>> neighbours;
+    for(auto const& [id,l]:TalentLayout) schools[id]=TalentSchool(l.tree,NativeMenu.at(id).owner,NativeMenu.at(id).spell);
+    for(auto edge:sTraitEdgeStore) for(auto const& [child,l]:TalentLayout)
+        if(l.node==uint32(edge->RightTraitNodeID)) for(auto const& [parent,p]:TalentLayout)
+            if(p.node==uint32(edge->LeftTraitNodeID)&&p.tree==l.tree&&NativeMenu.at(child).owner==NativeMenu.at(parent).owner)
+            {neighbours[child].insert(parent);neighbours[parent].insert(child);}
+    std::set<uint32> visited;
+    for(auto const& [id,l]:TalentLayout) if(!visited.count(id))
+    {
+        std::vector<uint32> component={id};std::set<uint32> evidence;visited.insert(id);
+        for(size_t i=0;i<component.size();++i)
+        {
+            auto node=component[i];if(schools[node]) evidence.insert(schools[node]);
+            for(auto next:neighbours[node]) if(visited.insert(next).second) component.push_back(next);
+        }
+        if(evidence.size()==1) for(auto node:component) if(!schools[node]) schools[node]=*evidence.begin();
+    }
     std::map<std::string,std::set<int32>> columns,rows;
     for(auto& [id,l]:TalentLayout)
     {
-        auto const& menu=NativeMenu.at(id);uint32 school=TalentSchool(l.tree,menu.owner,menu.spell);
+        auto const& menu=NativeMenu.at(id);uint32 school=schools[id];
         l.tag=std::to_string(menu.owner)+(school?"-school-":"-tree-")+std::to_string(school?school:l.tree);
         BranchSchools[l.tag]=school;BranchTrees[l.tag]=l.tree;
         columns[l.tag].insert(l.x);rows[l.tag].insert(l.y);
@@ -966,14 +1020,20 @@ public:
         {
             std::set<uint32> schools;
             for(auto const& [id,layout]:TalentLayout) if(NativeMenu.at(id).owner==owner&&BranchSchools[layout.tag]) schools.insert(BranchSchools[layout.tag]);
-            if(schools.size()!=3) {TC_LOG_ERROR("scripts","ForeverAdvancement player school audit failed: class {} has {} schools, expected 3; original runtime must be retained",owner,schools.size());return;}
+            uint32 unresolved=0;
+            for(auto const& [id,layout]:TalentLayout) if(NativeMenu.at(id).owner==owner&&!BranchSchools[layout.tag])
+            {
+                if(unresolved<6) TC_LOG_ERROR("scripts","ForeverAdvancement unresolved school: class {} spell {} node {} tree {}",owner,NativeMenu.at(id).spell,layout.node,layout.tree);
+                ++unresolved;
+            }
+            if(schools.size()!=3||unresolved) {TC_LOG_ERROR("scripts","ForeverAdvancement player school audit failed: class {} has {} schools, expected 3; {} unresolved nodes; original runtime must be retained",owner,schools.size(),unresolved);return;}
         }
         TC_LOG_INFO("scripts","ForeverAdvancement player school audit passed: three native schools for each classic class; pets and collections excluded");
         PublishBookSchoolMetadata();PublishBookMetadata();
         TC_LOG_INFO("scripts","ForeverAdvancement native catalogue: {} supported records; {} resource exclusions; {} native trait entries",accepted,rejected,seenTraits.size());
         TC_LOG_INFO("scripts","ForeverAdvancement catalog audit: {}; legacy talents hidden; no name substitutions",audit?"written to ForeverAdvancement-catalog.tsv":"could not open audit file");
         TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: {} purchasable native nodes; native TraitMgr validation",TalentCatalog.size());
-        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: 0 visible abilities; protocol=3; version=1.14.0");
+        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: 0 visible abilities; protocol=3; version=1.14.1");
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} native ability entries; {} native talent nodes; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }
 };

@@ -151,7 +151,7 @@ class ServicesTrial:
                             'org.wowforever.encyclopedia': game['encyclopedia'],
                             'org.wowforever.scaling': '0.2.0'}
                 self.advancement_version=labels.get('org.wowforever.advancement')
-                if self.advancement_version not in ('1.11.0','1.12.0','1.13.0','1.14.0') or any(labels.get(k) != v for k, v in expected.items()):
+                if self.advancement_version not in ('1.11.0','1.12.0','1.13.0','1.14.0','1.14.1') or any(labels.get(k) != v for k, v in expected.items()):
                     raise ValueError('Saved gameplay image labels differ from the backup')
         if self.candidate:
             item=base.game.adv.image(self.candidate)
@@ -332,8 +332,9 @@ class ServicesTrial:
                 raise sql.TrialFailure('Restored worldserver restarted during readiness')
             last = module_readiness.snapshot(self, self.state, item)
             text = '\n'.join(last['lines'])
-            if any(v in text for v in ('schema missing', 'script registration missing')):
-                raise sql.TrialFailure('Restored module schema/registration failed')
+            failures = module_readiness.startup_failures(last)
+            if failures:
+                raise sql.TrialFailure('Restored module initialization failed: ' + '; '.join(failures[-6:]))
             if all(p in text for p in patterns):
                 try:
                     self.exec('worldserver', 'python3', '-c',
@@ -344,10 +345,12 @@ class ServicesTrial:
                 except sql.DockerFailure:
                     pass
             if time.monotonic() >= progress_at:
-                print('Waiting for restored world TCP 8085, online realm and three module markers...', flush=True)
+                missing = [p for p in patterns if p not in text]
+                print('Waiting for restored world readiness; missing: ' + '; '.join(missing) if missing
+                      else 'Waiting for restored world TCP 8085 and online realm...', flush=True)
                 progress_at = time.monotonic() + 20
             time.sleep(3)
-        raise sql.TrialFailure('Restored worldserver/modules readiness timed out')
+        raise sql.TrialFailure('Restored readiness timed out; missing: ' + ('; '.join(p for p in patterns if p not in '\n'.join(last.get('lines', []))) or 'TCP 8085 / online realm'))
 
     def probes(self):
         """Probe only internal aliases, verify restored CA and certificate hostname."""
@@ -482,6 +485,7 @@ def run_check(backup, work_parent, timeout=600, candidate=None):
                 report['diagnostics_unavailable'] = True
         report['error'] = str(error) if isinstance(error, (ValueError, sql.DockerFailure, sql.TrialFailure)) else type(error).__name__
         save()
+        print('Service trial diagnostics: ' + str(report_path), file=sys.stderr)
         raise
     finally:
         print('Removing only the labelled service trial and its private extracted files...', flush=True)

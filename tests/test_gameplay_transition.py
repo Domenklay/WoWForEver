@@ -153,7 +153,7 @@ class TransitionTests(unittest.TestCase):
                 self.assertEqual(len(sql_calls),2);self.assertIn('CREATE TABLE IF NOT EXISTS forever_advancement_preferences',sql_calls[1])
                 self.assertNotIn('DROP ',sql_calls[1]);self.assertNotIn('DELETE ',sql_calls[1])
                 saved=t.clean.load_state(root/'state.json')
-                self.assertEqual(saved['advancement']['version'],'1.14.0')
+                self.assertEqual(saved['advancement']['version'],'1.14.1')
                 self.assertEqual(saved['gameplay']['scaling'],'0.4.0')
                 self.assertEqual(saved['gameplay']['dungeonfinder'],'0.2.0')
                 self.assertTrue(saved['gameplay']['dungeon_solo_enabled'])

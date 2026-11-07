@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Progress-preserving 70658 upgrade to Ascension 1.13 + Dungeon Scaling 0.4; trial before cutover."""
+"""Progress-preserving 70658 upgrade to Ascension 1.14.1 + Dungeon Scaling 0.4; trial before cutover."""
 import argparse
 import copy
 import fcntl
@@ -191,7 +191,7 @@ def apply(root,record):
         target['gameplay'].update(source_sha256=game.source_id(), transition=path,
                                   scaling=game.SCALING_VERSION, dungeonfinder=NEW_DUNGEONFINDER_VERSION,
                                   dungeon_solo_enabled=True, dungeon_finder_enabled=True)
-        target['database_version']='gameplay-1.14@pristine-'+before['core'][:12]
+        target['database_version']='gameplay-1.14.1@pristine-'+before['core'][:12]
         model=json.loads(record['compose_before']);model['services']['worldserver']['image']=record['candidate_tag']
         # Only the worldserver module toggles change: credentials, ports,
         # named database volumes, bind mounts and every other service stay put.
@@ -214,7 +214,7 @@ def apply(root,record):
         clean.save(target);upgrade.private_text(root/'server.sh',upgrade.control_text(root),0o700)
         if record['previous_running']:clean.compose(target,'up','-d','--no-build','--no-deps',*record['previous_running'])
         save(record,'active');(root/MARKER).unlink()
-        print('GAMEPLAY UPGRADED: Ascension 1.14.0, Scaling 0.4.0, DungeonFinder 0.2.0 (solo+group enabled); character progress retained',flush=True)
+        print('GAMEPLAY UPGRADED: Ascension 1.14.1, Scaling 0.4.0, DungeonFinder 0.2.0 (solo+group enabled); character progress retained',flush=True)
     except BaseException:
         try:
             clean.write_private(Path(record['directory'])/'startup-diagnostics.json',adv.module_readiness.snapshot(clean,before,clean.container(before,'worldserver'),allow_stopped=True))
@@ -246,5 +246,5 @@ if __name__=='__main__':
     try:main()
     except (OSError,ValueError,KeyError,RuntimeError) as e:
         # Avoid raw Docker/SQL/credential-bearing output on the terminal.
-        print('Gameplay transition stopped: '+(str(e) if isinstance(e,ValueError) else type(e).__name__)+'. Check the private transition record.',file=sys.stderr)
+        print('Gameplay transition stopped: '+(str(e) if isinstance(e,(ValueError,trial.sql.TrialFailure)) else type(e).__name__)+'. See the diagnostics/report path above.',file=sys.stderr)
         raise SystemExit(1)

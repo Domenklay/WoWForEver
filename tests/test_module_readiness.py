@@ -100,6 +100,15 @@ class ModuleReadinessTests(unittest.TestCase):
         with patch.object(ready,'snapshot',return_value=report):
             with self.assertRaisesRegex(RuntimeError,'schema missing'):ready.wait(service,{},['ready'])
 
+    def test_school_audit_failure_stops_wait_immediately_with_the_actual_reason(self):
+        service=Mock();service.container.return_value={'Id':'current','State':{'StartedAt':START,'Running':True}}
+        line='ForeverAdvancement player school audit failed: class 1 has 1 schools, expected 3'
+        report=dict(lines=[line],settings={},serverLogStatus='current-process-file')
+        with patch.object(ready,'snapshot',return_value=report), patch.object(ready.time,'sleep') as pause:
+            with self.assertRaisesRegex(RuntimeError,'class 1 has 1 schools'):
+                ready.wait(service,{},['ready'],600)
+            pause.assert_not_called()
+
     def test_failure_capture_keeps_stopped_process_errors_before_recreation(self):
         service=Mock();service.run.return_value='ForeverAdvancement schema missing: table'
         item={'Id':'failed-candidate','Config':{'Image':'candidate'},'State':{'StartedAt':START,'Running':False,'ExitCode':1}}

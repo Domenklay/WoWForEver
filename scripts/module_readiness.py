@@ -68,6 +68,13 @@ def snapshot(clean, state, item, *, allow_stopped=False):
     return result
 
 
+def startup_failures(report):
+    """Only explicit module initialization failures from current-process evidence."""
+    markers = ('schema missing', 'script registration missing',
+               'player school audit failed', 'native catalog empty; disabled')
+    return [line for line in report.get('lines', []) if any(marker in line for marker in markers)]
+
+
 def wait(clean, state, patterns, timeout=180):
     deadline = time.monotonic() + timeout
     clean.wait_world(state, timeout)
@@ -86,7 +93,7 @@ def wait(clean, state, patterns, timeout=180):
             raise RuntimeError('Worldserver changed during startup evidence collection')
         missing = [p for p in patterns if p not in text]
         if not missing: return report
-        failure = [line for line in report['lines'] if 'schema missing' in line or 'script registration missing' in line]
+        failure = startup_failures(report)
         disabled = [k for k,v in report['settings'].items() if k.endswith('.Enable') and v is not None and v.strip('"').lower() in ('0','false','no','off')]
         if failure or disabled or time.monotonic() >= deadline:
             detail = '\n'.join(failure or report['lines'][-16:])

@@ -115,6 +115,18 @@ class BaselineServiceTests(unittest.TestCase):
                 with self.assertRaises(ValueError): trial.cleanup_report(path)
                 docker.assert_not_called()
 
+    def test_failed_school_audit_ends_trial_before_sleeping_and_preserves_reason(self):
+        with tempfile.TemporaryDirectory() as temp:
+            t=trial.ServicesTrial(manifest(),Path(temp),NONCE,candidate=IMAGE)
+            t.advancement_version='1.14.1'
+            item={'Id':'trial-world','State':{'Running':True,'StartedAt':'2026-11-07T00:00:00Z'}}
+            line='ForeverAdvancement player school audit failed: class 1 has 1 schools, expected 3'
+            report=dict(lines=[line],settings={},serverLogStatus='current-process-file')
+            with patch.object(t,'check_container',return_value=item), patch.object(trial.module_readiness,'snapshot',return_value=report), patch.object(trial.time,'sleep') as pause:
+                with self.assertRaisesRegex(trial.sql.TrialFailure,'class 1 has 1 schools'):
+                    t.ready(600)
+                pause.assert_not_called()
+
     def test_saved_credentials_are_replaced_and_only_archived_sources_mounted(self):
         with tempfile.TemporaryDirectory() as temp:
             folder=Path(temp)

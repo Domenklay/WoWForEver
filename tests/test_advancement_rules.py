@@ -426,6 +426,73 @@ int main() {
             self.assertEqual(result.returncode,0,result.stderr)
             subprocess.run([str(root/'test')],check=True,capture_output=True)
 
+    def test_classwide_root_does_not_collapse_three_spell_schools(self):
+        source=SOURCE.read_text()
+        code=r'''#include <algorithm>
+#include <array>
+#include <cassert>
+#include <map>
+#include <set>
+#include <string>
+#include <vector>
+using int32=int;using uint32=unsigned;
+constexpr int SKILL_CATEGORY_CLASS=7;
+template<class T> struct Store {
+ std::vector<T const*> rows;
+ auto begin()const{return rows.begin();}auto end()const{return rows.end();}
+ T const* LookupEntry(uint32 id){for(auto row:rows)if(row->ID==id)return row;return nullptr;}
+};
+struct Names {std::array<char const*,9> Str={};};
+struct Skill {uint32 ID;int CategoryID=7;uint32 Flags=1040;Names DisplayName={};};Store<Skill> sSkillLineStore;
+struct Info {uint32 ClassMask;};
+struct Manager {std::map<uint32,std::vector<Info const*>> infos;auto GetSkillRaceClassInfo(uint32 id){return infos[id];}} sDB2Manager;
+struct SkillTree {uint32 ID,SkillLineID,TraitTreeID;};Store<SkillTree> sSkillLineXTraitTreeStore;
+struct Ability {uint32 SkillLine;};
+struct Spells {std::multimap<uint32,Ability const*> rows;auto GetSkillLineAbilityMapBounds(uint32 id){return rows.equal_range(id);}} manager;auto sSpellMgr=&manager;
+struct Talent {uint32 ID,ClassID,SpellID,TabID=0,SpecID=0;std::array<uint32,9> SpellRank={};};Store<Talent> sTalentStore;
+struct Spec {uint32 ID,ClassID;int OrderIndex=0;};Store<Spec> sChrSpecializationStore;
+struct Edge {uint32 ID,RightTraitNodeID,LeftTraitNodeID;};Store<Edge> sTraitEdgeStore;
+struct Menu {uint32 owner,spell;};std::map<uint32,Menu> NativeMenu;
+struct Layout {uint32 node,tree;int32 x,y;float offset=0,col=0,row=0;std::string tag={};};
+std::map<uint32,Layout> TalentLayout;
+std::map<uint32,std::string> TreeTitles;
+std::map<std::string,std::string> BranchTitles;
+std::map<uint32,std::vector<uint32>> TalentParents;
+'''+function(source,'static bool PlayerClassSchool(')+function(source,'static uint32 SchoolClassMask(')+function(source,'static uint32 ClassSchoolForSpec(')+function(source,'static bool OwnedSchool(')+function(source,'static uint32 TalentSchool(')+'''
+static std::map<std::string,uint32> BranchSchools,BranchTrees;
+'''+function(source,'static void BuildTalentLayout()')+r'''
+int main() {
+ Skill arms{26},fury{256},protection{257},pet{188,7,0},mage{237};
+ sSkillLineStore.rows={&arms,&fury,&protection,&pet,&mage};Info warrior{1},magician{128};
+ for(auto id:{26,256,257,188}) {sDB2Manager.infos[id]={&warrior};}
+ sDB2Manager.infos[237]={&magician};
+ // The actual failure shape: ONE class-tree link, THREE schools inside that tree.
+ SkillTree root{1,26,1090};sSkillLineXTraitTreeStore.rows={&root};
+ Ability a{26},f{256},p{257},animal{188},foreign{237};
+ manager.rows={{100,&a},{200,&f},{300,&p},{400,&animal},{500,&foreign},{600,&a},{600,&f}};
+ assert(TalentSchool(1090,1,100)==26&&TalentSchool(1090,1,200)==256&&TalentSchool(1090,1,300)==257);
+ assert(!TalentSchool(1090,1,400)&&!TalentSchool(1090,1,500)&&!TalentSchool(1090,1,600));
+ assert(!TalentSchool(1090,1,999)); // root skill is not evidence for an unlisted spell
+ Spec spec{72,1};sChrSpecializationStore.rows={&spec};Talent passive{1,1,201,0,72};passive.SpellRank[1]=202;sTalentStore.rows={&passive};
+ assert(TalentSchool(1090,1,201)==256&&TalentSchool(1090,1,202)==256);
+ assert(ClassSchoolForSpec(11,105)==573&&!ClassSchoolForSpec(11,104)&&!ClassSchoolForSpec(1,105));
+ NativeMenu={{1,{1,100}},{2,{1,200}},{3,{1,300}},{4,{1,999}}};
+ TalentLayout={{1,{11,1090,5000,0}},{2,{12,1090,6000,0}},{3,{13,1090,7000,0}},{4,{14,1090,7100,100}}};
+ Edge edge{1,14,13};sTraitEdgeStore.rows={&edge};BuildTalentLayout();
+ std::set<uint32> schools;for(auto const& [id,l]:TalentLayout)schools.insert(BranchSchools[l.tag]);
+ assert((schools==std::set<uint32>{26,256,257}));assert(BranchSchools[TalentLayout[4].tag]==257);
+ assert(TalentLayout[1].col==0&&TalentLayout[2].col==0&&TalentLayout[3].col==0&&TalentLayout[4].col==1);
+ // A cross-school dependency must never relabel an ambiguous/unlisted node.
+ Edge cross{2,11,14};sTraitEdgeStore.rows={&edge,&cross};BuildTalentLayout();
+ assert(!BranchSchools[TalentLayout[4].tag]);
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(code)
+            result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            subprocess.run([str(root/'test')],check=True,capture_output=True)
+
     def test_trait_rank_bridge_preserves_native_config_and_never_learns_spells(self):
         code=r'''#include <cassert>
 #include <map>
