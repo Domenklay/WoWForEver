@@ -778,6 +778,20 @@ public:
             uint32 id=1500000000+row.owner*10000000+row.entry;
             NativeMenu[id]={id,row.owner,row.spell,std::max<uint32>(1,info->SpellLevel),1,row.max,row.entry,false,"native_rules_required"};
         }
+        // Forever may expose stock class talents through Talent.db2 as well as Trait*.
+        // Read that client/core store, never the donor's AscensionTalentSourceEntries.
+        for(auto talent:sTalentStore)
+        {
+            uint32 owner=talent->ClassID;if(!SupportedClass(owner)||talent->ID>=10000000) continue;
+            uint32 spell=talent->SpellID,max=0;
+            for(auto rank:talent->SpellRank) if(rank) { if(!max) spell=rank;++max; }
+            if(!spell) continue;if(!max) max=1;
+            auto info=sSpellMgr->GetSpellInfo(spell,DIFFICULTY_NONE);
+            record("talent",owner,spell,info?"native_rules_required":"missing_spell");
+            if(!info||std::any_of(NativeMenu.begin(),NativeMenu.end(),[&](auto const& pair){return pair.second.kind==1&&pair.second.owner==owner&&pair.second.spell==spell;})) continue;
+            uint32 id=1700000000+owner*10000000+talent->ID;
+            NativeMenu[id]={id,owner,spell,std::max<uint32>(1,info->SpellLevel),1,max,0,false,"native_rules_required"};
+        }
         if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement native catalog empty; disabled");return; }
         PublishBookSchoolMetadata();PublishBookMetadata();
         TC_LOG_INFO("scripts","ForeverAdvancement native catalogue: {} supported records; {} resource exclusions; {} native talent entries (browse only)",accepted,rejected,seenTraits.size());

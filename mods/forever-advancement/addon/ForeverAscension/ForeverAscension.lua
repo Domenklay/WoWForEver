@@ -119,7 +119,7 @@ local function tooltip(self)
  local tipSpell=(state and state.known and state.known[row.ID]) or (d and (d.spell or row.Spells[math.max(1,rank)]))
  GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
  local description
- if d and d.traitEntry and C_Traits and C_Traits.GetTraitDescription then
+ if d and d.traitEntry and d.traitEntry>0 and C_Traits and C_Traits.GetTraitDescription then
   local ok,value=pcall(C_Traits.GetTraitDescription,d.traitEntry,math.max(1,rank));if ok and type(value)=="string" and value~="" then description=value end
  end
  if description then GameTooltip:SetText(spellName(row),1,0.82,0.25);GameTooltip:AddLine(description,1,1,1,true)

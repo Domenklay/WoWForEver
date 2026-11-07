@@ -92,6 +92,10 @@ def prepare(root,backup,jobs,reuse=False):
 
 
 def rollback(root,record):
+    if record.get('phase') in ('prepared','rolled-back'):
+        print('No active transition to roll back; services unchanged',flush=True);return
+    if record.get('phase') not in ('starting','backed-up','active'):
+        raise ValueError('Unknown transition phase')
     path=str(Path(record['directory'])/'transition.json');marker=root/MARKER
     if marker.exists() and json.loads(marker.read_text()).get('record')!=path:
         raise ValueError('Another transition owns the recovery marker')
@@ -121,6 +125,7 @@ def apply(root,record):
     check_before(before,json.loads(record['compose_before']));game.check_image(adv.image(record['candidate']),before,candidate=True)
     size=int(clean.sql(before,"SELECT COALESCE(SUM(DATA_LENGTH+INDEX_LENGTH),0) FROM information_schema.TABLES WHERE TABLE_SCHEMA IN ('auth','world','characters','hotfixes');").strip())
     if shutil.disk_usage(root).free<max(1024**3,2*size):raise ValueError('Not enough space for the current four-database backup')
+    game.wait_module(before)
     record['previous_running']=upgrade.stop_running(before)
     clean.write_private(root/MARKER,{'record':path});save(record,'starting')
     try:
