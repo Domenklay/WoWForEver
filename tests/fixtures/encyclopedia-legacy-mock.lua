@@ -154,10 +154,19 @@ assert(ForeverEncyclopediaLegacyTab:GetID()==4)
 assert(ForeverEncyclopediaLegacyTab.iconTexture=="Interface\\Icons\\INV_Misc_Book_09")
 assert(legacy.title==title and legacy.currentPage==3)
 
+local function currentlyVisible(frame)
+    local f=frame
+    while f do
+        if not f.visible then return false end
+        if f==legacy then return true end
+        f=f.parent
+    end
+    return false
+end
 local function click(text)
     for i=#Frames,1,-1 do
         local f=Frames[i]
-        if f.visible and f.scripts.OnClick and not f.disabled then
+        if currentlyVisible(f) and f.scripts.OnClick and not f.disabled then
             for _,r in ipairs(f.regions) do
                 if r.text==text then f.scripts.OnClick(f);return true end
             end
@@ -174,10 +183,8 @@ end
 local function visibleModels()
     local found={}
     for _,f in ipairs(Frames) do
-        if f.type=="PlayerModel" and f.parent and f.parent:IsShown() and f:IsShown() then
-            local p=f.parent
-            while p and p~=legacy and p:IsShown() do p=p.parent end
-            if p==legacy then found[#found+1]=f end
+        if f.type=="PlayerModel" and currentlyVisible(f) then
+            found[#found+1]=f
         end
     end
     return found
@@ -193,6 +200,19 @@ assert(#calls.buy==1)
 assert(not click("Изучить за 3 знаний"))
 api.Refresh("talents") -- server acknowledges and delivers a new status
 assert(countObjects("ScrollFrame")>=2,"Talent tree/detail ScrollFrame missing")
+local treeScroll
+for _,f in ipairs(Frames) do
+    if f.type=="ScrollFrame" and currentlyVisible(f) and f.scrollChild and f.scrollChild:GetHeight()>600 then treeScroll=f end
+end
+assert(treeScroll and treeScroll.scripts.OnMouseWheel,"Scrollable full talent tree missing")
+treeScroll.scripts.OnMouseWheel(treeScroll,-1)
+assert(treeScroll:GetVerticalScroll()>0,"Mouse wheel must move the talent tree")
+-- A fully studied talent must never show 'Изучить за 0 знаний'.
+state.ranks.aegis_unlock=1
+api.Refresh("talents")
+assert(not click("Изучить за 0 знаний"),"Max-ranked talent must have no buy button")
+state.ranks.aegis_unlock=0
+api.Refresh("talents")
 assert(click("Коллекция"),"Collection subtab is missing")
 assert(click("Существа"),"Clickable collected-knowledge category missing")
 assert(calls.catalog>=1,"Creature category must request the real catalog")
