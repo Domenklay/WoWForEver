@@ -156,6 +156,13 @@ local function requestCreatureLoot(entry)
     if not state.lootSupported or not entry or entry<1 then return false end
     local prior=state.lootByCreature[entry]
     if prior and (prior.loaded or prior.loading) then return false end
+    -- Changing creature invalidates any queued, unfinished older preview.
+    -- Otherwise returning to the old creature could stick on "Загрузка..."
+    -- forever because its cancelled cache remains marked as loading.
+    if state.lootRequestEntry~=entry then
+        local abandoned=state.lootByCreature[state.lootRequestEntry]
+        if abandoned and abandoned.loading then abandoned.loading=false end
+    end
     lootGeneration=lootGeneration+1
     local gen=lootGeneration
     lootRequestPage=1
