@@ -99,20 +99,30 @@ static bool EnabledFor(Creature const* creature, WorldObject const* target)
     if (!map || map->IsBattlegroundOrArena())
         return false;
 
-    return creature->IsHostileTo(player);
+    if (creature->IsHostileTo(player))
+        return true;
+
+    // Yellow combat-neutral NPCs may also scale, but never convert peaceful
+    // civilians, traders or low-level starter NPCs into scaled targets.
+    return creature->GetLevel() >= 10 &&
+        creature->GetReactionTo(player) == REP_NEUTRAL &&
+        !creature->IsCivilian() &&
+        !creature->IsVendor() && !creature->IsTrainer() &&
+        !creature->IsQuestGiver() && !creature->IsGossip() &&
+        player->IsValidAttackTarget(creature);
 }
 
 static uint8 LevelFor(Creature const* creature, Player const* player)
 {
     int playerLevel = std::max(1, int(player->GetEffectiveLevel()));
     int originalLevel = std::max(1, int(creature->GetLevel()));
-    int minOffset = EnvInt("FOREVER_SCALING_MIN_OFFSET", -9, -100, 100);
+    int minOffset = EnvInt("FOREVER_SCALING_MIN_OFFSET", -3, -100, 100);
     int creatureMax = EnvInt("FOREVER_SCALING_CREATURE_MAX_LEVEL", 70, 1, 255);
 
     // Forever progression rule: preserve the creature's original level unless it
     // fell below the minimum-XP floor for this particular player.
-    // Examples: player 11 + creature 6 => 6; player 20 + creature 6 => 11;
-    // player 60 + creature 6 => 51.  The physical Creature level is never changed.
+    // Examples: player 11 + creature 6 => 6; player 20 + creature 6 => 17;
+    // player 60 + creature 6 => 57.  The physical Creature level is never changed.
     int minimumXpLevel = std::max(1, playerLevel + minOffset);
     int raisedLevel = std::min(creatureMax, minimumXpLevel);
     return uint8(std::clamp(std::max(originalLevel, raisedLevel), 1, 255));
