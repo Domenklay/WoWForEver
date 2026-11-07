@@ -23,4 +23,6 @@ jobs:
           luac -p mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
           luac -p tests/fixtures/native-dungeon-tab.lua
       - name: Exercise native Group Finder tab and FDF transport
-        run: lua tests/fixtures/native-dungeon-tab.lua mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
+        run: |
+          lua tests/fixtures/native-dungeon-tab.lua mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua
+          lua tests/fixtures/native-dungeon-tab.lua mods/living-encyclopedia/addon/ForeverEncyclopedia/ForeverDungeonFinder.lua pve
