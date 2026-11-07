@@ -71,6 +71,21 @@ end
 local function requestBaseStatus() send(BASE_REQ,"status") end
 local function requestTalentStatus() send(TAL_REQ,"status") end
 local function requestRuntimeStatus() send(RUNTIME_REQ,"status") end
+local fecQueue={}
+local fecQueueRunning=false
+local function queueCatalogRequest(payload,valid)
+    fecQueue[#fecQueue+1]={payload=payload,valid=valid}
+    if fecQueueRunning then return end
+    fecQueueRunning=true
+    local function pump()
+        local job=table.remove(fecQueue,1)
+        if not job then fecQueueRunning=false; return end
+        if not job.valid or job.valid() then send(BASE_REQ,job.payload) end
+        -- Forever server applies a 150ms rate limiter to all FEC1 requests.
+        C_Timer.After(0.27,pump)
+    end
+    C_Timer.After(0.27,pump)
+end
 local function requestCatalog(page) send(BASE_REQ,"catalog "..tostring(page or 1).." 0 0 -1") end
 
 -- Client 70658 / server FEC1 is deliberately paged (8 records per response).
@@ -91,7 +106,10 @@ local function requestFullCatalog()
     state.catalogAllZone=state.zone
     catalogAllSeen={}
     catalogRequestPage=1
-    requestCatalog(1)
+    local gen=catalogAllGeneration
+    queueCatalogRequest("catalog 1 0 0 -1",function()
+        return gen==catalogAllGeneration and state.catalogAllLoading and catalogRequestPage==1
+    end)
 end
 
 local function requestFullArchive()
@@ -103,20 +121,23 @@ local function requestFullArchive()
     state.archiveLoading=true
     archiveSeen={}
     archiveRequestPage=1
-    send(BASE_REQ,"archive 1")
+    local gen=archiveGeneration
+    queueCatalogRequest("archive 1",function()
+        return gen==archiveGeneration and state.archiveLoading and archiveRequestPage==1
+    end)
     return true
 end
 
 local function scheduleCatalogPage(page,generation)
-    C_Timer.After(0.26,function()
-        if generation~=catalogAllGeneration or not state.catalogAllLoading then return end
-        if page==catalogRequestPage then requestCatalog(page) end
+    queueCatalogRequest("catalog "..page.." 0 0 -1",function()
+        return generation==catalogAllGeneration and state.catalogAllLoading
+            and page==catalogRequestPage
     end)
 end
 local function scheduleArchivePage(page,generation)
-    C_Timer.After(0.26,function()
-        if generation~=archiveGeneration or not state.archiveLoading then return end
-        if page==archiveRequestPage then send(BASE_REQ,"archive "..page) end
+    queueCatalogRequest("archive "..page,function()
+        return generation==archiveGeneration and state.archiveLoading
+            and page==archiveRequestPage
     end)
 end
 local function requestZones() state.recentZones={}; state.recentZonesLoaded=false; send(BASE_REQ,"recent 3") end
@@ -463,7 +484,7 @@ local function parseBase(msg)
         state.catalogLoaded=true
         state.online=true
         selectedCreature=math.min(math.max(1,selectedCreature),math.max(1,#state.catalog))
-        queueCatalogInfo()
+        if not state.catalogAllLoading then queueCatalogInfo() end
         if state.catalogAllLoading and state.catalogPage==catalogRequestPage then
             for _,rec in ipairs(state.catalog) do
                 if rec.entry>0 and not catalogAllSeen[rec.entry] then
