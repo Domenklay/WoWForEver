@@ -83,8 +83,8 @@ SQL or service trials without a new change or unresolved concern.
 
 ## Launcher
 
-Verified Multi 1.8.0 source `d55f1662aa8ba8ef8b6e6bac54b39462adec7fa0`:
-Windows run 42358676742, artifact 13568828528. 80 launcher tests and 224 worker
+Verified Multi 1.9.0 source `16325671a45fd9702d1364db9060e200eac6c920`:
+Windows run 42361020986, artifact 13570041961. 81 launcher tests and 224 worker
 tests passed, with five-language UI, PS5.1 and NSIS/portable; archive/EXE hashes,
 matching GPL worker sources and unchanged CA checked. Chromium verified controls,
 save/reopen/cancel and disabled file mutations. User runtime test is pending;
@@ -92,7 +92,7 @@ working baseline launcher remains 1.7.0, with previous verified release 1.7.1.
 
 Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
 catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
-sets. Both initially use the approved source bytes. Use scripts/update-addon-channel.py
+sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has Ascension 1.12.0 and Encyclopedia 0.9.10. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
 and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
 synchronize the working branch. Catalogue CI 42359312577 checked the actual pinned
 Git payloads. Metadata-only catalogue edits need no launcher rebuild. Old
@@ -150,3 +150,20 @@ Docker/MySQL data, as configured in baseline-backup.yml. Native worker license
 and matching source must accompany binary delivery. Core changes compile against
 the exact pinned headers/CMake flags; syntax checks alone do not prove linking
 or gameplay. Follow the current user's authorization over historical guidelines.
+
+## Prepared native multiclass candidate
+
+Active user server is still confirmed 1.11.0. Development source now offers 1.12.0:
+90/10 XP with per-character opt-out, integer carry and capped-subclass refunds; native
+class spell catalogue and native trait browser. Legacy/custom menu and old talent
+allocation are hidden. Native subclass talent allocation is NOT implemented: do not
+claim browse-only entries as learnable or bypass TraitMgr conditions/choices/currencies.
+Old purchases/ranks remain stored. See docs/MULTICLASS-1.12.ru.md.
+
+Use upgrade-clean-gameplay.py prepare for a full build + isolated restored-baseline
+candidate trial, then its exact record and same checkout for apply/rollback. SQL is
+additive preferences only. Rollback restores runtime without importing old databases;
+cancelling a merely prepared candidate must never stop live services. User trial and
+installation of this candidate remain pending. Keep the controller worktrees.
+Multi 1.9 moves channel/update/development controls to the AddOns page and reads
+installed TOC versions plus receipt hashes. Journal is a full page with an empty state.

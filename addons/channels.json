@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107-2",
+  "revision": "70658-20261107T100650670472Z",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,39 +102,30 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-2",
+      "release": "testing-70658-20261107-3",
       "clientBuild": 70658,
       "addons": [
         {
           "name": "ForeverAscension",
-          "version": "1.11.0",
+          "version": "1.12.0",
           "protocol": 3,
-          "sourceCommit": "9437cf505cf0d2c697403c3c8191d031252ed4a2",
+          "sourceCommit": "3add1965219c5e3fb3e0b9c893661a0d8e8bdb23",
+          "sourcePath": "mods/forever-advancement/addon/ForeverAscension",
           "files": [
-            {
-              "name": "Catalog.lua",
-              "size": 10098530,
-              "sha256": "313f9006bac84edeece333dbb4972c49774b5595a11d7f6b9188a585d6ad980e"
-            },
             {
               "name": "CharacterStats.lua",
               "size": 7792,
               "sha256": "3de4b3c7ab77f808f47129b74a3b4b8d5b14adb18bfc0ebb2bb26ca24ae5fa94"
             },
             {
-              "name": "CustomRules.lua",
-              "size": 470,
-              "sha256": "dcc3dbfffa1eef314836caa5a74e478a1f164c715d13bc96d8f6b54b11e0a4fd"
-            },
-            {
               "name": "ForeverAscension.lua",
-              "size": 36397,
-              "sha256": "9cd87a60127468ede94510df4c4e36672c765d7ccc099d4003bd7685c7563e35"
+              "size": 39150,
+              "sha256": "eebd936934991c18297224b31185506f653eff9e58376f979acfeec646a9347b"
             },
             {
               "name": "ForeverAscension.toc",
-              "size": 331,
-              "sha256": "79773f1a62de4dc959905b9bd89099e6c281fc04060d6c436d99b654eba6f821"
+              "size": 325,
+              "sha256": "63c65b9c298c887119b6deaffdf4cf91685325a2612b25ed326cc24a3329e783"
             },
             {
               "name": "Integration.lua",
@@ -146,8 +137,7 @@
               "size": 4465,
               "sha256": "f595bbc1c553cd3b7d5db230bbafa25d44d98b2759824d1c58dd35aec9c815f2"
             }
-          ],
-          "sourcePath": "mods/forever-advancement/addon/ForeverAscension"
+          ]
         },
         {
           "name": "ForeverEncyclopedia",

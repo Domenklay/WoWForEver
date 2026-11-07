@@ -153,13 +153,13 @@
   },
   "launcher": {
     "working_baseline": "1.7.0",
-    "latest_verified_release": "1.8.0",
+    "latest_verified_release": "1.9.0",
     "latest_user_install_confirmed": false,
-    "source_commit": "d55f1662aa8ba8ef8b6e6bac54b39462adec7fa0",
-    "workflow_run": 42358676742,
-    "artifact": 13568828528,
-    "download_url": "https://github.com/Domenklay/WoWForEver/actions/runs/42358676742/artifacts/13568828528",
-    "zip_sha256": "f55aed4ff7f8b141ffa3289b4254b24caffd4c7b090dcd75bd5401a3543d1b96",
+    "source_commit": "16325671a45fd9702d1364db9060e200eac6c920",
+    "workflow_run": 42361020986,
+    "artifact": 13570041961,
+    "download_url": "https://github.com/Domenklay/WoWForEver/actions/runs/42361020986/artifacts/13570041961",
+    "zip_sha256": "189fd565a0d2eb743ede0b4924f71c634574814a03fb8d63ad2602523824d748",
     "addon_development_default": false,
     "addon_channel_default": "stable",
     "addon_updates_default": true,
@@ -170,12 +170,14 @@
     "addon_channel_catalog": "https://raw.githubusercontent.com/Domenklay/WoWForEver/main/addons/channels.json",
     "addon_channel_guide": "https://github.com/Domenklay/WoWForEver/blob/main/docs/ADDON-CHANNELS.ru.md",
     "previous_verified_release": {
-      "latest_verified_release": "1.7.1",
-      "source_commit": "87edd5aa6bdf0168dd25714c17b5815df82f6c68",
-      "workflow_run": 42291254078,
-      "artifact": 13540302260,
-      "zip_sha256": "a9254f60a896d7e029dc78cc7a6e1b39d16875224ec9e446b233b5e86f5c8d29"
-    }
+      "latest_verified_release": "1.8.0",
+      "source_commit": "d55f1662aa8ba8ef8b6e6bac54b39462adec7fa0",
+      "workflow_run": 42358676742,
+      "artifact": 13568828528,
+      "zip_sha256": "f55aed4ff7f8b141ffa3289b4254b24caffd4c7b090dcd75bd5401a3543d1b96"
+    },
+    "installed_addons_page": true,
+    "journal_full_page": true
   },
   "backup": {
     "directory_windows": "E:\\WoWForEver-work\\reports\\baseline-70658-20261107-003902",
@@ -211,10 +213,10 @@
     "image_archive_load_on_blank_docker_verified": false
   },
   "checks": {
-    "launcher_windows": 80,
+    "launcher_windows": 81,
     "worker_windows": 224,
     "combined_core_units": 12,
-    "combined_check_run": 42291253941,
+    "combined_check_run": 42361579841,
     "restore_unit_suite_total": 473,
     "restore_unit_suite_skipped": 30,
     "restore_real_mysql_fixture_verified": true,
@@ -223,7 +225,10 @@
     "services_restore_test_source": "464c9313d2f4a44aae19b08dee41d262714a2d97",
     "addon_catalog_ci_run": 42359312577,
     "addon_catalog_pinned_payloads_verified": true,
-    "launcher_browser_ui_verified": true
+    "launcher_browser_ui_verified": true,
+    "multiclass_unit_suite_total": 486,
+    "multiclass_unit_suite_skipped": 30,
+    "advancement_native_core_ci_run": 42362536722
   },
   "known_limits": [
     "Ability Essence economy is incomplete; purchase limit is used",
@@ -233,7 +238,7 @@
     "Scaling damage guard is per event, not a rolling window",
     "Party-size dungeon and loot scaling are not implemented",
     "Previous client ACCESS_VIOLATION root cause remains unproven",
-    "Detailed gameplay acceptance, Multi 1.8.0 channel/autologin user test and full-server restore remain pending"
+    "Detailed gameplay acceptance, Multi 1.9.0 AddOn inventory/channel/autologin user test and full-server restore remain pending"
   ],
   "privacy": {
     "snapshot_contains_secrets": false,
@@ -245,5 +250,20 @@
       "server backup archives",
       "private certificate keys"
     ]
+  },
+  "development_candidate": {
+    "advancement_version": "1.12.0",
+    "installed_on_user_pc": false,
+    "protocol": 3,
+    "experience_share_percent": 90,
+    "experience_opt_out_per_character": true,
+    "native_spell_catalog": true,
+    "legacy_talents_hidden": true,
+    "native_talents_browse_only": true,
+    "native_talents_allocation_implemented": false,
+    "guide": "https://github.com/Domenklay/WoWForEver/blob/main/docs/MULTICLASS-1.12.ru.md",
+    "transition_tool": "scripts/upgrade-clean-gameplay.py",
+    "trial_source_commit": "3add1965219c5e3fb3e0b9c893661a0d8e8bdb23",
+    "candidate_user_trial_verified": false
   }
 }
