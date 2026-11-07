@@ -74,7 +74,7 @@ def inject(core,module=None):
             player_header.write_text(header);player_source.write_text(source)
         source=player_source.read_text()
         reward='void Player::LearnSkillRewardedSpells(uint32 skillId, uint32 skillValue, Races race)\n{'
-        guard='    if (m_foreverAdvancementClassSkills.count(skillId)) return; // transient spellbook school'
+        guard='    if (m_foreverAdvancementClassSkills.count(skillId) || m_foreverAdvancementEquipmentSkills.count(skillId)) return; // transient spellbook school'
         if guard not in source:
             if source.count(reward)!=1:raise ValueError('Unknown skill reward function')
             player_source.write_text(source.replace(reward,reward+'\n'+guard))
@@ -98,6 +98,46 @@ def inject(core,module=None):
             end=source.index('\nvoid Player::SetReputation(',begin)
             replacement=(module/'server/PlayerTraits.inc').read_text().rstrip()+'\n'
             if source[begin:end]!=replacement:player_source.write_text(source[:begin]+replacement+source[end:])
+    # Reuse native trait validation with the subclass level, without changing player class/spec.
+    trait_header=core/'src/server/game/Spells/TraitMgr.h'
+    if trait_header.exists() and player_source.exists():
+        h=trait_header.read_text();old='PlayerDataAccessor(Player const* player) : _player(player) { }'
+        new='PlayerDataAccessor(Player const* player, int32 advancementLevel = -1) : _player(player), _advancementLevel(advancementLevel) { }'
+        if old in h:
+            h=h.replace(old,new).replace('    Player const* _player;','    Player const* _player;\n    int32 _advancementLevel = -1;');trait_header.write_text(h)
+        elif new not in h:raise ValueError('Unknown trait player accessor')
+        text_player=player_source.read_text()
+        old='int32 TraitMgr::PlayerDataAccessor::GetLevel() const\n{\n    return _player->GetLevel();'
+        new='int32 TraitMgr::PlayerDataAccessor::GetLevel() const\n{\n    if (_advancementLevel >= 0) return _advancementLevel;\n    return _player->GetLevel();'
+        if old in text_player:text_player=text_player.replace(old,new)
+        elif new not in text_player:raise ValueError('Unknown trait level accessor')
+        marker='int32 TraitMgr::PlayerDataAccessor::GetClassicTalentedStartLevel() const\n{'
+        added='\n    if (_advancementLevel >= 0) return 10; // foreign class never borrows primary legacy perks'
+        if marker+added not in text_player:
+            if marker not in text_player:raise ValueError('Unknown classic trait point accessor')
+            text_player=text_player.replace(marker,marker+added)
+        player_source.write_text(text_player)
+    if player_header.exists() and player_source.exists():
+        h=player_header.read_text();src=player_source.read_text()
+        signature='        void SyncForeverAdvancementEquipment(uint32 owner, std::set<uint32> const& skills, uint16 value, uint32 weapons, uint32 armor);'
+        if signature not in h:
+            marker='        void SyncForeverAdvancementClassSkills(std::set<uint32> const& desired);'
+            h=h.replace(marker,marker+'\n'+signature+'\n        uint32 GetForeverAdvancementClass() const { return m_foreverAdvancementOwner; }')
+            marker='        std::set<uint32> m_foreverAdvancementClassSkills;'
+            h=h.replace(marker,marker+'\n        std::set<uint32> m_foreverAdvancementEquipmentSkills;\n        uint32 m_foreverAdvancementOwner=0, m_foreverAdvancementWeapons=0, m_foreverAdvancementArmor=0;')
+            src+='\n'+(module/'server/PlayerEquipment.inc').read_text()
+        save_guard='m_foreverAdvancementClassSkills.count(itr->first) ||'
+        src=src.replace(save_guard,'m_foreverAdvancementEquipmentSkills.count(itr->first) || '+save_guard) if 'm_foreverAdvancementEquipmentSkills.count(itr->first)' not in src else src
+        src=src.replace('if (m_foreverAdvancementClassSkills.count(skillId)) return;', 'if (m_foreverAdvancementClassSkills.count(skillId) || m_foreverAdvancementEquipmentSkills.count(skillId)) return;')
+        player_header.write_text(h);player_source.write_text(src)
+    # Taming is the only hard class gate in the native effect; its native script still validates the beast.
+    effects=core/'src/server/game/Spells/SpellEffects.cpp'
+    if effects.exists():
+        e=effects.read_text();old='if (unitCaster->GetClass() != CLASS_HUNTER)\n        return;'
+        new='if (unitCaster->GetClass() != CLASS_HUNTER && !(unitCaster->ToPlayer() && unitCaster->ToPlayer()->GetForeverAdvancementClass() == CLASS_HUNTER))\n        return;'
+        if old in e:e=e.replace(old,new,1)
+        elif new not in e:raise ValueError('Unknown native taming class gate')
+        effects.write_text(e)
     db2_source=core/'src/server/game/DataStores/DB2Stores.cpp'
     if db2_source.exists():
         original=db2_source.read_text()

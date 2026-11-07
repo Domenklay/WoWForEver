@@ -26,7 +26,7 @@ MARKER='.gameplay-upgrade-in-progress.json'
 
 def check_before(state,model):
     if (state.get('core')!=clean.CORE or state.get('phase')!='ready'
-        or state.get('advancement',{}).get('version')!='1.11.0'
+        or state.get('advancement',{}).get('version') not in ('1.11.0','1.12.0')
         or state.get('gameplay',{}).get('version')!=1
         or state['gameplay'].get('encyclopedia')!=game.BOOK_VERSION
         or state['gameplay'].get('scaling')!=game.SCALING_VERSION):
@@ -139,7 +139,7 @@ def apply(root,record):
         target=copy.deepcopy(before);target['image']=record['candidate_tag']
         target['advancement'].update(version=adv.VERSION,protocol=3,source_sha256=adv.source_id())
         target['gameplay'].update(source_sha256=game.source_id(),transition=path)
-        target['database_version']='gameplay-1.12@pristine-'+before['core'][:12]
+        target['database_version']='gameplay-1.13@pristine-'+before['core'][:12]
         model=json.loads(record['compose_before']);model['services']['worldserver']['image']=record['candidate_tag']
         # bnet, MySQL, web, all mounts, credentials, ports and environment remain exact.
         clean.write_private(Path(before['compose']),model);clean.compose(target,'config','-q')
@@ -150,7 +150,7 @@ def apply(root,record):
         clean.save(target);upgrade.private_text(root/'server.sh',upgrade.control_text(root),0o700)
         if record['previous_running']:clean.compose(target,'up','-d','--no-build','--no-deps',*record['previous_running'])
         save(record,'active');(root/MARKER).unlink()
-        print('GAMEPLAY UPGRADED: 1.12.0; current databases and progress retained',flush=True)
+        print('GAMEPLAY UPGRADED: 1.13.0; current databases and progress retained',flush=True)
     except BaseException:
         try:
             clean.write_private(Path(record['directory'])/'startup-diagnostics.json',adv.module_readiness.snapshot(clean,before,clean.container(before,'worldserver'),allow_stopped=True))

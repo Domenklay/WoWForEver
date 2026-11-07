@@ -9,7 +9,7 @@ import subprocess
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build', type=Path, required=True)
 args = parser.parse_args()
-units = ('ForeverAdvancement.cpp', 'Player.cpp', 'DB2Stores.cpp', 'HotfixHandler.cpp', 'ChatHandler.cpp')
+units = ('SpellEffects.cpp', 'TraitMgr.cpp', 'ForeverAdvancement.cpp', 'Player.cpp', 'DB2Stores.cpp', 'HotfixHandler.cpp', 'ChatHandler.cpp')
 commands = json.loads((args.build / 'compile_commands.json').read_text())
 failed = []
 for unit in units:

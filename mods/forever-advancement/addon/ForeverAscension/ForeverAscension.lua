@@ -1,6 +1,6 @@
 local REQUEST,RESPONSE="FAC1","FAR1"
-local ABILITIES_PER_PAGE=8
-local order={11,3,8,2,5,4,7,9,1,6,10,12,13}
+local ABILITIES_PER_PAGE=8 -- legacy wire compatibility; the list now scrolls
+local order={11,3,8,2,5,4,7,9,1,6,10}
 local classes={
  [1]={"Warrior","Воин","WARRIOR"},[2]={"Paladin","Паладин","PALADIN"},
  [3]={"Hunter","Охотник","HUNTER"},[4]={"Rogue","Разбойник","ROGUE"},
@@ -8,7 +8,6 @@ local classes={
  [8]={"Mage","Маг","MAGE"},[9]={"Warlock","Чернокнижник","WARLOCK"},[11]={"Druid","Друид","DRUID"},
 }
 classes[6]={"DeathKnight","Рыцарь смерти","DEATHKNIGHT"};classes[10]={"Monk","Монах","MONK"}
-classes[12]={"DemonHunter","Охотник на демонов","DEMONHUNTER"};classes[13]={"Evoker","Пробудитель","EVOKER"}
 local nativeCatalog=false
 local classCoords={WARRIOR={0,0.25,0,0.25},MAGE={0.25,0.49609375,0,0.25},ROGUE={0.49609375,0.7421875,0,0.25},
  DRUID={0.7421875,0.98828125,0,0.25},HUNTER={0,0.25,0.25,0.5},SHAMAN={0.25,0.49609375,0.25,0.5},
@@ -22,6 +21,7 @@ local errors={select_subclass="Сначала активируйте нужны�
  unavailable_or_power="Способность недоступна или не хватает ресурса.",incompatible_or_level="Способность недоступна для изучения на этом уровне.",
  ability_limit="Достигнут предел дополнительных способностей.",select_target="Выберите цель.",already_learned="Способность уже изучена.",
  talent_unavailable="Этот ранг таланта пока недоступен.",talent_requirements="Не хватает очков или не выполнены требования предыдущих рядов."}
+errors.remove_foreign_equipment="Снимите оружие или броню, требующие владения предыдущего подкласса, прежде чем переключать класс."
 errors.custom_class_requirements="Нужны два разных магических класса: основной и классы купленных обычных способностей."
 errors.custom_requires_port="Эффекты Mana-forged Barrier ещё не перенесены в Forever. Покупка и применение недоступны."
 errors.refund_custom_first="Сначала верните зависимую кастомную способность."
@@ -42,6 +42,8 @@ local protocol=0
 local window,summary,message,search,previous,nextPage,pageText,selectedText,talentPoints,emptyAbilities,showAllButton
 local xpShareButton
 local activateButton,progressText,customButton,talentHeading,customHelp
+local abilityScroll,abilityCanvas,talentEmpty
+local treeNames,treeLayout={},{ }
 local talentScroll,talentCanvas
 local classButtons,tabButtons,abilityNodes,talentNodes,connectors={},{},{},{},{}
 local powerBars=ForeverAscensionResourceBars or {}
@@ -140,7 +142,7 @@ local function tooltip(self)
  end
  if d and state and state.known[row.ID] and not state.learned[row.ID] then GameTooltip:AddLine("Это уже известное нативное заклинание. Перетащите иконку на панель; повторная покупка не нужна.",0.5,0.9,0.5,true)
  elseif d and state and d.owner==state.primary then GameTooltip:AddLine("Это ваш основной класс. Его способности и таланты изучаются штатно.",0.8,0.8,0.8,true)
- elseif d and d.available==false then GameTooltip:AddLine(isTalent(row) and "Штатный талант Forever. Пока только просмотр: условия, выбор специализации и зависимости сохраняются за ядром." or "Штатная способность. Её ресурс пока не поддерживается мультиклассом.",0.9,0.7,0.4,true)
+ elseif d and d.available==false then GameTooltip:AddLine(isTalent(row) and "Узел недоступен в выбранной конфигурации. Нужны его штатные условия или поддержка механики." or "Штатная способность. Её ресурс пока не поддерживается мультиклассом.",0.9,0.7,0.4,true)
  elseif d then GameTooltip:AddLine(isTalent(row) and "ЛКМ - вложить очко. ПКМ - вернуть ранг." or "ЛКМ - изучить / применить. ПКМ - забыть. Изученную иконку можно перетащить.",0.5,0.9,0.5,true)
  else GameTooltip:AddLine("Запись каталога ещё не подключена к Forever: нет подтверждённого соответствия или её механика пока не поддерживается.",0.9,0.5,0.35,true) end
  GameTooltip:Show()
@@ -182,7 +184,7 @@ local function makeNode(parent,talent)
    return
   end
   local d=compatible[row.ID]
-  if d and d.available==false then message:SetText(isTalent(row) and "Штатный талант Forever: просмотр. Распределение подкласса требует проверки условий дерева." or "Ресурс или механика ещё не поддерживается мультиклассом.");return end
+  if d and d.available==false then message:SetText(isTalent(row) and "Этот узел пока не поддерживается. Доступные узлы проверяются штатными правилами Forever." or "Ресурс или механика ещё не поддерживается мультиклассом.");return end
   if not d then message:SetText("Пока не подключено: "..spellName(row)..". Выберите «Только доступные».");return end
   if state.known[row.ID] and not state.learned[row.ID] then message:SetText("Это заклинание уже известно. Перетащите иконку или примените его из штатной книги.");return end
   if d.owner==state.primary then message:SetText("Способности основного класса изучаются штатно.");return end
@@ -210,7 +212,7 @@ local function visible()
  end
  local abilities,talents={},{}
  for _,row in pairs(canonical) do
-  local matches=not selectedTab or row.Tab==selectedTab
+  local matches=not isTalent(row) or not selectedTab or row.Tab==selectedTab
   if matches and (filter=="" or string.find(fold(spellName(row)),filter,1,true)) then
    if isTalent(row) then table.insert(talents,row)
    elseif showAll or (compatible[row.ID] and compatible[row.ID].available~=false) then table.insert(abilities,row) end
@@ -221,8 +223,14 @@ local function visible()
  return abilities,talents
 end
 local function renderAbilities(rows)
+ for index=1,#rows do
+  if not abilityNodes[index] then
+   local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",0,-(index-1)*54);abilityNodes[index]=n
+  end
+ end
+ abilityCanvas:SetHeight(math.max(420,#rows*54))
  for index,n in ipairs(abilityNodes) do
-  local row=rows[(page-1)*ABILITIES_PER_PAGE+index];n.entry=row
+  local row=rows[index];n.entry=row
   if row then
    n.icon:SetTexture(icon(row));n.name:SetText(spellName(row));local d=compatible[row.ID]
    local learned=state and state.learned[row.ID]
@@ -252,9 +260,9 @@ local function renderTalents(rows)
  local nodeSize,iconSize=44,36
  for index,row in ipairs(rows) do
   local n=talentNodes[index] or makeNode(talentCanvas,true);talentNodes[index]=n;n.entry=row
-  local tier=math.floor((index-1)/4);local column=(index-1)%4+1
+  local tier=row.GridY or math.floor((index-1)/4);local column=row.GridX and (row.GridX+1) or (index-1)%4+1
   maxTier=math.max(maxTier,tier)
-  local x,y=35+(column-1)*125,-14-tier*rowStep
+  local x,y=25+(column-1)*92,-14-tier*rowStep
   n:ClearAllPoints();n:SetPoint("TOPLEFT",x,y);n:SetSize(nodeSize,nodeSize);n.icon:SetSize(iconSize,iconSize);n.border:SetSize(iconSize+15,iconSize+15)
   positions[row.ID]={x=x+nodeSize/2,y=y-nodeSize/2}
   local d=compatible[row.ID];local rank=state and state.talents[row.ID] or 0
@@ -272,10 +280,12 @@ local function renderTalents(rows)
   local child=positions[row.ID]
   for _,id in ipairs(row.RequiredIDs or {}) do
    local parent=positions[id]
-   if parent and child and parent.x==child.x and parent.y>child.y then
+   if parent and child and parent.y>child.y then
     lineCount=lineCount+1;local line=connectors[lineCount] or talentCanvas:CreateTexture(nil,"BACKGROUND")
     connectors[lineCount]=line;line:ClearAllPoints();line:SetColorTexture(0.65,0.49,0.16,0.8)
-    line:SetPoint("TOPLEFT",parent.x-1,parent.y-16);line:SetSize(2,math.max(1,parent.y-child.y-32));line:Show()
+    local dx,dy=child.x-parent.x,child.y-parent.y
+    line:SetPoint("CENTER",talentCanvas,"TOPLEFT",(parent.x+child.x)/2,(parent.y+child.y)/2)
+    line:SetSize(2,math.max(1,math.sqrt(dx*dx+dy*dy)-32));if line.SetRotation then line:SetRotation(-math.atan(dx/(-dy))) end;line:Show()
    end
   end
  end
@@ -288,8 +298,8 @@ refresh=function()
  if not window then return end
  local custom=selectedClass==0
  customButton:SetEnabled(not custom);activateButton:SetShown(not custom)
- talentScroll:SetShown(not custom);talentPoints:Hide();customHelp:Hide()
- talentHeading:SetText("Таланты Forever · просмотр")
+ talentScroll:SetShown(not custom);talentPoints:SetShown(state and state.nativeTalents==true);customHelp:Hide()
+ talentHeading:SetText("Таланты")
  if state then
   summary:SetText("Основной класс: "..name(state.primary).."  |  Уровень "..state.level.."  |  Умения "..state.used.."/"..state.limit)
   local progress=state.classes and state.classes[selectedClass]
@@ -300,22 +310,24 @@ refresh=function()
   talentPoints:SetText("TE активного: "..(state.talentFree or 0).." / "..(state.talentTotal or 0))
  else summary:SetText("Ожидаем состояние персонажа...");talentPoints:SetText("TE мультикласса: —") end
  local tabs,seen={},{ }
- for _,row in ipairs(custom and {} or byClass[selectedClass] or {}) do if availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
- table.sort(tabs)
+ for _,row in ipairs(custom and {} or byClass[selectedClass] or {}) do if isTalent(row) and availableRow(row) and not seen[row.Tab] then seen[row.Tab]=true;table.insert(tabs,row.Tab) end end
+ table.sort(tabs,function(a,b) return tostring(a)<tostring(b) end)
  if not selectedTab or not seen[selectedTab] then selectedTab=tabs[1] end
- for i,b in ipairs(tabButtons) do local tab=tabs[i];b.tab=tab;if tab then b:SetText(schools[tab] or tab);b:SetEnabled(tab~=selectedTab);b:Show() else b:Hide() end end
+ for i,b in ipairs(tabButtons) do local tab=tabs[i];b.tab=tab;if tab then b:SetText(treeNames[tab] or schools[tab] or tab);b:ClearAllPoints();b:SetSize(math.min(160,520/math.max(1,#tabs)-4),24);b:SetPoint("TOPLEFT",447+(i-1)*(math.min(164,520/math.max(1,#tabs))),-85);b:SetEnabled(tab~=selectedTab);b:Show() else b:Hide() end end
  for id,b in pairs(classButtons) do
   b.glow:SetShown(id==selectedClass)
   local count=0;if state then for learned in pairs(state.learned) do local row=byId[learned];if row and not customRule(row) and row.Class==classes[id][1] then count=count+1 end end end
   b.count:SetText(count>0 and tostring(count) or "")
  end
- selectedText:SetText(name(selectedClass).."  |  "..tostring(schools[selectedTab] or selectedTab or ""))
- local abilities,talents=visible();local pages=math.max(1,math.ceil(#abilities/ABILITIES_PER_PAGE));page=math.min(page,pages)
+ selectedText:SetText(name(selectedClass).."  |  "..tostring(treeNames[selectedTab] or schools[selectedTab] or selectedTab or ""))
+ local abilities,talents=visible()
  renderAbilities(abilities);renderTalents(talents)
  emptyAbilities:SetShown(#abilities==0)
  local count=0;for _,d in pairs(compatible) do if d.kind=="ability" then count=count+1 end end
- emptyAbilities:SetText(showAll and "Здесь пока нет записей." or ("В этой школе нет совместимых умений.\nНа сервере найдено: "..count..".\n«Все умения» показывает также записи без аналога."))
- pageText:SetText(page.." / "..pages);previous:SetEnabled(page>1);nextPage:SetEnabled(page<pages)
+ emptyAbilities:SetText(showAll and "Здесь пока нет записей." or ("Нет совместимых умений этого класса.\nНа сервере найдено: "..count..".\n«Все умения» показывает также записи без аналога."))
+ previous:Hide();nextPage:Hide();pageText:Hide()
+ talentEmpty:SetShown(#talents==0)
+ talentEmpty:SetText(nativeCatalog and "В этой ветке нет талантов по выбранному фильтру." or "Сервер 1.11 не передаёт нативные деревья Forever.\nОбновите сервер, чтобы видеть ветки и распределять очки.")
  showAllButton:SetText(showAll and "Только доступные" or "Все умения")
  showAllButton:SetShown(not custom)
  if state and protocol<2 then message:SetText("Для талантов и нового каталога обновите сервер до версии 1.1.") end
@@ -351,7 +363,7 @@ local function build()
   b.glow=b:CreateTexture(nil,"OVERLAY");b.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border");b.glow:SetBlendMode("ADD");b.glow:SetSize(64,64);b.glow:SetPoint("CENTER",b.icon)
   b.name=label(b,classes[id][2],"GameFontNormalSmall");b.name:SetPoint("LEFT",b.icon,"RIGHT",5,0);b.name:SetWidth(66);b.name:SetTextColor(1,0.82,0)
   b.count=label(b,"","GameFontHighlightSmall");b.count:SetPoint("RIGHT",b.icon,"RIGHT",4,-13)
-  b:SetScript("OnClick",function() selectedClass=id;selectedTab=nil;page=1;talentScroll:SetVerticalScroll(0);refresh() end);classButtons[id]=b
+  b:SetScript("OnClick",function() selectedClass=id;selectedTab=nil;page=1;abilityScroll:SetVerticalScroll(0);talentScroll:SetVerticalScroll(0);refresh() end);classButtons[id]=b
  end
  for i=1,8 do
   local b=button(window,"",160,function(self) selectedTab=self.tab;page=1;talentScroll:SetVerticalScroll(0);refresh() end)
@@ -369,8 +381,10 @@ local function build()
  local reload=button(window,"Обновить",105,function() send("status") end);reload:SetPoint("TOPRIGHT",-20,-46)
  local left=panel(window,140,-138,286,498)
  local heading=label(left,"Способности","GameFontNormalLarge");heading:SetPoint("TOP",0,-14);heading:SetTextColor(1,0.82,0);heading:SetShadowOffset(0,0)
- local abilityCanvas=CreateFrame("Frame",nil,left);abilityCanvas:SetPoint("TOPLEFT",12,-47);abilityCanvas:SetSize(258,432)
- for i=1,ABILITIES_PER_PAGE do local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",0,-(i-1)*54);abilityNodes[i]=n end
+ abilityScroll=CreateFrame("ScrollFrame","ForeverAscensionAbilityScroll",left,"UIPanelScrollFrameTemplate");abilityScroll:SetPoint("TOPLEFT",10,-47);abilityScroll:SetPoint("BOTTOMRIGHT",-28,10);abilityScroll:EnableMouseWheel(true)
+ abilityCanvas=CreateFrame("Frame",nil,abilityScroll);abilityCanvas:SetSize(258,432);abilityScroll:SetScrollChild(abilityCanvas)
+ abilityScroll:SetScript("OnMouseWheel",function(self,delta) self:SetVerticalScroll(math.max(0,math.min(math.max(0,abilityCanvas:GetHeight()-(self:GetHeight()>0 and self:GetHeight() or 420)),(self:GetVerticalScroll() or 0)-delta*54))) end)
+ for i=1,8 do local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",0,-(i-1)*54);abilityNodes[i]=n end
  emptyAbilities=label(abilityCanvas,"","GameFontHighlightSmall");emptyAbilities:SetPoint("CENTER",0,0);emptyAbilities:SetWidth(240);emptyAbilities:SetTextColor(0.6,0.7,0.82);emptyAbilities:SetShadowOffset(0,0);emptyAbilities:SetJustifyH("CENTER");emptyAbilities:SetWordWrap(true)
  local right=panel(window,436,-138,565,498)
  talentHeading=label(right,"Таланты","GameFontNormalLarge");talentHeading:SetPoint("TOPLEFT",25,-14)
@@ -379,11 +393,12 @@ local function build()
  talentPoints=label(right,"","GameFontNormal");talentPoints:SetPoint("TOPRIGHT",-25,-16)
  talentScroll=CreateFrame("ScrollFrame","ForeverAscensionTalentScroll",right);talentScroll:SetPoint("TOPLEFT",10,-44);talentScroll:SetPoint("BOTTOMRIGHT",-10,8)
  talentCanvas=CreateFrame("Frame",nil,talentScroll);talentCanvas:SetSize(545,446);talentScroll:SetScrollChild(talentCanvas);talentScroll:EnableMouseWheel(true)
+ talentEmpty=label(right,"","GameFontHighlightSmall");talentEmpty:SetPoint("CENTER",0,0);talentEmpty:SetWidth(460);talentEmpty:SetJustifyH("CENTER");talentEmpty:SetWordWrap(true)
  talentScroll:SetScript("OnMouseWheel",function(self,delta) local current=self:GetVerticalScroll() or 0;self:SetVerticalScroll(math.max(0,math.min(math.max(0,talentCanvas:GetHeight()-math.max(300,self:GetHeight() or 403)),current-delta*40))) end)
  previous=button(window,"Назад",55,function() page=math.max(1,page-1);refresh() end);previous:SetPoint("BOTTOMLEFT",149,27)
  nextPage=button(window,"Далее",55,function() page=page+1;refresh() end);nextPage:SetPoint("LEFT",previous,"RIGHT",48,0)
  pageText=label(window,"");pageText:SetPoint("LEFT",previous,"RIGHT",12,0)
- showAllButton=button(window,"Все умения",100,function() showAll=not showAll;page=1;refresh() end);showAllButton:SetPoint("LEFT",nextPage,"RIGHT",9,0)
+ showAllButton=button(window,"Все умения",100,function() showAll=not showAll;page=1;refresh() end);showAllButton:SetPoint("BOTTOMLEFT",149,27)
  message=label(window,"ЛКМ - изучить / применить. ПКМ - забыть / вернуть ранг. Изученное можно перетащить на панель.","GameFontHighlightSmall");message:SetPoint("BOTTOMLEFT",28,10);message:SetWidth(965);message:SetJustifyH("LEFT")
  local find=button(window,"Можно изучить",145,function()
   if not state then send("status");return end
@@ -397,7 +412,7 @@ local function build()
   selectedClass=compatible[row.ID].owner;selectedTab=row.Tab;page=1;filter="";search:SetText("");showAll=false;refresh()
   message:SetText("Доступно для изучения: "..spellName(row)..". Нажмите на карточку способности.")
  end);find:SetPoint("BOTTOMLEFT",452,27)
- local hint=label(window,"Дерево: прокрутка колёсиком","GameFontHighlightSmall");hint:SetPoint("BOTTOMRIGHT",-28,36)
+ local hint=label(window,"Списки и дерево: прокрутка колёсиком","GameFontHighlightSmall");hint:SetPoint("BOTTOMRIGHT",-28,36)
 
  window:Hide();refresh()
 end
@@ -440,7 +455,14 @@ local function parse(text)
    end
    compatible[id]={kind="ability",spell=spell,level=level,owner=owner,available=true}
   end
- elseif kind=="TENTRY" and pending then -- legacy 3.3.5 tree stays hidden
+ elseif kind=="TREES" and pending then pending.nativeTalents=true
+ elseif kind=="TREE" and pending then
+  local key=words[2];local text=(words[3] or ""):gsub("%x%x",function(v) return string.char(tonumber(v,16)) end);treeNames[key]=text
+ elseif kind=="TNODE" and pending then
+  local row=byId[tonumber(words[2])];if row then row.Tab=words[3];row.GridX=tonumber(words[4]);row.GridY=tonumber(words[5]);row.RequiredIDs={} end
+ elseif kind=="TEDGE" and pending then
+  local row=byId[tonumber(words[2])];if row then table.insert(row.RequiredIDs,tonumber(words[3])) end
+ elseif kind=="TENTRY" and pending then -- legacy donor tree stays hidden
  elseif kind=="TPOINTS" and pending then pending.talentFree=tonumber(words[2]);pending.talentSpent=tonumber(words[3]);pending.talentTotal=tonumber(words[4])
  elseif kind=="TALENT" and pending then
   local id=tonumber(words[2]);pending.talents[id]=tonumber(words[3]);if compatible[id] and words[4] then compatible[id].spell=tonumber(words[4]) end
