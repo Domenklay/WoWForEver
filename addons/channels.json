@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107-legacy-top-cover-8",
+  "revision": "70658-20261107-native-lfg-9",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,7 +102,7 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-8",
+      "release": "testing-70658-20261107-9",
       "clientBuild": 70658,
       "addons": [
         {
@@ -141,19 +141,19 @@
         },
         {
           "name": "ForeverEncyclopedia",
-          "version": "0.9.15-v2.1-legacy-top-cover",
+          "version": "0.9.16-v2.1-native-lfg",
           "protocol": 1,
-          "sourceCommit": "c43544cce32ff4368520036f01907742c9226d4e",
+          "sourceCommit": "94d6097389871dfc3f749e12ecb07d2122476b60",
           "files": [
             {
               "name": "ForeverDungeonFinder.lua",
-              "size": 23821,
-              "sha256": "a85003a07b7bbbcbf892bfdf0eaef1a86ee7bb3b00a148b2d65726d319f58eca"
+              "size": 22271,
+              "sha256": "bac83af15b3330e66afee1b22a9e470d968c408178b752bf53fffb960f559dd2"
             },
             {
               "name": "ForeverEncyclopedia.toc",
-              "size": 655,
-              "sha256": "13fb223df014328f418e5b2e933845fffc297025404fc6d0b27d1d902d20f901"
+              "size": 649,
+              "sha256": "68fa6acb2b16eae956610dbf31a1c98fa292bf0a0ee9b7bea2b54842dd1f377d"
             },
             {
               "name": "ForeverEncyclopediaAbilities.lua",
