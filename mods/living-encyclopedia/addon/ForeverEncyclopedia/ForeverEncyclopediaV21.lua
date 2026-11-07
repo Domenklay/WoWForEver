@@ -623,6 +623,19 @@ local function parseBase(msg)
 end
 
 local function parseRuntime(msg)
+    if msg:sub(1,6)=="EVENT|" then
+        local _,event,amount=strsplit("|",msg)
+        if event=="SKIN_APPLIED" then
+            state.skinDisplay=tonumber(amount) or 0
+            state.skinMissing=nil
+            notifyNative("appearance")
+        elseif event=="SKIN_MISSING" then
+            state.skinDisplay=0
+            state.skinMissing=tonumber(amount) or 0
+            notifyNative("appearance")
+        end
+        return
+    end
     if msg:sub(1,5)~="BOOK|" then return end
     local _,mask,mana,maxMana=strsplit("|",msg)
     local previousMax,previousMask=state.maxMana,state.abilityMask
