@@ -61,6 +61,15 @@ ForeverEncyclopediaTalentCatalog = {
         { key="knowledge_spirit", name="Дух знаний", threshold=500, creature=161896, source="500 накопленных знаний" },
         { key="small_construct", name="Малый конструкт", threshold=1500, creature=183783, source="1500 накопленных знаний" },
         { key="runekeeper", name="Хранитель рун", threshold=5000, creature=130946, source="5000 накопленных знаний" },
+        -- Free testing appearances. IDs are Creature Entries (NOT display IDs).
+        -- Preview is possible immediately; a live pet selection also requires
+        -- the matching worldserver FET1/companion skin update.
+        { key="test_lofty_libram", name="Парящий манускрипт", threshold=0, creature=68806, source="WoW: Lofty Libram · NPC 68806", testing=true },
+        { key="test_animated_tome", name="Оживший фолиант", threshold=0, creature=171120, source="WoW: Animated Tome · NPC 171120", testing=true },
+        { key="test_gusting_grimoire", name="Парящий гримуар", threshold=0, creature=69208, source="WoW: Gusting Grimoire · NPC 69208", testing=true },
+        { key="test_agitated_tome", name="Беспокойная книга", threshold=0, creature=101633, source="WoW: Agitated Tome · NPC 101633", testing=true },
+        { key="test_troubled_tome", name="Драконий фолиант", threshold=0, creature=198511, source="WoW: Troubled Tome · NPC 198511", testing=true },
+        { key="test_chromies_codex", name="Кодекс Хроми", threshold=0, creature=227052, source="WoW: Chromie's Codex · NPC 227052", testing=true },
     },
 }
 
