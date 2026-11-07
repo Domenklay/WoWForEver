@@ -13,7 +13,7 @@ function methods:SetFrameLevel(v) self.level=v end
 function methods:SetVertexColor(r,g,b,a) self.rgba={r,g,b,a} end
 function methods:SetTexture(v) self.texture=v end
 function methods:EnableMouse(v) self.mouseEnabled=v end
-function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1; self.lastAnchor={...} end
+function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1; self.lastAnchor={...}; self.anchors=self.anchors or {}; table.insert(self.anchors,{...}) end
 function methods:GetLeft() return rawget(self,"left") end
 function methods:GetRight() return rawget(self,"right") end
 function methods:SetAllPoints() self.points=1 end
@@ -95,15 +95,24 @@ assert(tab:GetNumPoints()>=1,"Portal must be anchored")
 local a=tab.lastAnchor
 assert(a and a[1]=="TOPLEFT","Portal anchor must use top-left placement")
 if arg[3]=="sidebar" then
-    assert(a[2]==_G.PVEFrameTab3 and a[3]=="BOTTOMLEFT" and a[4]==0 and a[5]==-6,
+    assert(a[2]==_G.PVEFrameTab3 and a[3]=="BOTTOMLEFT" and a[4]==-2 and a[5]==-3,
         "Portal must follow native right-hand sidebar third tab")
 else
-    assert(a[2]==expectedHost and a[3]=="TOPRIGHT" and a[4]==4 and a[5]==-249,
+    assert(a[2]==expectedHost and a[3]=="TOPRIGHT" and a[4]==1 and a[5]==-238,
         "Portal fallback must live OUTSIDE the native top filter area")
 end
 assert(pane.opaqueBackground and pane.opaqueBackground.texture and pane.opaqueBackground.texture:find("WHITE8X8",1,true),"Missing reliable opaque background texture")
 assert(pane.opaqueBackground.rgba and pane.opaqueBackground.rgba[4]==1,"Dungeon panel must have alpha 1")
 assert(pane:GetFrameLevel()>expectedHost:GetFrameLevel()+50,"Native content may draw over dungeon panel")
+assert(pane:GetFrameLevel()==expectedHost:GetFrameLevel()+130,"Top cover pane must sit above role and search controls")
+local paneTop, paneBottom
+for _,child in ipairs(frames) do
+    if child==pane then paneTop=child.anchors and child.anchors[1];paneBottom=child.anchors and child.anchors[2] end
+end
+assert(paneTop and paneTop[1]=="TOPLEFT" and paneTop[2]==expectedHost and paneTop[4]==18 and paneTop[5]==-72,
+    "Dungeon pane must begin high enough to cover native upper controls")
+assert(paneBottom and paneBottom[1]=="BOTTOMRIGHT" and paneBottom[2]==expectedHost and paneBottom[4]==-17 and paneBottom[5]==48,
+    "Native dungeon pane must preserve lower in-window buttons")
 assert(not pane:IsShown(),"Pane should initially be hidden")
 assert(type(SlashCmdList.FOREVERDUNGEONFINDER)=="function","/fd missing")
 SlashCmdList.FOREVERDUNGEONFINDER()
