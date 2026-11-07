@@ -404,6 +404,211 @@ minimap:SetScript("OnEnter", function(self)
 end)
 minimap:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+
+-- Native Group Finder tab (client builds vary: PVEFrame / LFGParentFrame /
+-- GroupFinderFrame). Never touches the unsafe retail LFG queue protocol.
+local nativeOverlay, nativeRefresh, nativeTab
+local function installNativeTab()
+    if nativeTab then return end
+    local host = PVEFrame or LFGParentFrame or GroupFinderFrame
+    if not host or not host.CreateTexture then return end
+
+    nativeTab = CreateFrame("Button", "ForeverDungeonFinderGroupFinderTab", host, "UIPanelButtonTemplate")
+    nativeTab:SetSize(166, 25)
+    nativeTab:SetPoint("TOPRIGHT", host, "TOPRIGHT", -37, -38)
+    nativeTab:SetText("Вход в подземелье")
+    nativeTab:SetFrameLevel(host:GetFrameLevel() + 40)
+
+    nativeOverlay = CreateFrame("Frame", "ForeverDungeonFinderGroupFinderPane", host)
+    nativeOverlay:SetSize(520, 390)
+    nativeOverlay:SetPoint("TOP", host, "TOP", 0, -73)
+    nativeOverlay:SetFrameLevel(host:GetFrameLevel() + 35)
+    nativeOverlay:EnableMouse(true)
+    nativeOverlay:Hide()
+
+    local surface = nativeOverlay:CreateTexture(nil, "BACKGROUND")
+    surface:SetAllPoints()
+    surface:SetColorTexture(0.035, 0.049, 0.071, 0.99)
+
+    local heading = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    heading:SetPoint("TOPLEFT", 16, -12)
+    heading:SetText("Прямой вход — WoW Forever")
+    heading:SetTextColor(1, 0.83, 0.45)
+
+    local info = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    info:SetPoint("TOPLEFT", 16, -35)
+    info:SetText("Выберите подземелье и способ входа. Без очереди и поиска игроков.")
+    info:SetTextColor(0.66, 0.76, 0.86)
+
+    local searchTab = CreateFrame("EditBox", nil, nativeOverlay, "InputBoxTemplate")
+    searchTab:SetSize(205, 25)
+    searchTab:SetPoint("TOPLEFT", 19, -60)
+    searchTab:SetAutoFocus(false)
+    searchTab:SetMaxLetters(40)
+
+    local leftTitle = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    leftTitle:SetPoint("TOPLEFT", 20, -96)
+    leftTitle:SetText("ПОДЗЕМЕЛЬЯ")
+    local rightTitle = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    rightTitle:SetPoint("TOPLEFT", 261, -96)
+    rightTitle:SetText("ВЫБРАННОЕ ПОДЗЕМЕЛЬЕ")
+
+    local dividingLine = nativeOverlay:CreateTexture(nil, "ARTWORK")
+    dividingLine:SetPoint("TOPLEFT", 246, -91)
+    dividingLine:SetSize(1, 280)
+    dividingLine:SetColorTexture(0.55, 0.43, 0.21, 0.75)
+
+    local picked = DUNGEONS[1]
+    local page, listed, buttons = 0, {}, {}
+    local labelName = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    labelName:SetPoint("TOPLEFT", 260, -120)
+    labelName:SetWidth(242)
+    labelName:SetJustifyH("LEFT")
+
+    local labelZone = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    labelZone:SetPoint("TOPLEFT", 260, -167)
+    labelZone:SetWidth(230)
+    labelZone:SetJustifyH("LEFT")
+
+    local labelDesc = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    labelDesc:SetPoint("TOPLEFT", 260, -207)
+    labelDesc:SetWidth(230)
+    labelDesc:SetJustifyH("LEFT")
+    labelDesc:SetJustifyV("TOP")
+
+    local partyText = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    partyText:SetPoint("BOTTOMLEFT", 260, 88)
+    partyText:SetWidth(235)
+    partyText:SetJustifyH("LEFT")
+
+    local buttonSolo = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+    buttonSolo:SetSize(111, 30)
+    buttonSolo:SetPoint("BOTTOMLEFT", 260, 45)
+    buttonSolo:SetText("Соло")
+
+    local buttonGroup = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+    buttonGroup:SetSize(120, 30)
+    buttonGroup:SetPoint("LEFT", buttonSolo, "RIGHT", 7, 0)
+    buttonGroup:SetText("Группой")
+
+    local prev = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+    prev:SetSize(65, 22)
+    prev:SetPoint("BOTTOMLEFT", 20, 14)
+    prev:SetText("Назад")
+    local nextButton = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+    nextButton:SetSize(65, 22)
+    nextButton:SetPoint("LEFT", prev, "RIGHT", 6, 0)
+    nextButton:SetText("Далее")
+    local pageText = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    pageText:SetPoint("LEFT", nextButton, "RIGHT", 8, 0)
+
+    local function refreshEmbedded()
+        local searchValue = searchTab:GetText() or ""
+        local needle = string.lower(searchValue)
+        wipe(listed)
+        for _, entry in ipairs(DUNGEONS) do
+            if needle == "" or string.find(string.lower(entry.name .. " " .. entry.zone), needle, 1, true) then
+                table.insert(listed, entry)
+            end
+        end
+        local pages = math.max(1, math.ceil(#listed / 8))
+        page = math.max(0, math.min(page, pages - 1))
+        for index, button in ipairs(buttons) do
+            local entry = listed[page * 8 + index]
+            button.data = entry
+            if entry then
+                button:Show()
+                button:SetText(entry.name)
+                button:GetFontString():SetTextColor(
+                    entry == picked and 1 or 0.84, entry == picked and 0.82 or 0.89, 0.73)
+            else
+                button:Hide()
+            end
+        end
+        prev:SetEnabled(page > 0)
+        nextButton:SetEnabled(page < pages - 1)
+        pageText:SetText(tostring(page + 1) .. "/" .. tostring(pages))
+
+        labelName:SetText(picked.name)
+        labelZone:SetText(picked.zone .. "  •  " .. picked.range)
+        labelDesc:SetText(picked.desc)
+        local count, raid, leader = partyState()
+        if raid then
+            partyText:SetText("Рейд: групповой вход недоступен.")
+        elseif count <= 1 then
+            partyText:SetText("Вы один. Доступен одиночный вход.")
+        elseif leader then
+            partyText:SetText(string.format("Группа: %d. Вы лидер.", count))
+        else
+            partyText:SetText(string.format("Группа: %d. Нужен лидер.", count))
+        end
+        buttonGroup:SetEnabled(count > 1 and not raid and leader)
+    end
+    nativeRefresh = refreshEmbedded
+
+    for i = 1, 8 do
+        local button = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
+        button:SetSize(216, 27)
+        button:SetPoint("TOPLEFT", 18, -116 - (i - 1) * 30)
+        button:GetFontString():SetJustifyH("LEFT")
+        button:SetScript("OnClick", function(self)
+            if self.data then
+                picked = self.data
+                selected = self.data
+                refreshDetails()
+                refreshEmbedded()
+            end
+        end)
+        buttons[i] = button
+    end
+
+    searchTab:SetScript("OnTextChanged", function() page = 0; refreshEmbedded() end)
+    searchTab:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    searchTab:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    prev:SetScript("OnClick", function() page = page - 1; refreshEmbedded() end)
+    nextButton:SetScript("OnClick", function() page = page + 1; refreshEmbedded() end)
+
+    buttonSolo:SetScript("OnClick", function()
+        if picked and UnitName("player") then
+            sendAddon("SOLO:" .. tostring(picked.map), "WHISPER", UnitName("player"))
+        end
+    end)
+    buttonGroup:SetScript("OnClick", function()
+        local count, raid, leader = partyState()
+        if picked and count > 1 and not raid and leader then
+            sendAddon("GROUP:" .. tostring(picked.map), "PARTY")
+        end
+    end)
+
+    nativeTab:SetScript("OnClick", function()
+        if nativeOverlay:IsShown() then nativeOverlay:Hide() else refreshEmbedded(); nativeOverlay:Show() end
+    end)
+    host:HookScript("OnHide", function() nativeOverlay:Hide() end)
+
+    -- Blizzard's tabs remain untouched. Switching to a native tab closes
+    -- only our overlay instead of invoking the unsafe LFG matchmaking code.
+    for i = 1, 5 do
+        local other = _G["PVEFrameTab" .. i] or _G["LFGParentFrameTab" .. i]
+        if other and other.HookScript then
+            other:HookScript("OnClick", function() nativeOverlay:Hide() end)
+        end
+    end
+    refreshEmbedded()
+end
+
+local tabEvents = CreateFrame("Frame")
+tabEvents:RegisterEvent("PLAYER_LOGIN")
+tabEvents:RegisterEvent("ADDON_LOADED")
+tabEvents:RegisterEvent("GROUP_ROSTER_UPDATE")
+tabEvents:SetScript("OnEvent", function(_, event)
+    if event == "GROUP_ROSTER_UPDATE" then
+        if nativeOverlay and nativeOverlay:IsShown() and nativeRefresh then nativeRefresh() end
+    else
+        installNativeTab()
+    end
+end)
+if IsLoggedIn and IsLoggedIn() then installNativeTab() end
+
 for _, dungeon in ipairs(DUNGEONS) do table.insert(filtered, dungeon) end
 selected = filtered[1]
 refreshRows()
