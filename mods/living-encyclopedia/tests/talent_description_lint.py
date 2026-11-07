@@ -80,7 +80,16 @@ assert "state.mana -= amount;" in runtime
 assert "uint32 amount = std::min(state.mana, cap);" in runtime
 assert "uint32 amount = std::min(state.pendingShieldAmount, state.mana);" in runtime
 assert "uint32 spendable = SpendableMana(*state);" in runtime
-assert "Talents::AmplifiedHeal" in runtime
+assert "Talents::AffordableNativeHeal" in runtime
+assert "void OnHealBefore(Unit* healer, Unit* receiver, uint32& gain) override" in runtime
+assert "void OnHeal(Unit* healer, Unit* receiver, uint32& gain) override" not in runtime
+assert "state->mana -= allowed;" in runtime
+assert "state->healReady = now +" in runtime
+assert "state->healPending = true;" in runtime
+injector = (root / "server/inject.py").read_text(encoding="utf-8")
+assert "sScriptMgr->OnHealBefore(healer, victim, addhealth);" in injector
+assert injector.index("OnHealBefore(healer, victim, addhealth);") < injector.index("ModifyHealth(int32(addhealth))")
+
 # The stable channel keeps 0.9.8, while the explicit test channel pins this pack.
 repo = root.parents[1]
 stable = json.loads((repo / "app/src-tauri/addons/forever-encyclopedia.json").read_text(encoding="utf-8"))
