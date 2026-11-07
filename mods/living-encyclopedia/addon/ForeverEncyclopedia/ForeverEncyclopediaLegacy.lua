@@ -21,6 +21,7 @@ local ui = {}
 local objects = {}
 local scrollPositions = {}
 local activeScrolls = {}
+local modelOrientation = {}
 
 local GOLD = {0.82, 0.59, 0.24}
 local PALE = {0.96, 0.87, 0.72}
@@ -162,7 +163,10 @@ local function modelPreview(parent,x,y,w,h,creatureID,key)
     if model.SetKeepModelOnHide then model:SetKeepModelOnHide(true) end
     model:EnableMouse(true)
     model:EnableMouseWheel(true)
-    local rotation,zoom=0.30,1.30
+    local viewKey=tostring(key or "preview")..":"..tostring(creatureID)
+    local remembered=modelOrientation[viewKey]
+    local rotation,zoom=remembered and remembered.rotation or 0.30,
+                        remembered and remembered.zoom or 1.30
     local ok=pcall(function()
         model:ClearModel()
         model:SetCreature(creatureID)
@@ -188,12 +192,14 @@ local function modelPreview(parent,x,y,w,h,creatureID,key)
         if dragX then
             rotation=dragRotation+(GetCursorPosition()-dragX)*0.012
             model:SetRotation(rotation,false)
+            modelOrientation[viewKey]={rotation=rotation,zoom=zoom}
         end
     end)
     model:SetScript("OnMouseWheel",function(_,delta)
         zoom=math.max(0.70,math.min(2.25,zoom-delta*0.12))
         model:SetCamDistanceScale(zoom)
         model:RefreshCamera()
+        modelOrientation[viewKey]={rotation=rotation,zoom=zoom}
     end)
     model:SetScript("OnEnter",function()
         GameTooltip:SetOwner(model,"ANCHOR_RIGHT")
