@@ -85,7 +85,7 @@ class AdvancementTests(unittest.TestCase):
             self.assertEqual([p.name for p in target.parent.iterdir()],['ForeverAscension'])
             self.assertFalse((target/'user.lua').exists())
             self.assertEqual((root/'second/ForeverAscension/user.lua').read_text(),'local edits')
-            self.assertIn('## Version: 1.13.1',(target/'ForeverAscension.toc').read_text())
+            self.assertIn('## Version: 1.13.2',(target/'ForeverAscension.toc').read_text())
             installer.restore(root/'second')
             self.assertEqual((target/'user.lua').read_text(),'local edits')
             self.assertFalse((target.parent/'ForeverSubclass').exists())
@@ -197,6 +197,8 @@ function methods:GetFrameStrata() return self.strata or "MEDIUM" end
 function methods:GetScript(k) return self.scripts[k] end
 function methods:SetParent(parent) self.parent=parent end
 function methods:SetSize(w,h) self.width=w;self.height=h end
+function methods:SetScale(value) self.scale=value end
+function methods:SetFont(path,size,flags) self.fontSize=size end
 function methods:GetFrameLevel() return self.level or 1 end
 function methods:SetFrameLevel(value) self.level=value end
 function methods:SetFrameStrata(value) self.strata=value end
@@ -225,7 +227,9 @@ function methods:CreateTexture() return object('Texture',nil,self) end
 function methods:CreateFontString() return object('Font',nil,self) end
 function CreateFrame(kind,name,parent,template)
  local o=object(kind,name,parent)
+ o.template=template
  if template=='BasicFrameTemplateWithInset' then o.TitleText=object('Font',nil,o) end
+ if template=='TabSystemButtonArtTemplate' then o.Text=object('Font',nil,o);o.RotatedTextures={} end
  return o
 end
 UIParent=CreateFrame('Frame');PlayerFrame=CreateFrame('Frame');PlayerFrameManaBar=CreateFrame('StatusBar',nil,PlayerFrame);CharacterFrame=CreateFrame('Frame')
@@ -258,6 +262,7 @@ class AdvancementUITests(unittest.TestCase):
                           (MODULE/'addon/ForeverAscension/Portrait.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/CharacterStats.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/Integration.lua').read_text(),
+                          (MODULE/'addon/ForeverAscension/Presentation.lua').read_text(),
                           (MODULE/'addon/ForeverAscension/ForeverAscension.lua').read_text()+'\n'+assertions]:
                 status=lib.luaL_loadstring(state,chunk.encode())
                 if not status:status=lib.lua_pcallk(state,0,0,0,0,None)
@@ -466,6 +471,37 @@ root.TalentsFrame.TabSystem=CreateFrame('Frame',nil,root.TalentsFrame)
 for _,f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f,'ADDON_LOADED') end end
 assert(ForeverAscensionTalentButton.parent==root.TalentsFrame)
 assert(window.parent==ForeverAscensionTalentPage and root.active==2)
+''')
+
+    def test_embedded_presentation_fills_native_page_without_shrinking_text_or_nested_dialog(self):
+        self.lua(r'''
+local parent=CreateFrame('Frame',nil,UIParent);parent:SetSize(1208,635)
+ForeverAscensionShowIn(parent)
+parse('STATE 8 21 1 8');parse('CATALOG');parse('ENTRY 10 116 1 0 8');parse('END')
+assert(window.scale==1 and window.width==1208 and window.height==635)
+assert(window.foreverFill.texture=='Interface\\Buttons\\WHITE8X8')
+assert(uiRefs.abilityWidth>280 and uiRefs.talentWidth>500)
+assert(classButtons[6].name.fontSize==14 and abilityNodes[1].name.fontSize==14)
+assert(abilityNodes[1].height==60 and uiRefs.emptyTitle.fontSize==20)
+local last=classButtons[order[#order]]
+assert(-last.points[1][5]+last.height<=uiRefs.sidebar.height,'all class rows fit inside the sidebar')
+assert(uiRefs.emptyCard:IsShown() and uiRefs.nativeTalents:IsShown() and not talentScroll:IsShown())
+assert(not talentEmpty:IsShown(),'small technical text is replaced by a readable empty state')
+for _,size in ipairs({{1020,600},{1208,635}}) do
+ parent:SetSize(size[1],size[2]);parent.scripts.OnSizeChanged(parent)
+ assert(window.scale==1 and window.width==size[1] and uiRefs.talents.points[1][4]+uiRefs.talents.width<=size[1]-15)
+end
+''')
+
+    def test_presentation_keeps_real_trees_and_legacy_server_states_distinct(self):
+        self.lua(r'''
+local parent=CreateFrame('Frame',nil,UIParent);parent:SetSize(1208,635);ForeverAscensionShowIn(parent)
+parse('STATE 1 21 0 8');parse('ACTIVE 8');parse('CLASS 8 21 0 1000');parse('CATALOG');parse('ENTRY 10 116 1 0 8');parse('END')
+assert(uiRefs.emptyCard:IsShown() and not uiRefs.nativeTalents:IsShown())
+parse('STATE 1 21 0 8');parse('ACTIVE 8');parse('CLASS 8 21 0 1000');parse('CATALOG NATIVE');parse('TREES')
+parse('NATIVE 1000 8 2000 10 1 5 700 1 available');parse('TREE arcane d0a2d0b0d0b9d0bdd0b0d18f');parse('TNODE 1000 arcane 0 0');parse('END')
+assert(not uiRefs.emptyCard:IsShown() and talentScroll:IsShown() and tabButtons[1]:IsShown())
+assert(tabButtons[1].parent==uiRefs.talents and tabButtons[1].width>=140)
 ''')
 
     def test_modern_talent_button_anchors_to_content_and_closes_root(self):

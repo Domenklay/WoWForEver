@@ -45,19 +45,33 @@ local function camelot()
  local background=talentPage:CreateTexture(nil,"BACKGROUND");background:SetAllPoints();background:SetColorTexture(0.025,0.022,0.018,1)
  talentPage:EnableMouse(true);talentPage:Hide();talentPage:SetScript("OnShow",showContent)
  talentButton=nil
- for _,template in ipairs({"PanelTopTabButtonTemplate","CharacterFrameTabButtonTemplate","UIPanelButtonTemplate"}) do
+ for _,template in ipairs({"TabSystemButtonArtTemplate","PanelTopTabButtonTemplate","CharacterFrameTabButtonTemplate","UIPanelButtonTemplate"}) do
   local ok,button=pcall(CreateFrame,"Button",nil,host,template)
-  if ok and button then talentButton=button;break end
+  if ok and button then talentButton=button;talentButton.foreverNativeArt=template=="TabSystemButtonArtTemplate";break end
  end
  if not talentButton then talentButton=CreateFrame("Button",nil,host) end
  ForeverAscensionCamelotTalentTab=talentButton
- talentButton:SetSize(155,28);talentButton:SetText("Мультикласс");talentButton:SetID(3)
+ talentButton:SetSize(146,32);talentButton:SetText("Мультикласс");talentButton:SetID(3)
+ if talentButton.foreverNativeArt then
+  talentButton.isTabOnTop=true;talentButton.selectedFontObject=GameFontHighlight or "GameFontHighlight";talentButton.unselectedFontObject=GameFontNormal or "GameFontNormal"
+  if talentButton.HandleRotation then talentButton:HandleRotation() end
+ end
+ local function setSelected(value)
+  if talentButton.foreverNativeArt then talentButton:SetTabSelected(value)
+  elseif value and PanelTemplates_SelectTab then pcall(PanelTemplates_SelectTab,talentButton)
+  elseif not value and PanelTemplates_DeselectTab then pcall(PanelTemplates_DeselectTab,talentButton) end
+  local text=talentButton.Text or (talentButton.GetFontString and talentButton:GetFontString())
+  if (type(text)=="table" or type(text)=="userdata") and text.SetFont then text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",14,"");text:SetHeight(18) end
+ end
+ setSelected(false)
  talentButton:SetFrameStrata(host:GetFrameStrata());talentButton:SetFrameLevel(level+20)
+ local savedNativeTab
  local function restore()
   camelotSelected=false;talentPage:Hide()
   local hidden=camelotHidden;camelotHidden={}
   for child in pairs(hidden) do child:Show() end
-  if PanelTemplates_DeselectTab then pcall(PanelTemplates_DeselectTab,talentButton) end
+  if savedNativeTab and strip.selectedTabID==0 and type(strip.SetTabVisuallySelected)=="function" then strip:SetTabVisuallySelected(savedNativeTab) end
+  setSelected(false)
  end
  camelotRestore=restore
  local hooked=setmetatable({}, {__mode="k"})
@@ -77,6 +91,11 @@ local function camelot()
    end
   end)
   talentButton:ClearAllPoints();talentButton:SetPoint("LEFT",strip,"RIGHT",5,0)
+  local width=146
+  for _,tab in ipairs({strip:GetChildren()}) do
+   if tab.GetObjectType and tab:GetObjectType()=="Button" and tab:GetWidth()>=80 and tab:GetWidth()<=220 then width=tab:GetWidth();break end
+  end
+  talentButton:SetSize(width,32)
   local top,bottom=host:GetTop(),strip:GetBottom()
   if top and bottom and top-bottom>=0 and top-bottom<120 then
    talentPage:ClearAllPoints();talentPage:SetPoint("TOPLEFT",host,"TOPLEFT",5,-(top-bottom+4));talentPage:SetPoint("BOTTOMRIGHT",host,"BOTTOMRIGHT",-5,5)
@@ -88,13 +107,15 @@ local function camelot()
   if InCombatLockdown and InCombatLockdown() then return end
   if owner.IsInspecting and owner:IsInspecting() then return end
   if not camelotSelected then
+   savedNativeTab=type(strip.selectedTabID)=="number" and strip.selectedTabID or nil
+   if savedNativeTab and type(strip.SetTabVisuallySelected)=="function" then strip:SetTabVisuallySelected(0) end
    camelotHidden={}
    for _,child in ipairs({host:GetChildren()}) do
     if child~=strip and child~=talentPage and child~=talentButton and child:IsShown() then camelotHidden[child]=true;child:Hide() end
    end
   end
   camelotSelected=true;talentPage:Show();showContent()
-  if PanelTemplates_SelectTab then pcall(PanelTemplates_SelectTab,talentButton) end
+  setSelected(true)
  end)
  -- Switching a native loadout or closing the window restores its own content.
  host:HookScript("OnHide",restore)

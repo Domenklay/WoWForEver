@@ -1,5 +1,8 @@
 local REQUEST,RESPONSE="FAC1","FAR1"
 local ABILITIES_PER_PAGE=8 -- legacy wire compatibility; the list now scrolls
+local ABILITY_ROW_HEIGHT=60
+local presentation=ForeverAscensionPresentation
+local uiRefs={}
 local order={11,3,8,2,5,4,7,9,1,6,10}
 local classes={
  [1]={"Warrior","Воин","WARRIOR"},[2]={"Paladin","Паладин","PALADIN"},
@@ -64,6 +67,7 @@ local function label(parent,text,font)
  local f=parent:CreateFontString(nil,"OVERLAY",font or "GameFontHighlight");f:SetText(text or "");return f
 end
 local function button(parent,text,width,fn)
+ if presentation then return presentation.Button(parent,text,width,fn) end
  local b=CreateFrame("Button",nil,parent,"UIPanelButtonTemplate");b:SetSize(width,24);b:SetText(text);b:SetScript("OnClick",fn);return b
 end
 local function spellName(row)
@@ -228,13 +232,14 @@ end
 local function renderAbilities(rows)
  for index=1,#rows do
   if not abilityNodes[index] then
-   local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",0,-(index-1)*54);abilityNodes[index]=n
+   local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",0,-(index-1)*ABILITY_ROW_HEIGHT);abilityNodes[index]=n
   end
  end
- abilityCanvas:SetHeight(math.max(420,#rows*54))
+ abilityCanvas:SetHeight(math.max(420,#rows*ABILITY_ROW_HEIGHT))
  for index,n in ipairs(abilityNodes) do
   local row=rows[index];n.entry=row
   if row then
+   if presentation then presentation.Row(n,uiRefs.abilityWidth or 250) end
    n.icon:SetTexture(icon(row));n.name:SetText(spellName(row));local d=compatible[row.ID]
    local learned=state and state.learned[row.ID]
    local known=state and state.known[row.ID]
@@ -256,16 +261,18 @@ local function renderAbilities(rows)
  end
 end
 local function renderTalents(rows)
- local maxTier=0;local positions={}
- for _,row in ipairs(rows) do maxTier=math.max(maxTier,math.floor((row.RequiredTEInvestment or 0)/3)) end
+ local maxTier,maxColumn=0,4;local positions={}
+ for _,row in ipairs(rows) do maxTier=math.max(maxTier,math.floor((row.RequiredTEInvestment or 0)/3));maxColumn=math.max(maxColumn,(row.GridX or 0)+1) end
  local viewport=math.max(300,talentScroll:GetHeight() or 403)
  local rowStep=52
  local nodeSize,iconSize=44,36
+ local spacing=math.min(92,math.max(44,((uiRefs.talentWidth or 545)-80)/math.max(1,maxColumn-1)))
+ local left=math.max(20,((uiRefs.talentWidth or 545)-((maxColumn-1)*spacing+nodeSize))/2)
  for index,row in ipairs(rows) do
   local n=talentNodes[index] or makeNode(talentCanvas,true);talentNodes[index]=n;n.entry=row
   local tier=row.GridY or math.floor((index-1)/4);local column=row.GridX and (row.GridX+1) or (index-1)%4+1
   maxTier=math.max(maxTier,tier)
-  local x,y=25+(column-1)*92,-14-tier*rowStep
+  local x,y=left+(column-1)*spacing,-14-tier*rowStep
   n:ClearAllPoints();n:SetPoint("TOPLEFT",x,y);n:SetSize(nodeSize,nodeSize);n.icon:SetSize(iconSize,iconSize);n.border:SetSize(iconSize+15,iconSize+15)
   positions[row.ID]={x=x+nodeSize/2,y=y-nodeSize/2}
   local d=compatible[row.ID];local rank=state and state.talents[row.ID] or 0
@@ -306,7 +313,7 @@ refresh=function()
  if state then
   summary:SetText("Основной класс: "..name(state.primary).."  |  Уровень "..state.level.."  |  Умения "..state.used.."/"..state.limit)
   local progress=state.classes and state.classes[selectedClass]
-  progressText:SetText((state.xpShare==nil and "Распределение опыта: обновите сервер" or state.active~=0 and state.xpShare and "Опыт: 90% подклассу / 10% персонажу" or "Опыт: 100% персонажу")..(progress and (" | "..name(selectedClass)..": ур. "..progress.level.."/40, "..progress.xp.."/"..progress.next.." опыта") or ""))
+  progressText:SetText((state.xpShare==nil and "Настройки опыта появятся после обновления сервера" or state.active~=0 and state.xpShare and "Опыт: 90% подклассу / 10% персонажу" or "Опыт: 100% персонажу")..(progress and (" | "..name(selectedClass)..": ур. "..progress.level.."/40, "..progress.xp.."/"..progress.next.." опыта") or ""))
   xpShareButton:SetShown(state.xpShare~=nil);xpShareButton:SetChecked(state.xpShare==true)
   activateButton:SetText(selectedClass==state.primary and "Основной класс" or state.active==selectedClass and "Подкласс активен" or "Активировать")
   activateButton:SetEnabled(state.active~=(selectedClass==state.primary and 0 or selectedClass))
@@ -321,6 +328,7 @@ refresh=function()
   b.glow:SetShown(id==selectedClass)
   local count=0;if state then for learned in pairs(state.learned) do local row=byId[learned];if row and not customRule(row) and row.Class==classes[id][1] then count=count+1 end end end
   b.count:SetText(count>0 and tostring(count) or "")
+  if presentation then presentation.ClassButton(b,id==selectedClass,state and state.active==id) end
  end
  selectedText:SetText(name(selectedClass))
  talentHeading:SetText("Таланты"..(selectedTab and (" — "..tostring(treeNames[selectedTab] or schools[selectedTab] or selectedTab)) or ""))
@@ -334,10 +342,12 @@ refresh=function()
  talentEmpty:SetText(nativeCatalog and "В этой ветке нет талантов по выбранному фильтру." or "Сервер 1.11 не передаёт нативные деревья Forever.\nОбновите сервер, чтобы видеть ветки и распределять очки.")
  showAllButton:SetText(showAll and "Только доступные" or "Все умения")
  showAllButton:SetShown(not custom)
- if state and protocol<2 then message:SetText("Для талантов и нового каталога обновите сервер до версии 1.1.") end
+ if state and protocol<2 then message:SetText(protocol==0 and "Ожидаем ответ сервера…" or "Некоторые функции недоступны в текущей версии сервера.") end
+ if presentation then presentation.Refresh(uiRefs,{talents=#talents,native=nativeCatalog,primary=state and selectedClass==state.primary,branches=#tabs,selectedTab=selectedTab,coords=(CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classes[selectedClass] and classes[selectedClass][3]]) or classCoords[classes[selectedClass] and classes[selectedClass][3]]}) end
  updatePowers()
 end
 local function panel(parent,x,y,width,height)
+ if presentation then return presentation.Panel(parent,x,y,width,height) end
  local f=CreateFrame("Frame",nil,parent,BackdropTemplateMixin and "BackdropTemplate" or nil);f:SetPoint("TOPLEFT",x,y);f:SetSize(width,height)
  if f.SetBackdrop then
   f:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=32,edgeSize=14,insets={left=4,right=4,top=4,bottom=4}})
@@ -363,7 +373,7 @@ local function build()
   b.icon=b:CreateTexture(nil,"ARTWORK");b.icon:SetSize(38,38);b.icon:SetPoint("LEFT",4,0)
   b.icon:SetTexture("Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES")
   local coords=(CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classes[id][3]]) or classCoords[classes[id][3]];if coords then b.icon:SetTexCoord(unpack(coords)) else b.icon:SetTexture(134400) end
-  local border=b:CreateTexture(nil,"OVERLAY");border:SetTexture("Interface\\Buttons\\UI-Quickslot2");border:SetSize(54,54);border:SetPoint("CENTER",b.icon)
+  local border=b:CreateTexture(nil,"OVERLAY");b.border=border;border:SetTexture("Interface\\Buttons\\UI-Quickslot2");border:SetSize(54,54);border:SetPoint("CENTER",b.icon)
   b.glow=b:CreateTexture(nil,"OVERLAY");b.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border");b.glow:SetBlendMode("ADD");b.glow:SetSize(64,64);b.glow:SetPoint("CENTER",b.icon)
   b.name=label(b,classes[id][2],"GameFontNormalSmall");b.name:SetPoint("LEFT",b.icon,"RIGHT",5,0);b.name:SetWidth(66);b.name:SetTextColor(1,0.82,0)
   b.count=label(b,"","GameFontHighlightSmall");b.count:SetPoint("RIGHT",b.icon,"RIGHT",4,-13)
@@ -387,8 +397,8 @@ local function build()
  local heading=label(left,"Способности","GameFontNormalLarge");heading:SetPoint("TOP",0,-14);heading:SetTextColor(1,0.82,0);heading:SetShadowOffset(0,0)
  abilityScroll=CreateFrame("ScrollFrame","ForeverAscensionAbilityScroll",left,"UIPanelScrollFrameTemplate");abilityScroll:SetPoint("TOPLEFT",10,-47);abilityScroll:SetPoint("BOTTOMRIGHT",-28,10);abilityScroll:EnableMouseWheel(true)
  abilityCanvas=CreateFrame("Frame",nil,abilityScroll);abilityCanvas:SetSize(258,432);abilityScroll:SetScrollChild(abilityCanvas)
- abilityScroll:SetScript("OnMouseWheel",function(self,delta) self:SetVerticalScroll(math.max(0,math.min(math.max(0,abilityCanvas:GetHeight()-(self:GetHeight()>0 and self:GetHeight() or 420)),(self:GetVerticalScroll() or 0)-delta*54))) end)
- for i=1,8 do local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",0,-(i-1)*54);abilityNodes[i]=n end
+ abilityScroll:SetScript("OnMouseWheel",function(self,delta) self:SetVerticalScroll(math.max(0,math.min(math.max(0,abilityCanvas:GetHeight()-(self:GetHeight()>0 and self:GetHeight() or 420)),(self:GetVerticalScroll() or 0)-delta*ABILITY_ROW_HEIGHT))) end)
+ for i=1,8 do local n=makeNode(abilityCanvas,false);n:SetPoint("TOPLEFT",0,-(i-1)*ABILITY_ROW_HEIGHT);abilityNodes[i]=n end
  emptyAbilities=label(abilityCanvas,"","GameFontHighlightSmall");emptyAbilities:SetPoint("CENTER",0,0);emptyAbilities:SetWidth(240);emptyAbilities:SetTextColor(0.6,0.7,0.82);emptyAbilities:SetShadowOffset(0,0);emptyAbilities:SetJustifyH("CENTER");emptyAbilities:SetWordWrap(true)
  local right=panel(window,436,-138,565,498)
  talentHeading=label(right,"Таланты","GameFontNormalLarge");talentHeading:SetPoint("TOPLEFT",25,-14)
@@ -418,13 +428,26 @@ local function build()
  end);find:SetPoint("BOTTOMLEFT",452,27)
  local hint=label(window,"Списки и дерево: прокрутка колёсиком","GameFontHighlightSmall");hint:SetPoint("BOTTOMRIGHT",-28,36)
 
+ uiRefs={summary=summary,progress=progressText,selected=selectedText,activate=activateButton,xp=xpShareButton,xpLabel=xpLabel,search=search,reload=reload,
+  abilities=left,talents=right,sidebar=CreateFrame("Frame",nil,window),classes=classButtons,order=order,abilityTitle=heading,talentTitle=talentHeading,points=talentPoints,
+  abilityScroll=abilityScroll,abilityCanvas=abilityCanvas,talentScroll=talentScroll,talentCanvas=talentCanvas,filter=showAllButton,find=find,hint=hint,message=message,
+  oldEmpty=talentEmpty,rows=abilityNodes,tabs=tabButtons}
  window:Hide();refresh()
 end
 function ForeverAscensionShowIn(parent)
  build();if UISpecialFrames then for i=#UISpecialFrames,1,-1 do if UISpecialFrames[i]=="ForeverAscensionWindow" then table.remove(UISpecialFrames,i) end end end
- window:SetParent(parent);window:ClearAllPoints();window:SetPoint("TOP",parent,"TOP",0,0)
- local width,height=parent:GetWidth(),parent:GetHeight()
- if width>0 and height>0 then window:SetScale(math.min(width/1020,height/690)) else window:SetScale(0.85) end
+ window:SetParent(parent);window:ClearAllPoints();window:SetPoint("TOPLEFT",parent,"TOPLEFT",0,0)
+ local function resize()
+  local width,height=parent:GetWidth(),parent:GetHeight()
+  if width<=0 or height<=0 then width,height=1020,640 end
+  window:SetScale(1);window:SetSize(width,height)
+  if presentation then presentation.Apply(window,uiRefs,width,height) end
+ end
+ resize()
+ if not parent.foreverAscensionResizeHook then
+  parent.foreverAscensionResizeHook=true
+  parent:HookScript("OnSizeChanged",function() if window:GetParent()==parent then resize();refresh() end end)
+ end
  window:SetFrameStrata(parent:GetFrameStrata());window:SetFrameLevel(parent:GetFrameLevel()+1)
  window:SetMovable(false);window:SetScript("OnDragStart",nil);window:SetScript("OnDragStop",nil)
  if window.title then window.title:Hide() end;if window.close then window.close:Hide() end
