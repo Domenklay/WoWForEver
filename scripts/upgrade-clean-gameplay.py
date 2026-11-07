@@ -86,7 +86,18 @@ def prepare(root,backup,jobs,reuse=False):
         raise ValueError('Candidate clone trial was not verified and cleaned')
     if clean.load_state(root/'state.json')!=before or Path(before['compose']).read_text()!=text:
         raise ValueError('Live installation changed while the candidate was tested')
-    folder=root/'advancement'/os.urandom(6).hex();upgrade.direct(folder);folder.mkdir(parents=True,mode=0o700)
+    # direct() requires the path to ALREADY exist (resolve(strict=True)).
+    # Validate an existing private parent first, create the nonce folder, then
+    # validate the newly created path. The previous order raised FileNotFoundError
+    # after the candidate clone had been successfully tested.
+    parent=root/'advancement'
+    if parent.is_symlink():
+        raise ValueError('Linked advancement directory is unsupported')
+    parent.mkdir(mode=0o700,exist_ok=True)
+    upgrade.direct(parent)
+    folder=parent/os.urandom(6).hex()
+    folder.mkdir(mode=0o700)
+    upgrade.direct(folder)
     record=dict(format=FORMAT,root=str(root),directory=str(folder),before=before,before_digest=upgrade.digest(before),
                 compose_before=text,compose_digest=hashlib.sha256(text.encode()).hexdigest(),
                 control_before=(root/'server.sh').read_text(),candidate=item['Id'],candidate_tag=candidate,
