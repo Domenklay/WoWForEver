@@ -63,8 +63,8 @@ end
 -- In-place, opaque dungeon panel of Blizzard's existing Group Finder.
 -- The client only submits FDF requests; authority is retained server-side.
 local picked, host, pane, portal, redraw = DUNGEONS[1], nil, nil, nil, nil
-local entries, searchText, page = {}, "", 0
-local rows, PAGE_SIZE = {}, 9
+local entries, searchText = {}, ""
+local rows, ROW_HEIGHT = {}, 32
 local lastRequest = -100
 local oldUiNames = {
     "ForeverDungeonFinderFrame", "ForeverDungeonFinderMinimapButton",
@@ -189,30 +189,33 @@ local function install()
     end
     host.DungeonPortalTab = portal
 
-    -- Native page rather than an overlay: it becomes the sole visible page
-    -- when selected; existing listing/browse/who frames are never deleted.
-    pane = CreateFrame("Frame", "ForeverDungeonFinderPane", host)
-    pane:SetPoint("TOPLEFT", host, "TOPLEFT", 5, -36)
-    pane:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -5, 5)
+    -- The three Blizzard LFG pages use PortraitFrameTemplateNoCloseButton,
+    -- filling the WHOLE 458x535 LFGParentFrame. Reuse their actual chrome,
+    -- title bar and dimensions instead of a smaller, unstyled custom rectangle.
+    pane = CreateFrame("Frame", "ForeverDungeonFinderPane", host, "PortraitFrameTemplateNoCloseButton")
+    pane:SetAllPoints(host)
     pane:SetFrameLevel(host:GetFrameLevel() + 101)
     pane:EnableMouse(true)
-    pane:EnableMouseWheel(true)
+    if pane.SetTitle then pane:SetTitle("Поиск группы") end
 
+    -- Keep the inherited Blizzard border/portrait/title visible. Only fill
+    -- the content well beneath the real header. The page itself covers the
+    -- ENTIRE stock window and can no longer appear shorter than other tabs.
     local bg = plain(pane, "BACKGROUND", 0.070, 0.046, 0.031, 1)
-    bg:SetAllPoints()
-    pane.opaqueBackground = bg -- testable and independent of legacy SetBackdrop
+    bg:SetPoint("TOPLEFT", pane, "TOPLEFT", 11, -57)
+    bg:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -10, 35)
+    pane.opaqueBackground = bg
 
     local inner = plain(pane, "BORDER", 0.115, 0.071, 0.037, 1)
-    inner:SetPoint("TOPLEFT", pane, "TOPLEFT", 4, -4)
-    inner:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -4, 4)
+    inner:SetPoint("TOPLEFT", pane, "TOPLEFT", 15, -61)
+    inner:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -14, 40)
 
-    -- Natural WoW gold trim around the complete native-content rectangle.
-    local width = math.max(325, host:GetWidth() - 10)
-    local height = math.max(340, host:GetHeight() - 41)
-    border(pane, 4, 3, width - 8, 2)
-    border(pane, 4, height - 6, width - 8, 2)
-    border(pane, 3, 4, 2, height - 8)
-    border(pane, width - 5, 4, 2, height - 8)
+    local width = math.max(325, host:GetWidth())
+    local height = math.max(400, host:GetHeight())
+    border(pane, 12, 56, width - 23, 2)
+    border(pane, 12, height - 39, width - 23, 2)
+    border(pane, 12, 57, 2, height - 96)
+    border(pane, width - 13, 57, 2, height - 96)
 
     local split = math.floor(width * 0.455)
     local leftW = split - 31
@@ -221,58 +224,67 @@ local function install()
     if rightW < 130 then rightW = 130 end
 
     local listBg = plain(pane, "ARTWORK", 0.050, 0.036, 0.025, 0.97)
-    listBg:SetPoint("TOPLEFT", pane, "TOPLEFT", 10, -65)
-    listBg:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 10, 43)
+    listBg:SetPoint("TOPLEFT", pane, "TOPLEFT", 17, -114)
+    listBg:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 17, 47)
     listBg:SetWidth(split - 15)
     local rule = plain(pane, "ARTWORK", 0.52, 0.35, 0.15, 0.81)
-    rule:SetPoint("TOPLEFT", pane, "TOPLEFT", split + 1, -11)
-    rule:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", split + 1, 11)
+    rule:SetPoint("TOPLEFT", pane, "TOPLEFT", split + 1, -60)
+    rule:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", split + 1, 46)
     rule:SetWidth(1)
 
     local search = CreateFrame("EditBox", nil, pane, "InputBoxTemplate")
     search:SetSize(leftW, 23)
-    search:SetPoint("TOPLEFT", pane, "TOPLEFT", 17, -15)
+    search:SetPoint("TOPLEFT", pane, "TOPLEFT", 21, -68)
     search:SetAutoFocus(false)
     search:SetMaxLetters(48)
     if search.SetTextInsets then search:SetTextInsets(6, 6, 0, 0) end
-    local hint = label(pane, "Поиск...", "GameFontDisableSmall", 27, 21, leftW - 15, GREY)
+    local hint = label(pane, "Поиск...", "GameFontDisableSmall", 31, 74, leftW - 15, GREY)
     if hint.EnableMouse then hint:EnableMouse(false) end
-    label(pane, "ДОСТУПНЫЕ ПОДЗЕМЕЛЬЯ", "GameFontNormalSmall", 15, 49, split - 16, GOLD)
+    label(pane, "ДОСТУПНЫЕ ПОДЗЕМЕЛЬЯ", "GameFontNormalSmall", 21, 100, split - 19, GOLD)
 
-    for i = 1, PAGE_SIZE do
-        local row = CreateFrame("Button", nil, pane)
-        row:SetSize(split - 20, 24)
-        row:SetPoint("TOPLEFT", pane, "TOPLEFT", 13, -70 - (i - 1) * 25)
-        row:SetFrameLevel(pane:GetFrameLevel() + 2)
+    -- Native WoW ScrollFrame: all dungeons are in one continuous list.
+    -- The built-in UIPanelScrollFrameTemplate provides a real scroll bar,
+    -- while mouse-wheel scrolling remains usable with the pointer over rows.
+    local scroller = CreateFrame("ScrollFrame", "ForeverDungeonListScrollFrame", pane, "UIPanelScrollFrameTemplate")
+    scroller:SetPoint("TOPLEFT", pane, "TOPLEFT", 20, -123)
+    scroller:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 20, 53)
+    scroller:SetWidth(split - 53)
+    scroller:EnableMouseWheel(true)
+    local listChild = CreateFrame("Frame", "ForeverDungeonListContent", scroller)
+    listChild:SetWidth(split - 53)
+    listChild:SetHeight(#DUNGEONS * ROW_HEIGHT)
+    scroller:SetScrollChild(listChild)
+
+    for i = 1, #DUNGEONS do
+        local row = CreateFrame("Button", nil, listChild)
+        row:SetSize(split - 54, ROW_HEIGHT - 1)
+        row:SetPoint("TOPLEFT", listChild, "TOPLEFT", 0, -(i - 1) * ROW_HEIGHT)
+        row:SetFrameLevel(scroller:GetFrameLevel() + 2)
         local shade = plain(row, "BACKGROUND", 0.11, 0.075, 0.049, 0.58)
         shade:SetAllPoints()
         local rowName = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        rowName:SetPoint("LEFT", row, "LEFT", 4, 0)
-        rowName:SetPoint("RIGHT", row, "RIGHT", -42, 0)
+        rowName:SetPoint("LEFT", row, "LEFT", 3, 0)
+        rowName:SetPoint("RIGHT", row, "RIGHT", -36, 0)
         rowName:SetJustifyH("LEFT")
         local rowLvl = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        rowLvl:SetPoint("RIGHT", row, "RIGHT", -3, 0)
+        rowLvl:SetPoint("RIGHT", row, "RIGHT", -2, 0)
         row.shade, row.title, row.level = shade, rowName, rowLvl
         rows[i] = row
     end
 
-    local prev = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
-    prev:SetSize(64, 22)
-    prev:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 14, 13)
-    prev:SetText("Назад")
-    local nextButton = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
-    nextButton:SetSize(64, 22)
-    nextButton:SetPoint("LEFT", prev, "RIGHT", 5, 0)
-    nextButton:SetText("Далее")
-    local pagesLabel = label(pane, "", "GameFontDisableSmall", 147, height - 39, 40, GREY)
+    scroller:SetScript("OnMouseWheel", function(self, delta)
+        local range = self:GetVerticalScrollRange() or 0
+        local pos = self:GetVerticalScroll() or 0
+        self:SetVerticalScroll(math.max(0, math.min(range, pos - delta * ROW_HEIGHT * 3)))
+    end)
 
-    local dungeonName = label(pane, "", "GameFontNormalLarge", rightX, 19, rightW, GOLD)
-    local region = label(pane, "", "GameFontHighlightSmall", rightX, 49, rightW, GREY)
-    border(pane, rightX, 77, rightW, 1)
-    local levelText = label(pane, "", "GameFontNormalSmall", rightX, 91, rightW, IVORY)
-    local description = label(pane, "", "GameFontHighlightSmall", rightX, 118, rightW, IVORY)
+    local dungeonName = label(pane, "", "GameFontNormalLarge", rightX, 70, rightW, GOLD)
+    local region = label(pane, "", "GameFontHighlightSmall", rightX, 100, rightW, GREY)
+    border(pane, rightX, 126, rightW, 1)
+    local levelText = label(pane, "", "GameFontNormalSmall", rightX, 141, rightW, IVORY)
+    local description = label(pane, "", "GameFontHighlightSmall", rightX, 170, rightW, IVORY)
     description:SetJustifyV("TOP")
-    local scaling = label(pane, "Уровни противников подстраиваются под персонажа.", "GameFontHighlightSmall", rightX, 166, rightW, GREY)
+    local scaling = label(pane, "Уровни противников подстраиваются под персонажа.", "GameFontHighlightSmall", rightX, 226, rightW, GREY)
     scaling:SetJustifyV("TOP")
 
     local party = CreateFrame("Frame", nil, pane)
@@ -307,13 +319,10 @@ local function install()
                 table.insert(entries, dungeon)
             end
         end
-        local pages = math.max(1, math.ceil(#entries / PAGE_SIZE))
-        page = math.max(0, math.min(page, pages - 1))
-        prev:SetEnabled(page > 0)
-        nextButton:SetEnabled(page < pages - 1)
-        pagesLabel:SetText(tostring(page + 1) .. "/" .. tostring(pages))
+        listChild:SetHeight(math.max(1, #entries * ROW_HEIGHT))
+        if scroller.UpdateScrollChildRect then scroller:UpdateScrollChildRect() end
         for i, row in ipairs(rows) do
-            local d = entries[page * PAGE_SIZE + i]
+            local d = entries[i]
             row.data = d
             if d then
                 row:Show()
@@ -364,17 +373,11 @@ local function install()
     search:SetScript("OnTextChanged", function(self)
         searchText = self:GetText() or ""
         if searchText == "" then hint:Show() else hint:Hide() end
-        page = 0
+        scroller:SetVerticalScroll(0)
         update()
     end)
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    prev:SetScript("OnClick", function() page = page - 1; update() end)
-    nextButton:SetScript("OnClick", function() page = page + 1; update() end)
-    pane:SetScript("OnMouseWheel", function(_, delta)
-        page = page - (delta > 0 and 1 or -1)
-        update()
-    end)
     solo:SetScript("OnClick", function() requestEntry(false) end)
     together:SetScript("OnClick", function() requestEntry(true) end)
 
