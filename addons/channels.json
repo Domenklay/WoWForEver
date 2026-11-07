@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107T150344403739Z",
+  "revision": "70658-20261107-legacy-loot-16",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,7 +102,7 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-15",
+      "release": "testing-70658-20261107-16",
       "clientBuild": 70658,
       "addons": [
         {
@@ -141,9 +141,9 @@
         },
         {
           "name": "ForeverEncyclopedia",
-          "version": "0.9.20-v2.1-archive-layout",
+          "version": "0.9.21-v2.1-loot-preview",
           "protocol": 1,
-          "sourceCommit": "400545a99117b3098d3b3895d918ccc013aa274e",
+          "sourceCommit": "669fc610291bb98f0b869e29cf4fd850686f2728",
           "sourcePath": "mods/living-encyclopedia/addon/ForeverEncyclopedia",
           "files": [
             {
@@ -153,8 +153,8 @@
             },
             {
               "name": "ForeverEncyclopedia.toc",
-              "size": 653,
-              "sha256": "412e3e4b2369264456b8d2509fcd2a6bd57dbba3df115009f9e73c9b071f613d"
+              "size": 651,
+              "sha256": "d0ed3610d9565ae31dfd5885b1faa03f46eaf7526617619d30859354ee3f70f5"
             },
             {
               "name": "ForeverEncyclopediaAbilities.lua",
@@ -168,8 +168,8 @@
             },
             {
               "name": "ForeverEncyclopediaLegacy.lua",
-              "size": 49351,
-              "sha256": "6ca75c8c657d84ef154eac8b7337fd629ea13915b55733eb3f6563c1864d24cd"
+              "size": 54660,
+              "sha256": "2d7d9d928a608313e7a899dd699254cc057003240629c26db52c073ff6ede2de"
             },
             {
               "name": "ForeverEncyclopediaMovableDock.lua",
@@ -193,8 +193,8 @@
             },
             {
               "name": "ForeverEncyclopediaV21.lua",
-              "size": 45621,
-              "sha256": "362e04bbf92ca6d239dc7147ab99c57c7dc2d1d6fcbc9a0737edd22aca4ddfc5"
+              "size": 48747,
+              "sha256": "e7b744bcc6f37c0a730bfa73618bfb7c00de60e0cef0fcc243b22a5bf6a088c4"
             }
           ]
         }
