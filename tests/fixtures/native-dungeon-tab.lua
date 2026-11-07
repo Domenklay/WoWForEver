@@ -9,6 +9,10 @@ function methods:GetNumPoints() return rawget(self,"points") or 0 end
 function methods:SetWidth(v) self.width=v end
 function methods:SetHeight(v) self.height=v end
 function methods:SetSize(w,h) self.width=w; self.height=h end
+function methods:SetFrameLevel(v) self.level=v end
+function methods:SetVertexColor(r,g,b,a) self.rgba={r,g,b,a} end
+function methods:SetTexture(v) self.texture=v end
+function methods:EnableMouse(v) self.mouseEnabled=v end
 function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1 end
 function methods:SetAllPoints() self.points=1 end
 function methods:SetText(v) self.text=v end
@@ -16,7 +20,7 @@ function methods:GetText() return self.text or "" end
 function methods:SetEnabled(v) self.enabled=v end
 function methods:SetScript(n,f) self.scripts[n]=f end
 function methods:HookScript(n,f) self.scripts[n]=f end
-function methods:Show() self.shown=true end
+function methods:Show() self.shown=true; if self.scripts.OnShow then self.scripts.OnShow(self) end end
 function methods:Hide() self.shown=false end
 function methods:IsShown() return self.shown and (not rawget(self,"parent") or self.parent:IsShown()) end
 function methods:SetChecked(v) self.checked=v end
@@ -52,6 +56,10 @@ C_ChatInfo={
 LFGParentFrame=make("Frame","LFGParentFrame",nil)
 LFGParentFrame:SetSize(470,580)
 LFGParentFrame:Hide()
+local oldRed=CreateFrame("Button","ForeverDungeonFinderGroupFinderTab",LFGParentFrame)
+oldRed:SetText("Вход в подземелье")
+oldRed:SetSize(166,25)
+local oldPane=CreateFrame("Frame","ForeverDungeonFinderGroupFinderPane",LFGParentFrame)
 function ShowUIPanel(frame) frame:Show() end
 
 local file=arg[1]
@@ -63,11 +71,17 @@ local tab=_G.ForeverDungeonPortalTab
 local pane=_G.ForeverDungeonFinderPane
 assert(tab and pane,"Native tab or embedded pane missing")
 assert(tab.parent==LFGParentFrame and pane.parent==LFGParentFrame,"Pane is not inside stock LFG")
-assert(tab:GetWidth()==43 and tab:GetHeight()==43,"Tab is not a square icon")
+assert(tab:GetWidth()==50 and tab:GetHeight()==50,"Tab is not a properly sized portal icon")
+assert(not oldRed:IsShown() and not oldPane:IsShown(),"Obsolete top red button or overlay remains visible")
+assert(tab:GetNumPoints()>=1,"Portal icon is not anchored in role row")
+assert(pane.opaqueBackground and pane.opaqueBackground.texture=="Interface\\\\Buttons\\\\WHITE8X8","Missing reliable opaque background texture")
+assert(pane.opaqueBackground.rgba and pane.opaqueBackground.rgba[4]==1,"Dungeon panel must have alpha 1")
+assert(pane:GetFrameLevel()>LFGParentFrame:GetFrameLevel()+50,"Native content may draw over dungeon panel")
 assert(not pane:IsShown(),"Pane should initially be hidden")
 assert(type(SlashCmdList.FOREVERDUNGEONFINDER)=="function","/fd missing")
 SlashCmdList.FOREVERDUNGEONFINDER()
 assert(LFGParentFrame:IsShown() and pane:IsShown(),"Slash command did not open embedded pane")
+assert(not oldRed:IsShown(),"Obsolete red header button must stay hidden after opening")
 assert(tab.checked,"Native square was not selected")
 local function findButton(text)
     for _,v in ipairs(frames) do
