@@ -72,6 +72,7 @@ int main()
     assert(AffordableNativeHeal(200, 500, 40, 500, 0) == 40);
     assert(AffordableNativeHeal(200, 500, 400, 500, 5) == 300);
     assert(AffordableNativeHeal(UINT32_MAX, UINT32_MAX, 100, 50, 5) == 50);
+    assert(AffordableNativeHeal(UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX, 5) == uint32_t(INT32_MAX));
     assert(ReservePercent(0) == 0);
     assert(ReservePercent(3) == 15);
     assert(ReservePercent(5) == 25);
