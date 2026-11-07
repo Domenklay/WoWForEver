@@ -143,7 +143,7 @@ assert(tab and pane,"Native sidebar and page are missing")
 assert(tab.parent==LFGParentFrame and pane.parent==LFGParentFrame,"Wrong LFG parent")
 assert(tab.template=="LFGVanillaRightTabTemplate","Must use real Blizzard side-tab template")
 assert(tab:GetID()==4,"Native dungeon tab must have ID=4")
-assert(tab.Icon and tab.Icon.texture=="Interface\Icons\Spell_Arcane_PortalStormWind","Portal icon not inherited")
+assert(tab.Icon and tab.Icon.texture=="Interface\\Icons\\Spell_Arcane_PortalStormWind","Portal icon not inherited")
 assert(tab.lastAnchor[1]=="TOPLEFT" and tab.lastAnchor[2]==LFGParentFrame.WhoListingTab
     and tab.lastAnchor[3]=="BOTTOMLEFT" and tab.lastAnchor[4]==0 and tab.lastAnchor[5]==-2,
     "New portal must attach to third native sidebar tab")
