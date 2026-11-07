@@ -14,6 +14,8 @@ local selectedAppearance = "living_book"
 local pendingBuy = false
 local ui = {}
 local objects = {}
+local scrollPositions = {}
+local activeScrolls = {}
 
 local GOLD = {0.82, 0.59, 0.24}
 local PALE = {0.96, 0.87, 0.72}
@@ -29,6 +31,10 @@ local function remember(o)
 end
 
 local function wipeView()
+    for key, scroll in pairs(activeScrolls) do
+        if scroll.GetVerticalScroll then scrollPositions[key]=scroll:GetVerticalScroll() end
+    end
+    wipe(activeScrolls)
     for i = 1, #objects do objects[i]:Hide() end
     wipe(objects)
 end
@@ -105,6 +111,92 @@ local function button(parent,x,y,w,h,text,selected,fn)
     end)
     b:SetScript("OnClick",fn)
     return b
+end
+
+-- Native ScrollFrame clips its child, preserving the visible page and
+-- position when a server response redraws the current archive.
+local function scrollArea(parent,x,y,w,h,key,childHeight)
+    local scroll=remember(CreateFrame("ScrollFrame",nil,parent,"UIPanelScrollFrameTemplate"))
+    scroll:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y)
+    scroll:SetSize(w,h)
+    local child=CreateFrame("Frame",nil,scroll)
+    child:SetSize(w-28,math.max(h,childHeight or h))
+    scroll:SetScrollChild(child)
+    if scroll.SetVerticalScroll then
+        scroll:SetVerticalScroll(math.min(scrollPositions[key] or 0,math.max(0,child:GetHeight()-h)))
+    end
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel",function(self,delta)
+        local maxOffset=math.max(0,child:GetHeight()-h)
+        local nextOffset=math.max(0,math.min(maxOffset,(self:GetVerticalScroll() or 0)-delta*44))
+        self:SetVerticalScroll(nextOffset)
+        scrollPositions[key]=nextOffset
+    end)
+    activeScrolls[key]=scroll
+    return child,scroll
+end
+
+local function paragraph(parent,x,y,w,text,style,color,spacing)
+    local f=font(parent,x,y,w,text,style or "GameFontNormalSmall",color or MUTED)
+    if f.SetWordWrap then f:SetWordWrap(true) end
+    local measured=f.GetStringHeight and f:GetStringHeight() or 17
+    return y+math.max(17,measured or 17)+(spacing or 9)
+end
+
+local function modelPreview(parent,x,y,w,h,creatureID,key)
+    local plate=frame(parent,x,y,w,h,{0.017,0.016,0.018,1})
+    if not creatureID or tonumber(creatureID)==0 then
+        label(plate,10,math.floor(h/2)-10,w-20,"3D-образ ещё не открыт",
+              "GameFontNormalSmall",MUTED,"CENTER")
+        return nil
+    end
+    local model=CreateFrame("PlayerModel",nil,plate)
+    model:SetPoint("TOPLEFT",plate,"TOPLEFT",5,-5)
+    model:SetPoint("BOTTOMRIGHT",plate,"BOTTOMRIGHT",-5,5)
+    if model.SetKeepModelOnHide then model:SetKeepModelOnHide(true) end
+    model:EnableMouse(true)
+    model:EnableMouseWheel(true)
+    local rotation,zoom=0.30,1.30
+    local ok=pcall(function()
+        model:ClearModel()
+        model:SetCreature(creatureID)
+        if model.SetPortraitZoom then model:SetPortraitZoom(0) end
+        model:SetCamDistanceScale(zoom)
+        model:SetRotation(rotation,false)
+        model:RefreshCamera()
+    end)
+    if not ok then
+        label(plate,9,math.floor(h/2)-10,w-18,"3D-модель недоступна",
+              "GameFontNormalSmall",MUTED,"CENTER")
+    end
+    local dragX,dragRotation
+    model:SetScript("OnMouseDown",function(_,mouse)
+        if mouse=="LeftButton" then
+            dragX=GetCursorPosition()
+            dragRotation=rotation
+        end
+    end)
+    model:SetScript("OnMouseUp",function() dragX=nil end)
+    model:SetScript("OnHide",function() dragX=nil end)
+    model:SetScript("OnUpdate",function()
+        if dragX then
+            rotation=dragRotation+(GetCursorPosition()-dragX)*0.012
+            model:SetRotation(rotation,false)
+        end
+    end)
+    model:SetScript("OnMouseWheel",function(_,delta)
+        zoom=math.max(0.70,math.min(2.25,zoom-delta*0.12))
+        model:SetCamDistanceScale(zoom)
+        model:RefreshCamera()
+    end)
+    model:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(model,"ANCHOR_RIGHT")
+        GameTooltip:AddLine("3D-предпросмотр",1,0.8,0.3)
+        GameTooltip:AddLine("Мышь: вращение. Колесо: масштаб.",0.85,0.83,0.75,true)
+        GameTooltip:Show()
+    end)
+    model:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    return model
 end
 
 local function emblem(parent,x,y,w,h,path)
