@@ -636,9 +636,8 @@ public:
         uint32 missing = uint32(std::min<uint64>(UINT32_MAX, player->GetMaxHealth() - player->GetHealth()));
         uint32 cap = player->CountPctFromMaxHealth(HealCapPct(*state));
         uint32 spendable = SpendableMana(*state);
-        uint32 amplified = ForeverEncyclopedia::Talents::AmplifiedHeal(gain,
-            GetRank(state->ranks, "mend_power"));
-        uint32 allowed = std::min({ amplified, missing, cap, spendable });
+        uint32 allowed = ForeverEncyclopedia::Talents::AffordableNativeHeal(
+            gain, missing, cap, spendable, GetRank(state->ranks, "mend_power"));
 
         // This runs before ModifyHealth: free, excessive and unaffordable
         // native healing is blocked rather than modified after the fact.
