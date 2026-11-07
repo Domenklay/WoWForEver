@@ -437,6 +437,28 @@ local function openNative()
     pane.openPane()
 end
 
+-- A previous testing channel could have left the old standalone addon in
+-- Interface/AddOns.  Keep that folder intact, but suppress its obsolete UI
+-- in favor of the native Group Finder tab.
+local function suppressLegacyFrame()
+    local old = _G.ForeverDungeonFinderFrame
+    if old and old.Hide then
+        old:Hide()
+        if not old.foreverNativeSuppressed and old.HookScript then
+            old.foreverNativeSuppressed = true
+            old:HookScript("OnShow", function(self) self:Hide() end)
+        end
+    end
+    local mini = _G.ForeverDungeonFinderMinimapButton
+    if mini and mini.Hide then
+        mini:Hide()
+        if mini.EnableMouse then mini:EnableMouse(false) end
+    end
+    -- An independently loaded old addon may have registered the same /fd
+    -- slash binding before or after the Encyclopedia.  Prefer native UI.
+    SlashCmdList.FOREVERDUNGEONFINDER = openNative
+end
+
 SLASH_FOREVERDUNGEONFINDER1 = "/fd"
 SLASH_FOREVERDUNGEONFINDER2 = "/dungeon"
 SlashCmdList.FOREVERDUNGEONFINDER = openNative
@@ -455,5 +477,6 @@ events:SetScript("OnEvent", function(_, event)
     else
         install()
     end
+    suppressLegacyFrame()
 end)
-if IsLoggedIn and IsLoggedIn() then registerPrefix(); install() end
+if IsLoggedIn and IsLoggedIn() then registerPrefix(); install(); suppressLegacyFrame() end
