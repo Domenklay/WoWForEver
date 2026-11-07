@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Progress-preserving 1.11 -> 1.12 gameplay transition; trial first, additive SQL only."""
+"""Progress-preserving 70658 upgrade to Ascension 1.13 + Dungeon Scaling 0.4; trial before cutover."""
 import argparse
 import copy
 import fcntl
@@ -22,6 +22,8 @@ trial=module('gameplay_upgrade_trial','test-baseline-services.py')
 clean,adv,upgrade=game.clean,game.adv,game.upgrade
 FORMAT='forever-gameplay-transition-v1'
 MARKER='.gameplay-upgrade-in-progress.json'
+ORIGINAL_SCALING_VERSION='0.2.0'
+NEW_DUNGEONFINDER_VERSION='0.2.0'
 
 
 def check_before(state,model):
@@ -29,8 +31,11 @@ def check_before(state,model):
         or state.get('advancement',{}).get('version') not in ('1.11.0','1.12.0')
         or state.get('gameplay',{}).get('version')!=1
         or state['gameplay'].get('encyclopedia')!=game.BOOK_VERSION
-        or state['gameplay'].get('scaling')!=game.SCALING_VERSION):
-        raise ValueError('This transition requires the ready combined 1.11.0 / 70658 baseline')
+        or state['gameplay'].get('scaling')!=ORIGINAL_SCALING_VERSION
+        or state['gameplay'].get('dungeonfinder') not in (None, '')
+        or state['gameplay'].get('dungeon_solo_enabled')
+        or state['gameplay'].get('dungeon_finder_enabled')):
+        raise ValueError('Requires the ready 70658 server: Scaling 0.2.0, Advancement 1.11/1.12 and unchanged encyclopedia')
     if model.get('name')!=state['project'] or model['services']['worldserver'].get('image')!=state['image']:
         raise ValueError('Live Compose identity differs')
     if any((Path(state['root'])/n).exists() for n in (MARKER,game.MARKER,adv.MARKER,'.upgrade-in-progress.json')):
@@ -138,19 +143,30 @@ def apply(root,record):
         clean.sql(before,'USE characters;\n'+(ROOT/'mods/forever-advancement/sql/preferences.sql').read_text())
         target=copy.deepcopy(before);target['image']=record['candidate_tag']
         target['advancement'].update(version=adv.VERSION,protocol=3,source_sha256=adv.source_id())
-        target['gameplay'].update(source_sha256=game.source_id(),transition=path)
+        target['gameplay'].update(source_sha256=game.source_id(), transition=path,
+                                  scaling=game.SCALING_VERSION, dungeonfinder=NEW_DUNGEONFINDER_VERSION,
+                                  dungeon_solo_enabled=True, dungeon_finder_enabled=True)
         target['database_version']='gameplay-1.13@pristine-'+before['core'][:12]
         model=json.loads(record['compose_before']);model['services']['worldserver']['image']=record['candidate_tag']
+        # Only the worldserver module toggles change: credentials, ports,
+        # named database volumes, bind mounts and every other service stay put.
+        world_env=model['services']['worldserver']['environment']
+        world_env.update(FOREVER_SCALING_ENABLED='1', FOREVER_SCALING_DAMAGE_GUARD='1',
+                         FOREVER_SCALING_MIN_OFFSET='-3', FOREVER_SCALING_CREATURE_MAX_LEVEL='70',
+                         FOREVER_DUNGEON_SCALING_ENABLED='1', FOREVER_DUNGEON_FINDER_ENABLED='1')
         # bnet, MySQL, web, all mounts, credentials, ports and environment remain exact.
         clean.write_private(Path(before['compose']),model);clean.compose(target,'config','-q')
         clean.compose(target,'up','-d','--no-build','--no-deps','--force-recreate','worldserver')
         game.wait_module(target)
+        # The FDF module is the actual teleport dispatcher. Refuse cutover if
+        # its startup registration is missing from the candidate image.
+        adv.module_readiness.wait(clean, target, ['ForeverDungeonFinder: direct-entry-v0.2 registered (enabled=true)'], 90)
         if fingerprints(target)!=record['progress_before'] or upgrade.snapshot(target)['counts']!=record['snapshot']['counts']:
             raise ValueError('Account/character/module progress changed during initialization')
         clean.save(target);upgrade.private_text(root/'server.sh',upgrade.control_text(root),0o700)
         if record['previous_running']:clean.compose(target,'up','-d','--no-build','--no-deps',*record['previous_running'])
         save(record,'active');(root/MARKER).unlink()
-        print('GAMEPLAY UPGRADED: 1.13.0; current databases and progress retained',flush=True)
+        print('GAMEPLAY UPGRADED: Ascension 1.13.0, Scaling 0.4.0, DungeonFinder 0.2.0 (solo+group enabled); character progress retained',flush=True)
     except BaseException:
         try:
             clean.write_private(Path(record['directory'])/'startup-diagnostics.json',adv.module_readiness.snapshot(clean,before,clean.container(before,'worldserver'),allow_stopped=True))
