@@ -657,7 +657,7 @@ local function dropdown(parent,x,y,w,current,options,choose)
     for _,option in ipairs(options) do
         if option.value==current then currentName=option.name; break end
     end
-    local trigger=button(parent,x,y,w,29,currentName.."  ▾",false,function()
+    local trigger=button(parent,x,y,w,29,currentName.." v",false,function()
         if ui.archivePopup and ui.archivePopup:IsShown() then
             ui.archivePopup:Hide()
             ui.archivePopup=nil
