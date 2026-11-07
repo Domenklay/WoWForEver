@@ -13,7 +13,9 @@ function methods:SetFrameLevel(v) self.level=v end
 function methods:SetVertexColor(r,g,b,a) self.rgba={r,g,b,a} end
 function methods:SetTexture(v) self.texture=v end
 function methods:EnableMouse(v) self.mouseEnabled=v end
-function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1 end
+function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1; self.lastAnchor={...} end
+function methods:GetLeft() return rawget(self,"left") end
+function methods:GetRight() return rawget(self,"right") end
 function methods:SetAllPoints() self.points=1 end
 function methods:SetText(v) self.text=v end
 function methods:GetText() return self.text or "" end
@@ -65,6 +67,13 @@ if arg[2]=="pve" then
     PVEFrame:Hide()
 end
 local expectedHost=PVEFrame or LFGParentFrame
+expectedHost.left=16
+expectedHost.right=486
+if arg[3]=="sidebar" then
+    local sidebar=make("Button","PVEFrameTab3",expectedHost)
+    sidebar:SetSize(49,49)
+    sidebar.left=491
+end
 local oldRed=CreateFrame("Button","ForeverDungeonFinderGroupFinderTab",expectedHost)
 oldRed:SetText("Вход в подземелье")
 oldRed:SetSize(166,25)
@@ -82,7 +91,16 @@ assert(tab and pane,"Native tab or embedded pane missing")
 assert(tab.parent==expectedHost and pane.parent==expectedHost,"Pane is not inside stock LFG")
 assert(tab:GetWidth()==50 and tab:GetHeight()==50,"Tab is not a properly sized portal icon")
 assert(not oldRed:IsShown() and not oldPane:IsShown(),"Obsolete top red button or overlay remains visible")
-assert(tab:GetNumPoints()>=1,"Portal icon is not anchored in role row")
+assert(tab:GetNumPoints()>=1,"Portal must be anchored")
+local a=tab.lastAnchor
+assert(a and a[1]=="TOPLEFT","Portal anchor must use top-left placement")
+if arg[3]=="sidebar" then
+    assert(a[2]==_G.PVEFrameTab3 and a[3]=="BOTTOMLEFT" and a[4]==0 and a[5]==-6,
+        "Portal must follow native right-hand sidebar third tab")
+else
+    assert(a[2]==expectedHost and a[3]=="TOPRIGHT" and a[4]==4 and a[5]==-249,
+        "Portal fallback must live OUTSIDE the native top filter area")
+end
 assert(pane.opaqueBackground and pane.opaqueBackground.texture and pane.opaqueBackground.texture:find("WHITE8X8",1,true),"Missing reliable opaque background texture")
 assert(pane.opaqueBackground.rgba and pane.opaqueBackground.rgba[4]==1,"Dungeon panel must have alpha 1")
 assert(pane:GetFrameLevel()>expectedHost:GetFrameLevel()+50,"Native content may draw over dungeon panel")
