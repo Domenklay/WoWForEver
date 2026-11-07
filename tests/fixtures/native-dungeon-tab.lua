@@ -26,7 +26,10 @@ function methods:IsShown() return self.shown and (not rawget(self,"parent") or s
 function methods:SetChecked(v) self.checked=v end
 local function make(kind, name, parent)
     local o=setmetatable({kind=kind, name=name, parent=parent, shown=true, scripts={}, children={}},{
-        __index=function(_,key) return methods[key] or noop end,
+        __index=function(_,key)
+            if key=="foreverNativeHidden" then return nil end
+            return methods[key] or noop
+        end,
     })
     if parent then table.insert(parent.children, o) end
     if name then _G[name]=o end
