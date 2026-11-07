@@ -128,6 +128,13 @@ local function requestFullArchive()
     return true
 end
 
+local function cancelArchiveLoads()
+    catalogAllGeneration=catalogAllGeneration+1
+    archiveGeneration=archiveGeneration+1
+    state.catalogAllLoading=false
+    state.archiveLoading=false
+end
+
 local function scheduleCatalogPage(page,generation)
     queueCatalogRequest("catalog "..page.." 0 0 -1",function()
         return generation==catalogAllGeneration and state.catalogAllLoading
@@ -509,7 +516,14 @@ local function parseBase(msg)
         if ui and ui:IsShown() and currentTab==1 then Draw() end
     else
         local tag,a,b,c,d,e,f=strsplit(" ",msg)
-        if tag=="STATE" then state.total=tonumber(a) or 0; state.creatures=tonumber(b) or 0; state.items=tonumber(c) or 0; state.zones=tonumber(d) or 0; state.online=true
+        if tag=="STATE" then
+            local previousCreatures=state.creatures
+            state.total=tonumber(a) or 0
+            state.creatures=tonumber(b) or 0
+            state.items=tonumber(c) or 0
+            state.zones=tonumber(d) or 0
+            state.online=true
+            if previousCreatures~=state.creatures then state.archiveLoaded=false end
         elseif tag=="KNOW" then state.knowledgeTotal=tonumber(a) or 0; state.knowledgeSpent=tonumber(b) or 0; state.knowledgeAvailable=tonumber(c) or 0
         elseif tag=="CURRENT" then state.map=tonumber(a) or 0; state.zone=tonumber(b) or 0; state.area=tonumber(c) or 0
         elseif tag=="CAPS" and a=="ARCHIVE1" then
@@ -571,6 +585,7 @@ _G.ForeverEncyclopediaUIBridge = {
     RequestCatalog=requestCatalog,
     RequestFullCatalog=requestFullCatalog,
     RequestFullArchive=requestFullArchive,
+    CancelArchiveLoads=cancelArchiveLoads,
     RequestZones=requestZones,
     RequestItems=requestItems,
     RequestCreatureInfo=requestCreatureInfo,
