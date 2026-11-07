@@ -54,6 +54,18 @@ local function solid(parent, layer, rgba)
 end
 
 local function edge(f, color)
+    -- Ornate built-in Warcraft borders instead of four flat yellow lines.
+    if f.SetBackdrop and f.SetBackdropBorderColor then
+        f:SetBackdrop({
+            bgFile="Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+            edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile=true,tileSize=32,edgeSize=18,
+            insets={left=4,right=4,top=4,bottom=4}
+        })
+        f:SetBackdropColor(0.09,0.065,0.049,0.95)
+        f:SetBackdropBorderColor(color[1],color[2],color[3],0.91)
+        return
+    end
     local r, g, b = color[1], color[2], color[3]
     local lines = {}
     local function one(pt1,pt2,w,h)
@@ -72,11 +84,15 @@ local function edge(f, color)
 end
 
 local function frame(parent, x, y, w, h, color)
-    local f = remember(CreateFrame("Frame",nil,parent))
+    local f = remember(CreateFrame("Frame",nil,parent,"BackdropTemplate"))
     f:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y)
     f:SetSize(w,h)
     local background=solid(f,"BACKGROUND",color or DEEP)
     background:SetAllPoints()
+    local parchment=f:CreateTexture(nil,"BACKGROUND",nil,1)
+    parchment:SetTexture("Interface\\AchievementFrame\\UI-Achievement-AchievementBackground")
+    parchment:SetAllPoints()
+    parchment:SetVertexColor(0.47,0.37,0.28,0.17)
     edge(f,GOLD)
     return f
 end
@@ -92,7 +108,7 @@ local function font(parent,x,y,w,text,style,color,align)
 end
 
 local function label(parent,x,y,w,text,style,color,align)
-    local f = remember(CreateFrame("Frame",nil,parent))
+    local f = remember(CreateFrame("Frame",nil,parent,"BackdropTemplate"))
     f:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y)
     f:SetSize(w,34)
     font(f,0,0,w,text,style,color,align)
@@ -100,7 +116,7 @@ local function label(parent,x,y,w,text,style,color,align)
 end
 
 local function button(parent,x,y,w,h,text,selected,fn)
-    local b=remember(CreateFrame("Button",nil,parent))
+    local b=remember(CreateFrame("Button",nil,parent,"BackdropTemplate"))
     b:SetSize(w,h)
     b:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y)
     local bg=solid(b,"BACKGROUND",selected and {0.29,0.16,0.043,1} or BROWN)
@@ -166,7 +182,7 @@ local function modelPreview(parent,x,y,w,h,creatureID,key)
     local viewKey=tostring(key or "preview")..":"..tostring(creatureID)
     local remembered=modelOrientation[viewKey]
     local rotation,zoom=remembered and remembered.rotation or 0.30,
-                        remembered and remembered.zoom or 1.30
+                        remembered and remembered.zoom or (key=="creature" and 1.62 or 1.30)
     local ok=pcall(function()
         model:ClearModel()
         model:SetCreature(creatureID)
@@ -298,7 +314,7 @@ local function node(parent,x,y,n)
     local eligible=n.implemented and checkPrereq(n)
     local full=rank>=n.max
     local chosen=selectedNode==n.key
-    local b=remember(CreateFrame("Button",nil,parent))
+    local b=remember(CreateFrame("Button",nil,parent,"BackdropTemplate"))
     b:SetPoint("CENTER",parent,"TOPLEFT",x,-y)
     b:SetSize(49,49)
     local bg=solid(b,"BACKGROUND",{0.030,0.029,0.027,1})
@@ -343,7 +359,7 @@ local function node(parent,x,y,n)
 end
 
 local function category(parent,x,y,w,h,title,stat,icon,action,locked,small)
-    local b=remember(CreateFrame("Button",nil,parent))
+    local b=remember(CreateFrame("Button",nil,parent,"BackdropTemplate"))
     b:SetSize(w,h)
     b:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y)
     local bg=solid(b,"BACKGROUND",locked and {0.060,0.055,0.052,1} or {0.13,0.078,0.036,1})
