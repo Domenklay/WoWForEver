@@ -1,7 +1,6 @@
--- ForeverDungeonFinder 0.2.0 UI, bundled with ForeverEncyclopedia for the
--- two-AddOn Multi 1.8.0 release contract. Server teleport remains separate.
--- Do not open duplicate frames if the standalone development AddOn is present.
-if _G.ForeverDungeonFinderFrame then return end
+-- WoW Forever Dungeon Finder: native Group Finder tab, release 0.3.0.
+-- Only the stock LFG window is used; server validation is authoritative.
+if _G.ForeverDungeonPortalTab then return end
 
 local PREFIX = "FDF"
 
@@ -26,10 +25,6 @@ local DUNGEONS = {
     { map = 289, name = "Некроситет", range = "58–60", zone = "Западные Чумные земли", desc = "Школа некромантии в Каэр Дарроу." },
     { map = 329, name = "Стратхольм", range = "58–60", zone = "Восточные Чумные земли", desc = "Павший город, разделённый между Алым орденом и Плетью." },
 }
-
-local filtered, rows = {}, {}
-local selected, offset = nil, 0
-local ROWS = 12
 
 local function registerPrefix()
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
@@ -63,558 +58,425 @@ local function partyState()
     return 1, false, true
 end
 
-local frame = CreateFrame("Frame", "ForeverDungeonFinderFrame", UIParent)
-frame:SetSize(780, 530)
-frame:SetPoint("CENTER")
-frame:SetFrameStrata("DIALOG")
-frame:SetClampedToScreen(true)
-frame:SetMovable(true)
-frame:EnableMouse(true)
-frame:RegisterForDrag("LeftButton")
-frame:SetScript("OnDragStart", frame.StartMoving)
-frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-frame:Hide()
 
-local shadow = frame:CreateTexture(nil, "BACKGROUND")
-shadow:SetPoint("TOPLEFT", -5, 5)
-shadow:SetPoint("BOTTOMRIGHT", 5, -5)
-shadow:SetColorTexture(0, 0, 0, 0.60)
+-- Integrated version: NO separate dungeon window, movable frame, minimap button
+-- or retail LFG queue calls.  This is an in-place panel of the stock LFG window.
+local picked = DUNGEONS[1]
+local host, pane, tab, refresh
+local filterText, visible, page = "", {}, 0
+local perPage = 8
+local rows = {}
+local lastRequest = -100
 
-local bg = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
-bg:SetAllPoints()
-bg:SetColorTexture(0.035, 0.045, 0.060, 0.98)
-
-local header = frame:CreateTexture(nil, "ARTWORK")
-header:SetPoint("TOPLEFT", 1, -1)
-header:SetPoint("TOPRIGHT", -1, -1)
-header:SetHeight(58)
-header:SetColorTexture(0.055, 0.075, 0.105, 1)
-
-local divider = frame:CreateTexture(nil, "ARTWORK")
-divider:SetPoint("TOPLEFT", 292, -68)
-divider:SetPoint("BOTTOMLEFT", 292, 20)
-divider:SetWidth(1)
-divider:SetColorTexture(0.20, 0.27, 0.35, 0.8)
-
-local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-title:SetPoint("TOPLEFT", 24, -17)
-title:SetText("Поиск подземелий")
-title:SetTextColor(0.90, 0.95, 1.00)
-
-local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
-subtitle:SetText("WoW Forever • мгновенный вход без очереди")
-subtitle:SetTextColor(0.48, 0.62, 0.78)
-
-local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-close:SetPoint("TOPRIGHT", -7, -7)
-
-local search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-search:SetSize(244, 28)
-search:SetPoint("TOPLEFT", 22, -79)
-search:SetAutoFocus(false)
-search:SetMaxLetters(40)
-search:SetTextInsets(8, 8, 0, 0)
-
-local searchHint = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-searchHint:SetPoint("LEFT", search, "LEFT", 9, 0)
-searchHint:SetText("Поиск...")
-searchHint:SetTextColor(0.42, 0.48, 0.55)
-
-local listCaption = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-listCaption:SetPoint("TOPLEFT", 24, -116)
-listCaption:SetText("ДОСТУПНЫЕ ПОДЗЕМЕЛЬЯ")
-listCaption:SetTextColor(0.48, 0.62, 0.78)
-
-for i = 1, ROWS do
-    local row = CreateFrame("Button", nil, frame)
-    row.index = i
-    row:SetSize(252, 30)
-    row:SetPoint("TOPLEFT", 20, -137 - ((i - 1) * 31))
-
-    row.bg = row:CreateTexture(nil, "BACKGROUND")
-    row.bg:SetAllPoints()
-
-    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.name:SetPoint("LEFT", 9, 2)
-    row.name:SetPoint("RIGHT", -58, 2)
-    row.name:SetJustifyH("LEFT")
-    row.name:SetTextColor(0.88, 0.91, 0.94)
-
-    row.level = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    row.level:SetPoint("RIGHT", -8, 0)
-    row.level:SetTextColor(0.50, 0.60, 0.70)
-
-    row:SetScript("OnEnter", function(self)
-        self.bg:SetColorTexture(0.11, 0.18, 0.26, 0.95)
-    end)
-    row:SetScript("OnLeave", function(self)
-        if self.data and selected == self.data then
-            self.bg:SetColorTexture(0.10, 0.24, 0.36, 0.95)
-        else
-            self.bg:SetColorTexture(0.055, 0.070, 0.090, self.index % 2 == 0 and 0.75 or 0.48)
-        end
-    end)
-    rows[i] = row
+local function notify(message)
+    if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffd275[WoW Forever]|r " .. message)
+    end
 end
 
-local up = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-up:SetSize(30, 22)
-up:SetPoint("BOTTOMLEFT", 205, 27)
-up:SetText("▲")
-
-local down = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-down:SetSize(30, 22)
-down:SetPoint("LEFT", up, "RIGHT", 4, 0)
-down:SetText("▼")
-
-local detailTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-detailTitle:SetPoint("TOPLEFT", 320, -91)
-detailTitle:SetPoint("RIGHT", -28, 0)
-detailTitle:SetJustifyH("LEFT")
-detailTitle:SetTextColor(0.92, 0.96, 1.00)
-
-local detailZone = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-detailZone:SetPoint("TOPLEFT", detailTitle, "BOTTOMLEFT", 0, -9)
-detailZone:SetTextColor(0.47, 0.66, 0.84)
-
-local line = frame:CreateTexture(nil, "ARTWORK")
-line:SetPoint("TOPLEFT", 320, -150)
-line:SetPoint("TOPRIGHT", -30, -150)
-line:SetHeight(1)
-line:SetColorTexture(0.20, 0.27, 0.35, 0.8)
-
-local levelLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-levelLabel:SetPoint("TOPLEFT", 320, -174)
-levelLabel:SetText("Исходный диапазон:")
-levelLabel:SetTextColor(0.62, 0.68, 0.74)
-
-local levelValue = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-levelValue:SetPoint("LEFT", levelLabel, "RIGHT", 8, 0)
-levelValue:SetTextColor(0.84, 0.90, 0.96)
-
-local scaling = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-scaling:SetPoint("TOPLEFT", 320, -205)
-scaling:SetWidth(420)
-scaling:SetJustifyH("LEFT")
-scaling:SetText("Уровень врагов масштабируется персонально под каждого игрока.")
-scaling:SetTextColor(0.48, 0.76, 0.94)
-
-local desc = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-desc:SetPoint("TOPLEFT", 320, -246)
-desc:SetWidth(420)
-desc:SetJustifyH("LEFT")
-desc:SetJustifyV("TOP")
-desc:SetTextColor(0.72, 0.76, 0.80)
-
-local groupPanel = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
-groupPanel:SetPoint("BOTTOMLEFT", 315, 100)
-groupPanel:SetPoint("BOTTOMRIGHT", -25, 100)
-groupPanel:SetHeight(72)
-groupPanel:SetColorTexture(0.050, 0.065, 0.085, 0.95)
-
-local groupTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-groupTitle:SetPoint("TOPLEFT", groupPanel, "TOPLEFT", 14, -11)
-groupTitle:SetText("ТЕКУЩИЙ СОСТАВ")
-groupTitle:SetTextColor(0.48, 0.62, 0.78)
-
-local groupInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-groupInfo:SetPoint("TOPLEFT", groupTitle, "BOTTOMLEFT", 0, -8)
-groupInfo:SetPoint("RIGHT", groupPanel, "RIGHT", -14, 0)
-groupInfo:SetJustifyH("LEFT")
-groupInfo:SetTextColor(0.84, 0.87, 0.90)
-
-local soloEnter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-soloEnter:SetSize(174, 38)
-soloEnter:SetPoint("BOTTOMLEFT", 320, 34)
-soloEnter:SetText("Войти соло")
-
-local groupEnter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-groupEnter:SetSize(220, 38)
-groupEnter:SetPoint("LEFT", soloEnter, "RIGHT", 12, 0)
-groupEnter:SetText("Войти группой")
-
-local note = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-note:SetPoint("BOTTOMLEFT", 320, 19)
-note:SetText("Без очереди, ролей и подбора случайных игроков")
-note:SetTextColor(0.45, 0.50, 0.56)
-
-local function setButtonEnabled(button, enabled)
-    if enabled then button:Enable() else button:Disable() end
+local function canRequest()
+    if not GetTime then return true end
+    if GetTime() - lastRequest < 2 then return false end
+    lastRequest = GetTime()
+    return true
 end
 
-local function refreshGroup()
+local function sendRequest(mode)
+    if not picked or not canRequest() then return end
     local count, raid, leader = partyState()
-    setButtonEnabled(soloEnter, selected ~= nil)
-
-    if raid then
-        groupInfo:SetText("Рейдовая группа: групповой прямой вход недоступен. Соло остаётся доступно.")
-        groupEnter:SetText("Недоступно для рейда")
-        groupEnter:Disable()
-    elseif count <= 1 then
-        groupInfo:SetText("Вы сейчас без группы. Можно войти в подземелье соло.")
-        groupEnter:SetText("Нет текущей группы")
-        groupEnter:Disable()
-    elseif not leader then
-        groupInfo:SetText(string.format("Группа: %d игроков. Групповой вход запускает только лидер.", count))
-        groupEnter:SetText("Ожидание лидера")
-        groupEnter:Disable()
+    if mode == "GROUP" and (count < 2 or count > 5 or raid or not leader) then
+        notify("Для входа группой нужен лидер обычной группы из 2–5 игроков.")
+        return
+    end
+    local name = UnitName("player")
+    if not name then return end
+    local ok
+    if mode == "SOLO" then
+        ok = sendAddon("SOLO:" .. picked.map, "WHISPER", name)
     else
-        groupInfo:SetText(string.format("Группа: %d игроков. Лидер перенесёт весь текущий состав в один экземпляр.", count))
-        groupEnter:SetText(string.format("Войти группой (%d)", count))
-        setButtonEnabled(groupEnter, selected ~= nil)
+        ok = sendAddon("GROUP:" .. picked.map, "PARTY")
+    end
+    if ok == false then
+        notify("Не удалось передать запрос на телепортацию.")
+    else
+        notify("Запрос входа отправлен. Если серверный модуль отключён, перенос не состоится.")
     end
 end
 
-local function refreshDetails()
-    if selected then
-        detailTitle:SetText(selected.name)
-        detailZone:SetText(selected.zone)
-        levelValue:SetText(selected.range)
-        desc:SetText(selected.desc)
-    else
-        detailTitle:SetText("Выберите подземелье")
-        detailZone:SetText("")
-        levelValue:SetText("—")
-        desc:SetText("Выберите подземелье слева. Поиск группы не запускается — вы сами выбираете соло или текущую группу.")
+-- Prefer a stock Group Finder frame, not the custom full-screen dungeon frame.
+-- Classic/Forever UI names differ, so installation is retried after lazy loads.
+local function findHost()
+    local frame = _G.PVEFrame or _G.LFGParentFrame or _G.GroupFinderFrame
+        or _G.LookingForGroupFrame or _G.LFGFrame
+    if frame and frame.GetWidth and frame.GetHeight then return frame end
+    if _G.LFGListFrame and _G.LFGListFrame.GetParent then
+        local parent = _G.LFGListFrame:GetParent()
+        return parent or _G.LFGListFrame
     end
-    refreshGroup()
 end
 
-local function refreshRows()
-    local maxOffset = math.max(0, #filtered - ROWS)
-    offset = math.max(0, math.min(offset, maxOffset))
+local function font(parent, text, style, x, y, width, color)
+    local obj = parent:CreateFontString(nil, "OVERLAY", style)
+    obj:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    obj:SetWidth(width)
+    obj:SetJustifyH("LEFT")
+    obj:SetText(text or "")
+    if color then obj:SetTextColor(color[1], color[2], color[3]) end
+    return obj
+end
+
+-- Lua 5.1 string.lower only handles ASCII in WoW; fold Russian UTF-8
+-- as well so searching "зул" matches "Зул'Фаррак".
+local function foldRu(text)
+    local result = string.lower(text or "")
+    result = result:gsub("\208([\144-\159])", function(b)
+        return "\208" .. string.char(string.byte(b) + 32)
+    end)
+    result = result:gsub("\208([\160-\175])", function(b)
+        return "\209" .. string.char(string.byte(b) - 32)
+    end)
+    return result:gsub("Ё", "ё")
+end
+
+local GOLD = {1, 0.82, 0.19}
+local IVORY = {0.93, 0.88, 0.76}
+local MUTED = {0.69, 0.71, 0.74}
+
+local function decorate(frame)
+    if frame.SetBackdrop then
+        frame:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 22,
+            insets = { left = 9, right = 9, top = 9, bottom = 9 },
+        })
+        frame:SetBackdropColor(0.05, 0.035, 0.025, 1)
+    else
+        local bg = frame:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+    end
+end
+
+local function install()
+    if tab then return true end
+    local root = findHost()
+    if not root or not root.CreateTexture then return false end
+    if root.GetWidth and root:GetWidth() < 330 then return false end
+    host = root
+
+    tab = CreateFrame("CheckButton", "ForeverDungeonPortalTab", host)
+    tab:SetSize(43, 43)
+    tab:SetFrameLevel(host:GetFrameLevel() + 30)
+    tab:RegisterForClicks("LeftButtonUp")
+    tab:SetHitRectInsets(0, 0, 0, 0)
+    local icon = tab:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", 5, -5)
+    icon:SetPoint("BOTTOMRIGHT", -5, 5)
+    icon:SetTexture("Interface\\Icons\\Spell_Arcane_PortalStormWind")
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local outline = tab:CreateTexture(nil, "OVERLAY")
+    outline:SetAllPoints()
+    outline:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    local glow = tab:CreateTexture(nil, "OVERLAY")
+    glow:SetPoint("TOPLEFT", -8, 8)
+    glow:SetPoint("BOTTOMRIGHT", 8, -8)
+    glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    glow:SetBlendMode("ADD")
+    glow:SetVertexColor(1, 0.72, 0.10)
+    glow:Hide()
+
+    -- Slot between the damage and guide role icons on Classic's LFG row.
+    -- Fall back to the same row's proportional position on other UIs.
+    local damage = _G.LFGListFrameRoleButtonDPS or _G.LFGFrameRoleCheckButtonDPS
+        or _G.LFDQueueFrameRoleButtonDPS or _G.LFGListFrameRoleButtonDamage
+    local guide = _G.LFGListFrameRoleButtonGuide or _G.LFGFrameRoleCheckButtonGuide
+        or _G.LFDQueueFrameRoleButtonGuide
+    if damage and guide and damage.GetCenter and guide.GetCenter then
+        local dx, dy = damage:GetCenter()
+        local gx, gy = guide:GetCenter()
+        if dx and gx and dy and gy and gx > dx and gx - dx > 57 then
+            tab:SetPoint("CENTER", damage, "CENTER", (gx - dx) / 2, (gy - dy) / 2)
+        end
+    end
+    if not tab:GetNumPoints() or tab:GetNumPoints() == 0 then
+        tab:SetPoint("TOPLEFT", host, "TOPLEFT", math.max(290, math.min(355, math.floor(host:GetWidth() * 0.745))), -78)
+    end
+
+    tab:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Вход в подземелье", 1, 0.82, 0.19)
+        GameTooltip:AddLine("Соло или готовой группой, без очереди", 0.93, 0.88, 0.76)
+        GameTooltip:Show()
+    end)
+    tab:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- All finder content stays INSIDE its parent and below the native role row.
+    pane = CreateFrame("Frame", "ForeverDungeonFinderPane", host)
+    pane:SetPoint("TOPLEFT", host, "TOPLEFT", 20, -166)
+    pane:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -19, 51)
+    pane:SetFrameLevel(host:GetFrameLevel() + 22)
+    pane:EnableMouse(true)
+    pane:EnableMouseWheel(true)
+    decorate(pane)
+    pane:Hide()
+
+    -- Column sizes are based on the stock 470-wide Group Finder layout.
+    local splitX = math.floor(math.max(345, host:GetWidth() - 40) * 0.46)
+    local leftW = splitX - 24
+    local rightX = splitX + 15
+    local rightW = math.max(145, host:GetWidth() - 68 - rightX)
+
+    local search = CreateFrame("EditBox", nil, pane, "InputBoxTemplate")
+    search:SetSize(leftW, 24)
+    search:SetPoint("TOPLEFT", 19, -18)
+    search:SetAutoFocus(false)
+    search:SetMaxLetters(48)
+    if search.SetTextInsets then search:SetTextInsets(6, 6, 0, 0) end
+    local searchHint = font(pane, "Поиск...", "GameFontDisableSmall", 29, -25, leftW - 20, MUTED)
+    if searchHint.EnableMouse then searchHint:EnableMouse(false) end
+
+    font(pane, "ПОДЗЕМЕЛЬЯ", "GameFontNormalSmall", 20, -54, leftW, GOLD)
+    local divider = pane:CreateTexture(nil, "ARTWORK")
+    divider:SetTexture("Interface\\Buttons\\WHITE8X8")
+    divider:SetVertexColor(0.53, 0.35, 0.15, 0.75)
+    divider:SetPoint("TOPLEFT", pane, "TOPLEFT", splitX, -18)
+    divider:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", splitX, 13)
+    divider:SetWidth(1)
+
+    for i = 1, perPage do
+        local row = CreateFrame("Button", nil, pane)
+        row:SetPoint("TOPLEFT", 18, -78 - (i - 1) * 25)
+        row:SetSize(leftW + 3, 24)
+        row:SetFrameLevel(pane:GetFrameLevel() + 2)
+        local bg = row:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+        local title = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        title:SetPoint("LEFT", row, "LEFT", 4, 0)
+        title:SetPoint("RIGHT", row, "RIGHT", -42, 0)
+        title:SetJustifyH("LEFT")
+        local level = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        level:SetPoint("RIGHT", row, "RIGHT", -3, 0)
+        row.background, row.title, row.level = bg, title, level
+        rows[i] = row
+    end
+
+    local leftPrev = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
+    leftPrev:SetSize(64, 23)
+    leftPrev:SetPoint("BOTTOMLEFT", 18, 16)
+    leftPrev:SetText("Назад")
+    local leftNext = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
+    leftNext:SetSize(64, 23)
+    leftNext:SetPoint("LEFT", leftPrev, "RIGHT", 6, 0)
+    leftNext:SetText("Далее")
+
+    local detailName = font(pane, "", "GameFontNormalLarge", rightX, -22, rightW, GOLD)
+    local detailZone = font(pane, "", "GameFontHighlightSmall", rightX, -53, rightW, MUTED)
+    local rule = pane:CreateTexture(nil, "ARTWORK")
+    rule:SetTexture("Interface\\Buttons\\WHITE8X8")
+    rule:SetVertexColor(0.53, 0.35, 0.15, 0.75)
+    rule:SetPoint("TOPLEFT", pane, "TOPLEFT", rightX, -80)
+    rule:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -15, -80)
+    rule:SetHeight(1)
+
+    local detailRange = font(pane, "", "GameFontNormalSmall", rightX, -95, rightW, IVORY)
+    local detailDesc = font(pane, "", "GameFontHighlightSmall", rightX, -125, rightW, IVORY)
+    detailDesc:SetJustifyV("TOP")
+    local scaling = font(pane, "Уровень противника подстраивается под игрока.", "GameFontHighlightSmall", rightX, -172, rightW, MUTED)
+    scaling:SetJustifyV("TOP")
+
+    local party = CreateFrame("Frame", nil, pane)
+    party:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", rightX - 4, 77)
+    party:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -12, 77)
+    party:SetHeight(66)
+    decorate(party)
+    font(party, "ТЕКУЩИЙ СОСТАВ", "GameFontNormalSmall", 12, -8, rightW - 12, GOLD)
+    local partyInfo = font(party, "", "GameFontHighlightSmall", 12, -27, rightW - 15, IVORY)
+    partyInfo:SetJustifyV("TOP")
+
+    local solo = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
+    solo:SetSize(math.max(83, math.floor((rightW - 8) / 2)), 27)
+    solo:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", rightX, 23)
+    solo:SetText("Войти соло")
+    local group = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
+    group:SetSize(math.max(84, math.floor((rightW - 8) / 2)), 27)
+    group:SetPoint("LEFT", solo, "RIGHT", 5, 0)
+    group:SetText("Группой")
+
+    local function refreshRows()
+        wipe(visible)
+        local needle = foldRu(filterText)
+        for _, entry in ipairs(DUNGEONS) do
+            if needle == "" or string.find(foldRu(entry.name .. " " .. entry.zone), needle, 1, true) then
+                table.insert(visible, entry)
+            end
+        end
+        local pages = math.max(1, math.ceil(#visible / perPage))
+        page = math.max(0, math.min(page, pages - 1))
+        leftPrev:SetEnabled(page > 0)
+        leftNext:SetEnabled(page < pages - 1)
+        for i, row in ipairs(rows) do
+            local entry = visible[page * perPage + i]
+            row.data = entry
+            if entry then
+                row:Show()
+                row.title:SetText(entry.name)
+                row.level:SetText(entry.range)
+                if entry == picked then
+                    row.background:SetVertexColor(0.14, 0.27, 0.41, 0.98)
+                    row.title:SetTextColor(1, 0.83, 0.29)
+                else
+                    row.background:SetVertexColor(0.12, 0.08, 0.06, i % 2 == 0 and 0.72 or 0.40)
+                    row.title:SetTextColor(0.93, 0.88, 0.76)
+                end
+            else
+                row:Hide()
+            end
+        end
+        detailName:SetText(picked.name)
+        detailZone:SetText(picked.zone)
+        detailRange:SetText("Исходный уровень: " .. picked.range)
+        detailDesc:SetText(picked.desc)
+
+        local count, raid, leader = partyState()
+        if raid then
+            partyInfo:SetText("Рейд: только одиночный вход.")
+        elseif count <= 1 then
+            partyInfo:SetText("Без группы. Доступен вход соло.")
+        elseif not leader then
+            partyInfo:SetText("В группе " .. count .. " чел. Ждём лидера.")
+        else
+            partyInfo:SetText("Группа " .. count .. " чел. Можно войти вместе.")
+        end
+        group:SetEnabled(count >= 2 and count <= 5 and not raid and leader)
+    end
+    refresh = refreshRows
 
     for i, row in ipairs(rows) do
-        local data = filtered[offset + i]
-        row.data = data
-        if data then
-            row:Show()
-            row.name:SetText(data.name)
-            row.level:SetText(data.range)
-            if selected == data then
-                row.bg:SetColorTexture(0.10, 0.24, 0.36, 0.95)
-            else
-                row.bg:SetColorTexture(0.055, 0.070, 0.090, i % 2 == 0 and 0.75 or 0.48)
+        row:SetScript("OnClick", function(self)
+            if self.data then picked = self.data; refreshRows() end
+        end)
+        row:SetScript("OnEnter", function(self)
+            if self.data and self.data ~= picked then
+                self.background:SetVertexColor(0.24, 0.20, 0.12, 0.88)
             end
-            row:SetScript("OnClick", function(self)
-                selected = self.data
-                refreshRows()
-                refreshDetails()
-            end)
-        else
-            row:Hide()
+        end)
+        row:SetScript("OnLeave", function() refreshRows() end)
+    end
+    search:SetScript("OnTextChanged", function(self)
+        filterText = self:GetText() or ""
+        if filterText == "" then searchHint:Show() else searchHint:Hide() end
+        page = 0
+        refreshRows()
+    end)
+    search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    leftPrev:SetScript("OnClick", function() page = page - 1; refreshRows() end)
+    leftNext:SetScript("OnClick", function() page = page + 1; refreshRows() end)
+    pane:SetScript("OnMouseWheel", function(_, delta)
+        page = page - (delta > 0 and 1 or -1)
+        refreshRows()
+    end)
+    solo:SetScript("OnClick", function() sendRequest("SOLO") end)
+    group:SetScript("OnClick", function() sendRequest("GROUP") end)
+
+    local function closePane()
+        pane:Hide()
+        tab:SetChecked(false)
+        glow:Hide()
+    end
+    local function openPane()
+        refreshRows()
+        pane:Show()
+        tab:SetChecked(true)
+        glow:Show()
+    end
+    tab:SetScript("OnClick", function()
+        if pane:IsShown() then closePane() else openPane() end
+    end)
+    host:HookScript("OnHide", closePane)
+    for _, name in ipairs({
+        "PVEFrameTab1", "PVEFrameTab2", "PVEFrameTab3",
+        "LFGParentFrameTab1", "LFGParentFrameTab2", "LFGParentFrameTab3",
+        "GroupFinderFrameGroupButton", "GroupFinderFrameLFGListBrowserButton",
+    }) do
+        local native = _G[name]
+        if native and native.HookScript then
+            native:HookScript("OnClick", closePane)
         end
     end
-
-    setButtonEnabled(up, offset > 0)
-    setButtonEnabled(down, offset < maxOffset)
+    pane.openPane = openPane
+    pane.closePane = closePane
+    refreshRows()
+    return true
 end
 
-local function applyFilter()
-    wipe(filtered)
-    local query = search:GetText() or ""
-    local queryLower = string.lower(query)
-    for _, dungeon in ipairs(DUNGEONS) do
-        local haystack = dungeon.name .. " " .. dungeon.zone
-        if query == "" or string.find(haystack, query, 1, true) or string.find(string.lower(haystack), queryLower, 1, true) then
-            table.insert(filtered, dungeon)
+local function openNative()
+    if not install() then
+        -- Blizzard can load GroupFinder lazily; request its frame on demand.
+        if C_AddOns and C_AddOns.LoadAddOn then
+            pcall(C_AddOns.LoadAddOn, "Blizzard_GroupFinder")
+        elseif LoadAddOn then
+            pcall(LoadAddOn, "Blizzard_GroupFinder")
         end
     end
-    offset = 0
-    refreshRows()
+    if not install() then
+        notify("Откройте стандартное окно «Поиск группы» и попробуйте /fd ещё раз.")
+        return
+    end
+    if not host:IsShown() then
+        if PVEFrame_ShowFrame then
+            pcall(PVEFrame_ShowFrame, "GroupFinderFrame")
+        end
+        if not host:IsShown() and ShowUIPanel then
+            ShowUIPanel(host)
+        end
+        if not host:IsShown() then host:Show() end
+    end
+    pane.openPane()
 end
 
-search:SetScript("OnTextChanged", function(self)
-    if (self:GetText() or "") == "" then searchHint:Show() else searchHint:Hide() end
-    applyFilter()
-end)
-search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-
-up:SetScript("OnClick", function() offset = math.max(0, offset - 1); refreshRows() end)
-down:SetScript("OnClick", function() offset = math.min(math.max(0, #filtered - ROWS), offset + 1); refreshRows() end)
-
-frame:EnableMouseWheel(true)
-frame:SetScript("OnMouseWheel", function(_, delta)
-    if delta > 0 then
-        offset = math.max(0, offset - 2)
-    else
-        offset = math.min(math.max(0, #filtered - ROWS), offset + 2)
+-- A previous testing channel could have left the old standalone addon in
+-- Interface/AddOns.  Keep that folder intact, but suppress its obsolete UI
+-- in favor of the native Group Finder tab.
+local function suppressLegacyFrame()
+    local old = _G.ForeverDungeonFinderFrame
+    if old and old.Hide then
+        old:Hide()
+        if not old.foreverNativeSuppressed and old.HookScript then
+            old.foreverNativeSuppressed = true
+            old:HookScript("OnShow", function(self) self:Hide() end)
+        end
     end
-    refreshRows()
-end)
-
-soloEnter:SetScript("OnClick", function()
-    if not selected then return end
-    local playerName = UnitName("player")
-    if playerName then
-        sendAddon("SOLO:" .. tostring(selected.map), "WHISPER", playerName)
+    local mini = _G.ForeverDungeonFinderMinimapButton
+    if mini and mini.Hide then
+        mini:Hide()
+        if mini.EnableMouse then mini:EnableMouse(false) end
     end
-end)
-
-groupEnter:SetScript("OnClick", function()
-    if not selected then return end
-    local count, raid, leader = partyState()
-    if count <= 1 or raid or not leader then return end
-    sendAddon("GROUP:" .. tostring(selected.map), "PARTY")
-end)
-
-frame:SetScript("OnShow", function() refreshDetails() end)
-
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-eventFrame:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_LOGIN" then
-        registerPrefix()
-    elseif event == "GROUP_ROSTER_UPDATE" and frame:IsShown() then
-        refreshGroup()
-    end
-end)
+    -- An independently loaded old addon may have registered the same /fd
+    -- slash binding before or after the Encyclopedia.  Prefer native UI.
+    SlashCmdList.FOREVERDUNGEONFINDER = openNative
+end
 
 SLASH_FOREVERDUNGEONFINDER1 = "/fd"
 SLASH_FOREVERDUNGEONFINDER2 = "/dungeon"
-SlashCmdList.FOREVERDUNGEONFINDER = function()
-    if frame:IsShown() then
-        frame:Hide()
-    else
-        frame:Show()
-        search:ClearFocus()
+SlashCmdList.FOREVERDUNGEONFINDER = openNative
+
+local events = CreateFrame("Frame")
+events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
+events:RegisterEvent("ADDON_LOADED")
+events:RegisterEvent("GROUP_ROSTER_UPDATE")
+events:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGIN" then
+        registerPrefix()
     end
-end
-
-local minimap = CreateFrame("Button", "ForeverDungeonFinderMinimapButton", Minimap)
-minimap:SetSize(32, 32)
-minimap:SetFrameStrata("MEDIUM")
-minimap:SetPoint("TOPLEFT", Minimap, "TOPLEFT", -2, -4)
-minimap:RegisterForClicks("LeftButtonUp")
-
-local miniBg = minimap:CreateTexture(nil, "BACKGROUND")
-miniBg:SetAllPoints()
-miniBg:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-
-local miniIcon = minimap:CreateTexture(nil, "ARTWORK")
-miniIcon:SetSize(18, 18)
-miniIcon:SetPoint("CENTER", 0, 1)
-miniIcon:SetTexture("Interface\\Icons\\INV_Misc_Map_01")
-miniIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-minimap:SetScript("OnClick", function() SlashCmdList.FOREVERDUNGEONFINDER() end)
-minimap:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine("Поиск подземелий", 0.90, 0.95, 1.00)
-    GameTooltip:AddLine("Соло или текущая группа — без очереди.", 0.70, 0.76, 0.82)
-    GameTooltip:Show()
-end)
-minimap:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-
--- Native Group Finder tab (client builds vary: PVEFrame / LFGParentFrame /
--- GroupFinderFrame). Never touches the unsafe retail LFG queue protocol.
-local nativeOverlay, nativeRefresh, nativeTab
-local function installNativeTab()
-    if nativeTab then return end
-    local host = PVEFrame or LFGParentFrame or GroupFinderFrame
-    if not host or not host.CreateTexture then return end
-
-    nativeTab = CreateFrame("Button", "ForeverDungeonFinderGroupFinderTab", host, "UIPanelButtonTemplate")
-    nativeTab:SetSize(166, 25)
-    nativeTab:SetPoint("TOPRIGHT", host, "TOPRIGHT", -37, -38)
-    nativeTab:SetText("Вход в подземелье")
-    nativeTab:SetFrameLevel(host:GetFrameLevel() + 40)
-
-    nativeOverlay = CreateFrame("Frame", "ForeverDungeonFinderGroupFinderPane", host)
-    nativeOverlay:SetSize(520, 390)
-    nativeOverlay:SetPoint("TOP", host, "TOP", 0, -73)
-    nativeOverlay:SetFrameLevel(host:GetFrameLevel() + 35)
-    nativeOverlay:EnableMouse(true)
-    nativeOverlay:Hide()
-
-    local surface = nativeOverlay:CreateTexture(nil, "BACKGROUND")
-    surface:SetAllPoints()
-    surface:SetColorTexture(0.035, 0.049, 0.071, 0.99)
-
-    local heading = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    heading:SetPoint("TOPLEFT", 16, -12)
-    heading:SetText("Прямой вход — WoW Forever")
-    heading:SetTextColor(1, 0.83, 0.45)
-
-    local info = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    info:SetPoint("TOPLEFT", 16, -35)
-    info:SetText("Выберите подземелье и способ входа. Без очереди и поиска игроков.")
-    info:SetTextColor(0.66, 0.76, 0.86)
-
-    local searchTab = CreateFrame("EditBox", nil, nativeOverlay, "InputBoxTemplate")
-    searchTab:SetSize(205, 25)
-    searchTab:SetPoint("TOPLEFT", 19, -60)
-    searchTab:SetAutoFocus(false)
-    searchTab:SetMaxLetters(40)
-
-    local leftTitle = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    leftTitle:SetPoint("TOPLEFT", 20, -96)
-    leftTitle:SetText("ПОДЗЕМЕЛЬЯ")
-    local rightTitle = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    rightTitle:SetPoint("TOPLEFT", 261, -96)
-    rightTitle:SetText("ВЫБРАННОЕ ПОДЗЕМЕЛЬЕ")
-
-    local dividingLine = nativeOverlay:CreateTexture(nil, "ARTWORK")
-    dividingLine:SetPoint("TOPLEFT", 246, -91)
-    dividingLine:SetSize(1, 280)
-    dividingLine:SetColorTexture(0.55, 0.43, 0.21, 0.75)
-
-    local picked = DUNGEONS[1]
-    local page, listed, buttons = 0, {}, {}
-    local labelName = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    labelName:SetPoint("TOPLEFT", 260, -120)
-    labelName:SetWidth(242)
-    labelName:SetJustifyH("LEFT")
-
-    local labelZone = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    labelZone:SetPoint("TOPLEFT", 260, -167)
-    labelZone:SetWidth(230)
-    labelZone:SetJustifyH("LEFT")
-
-    local labelDesc = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    labelDesc:SetPoint("TOPLEFT", 260, -207)
-    labelDesc:SetWidth(230)
-    labelDesc:SetJustifyH("LEFT")
-    labelDesc:SetJustifyV("TOP")
-
-    local partyText = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    partyText:SetPoint("BOTTOMLEFT", 260, 88)
-    partyText:SetWidth(235)
-    partyText:SetJustifyH("LEFT")
-
-    local buttonSolo = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
-    buttonSolo:SetSize(111, 30)
-    buttonSolo:SetPoint("BOTTOMLEFT", 260, 45)
-    buttonSolo:SetText("Соло")
-
-    local buttonGroup = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
-    buttonGroup:SetSize(120, 30)
-    buttonGroup:SetPoint("LEFT", buttonSolo, "RIGHT", 7, 0)
-    buttonGroup:SetText("Группой")
-
-    local prev = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
-    prev:SetSize(65, 22)
-    prev:SetPoint("BOTTOMLEFT", 20, 14)
-    prev:SetText("Назад")
-    local nextButton = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
-    nextButton:SetSize(65, 22)
-    nextButton:SetPoint("LEFT", prev, "RIGHT", 6, 0)
-    nextButton:SetText("Далее")
-    local pageText = nativeOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    pageText:SetPoint("LEFT", nextButton, "RIGHT", 8, 0)
-
-    local function refreshEmbedded()
-        local searchValue = searchTab:GetText() or ""
-        local needle = string.lower(searchValue)
-        wipe(listed)
-        for _, entry in ipairs(DUNGEONS) do
-            if needle == "" or string.find(string.lower(entry.name .. " " .. entry.zone), needle, 1, true) then
-                table.insert(listed, entry)
-            end
-        end
-        local pages = math.max(1, math.ceil(#listed / 8))
-        page = math.max(0, math.min(page, pages - 1))
-        for index, button in ipairs(buttons) do
-            local entry = listed[page * 8 + index]
-            button.data = entry
-            if entry then
-                button:Show()
-                button:SetText(entry.name)
-                button:GetFontString():SetTextColor(
-                    entry == picked and 1 or 0.84, entry == picked and 0.82 or 0.89, 0.73)
-            else
-                button:Hide()
-            end
-        end
-        prev:SetEnabled(page > 0)
-        nextButton:SetEnabled(page < pages - 1)
-        pageText:SetText(tostring(page + 1) .. "/" .. tostring(pages))
-
-        labelName:SetText(picked.name)
-        labelZone:SetText(picked.zone .. "  •  " .. picked.range)
-        labelDesc:SetText(picked.desc)
-        local count, raid, leader = partyState()
-        if raid then
-            partyText:SetText("Рейд: групповой вход недоступен.")
-        elseif count <= 1 then
-            partyText:SetText("Вы один. Доступен одиночный вход.")
-        elseif leader then
-            partyText:SetText(string.format("Группа: %d. Вы лидер.", count))
-        else
-            partyText:SetText(string.format("Группа: %d. Нужен лидер.", count))
-        end
-        buttonGroup:SetEnabled(count > 1 and not raid and leader)
-    end
-    nativeRefresh = refreshEmbedded
-
-    for i = 1, 8 do
-        local button = CreateFrame("Button", nil, nativeOverlay, "UIPanelButtonTemplate")
-        button:SetSize(216, 27)
-        button:SetPoint("TOPLEFT", 18, -116 - (i - 1) * 30)
-        button:GetFontString():SetJustifyH("LEFT")
-        button:SetScript("OnClick", function(self)
-            if self.data then
-                picked = self.data
-                selected = self.data
-                refreshDetails()
-                refreshEmbedded()
-            end
-        end)
-        buttons[i] = button
-    end
-
-    searchTab:SetScript("OnTextChanged", function() page = 0; refreshEmbedded() end)
-    searchTab:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    searchTab:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    prev:SetScript("OnClick", function() page = page - 1; refreshEmbedded() end)
-    nextButton:SetScript("OnClick", function() page = page + 1; refreshEmbedded() end)
-
-    buttonSolo:SetScript("OnClick", function()
-        if picked and UnitName("player") then
-            sendAddon("SOLO:" .. tostring(picked.map), "WHISPER", UnitName("player"))
-        end
-    end)
-    buttonGroup:SetScript("OnClick", function()
-        local count, raid, leader = partyState()
-        if picked and count > 1 and not raid and leader then
-            sendAddon("GROUP:" .. tostring(picked.map), "PARTY")
-        end
-    end)
-
-    nativeTab:SetScript("OnClick", function()
-        if nativeOverlay:IsShown() then nativeOverlay:Hide() else refreshEmbedded(); nativeOverlay:Show() end
-    end)
-    host:HookScript("OnHide", function() nativeOverlay:Hide() end)
-
-    -- Blizzard's tabs remain untouched. Switching to a native tab closes
-    -- only our overlay instead of invoking the unsafe LFG matchmaking code.
-    for i = 1, 5 do
-        local other = _G["PVEFrameTab" .. i] or _G["LFGParentFrameTab" .. i]
-        if other and other.HookScript then
-            other:HookScript("OnClick", function() nativeOverlay:Hide() end)
-        end
-    end
-    refreshEmbedded()
-end
-
-local tabEvents = CreateFrame("Frame")
-tabEvents:RegisterEvent("PLAYER_LOGIN")
-tabEvents:RegisterEvent("ADDON_LOADED")
-tabEvents:RegisterEvent("GROUP_ROSTER_UPDATE")
-tabEvents:SetScript("OnEvent", function(_, event)
     if event == "GROUP_ROSTER_UPDATE" then
-        if nativeOverlay and nativeOverlay:IsShown() and nativeRefresh then nativeRefresh() end
+        if pane and pane:IsShown() and refresh then refresh() end
     else
-        installNativeTab()
+        install()
     end
+    suppressLegacyFrame()
 end)
-if IsLoggedIn and IsLoggedIn() then installNativeTab() end
-
-for _, dungeon in ipairs(DUNGEONS) do table.insert(filtered, dungeon) end
-selected = filtered[1]
-refreshRows()
-refreshDetails()
+if IsLoggedIn and IsLoggedIn() then registerPrefix(); install(); suppressLegacyFrame() end
