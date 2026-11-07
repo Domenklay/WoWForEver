@@ -1090,9 +1090,13 @@ local function drawAppearanceView()
         if not unlocked then icon:SetDesaturated(true) end
         local title=font(b,70,11,266,a.name,"GameFontHighlight",unlocked and PALE or MUTED)
         if title.SetMaxLines then title:SetMaxLines(1) end
-        font(b,70,40,266,unlocked and "Открыт" or
-            ("Нужно накопить: "..a.threshold.." знаний"),
-            "GameFontNormalSmall",unlocked and GREEN or MUTED)
+        local note
+        if a.testing then
+            note=unlocked and "Тестовый: можно применить" or "Тестовый: доступен просмотр"
+        else
+            note=unlocked and "Открыт" or ("Нужно накопить: "..a.threshold.." знаний")
+        end
+        font(b,70,40,266,note,"GameFontNormalSmall",unlocked and GREEN or MUTED)
     end
     chosen=chosen or appearances[1]
     if not chosen then
@@ -1102,9 +1106,17 @@ local function drawAppearanceView()
     local unlocked=state.appearances[chosen.key] and state.appearances[chosen.key].unlocked
     label(detail,14,9,390,chosen.name,"GameFontHighlight",PALE,"CENTER")
     modelPreview(detail,14,40,393,219,chosen.creature,"appearance")
-    label(detail,14,265,390,unlocked and "Облик открыт" or
-          ("Для открытия нужно "..chosen.threshold.." знаний"),
-          "GameFontNormalSmall",unlocked and GREEN or MUTED,"CENTER")
+    if chosen.testing then
+        -- The creature ID remains visible for model troubleshooting.
+        -- Some retail-only 2024+ assets may be missing in client 70658.
+        label(detail,14,260,390,"Тестовая модель · NPC "..chosen.creature,
+              "GameFontNormalSmall",MUTED,"CENTER")
+    end
+    if not chosen.testing then
+        label(detail,14,265,390,unlocked and "Облик открыт" or
+              ("Для открытия нужно "..chosen.threshold.." знаний"),
+              "GameFontNormalSmall",unlocked and GREEN or MUTED,"CENTER")
+    end
     if state.selectedAppearance==chosen.key then
         label(detail,14,301,390,"Используется","GameFontHighlight",GREEN,"CENTER")
     elseif unlocked then
@@ -1112,7 +1124,10 @@ local function drawAppearanceView()
             bridge.SelectAppearance(chosen.key) -- confirmed by server
         end)
     else
-        label(detail,14,300,390,"Пока недоступен","GameFontNormalSmall",MUTED,"CENTER")
+        label(detail,14,300,390,
+            chosen.testing and "Только просмотр: нужен новый worldserver"
+                or "Пока недоступен",
+            "GameFontNormalSmall",MUTED,"CENTER")
     end
 end
 
