@@ -639,7 +639,16 @@ local function parseTalent(msg)
     elseif msg:sub(1,5)=="RANK|" then local _,k,r=strsplit("|",msg); state.ranks[k]=tonumber(r) or 0
     elseif msg:sub(1,5)=="BOOK|" then local _,mask,mana,maxMana,info=strsplit("|",msg); local oldInfo=state.infoLevel; state.abilityMask=tonumber(mask) or 0; state.mana=tonumber(mana) or 0; state.maxMana=tonumber(maxMana) or 100; state.infoLevel=tonumber(info) or 0; if state.infoLevel>oldInfo then queueCatalogInfo() end
     elseif msg:sub(1,11)=="APPEARANCE|" then local _,k,u,thr=strsplit("|",msg); state.appearances[k]={unlocked=tonumber(u)==1,threshold=tonumber(thr) or 0}
-    elseif msg:sub(1,9)=="SELECTED|" then local _,k=strsplit("|",msg); state.selectedAppearance=k or "living_book"
+    elseif msg:sub(1,9)=="SELECTED|" then
+        local _,key=strsplit("|",msg)
+        local selected=key or "living_book"
+        local changed=state.selectedAppearance~=selected
+        state.selectedAppearance=selected
+        -- The talent server has committed this key to the character DB.
+        -- Inform the companion runtime so its actual display changes now;
+        -- model selection is never trusted from a raw client-provided ID.
+        if changed then send(RUNTIME_REQ,"skin") end
+        notifyNative("appearance")
     elseif msg:sub(1,9)=="CREATURE|" then local _,entry,level=strsplit("|",msg); pendingCreatureInfo=tonumber(entry) or pendingCreatureInfo; if pendingCreatureInfo then state.creatureInfo[pendingCreatureInfo]=state.creatureInfo[pendingCreatureInfo] or {}; state.creatureInfo[pendingCreatureInfo].level=tonumber(level) or 0 end
     elseif msg:sub(1,6)=="CBASE|" then
         local _,name,ctype,class,minL,maxL,family,unitClass,damageSchool,baseAttack,rangeAttack=strsplit("|",msg)
