@@ -225,7 +225,7 @@
     "services_restore_fixture_ci_run": 42301993948,
     "services_restore_fixture_verified": true,
     "services_restore_test_source": "464c9313d2f4a44aae19b08dee41d262714a2d97",
-    "addon_catalog_ci_run": 42362724077,
+    "addon_catalog_ci_run": 42381723594,
     "addon_catalog_pinned_payloads_verified": true,
     "launcher_browser_ui_verified": true,
     "multiclass_unit_suite_total": 488,
@@ -278,6 +278,8 @@
     ],
     "native_hunter_basics": true,
     "transient_class_equipment_proficiencies": true,
-    "native_tab_user_verified": false
+    "native_tab_user_verified": false,
+    "addon_catalog_ci_run": 42381723594,
+    "testing_release": "testing-70658-20261107-13"
   }
 }
