@@ -2,7 +2,7 @@
 ## Title: Forever Encyclopedia
 ## Notes: Живая энциклопедия WoW Forever: V2.1, расширенный бестиарий, SmartAI-способности, таланты, облики и физический спутник
 ## Author: WoWForEver project
-## Version: 0.9.17-v2.1-legacy-ux
+## Version: 0.9.18-v2.1-dungeon-scroll
 ## SavedVariables: ForeverEncyclopediaDB
 ForeverEncyclopediaTalentData.lua
 ForeverEncyclopediaTalentOverrides.lua
