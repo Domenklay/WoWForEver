@@ -711,19 +711,20 @@ end
 
 local function drawCreatureView()
     local base=frame(page,13,63,874,444,DEEP)
-    drawArchiveHeading(base,"Архив существ",
-        "Все загруженные записи без страниц. Поиск, тип существ и локация.")
-    -- Shrink the chooser and use the extra width for the 3D model and notes.
-    local list=frame(base,16,82,318,292,BROWN)
-    local detail=frame(base,345,82,511,292,BROWN)
+    -- Reclaim dead vertical space above/below the chooser and reuse the
+    -- same native page footprint; keep the right 3D/model pane generous.
+    button(base,16,5,135,28,"К коллекции",false,function() selectMode("collection") end)
+    heading(base,166,5,541,"Архив существ")
+    local list=frame(base,16,39,390,395,BROWN)
+    local detail=frame(base,418,39,439,395,BROWN)
 
     local allRows=archiveRecords()
     local options=locationChoices(allRows)
     local records=filteredArchiveRecords(allRows)
 
     local input=remember(CreateFrame("EditBox",nil,list,"InputBoxTemplate"))
-    input:SetPoint("TOPLEFT",list,"TOPLEFT",15,-9)
-    input:SetSize(279,27)
+    input:SetPoint("TOPLEFT",list,"TOPLEFT",15,-7)
+    input:SetSize(355,27)
     input:SetAutoFocus(false)
     input:SetText(creatureSearch)
     input:SetScript("OnEnterPressed",function(self)
@@ -739,17 +740,17 @@ local function drawCreatureView()
         _G.ForeverEncyclopediaLegacy.Refresh("view")
     end)
 
-    dropdown(list,9,44,142,creatureType,MONSTER_TYPES,function(value)
+    dropdown(list,9,40,178,creatureType,MONSTER_TYPES,function(value)
         creatureType=value; scrollPositions["creature-list"]=0
         _G.ForeverEncyclopediaLegacy.Refresh("view")
     end)
-    dropdown(list,159,44,147,creatureLocation,options,function(value)
+    dropdown(list,195,40,184,creatureLocation,options,function(value)
         creatureLocation=value; scrollPositions["creature-list"]=0
         _G.ForeverEncyclopediaLegacy.Refresh("view")
     end)
     local statusLabel=activeMonsterFilter=="known" and "Встреченные" or
         activeMonsterFilter=="unknown" and "Неизвестные" or "Все записи"
-    button(list,9,77,120,24,statusLabel.." ▾",false,function()
+    button(list,9,73,144,25,statusLabel.." v",false,function()
         activeMonsterFilter=activeMonsterFilter=="all" and "known" or
             activeMonsterFilter=="known" and "unknown" or "all"
         scrollPositions["creature-list"]=0
@@ -763,32 +764,26 @@ local function drawCreatureView()
     else
         loadInfo="Показано: "..#records.." из "..totalLoaded
     end
-    font(list,136,81,168,loadInfo,"GameFontNormalSmall",MUTED,"RIGHT")
-    if not state.archiveSupported then
-        font(list,11,265,297,"Другие зоны доступны после обновления worldserver",
-             "GameFontNormalSmall",MUTED)
-    end
-
-    -- Only 6 row widgets exist regardless of the server catalogue size.
-    -- They represent a virtual window onto one continuous scrollable list.
-    local rowSize=39
-    local viewHeight=state.archiveSupported and 177 or 151
-    local contents,scroller=scrollArea(list,9,108,296,viewHeight-8,"creature-list",
+    font(list,162,79,213,loadInfo,"GameFontNormalSmall",MUTED,"RIGHT")
+    -- All available height belongs to the virtualized list. A 30px row
+    -- reveals about ten entries without paging, regardless of catalogue size.
+    local rowSize=30
+    local viewHeight=286
+    local contents,scroller=scrollArea(list,9,101,368,viewHeight,"creature-list",
                                     math.max(viewHeight,#records*rowSize+4))
-    viewHeight=viewHeight-8
     local visibleCount=math.ceil(viewHeight/rowSize)+1
     local widgets={}
     for slot=1,visibleCount do
-        local row=button(contents,2,4+(slot-1)*rowSize,259,35,"",false,function()
+        local row=button(contents,2,4+(slot-1)*rowSize,330,27,"",false,function()
             local selected=widgets[slot] and widgets[slot].record
             if not selected then return end
             selectedCreatureEntry=selected.entry
             if selected.known then bridge.RequestCreatureInfo(selected.entry) end
             _G.ForeverEncyclopediaLegacy.Refresh("view")
         end)
-        local title=font(row,7,8,192,"","GameFontNormalSmall",PALE)
+        local title=font(row,7,5,249,"","GameFontNormalSmall",PALE)
         if title.SetMaxLines then title:SetMaxLines(1) end
-        local badge=font(row,194,9,60,"","GameFontNormalSmall",GREEN,"RIGHT")
+        local badge=font(row,262,5,63,"","GameFontNormalSmall",GREEN,"RIGHT")
         widgets[slot]={frame=row,name=title,status=badge}
     end
     local function renderVisible(offset)
@@ -833,36 +828,36 @@ local function drawCreatureView()
     if selected then
         selectedCreatureEntry=selected.entry
         local info=state.creatureInfo[selected.entry] or {}
-        label(detail,12,8,485,archiveRecordName(selected),"GameFontHighlight",PALE,"CENTER")
-        modelPreview(detail,14,35,483,174,selected.known and selected.entry or nil,"creature")
-        local infoBody=scrollArea(detail,13,219,485,64,"creature-info",260)
-        local y=paragraph(infoBody,5,7,445,
+        label(detail,12,9,415,archiveRecordName(selected),"GameFontHighlight",PALE,"CENTER")
+        modelPreview(detail,14,39,411,233,selected.known and selected.entry or nil,"creature")
+        local infoBody=scrollArea(detail,13,283,412,103,"creature-info",260)
+        local y=paragraph(infoBody,5,7,367,
             selected.known and "Открыто в бестиарии" or "Ещё не встречено",
             "GameFontNormalSmall",selected.known and GREEN or MUTED,6)
-        y=paragraph(infoBody,5,y,445,"Запись: #"..selected.entry,"GameFontNormalSmall",MUTED,5)
+        y=paragraph(infoBody,5,y,367,"Запись: #"..selected.entry,"GameFontNormalSmall",MUTED,5)
         if selected.zone and selected.zone>0 then
-            y=paragraph(infoBody,5,y,445,
+            y=paragraph(infoBody,5,y,367,
                 (state.archiveSupported and "Место первой встречи: " or "Локация: ")..
                 (bridge.AreaName(selected.zone) or "Зона #"..selected.zone),
                 "GameFontNormalSmall",MUTED,5)
         end
         if selected.known then
             if state.infoLevel>=3 then
-                y=paragraph(infoBody,5,y,445,
+                y=paragraph(infoBody,5,y,367,
                     "Уровни: "..tostring(info.minLevel or "?").."–"..tostring(info.maxLevel or "?"),
                     "GameFontNormalSmall",PALE,5)
-                y=paragraph(infoBody,5,y,445,
+                y=paragraph(infoBody,5,y,367,
                     "Семейство: "..tostring(info.family or "?"),
                     "GameFontNormalSmall",MUTED,5)
             else
-                y=paragraph(infoBody,5,y,445,
+                y=paragraph(infoBody,5,y,367,
                     "Подробности открываются талантами Познания.",
                     "GameFontNormalSmall",MUTED,5)
             end
         end
-        infoBody:SetHeight(math.max(64,y+10))
+        infoBody:SetHeight(math.max(103,y+10))
     else
-        label(detail,16,24,479,
+        label(detail,16,24,407,
             state.catalogAllLoading and "Собираю каталог существ…" or
                 "По выбранным фильтрам записей нет.",
             "GameFontNormal",MUTED,"CENTER")
