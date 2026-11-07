@@ -451,7 +451,7 @@ local function createUI()
     ui.status=fs(ui,24,-49,230,"Нет связи","GameFontNormalSmall",0.8,0.4,0.35); ui.stats=fs(ui,280,-49,420,"","GameFontNormalSmall",0.82,0.75,0.63,"CENTER"); ui.zone=fs(ui,720,-49,230,"","GameFontHighlight",0.93,0.85,0.70,"RIGHT")
     local labels={"Существа","Локации","Таланты","Облики"}; for i,label in ipairs(labels) do tabButtons[i]=raised(ui,26+(i-1)*232,-91,216,34,label,function() switchTab(i) end,i==currentTab,true) end
     content=CreateFrame("Frame",nil,ui); content:SetPoint("TOPLEFT",ui,"TOPLEFT",16,-132); content:SetSize(948,486)
-    fs(ui,0,-616,950,"Forever Encyclopedia 0.9.21 V2.1","GameFontNormalSmall",0.46,0.40,0.33,"RIGHT")
+    fs(ui,0,-616,950,"Forever Encyclopedia 0.9.22 V2.1","GameFontNormalSmall",0.46,0.40,0.33,"RIGHT")
     ui:SetScript("OnShow",function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus(); if currentTab==1 then requestCatalog(state.catalogPage) elseif currentTab==2 then requestZones() end end)
     updateHeader(); Draw()
 end
