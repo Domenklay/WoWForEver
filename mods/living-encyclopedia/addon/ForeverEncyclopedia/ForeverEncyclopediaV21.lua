@@ -33,6 +33,7 @@ local state = {
     catalog={}, catalogLoaded=false, catalogPage=1, catalogPages=1,
     catalogTotal=0, catalogKnown=0, catalogZoneTotal=0, catalogZoneKnown=0,
     recentZones={}, recentZonesLoaded=false,
+    recentItems={}, recentItemsLoaded=false,
     ranks={}, abilityMask=0, mana=0, maxMana=100, infoLevel=0,
     appearances={}, selectedAppearance="living_book",
     creatureInfo={},
@@ -70,6 +71,7 @@ local function requestTalentStatus() send(TAL_REQ,"status") end
 local function requestRuntimeStatus() send(RUNTIME_REQ,"status") end
 local function requestCatalog(page) send(BASE_REQ,"catalog "..tostring(page or 1).." 0 0 -1") end
 local function requestZones() state.recentZones={}; state.recentZonesLoaded=false; send(BASE_REQ,"recent 3") end
+local function requestItems() state.recentItems={}; state.recentItemsLoaded=false; send(BASE_REQ,"recent 2") end
 
 local function zoneName()
     local z=GetRealZoneText and GetRealZoneText() or ""
@@ -389,7 +391,9 @@ local function parseBase(msg)
         elseif tag=="CURRENT" then state.map=tonumber(a) or 0; state.zone=tonumber(b) or 0; state.area=tonumber(c) or 0
         elseif tag=="BOOK" and state.maxMana<=100 then state.mana=tonumber(a) or 0; state.maxMana=tonumber(b) or 100
         elseif tag=="REC" and tonumber(a)==3 then state.recentZones[#state.recentZones+1]={entry=tonumber(b) or 0,map=tonumber(c) or 0,zone=tonumber(d) or 0}
+        elseif tag=="REC" and tonumber(a)==2 then state.recentItems[#state.recentItems+1]={entry=tonumber(b) or 0,map=tonumber(c) or 0,zone=tonumber(d) or 0}
         elseif tag=="RECEND" and tonumber(a)==3 then state.recentZonesLoaded=true; if ui and ui:IsShown() and currentTab==2 then Draw() end
+        elseif tag=="RECEND" and tonumber(a)==2 then state.recentItemsLoaded=true
         elseif tag=="END" then state.online=true end
         updateHeader(); updateDock(); if tag=="END" or tag=="RECEND" then notifyNative("collection") end
     end
@@ -436,6 +440,7 @@ _G.ForeverEncyclopediaUIBridge = {
     RequestStatus=function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus() end,
     RequestCatalog=requestCatalog,
     RequestZones=requestZones,
+    RequestItems=requestItems,
     RequestCreatureInfo=requestCreatureInfo,
     BuyTalent=function(key) if type(key)=="string" then send(TAL_REQ,"buy "..key) end end,
     SelectAppearance=function(key) if type(key)=="string" then send(TAL_REQ,"appearance "..key) end end,
@@ -450,11 +455,12 @@ end
 SLASH_FOREVERENCYCLOPEDIAV21_1="/ency"; SLASH_FOREVERENCYCLOPEDIAV21_2="/encyclopedia"
 SlashCmdList["FOREVERENCYCLOPEDIAV21"]=toggleEncyclopedia
 
-local events=CreateFrame("Frame"); events:RegisterEvent("ADDON_LOADED"); events:RegisterEvent("PLAYER_LOGIN"); events:RegisterEvent("PLAYER_ENTERING_WORLD"); events:RegisterEvent("ZONE_CHANGED_NEW_AREA"); events:RegisterEvent("CHAT_MSG_ADDON")
+local events=CreateFrame("Frame"); events:RegisterEvent("ADDON_LOADED"); events:RegisterEvent("PLAYER_LOGIN"); events:RegisterEvent("PLAYER_ENTERING_WORLD"); events:RegisterEvent("ZONE_CHANGED_NEW_AREA"); events:RegisterEvent("CHAT_MSG_ADDON"); events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 events:SetScript("OnEvent",function(_,event,...)
     if event=="ADDON_LOADED" then local name=...; if name~=ADDON then return end; registerPrefixes(); return end
     if event=="CHAT_MSG_ADDON" then local p,m=...; if p==BASE_RES then parseBase(tostring(m or "")) elseif p==TAL_RES then parseTalent(tostring(m or "")) elseif p==RUNTIME_RES then parseRuntime(tostring(m or "")) end; return end
     if event=="PLAYER_LOGIN" then createDock() end
+    if event=="GET_ITEM_INFO_RECEIVED" then notifyNative("items"); return end
     if event=="ZONE_CHANGED_NEW_AREA" then state.catalog={}; state.catalogLoaded=false; state.catalogPage=1; selectedCreature=1; notifyNative("collection") end
     C_Timer.After(1.0,function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus(); if ui and ui:IsShown() then if currentTab==1 then requestCatalog(1) elseif currentTab==2 then requestZones() end end end)
 end)
