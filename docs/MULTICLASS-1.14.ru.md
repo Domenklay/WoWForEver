@@ -76,6 +76,7 @@ Trait* и fallback Talent.db2. Название выбиралось из пос
 - [Ascension / закреплённое ядро](https://github.com/Domenklay/WoWForEver/actions/runs/42398310341).
 - [Совместная сборка единиц C++ и правила Scaling/подземелий](https://github.com/Domenklay/WoWForEver/actions/runs/42398310377).
 - [Резервное копирование и испытательные инструменты](https://github.com/Domenklay/WoWForEver/actions/runs/42398310367).
+- [Точный тестовый комплект аддонов](https://github.com/Domenklay/WoWForEver/actions/runs/42399343781): семь файлов Ascension 1.14, stable и pin энциклопедии сохранены.
 - Локально 499 тестов, 30 пропусков; 31 UI-проверка. Есть регрессии на реальные
   колонки 50–53, mounts/pet skills, повторяющиеся школы, выбор родного фона и
   переход с сохранением Scaling 0.4 / Dungeon Finder 0.2 / всех environment мира.

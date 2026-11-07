@@ -95,8 +95,8 @@ Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
 catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
 sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.14.0 and Encyclopedia 0.9.23-v2.1-fdf-diagnostics; server candidate is Ascension 1.14.0, active server remains 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
 and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
-synchronize the working branch. Catalogue CI 42359312577 checked the actual pinned
-Git payloads. Metadata-only catalogue edits need no launcher rebuild. Old
+synchronize the working branch. Catalogue CI 42399343781 checked the actual pinned
+1.14 Git payloads, including all seven loaded files and the preserved stable/Encyclopedia pins. Metadata-only catalogue edits need no launcher rebuild. Old
 app/src-tauri/addons/forever-*.json are historical 1.7 snapshots, not runtime inputs.
 
 Defaults: addonChannel=stable, addonUpdatesEnabled=true, clientUpdatesEnabled=true,
