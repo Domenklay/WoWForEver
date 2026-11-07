@@ -85,7 +85,7 @@ class AdvancementTests(unittest.TestCase):
             self.assertEqual([p.name for p in target.parent.iterdir()],['ForeverAscension'])
             self.assertFalse((target/'user.lua').exists())
             self.assertEqual((root/'second/ForeverAscension/user.lua').read_text(),'local edits')
-            self.assertIn('## Version: 1.13.0',(target/'ForeverAscension.toc').read_text())
+            self.assertIn('## Version: 1.13.1',(target/'ForeverAscension.toc').read_text())
             installer.restore(root/'second')
             self.assertEqual((target/'user.lua').read_text(),'local edits')
             self.assertFalse((target.parent/'ForeverSubclass').exists())
@@ -202,7 +202,17 @@ function methods:SetFrameLevel(value) self.level=value end
 function methods:SetFrameStrata(value) self.strata=value end
 function methods:GetAlpha() return self.alpha or 1 end
 function methods:SetAlpha(value) self.alpha=value end
-function methods:HookScript(k,f) self.scripts[k]=f end
+function methods:HookScript(k,f)
+ local old=self.scripts[k];self.scripts[k]=function(...) if old then old(...) end;return f(...) end
+end
+function methods:GetChildren()
+ local out={};for _,f in ipairs(frames) do if f.parent==self then out[#out+1]=f end end;return table.unpack(out)
+end
+function methods:GetObjectType() return self.kind end
+function methods:GetLeft() return self.left end
+function methods:GetRight() return self.right end
+function methods:GetBottom() return self.bottom end
+function methods:GetTop() return self.top end
 function methods:SetVerticalScroll(value) self.scroll=value end
 function methods:GetVerticalScroll() return self.scroll or 0 end
 local function object(kind,name,parent)
@@ -403,6 +413,54 @@ assert(#PlayerTalentFrame.Pages==2 and #PlayerTalentFrame.Tabs==2)
 ForeverAscensionTalentButton.scripts.OnClick();assert(PlayerTalentFrame:IsShown() and window.parent==ForeverAscensionTalentPage)
 assert(PlayerTalentFrame.currentPage==2 and not window.title:IsShown() and not window.close:IsShown())
 PlayerTalentFrame:SelectPage(1);assert(not ForeverAscensionTalentPage:IsShown())
+''')
+
+    def test_camelot_tab_is_in_the_visible_loadout_strip_not_the_hidden_retail_tab_system(self):
+        self.lua(r'''
+open();WOW_PROJECT_ID=18
+PlayerSpellsFrame=CreateFrame('Frame','PlayerSpellsFrame',UIParent)
+local root=PlayerSpellsFrame;local retailTabs=0
+root.AddNamedTab=function() retailTabs=retailTabs+1 end
+root.SetTab=function(self,id) self.active=id end;root.talentTabID=2
+root.TalentsFrame=CreateFrame('Frame',nil,root)
+local host=root.TalentsFrame;host.ButtonsParent=CreateFrame('Frame',nil,host)
+local strip=host.ButtonsParent
+local primary=CreateFrame('Button',nil,strip);primary:SetText('Основное');primary.right=200
+local secondary=CreateFrame('Button',nil,strip);secondary:SetText('Дополнительное');secondary.right=350
+local nativeClicks=0;secondary:SetScript('OnClick',function() nativeClicks=nativeClicks+1 end)
+local tree=CreateFrame('Frame',nil,host);local footer=CreateFrame('Button',nil,host)
+local hidden=CreateFrame('Frame',nil,host);hidden:Hide()
+ForeverAscensionNativeTalentTab.Install()
+assert(retailTabs==0,'hidden retail TabSystem must not receive the new tab')
+local tab=ForeverAscensionTalentButton;local page=ForeverAscensionTalentPage
+assert(tab.parent==strip and page.parent==host)
+assert(tab.points[1][2]==secondary,'tab follows the native secondary loadout')
+SlashCmdList.FOREVERASCENSION('')
+assert(root.active==2 and root:IsShown() and host:IsShown())
+assert(window.parent==page and page:IsShown() and not tree:IsShown() and not footer:IsShown())
+assert(tab:IsShown() and primary:IsShown() and secondary:IsShown())
+secondary.scripts.OnClick(secondary)
+assert(nativeClicks==1,'native handler preserved')
+assert(not page:IsShown() and tree:IsShown() and footer:IsShown() and not hidden:IsShown())
+tab.scripts.OnClick(tab);ForeverAscensionToggle()
+assert(not page:IsShown() and tree:IsShown(),'toggle must restore the native tree, not leave a blank page')
+tab.scripts.OnClick(tab);host.scripts.OnHide(host)
+assert(not page:IsShown() and tree:IsShown() and not hidden:IsShown())
+local count=#frames;ForeverAscensionNativeTalentTab.Install();assert(#frames==count)
+''')
+
+    def test_camelot_waits_for_delayed_buttons_parent_instead_of_adding_hidden_tabs(self):
+        self.lua(r'''
+WOW_PROJECT_ID=18;PlayerSpellsFrame=CreateFrame('Frame','PlayerSpellsFrame',UIParent)
+local root=PlayerSpellsFrame;root.TalentsFrame=CreateFrame('Frame',nil,root)
+root.AddNamedTab=function() error('must not attach to hidden retail tab system') end
+assert(not ForeverAscensionNativeTalentTab.Install())
+root.SetTab=function(self,id) self.active=id end;root.talentTabID=2
+SlashCmdList.FOREVERASCENSION('');assert(window==nil,'delayed native load must not open a standalone window')
+root.TalentsFrame.ButtonsParent=CreateFrame('Frame',nil,root.TalentsFrame)
+for _,f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f,'ADDON_LOADED') end end
+assert(ForeverAscensionTalentButton.parent==root.TalentsFrame.ButtonsParent)
+assert(window.parent==ForeverAscensionTalentPage and root.active==2)
 ''')
 
     def test_modern_talent_button_anchors_to_content_and_closes_root(self):

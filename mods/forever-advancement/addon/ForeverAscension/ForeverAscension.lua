@@ -435,7 +435,7 @@ local function open()
  build();window:Show();refresh();send("status")
 end
 function ForeverAscensionToggle()
- if ForeverAscensionTalentPage and ForeverAscensionTalentPage:IsShown() then ForeverAscensionTalentPage:Hide() elseif window and window:IsShown() then window:Hide() else open() end
+ if ForeverAscensionTalentPage and ForeverAscensionTalentPage:IsShown() then ForeverAscensionNativeTalentTab.Close() elseif window and window:IsShown() then window:Hide() else open() end
 end
 SLASH_FOREVERASCENSION1="/ascension";SLASH_FOREVERASCENSION2="/fa";SLASH_FOREVERASCENSION3="/fsub"
 SlashCmdList.FOREVERASCENSION=function(text)

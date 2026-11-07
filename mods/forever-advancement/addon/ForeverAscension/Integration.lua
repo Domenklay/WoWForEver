@@ -15,11 +15,104 @@ function ForeverAscensionPickupSpell(spell)
 end
 -- Follow Encyclopedia's native Pages/Tabs adapter. No replacement native talent window.
 local talentHost,talentButton,talentPage,nativeIndex
+local camelotOwner,camelotSelected,camelotHidden,camelotRestore,camelotPosition,pendingNativeOpen
+local function isCamelot()
+ return WOW_PROJECT_ID==18 or (WOW_PROJECT_CAMELOT~=nil and WOW_PROJECT_ID==WOW_PROJECT_CAMELOT)
+end
 local function root()
  return PlayerTalentFrame or TalentFrame or ClassTalentFrame or ClassicTalentFrame or (PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame) or PlayerSpellsFrame
 end
 local function showContent()
  if ForeverAscensionShowIn then ForeverAscensionShowIn(talentPage) end
+end
+-- Forever replaces the visible talent loadout strip. PlayerSpellsFrame.TabSystem
+-- still exists but is hidden: adding a retail tab there produces an unreachable
+-- page. Attach to the confirmed TalentsFrame.ButtonsParent instead.
+local function camelot()
+ local owner=PlayerSpellsFrame
+ local host=owner and owner.TalentsFrame
+ if type(host)~="table" and type(host)~="userdata" then return false end
+ local strip=host.ButtonsParent
+ if type(strip)~="table" and type(strip)~="userdata" then return false end
+ if talentHost==host and camelotOwner==owner then if camelotPosition then camelotPosition() end;return true end
+ if talentButton then talentButton:Hide() end;if talentPage then talentPage:Hide() end
+ talentHost=host;camelotOwner=owner;nativeIndex=nil;camelotSelected=false;camelotHidden={}
+ talentPage=CreateFrame("Frame","ForeverAscensionCamelotTalentPage",host)
+ talentPage:SetPoint("TOPLEFT",host,"TOPLEFT",5,-45);talentPage:SetPoint("BOTTOMRIGHT",host,"BOTTOMRIGHT",-5,5)
+ talentPage:SetFrameStrata(host:GetFrameStrata());talentPage:SetFrameLevel(host:GetFrameLevel()+50)
+ local background=talentPage:CreateTexture(nil,"BACKGROUND");background:SetAllPoints();background:SetColorTexture(0.025,0.022,0.018,1)
+ talentPage:EnableMouse(true);talentPage:Hide();talentPage:SetScript("OnShow",showContent)
+ talentButton=nil
+ for _,template in ipairs({"PanelTopTabButtonTemplate","CharacterFrameTabButtonTemplate","UIPanelButtonTemplate"}) do
+  local ok,button=pcall(CreateFrame,"Button",nil,strip,template)
+  if ok and button then talentButton=button;break end
+ end
+ if not talentButton then talentButton=CreateFrame("Button",nil,strip) end
+ ForeverAscensionCamelotTalentTab=talentButton
+ talentButton:SetSize(155,28);talentButton:SetText("Мультикласс");talentButton:SetID(3)
+ talentButton:SetFrameStrata(strip:GetFrameStrata());talentButton:SetFrameLevel(strip:GetFrameLevel()+10)
+ local function restore()
+  camelotSelected=false;talentPage:Hide()
+  local hidden=camelotHidden;camelotHidden={}
+  for child in pairs(hidden) do child:Show() end
+  if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(talentButton) end
+ end
+ camelotRestore=restore
+ local hooked=setmetatable({}, {__mode="k"})
+ local function visit(parent,depth,fn)
+  if depth>5 or not parent.GetChildren then return end
+  for _,child in ipairs({parent:GetChildren()}) do
+   if child~=talentButton and child~=talentPage then fn(child);visit(child,depth+1,fn) end
+  end
+ end
+ local function textOf(child)
+  if child.GetText then local ok,text=pcall(child.GetText,child);if ok and type(text)=="string" then return text end end
+  for _,key in ipairs({"Text","Label","text"}) do
+   local text=child[key]
+   if (type(text)=="table" or type(text)=="userdata") and text.GetText then local ok,value=pcall(text.GetText,text);if ok and type(value)=="string" then return value end end
+  end
+ end
+ local function position()
+  local anchor,right
+  visit(strip,0,function(child)
+   local text=textOf(child)
+   if text and (text:find("Основное",1,true) or text:find("Дополнительное",1,true) or text:find("Primary",1,true) or text:find("Secondary",1,true)) then
+    local edge=child.GetRight and child:GetRight()
+    if not anchor or (edge and (not right or edge>right)) then anchor=child;right=edge end
+   end
+   if child.HookScript and not hooked[child] then
+    hooked[child]=true
+    -- The native strip can use Frame mouse handlers rather than Button OnClick.
+    for _,script in ipairs({"OnMouseDown","OnMouseUp","OnClick"}) do pcall(child.HookScript,child,script,restore) end
+   end
+  end)
+  talentButton:ClearAllPoints()
+  if anchor then talentButton:SetPoint("LEFT",anchor,"RIGHT",5,0)
+  else talentButton:SetPoint("TOPLEFT",strip,"TOPLEFT",330,0) end
+  talentButton:Show()
+ end
+ camelotPosition=position
+ talentButton:SetScript("OnClick",function()
+  if InCombatLockdown and InCombatLockdown() then return end
+  if owner.IsInspecting and owner:IsInspecting() then return end
+  if not camelotSelected then
+   camelotHidden={}
+   for _,child in ipairs({host:GetChildren()}) do
+    if child~=strip and child~=talentPage and child:IsShown() then camelotHidden[child]=true;child:Hide() end
+   end
+  end
+  camelotSelected=true;talentPage:Show();showContent()
+  if PanelTemplates_SelectTab then PanelTemplates_SelectTab(talentButton) end
+ end)
+ -- Switching a native loadout or closing the window restores its own content.
+ host:HookScript("OnHide",restore)
+ host:HookScript("OnShow",position)
+ strip:HookScript("OnShow",position)
+ strip:HookScript("OnSizeChanged",position)
+ strip:HookScript("OnMouseDown",restore)
+ position()
+ ForeverAscensionTalentButton=talentButton;ForeverAscensionTalentPage=talentPage
+ return true
 end
 local function modern()
  local frame=PlayerSpellsFrame
@@ -50,6 +143,8 @@ local function modern()
 end
 local function attach()
  if InCombatLockdown and InCombatLockdown() then return false end
+ if camelot() then return true end
+ if isCamelot() then return false end -- wait for the real loadout strip, not a hidden retail tab
  if modern() then return true end
  local frame=root();if not frame then return false end
  if frame==talentHost and talentButton then return true end
@@ -100,17 +195,41 @@ ForeverAscensionNativeTalentTab={Install=attach,Open=function()
    for _,name in ipairs({"Blizzard_PlayerSpells","Blizzard_ClassTalentUI","Blizzard_TalentUI"}) do pcall(C_AddOns.LoadAddOn,name);if attach() then break end end
   end
  end
+ if not talentHost and isCamelot() then
+  -- Load-on-demand children may appear one frame after their owner. Keep /fa
+  -- on that native owner while events/deferred installation finish the request.
+  pendingNativeOpen=true
+  if PlayerSpellsFrame then
+   if ShowUIPanel then ShowUIPanel(PlayerSpellsFrame) else PlayerSpellsFrame:Show() end
+   if PlayerSpellsFrame.talentTabID and type(PlayerSpellsFrame.SetTab)=="function" then PlayerSpellsFrame:SetTab(PlayerSpellsFrame.talentTabID) end
+  end
+  if C_Timer and C_Timer.After then C_Timer.After(0,function() if pendingNativeOpen and attach() then ForeverAscensionNativeTalentTab.Open() end end) end
+  return true
+ end
  if not talentHost then return false end
+ pendingNativeOpen=false
  local top=PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame==talentHost and PlayerSpellsFrame or talentHost
  if ShowUIPanel then ShowUIPanel(top) else top:Show() end
+ if camelotOwner and top.talentTabID and type(top.SetTab)=="function" then top:SetTab(top.talentTabID) end
  if talentHost~=top then talentHost:Show() end
  if nativeIndex then
   if talentHost==PlayerSpellsFrame and type(talentHost.SetTab)=="function" then talentHost:SetTab(nativeIndex) else talentHost:SelectPage(nativeIndex) end
  else talentButton:GetScript("OnClick")() end
  return true
+end,Close=function()
+ if camelotRestore then camelotRestore()
+ elseif talentHost==PlayerSpellsFrame and talentHost.talentTabID then talentHost:SetTab(talentHost.talentTabID)
+ elseif nativeIndex and talentHost.SelectPage then talentHost:SelectPage(1)
+ elseif talentPage then talentPage:Hide() end
 end}
 local events=CreateFrame("Frame");events:RegisterEvent("PLAYER_LOGIN");events:RegisterEvent("ADDON_LOADED");events:RegisterEvent("PLAYER_REGEN_ENABLED")
-events:SetScript("OnEvent",attach)
+local function tryAttach()
+ if attach() and pendingNativeOpen then ForeverAscensionNativeTalentTab.Open() end
+end
+events:SetScript("OnEvent",function()
+ tryAttach()
+ if C_Timer and C_Timer.After then C_Timer.After(0,tryAttach);C_Timer.After(0.2,tryAttach) end
+end)
 
 -- Read-only report of the actual client's spellbook API and frame implementation.
 function ForeverAscensionNativeBookReport()
