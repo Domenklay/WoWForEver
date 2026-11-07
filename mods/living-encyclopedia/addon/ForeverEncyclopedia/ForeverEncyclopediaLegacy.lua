@@ -9,6 +9,7 @@ local state, catalog = bridge.state, bridge.catalog
 local host, page, tab
 local mode, branch, selectedNode = "talents", "protection", "aegis_unlock"
 local selectedCreature = 1
+local selectedItem = 1
 local selectedAppearance = "living_book"
 local pendingBuy = false
 local ui = {}
@@ -144,6 +145,7 @@ local function selectMode(nextMode)
     if mode=="collection" then bridge.RequestStatus() end
     if mode=="creatures" then bridge.RequestCatalog(state.catalogPage or 1) end
     if mode=="zones" then bridge.RequestZones() end
+    if mode=="items" and bridge.RequestItems then bridge.RequestItems() end
     _G.ForeverEncyclopediaLegacy.Refresh("view")
 end
 
@@ -465,17 +467,62 @@ local function drawZoneView()
     end
 end
 
+local function itemInfo(entry)
+    -- The server exposes discovered item IDs, never a guessed or fake item list.
+    -- C_Item may return nil for uncached items; display an honest ID meanwhile.
+    local name,icon="Предмет #"..tostring(entry),"Interface\\Icons\\INV_Misc_Bag_10"
+    if C_Item and C_Item.GetItemInfo then
+        local ok,n=pcall(C_Item.GetItemInfo,entry)
+        if ok and type(n)=="string" and n~="" then name=n end
+    end
+    if C_Item and C_Item.GetItemIconByID then
+        local ok,i=pcall(C_Item.GetItemIconByID,entry)
+        if ok and i then icon=i end
+    end
+    return name,icon
+end
+
 local function drawItemView()
     local base=frame(page,13,63,874,444,DEEP)
-    drawArchiveHeading(base,"Коллекция предметов","Количество открытий получено от сервера.")
-    local b=frame(base,80,117,710,200,BROWN)
-    local icon=b:CreateTexture(nil,"ARTWORK")
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Bag_10")
-    icon:SetSize(95,95); icon:SetPoint("TOP",b,"TOP",0,-17)
-    label(b,22,126,660,(state.items or 0).." уникальных предметов изучено",
-          "GameFontHighlightLarge",PALE,"CENTER")
-    label(b,22,160,660,"Сервер пока не отправляет постраничный перечень предметов.",
-          "GameFontNormalSmall",MUTED,"CENTER")
+    drawArchiveHeading(base,"Коллекция предметов",
+        (state.items or 0).." уникальных предметов изучено. Ниже — 12 последних записей сервера.")
+    local list=frame(base,16,82,474,292,BROWN)
+    local detail=frame(base,504,82,353,292,BROWN)
+    if not state.recentItemsLoaded then
+        label(list,16,18,430,"Получаю последние предметы с сервера…","GameFontHighlight",PALE)
+        return
+    end
+    if #state.recentItems==0 then
+        label(list,16,18,430,"Пока нет открытых предметов.","GameFontNormal",MUTED)
+        return
+    end
+    for i,rec in ipairs(state.recentItems) do
+        if i>12 then break end
+        local col=(i-1)%2
+        local row=math.floor((i-1)/2)
+        local name,icon=itemInfo(rec.entry)
+        local b=button(list,7+col*235,8+row*46,229,42,"",i==selectedItem,function()
+            selectedItem=i
+            _G.ForeverEncyclopediaLegacy.Refresh("view")
+        end)
+        local t=b:CreateTexture(nil,"ARTWORK")
+        t:SetTexture(icon)
+        t:SetPoint("TOPLEFT",b,"TOPLEFT",5,-5)
+        t:SetSize(32,32)
+        font(b,42,8,181,name,"GameFontNormalSmall",PALE)
+        font(b,42,25,181,"#"..rec.entry,"GameFontNormalSmall",MUTED)
+    end
+    local rec=state.recentItems[selectedItem] or state.recentItems[1]
+    if rec then
+        local name,icon=itemInfo(rec.entry)
+        emblem(detail,20,20,95,95,icon)
+        label(detail,128,26,209,name,"GameFontHighlight",PALE)
+        label(detail,128,56,209,"Запись #"..rec.entry,"GameFontNormalSmall",GREEN)
+        local where=bridge.AreaName(rec.zone) or ("Зона #"..tostring(rec.zone or 0))
+        label(detail,22,146,315,"Впервые найдено: "..where,"GameFontNormalSmall",MUTED)
+        label(detail,22,182,315,"Карта: "..tostring(rec.map or 0),"GameFontNormalSmall",MUTED)
+        label(detail,22,224,315,"Данные изучения принадлежат аккаунту.","GameFontNormalSmall",MUTED)
+    end
 end
 
 local function drawAppearanceView()
