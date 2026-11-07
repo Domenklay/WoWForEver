@@ -1,11 +1,12 @@
 name: Encyclopedia global archive protocol (70658)
 on:
   push:
-    branches: [feature/encyclopedia-archive-filters-70658, feature/encyclopedia-loot-panel-70658]
+    branches: [feature/encyclopedia-archive-filters-70658, feature/encyclopedia-loot-panel-70658, feature/encyclopedia-flying-book-skins-70658]
     paths:
-      - 'mods/living-encyclopedia/server/ForeverEncyclopedia.cpp'
+      - 'mods/living-encyclopedia/server/**'
       - 'mods/living-encyclopedia/addon/**'
       - 'tests/test_encyclopedia_legacy.py'
+      - 'tests/test_encyclopedia_skins.py'
       - '.github/workflows/encyclopedia-archive-core.yml'
   workflow_dispatch:
 permissions:
@@ -41,18 +42,21 @@ jobs:
           import json,os,subprocess,shlex,pathlib
           build=pathlib.Path(os.environ['RUNNER_TEMP'])/'build'
           commands=json.loads((build/'compile_commands.json').read_text())
-          match=[it for it in commands if pathlib.Path(it['file']).name=='ForeverEncyclopedia.cpp']
-          assert len(match)==1, f'Expected exactly one Encyclopedia.cpp, got {len(match)}'
-          entry=match[0]
-          original=entry.get('arguments') or shlex.split(entry['command'])
-          command=[]
-          skip=False
-          for part in original:
-              if skip: skip=False; continue
-              if part=='-o': skip=True; continue
-              if part=='-c': continue
-              command.append(part)
-          command.append('-fsyntax-only')
-          subprocess.run(command,cwd=entry['directory'],check=True)
-          print('Pinned worldserver Encyclopedia archive protocol compiles successfully')
+          targets=('ForeverEncyclopedia.cpp','ForeverEncyclopediaTalents.cpp',
+                   'ForeverEncyclopediaRuntime.cpp')
+          for filename in targets:
+              matches=[it for it in commands if pathlib.Path(it['file']).name==filename]
+              assert len(matches)==1, f'Expected exactly one {filename}, got {len(matches)}'
+              entry=matches[0]
+              original=entry.get('arguments') or shlex.split(entry['command'])
+              command=[]
+              skip=False
+              for part in original:
+                  if skip: skip=False; continue
+                  if part=='-o': skip=True; continue
+                  if part=='-c': continue
+                  command.append(part)
+              command.append('-fsyntax-only')
+              subprocess.run(command,cwd=entry['directory'],check=True)
+              print(f'Pinned worldserver {filename} syntax check passed')
           PY

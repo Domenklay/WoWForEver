@@ -112,6 +112,14 @@ inline uint32_t AppearanceThreshold(std::string_view key)
     if (key == "knowledge_spirit") return 500;
     if (key == "small_construct") return 1500;
     if (key == "runekeeper") return 5000;
+    // These temporary catalogue choices are intentionally free for client
+    // model compatibility testing. Existing progress thresholds are unchanged.
+    if (key == "test_lofty_libram") return 0;
+    if (key == "test_animated_tome") return 0;
+    if (key == "test_gusting_grimoire") return 0;
+    if (key == "test_agitated_tome") return 0;
+    if (key == "test_troubled_tome") return 0;
+    if (key == "test_chromies_codex") return 0;
     return UINT32_MAX;
 }
 }

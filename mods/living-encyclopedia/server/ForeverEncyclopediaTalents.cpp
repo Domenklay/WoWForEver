@@ -6,6 +6,7 @@
 #include "WorldSession.h"
 #include "ObjectMgr.h"
 #include "TalentRules.h"
+#include "AppearanceSkins.h"
 #include <algorithm>
 #include <mutex>
 #include <sstream>
@@ -173,10 +174,10 @@ static void Snapshot(Player* player)
     Send(player, Trinity::StringFormat("BOOK|{}|{}|{}|{}|0|0|0|0",
         AbilityMask(ranks), mana, maxMana, InformationLevel(ranks)));
 
-    static char const* appearances[] = {"living_book", "archivist", "knowledge_spirit", "small_construct", "runekeeper"};
-    for (char const* key : appearances)
-        Send(player, Trinity::StringFormat("APPEARANCE|{}|{}|{}", key,
-            p.total >= AppearanceThreshold(key) ? 1 : 0, AppearanceThreshold(key)));
+    for (auto const& skin : ForeverEncyclopedia::Skins::All)
+        Send(player, Trinity::StringFormat("APPEARANCE|{}|{}|{}", skin.key,
+            p.total >= AppearanceThreshold(skin.key) ? 1 : 0,
+            AppearanceThreshold(skin.key)));
     Send(player, "SELECTED|" + SelectedAppearance(player));
     Send(player, "END");
 }

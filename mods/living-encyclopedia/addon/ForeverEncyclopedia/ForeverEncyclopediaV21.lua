@@ -451,7 +451,7 @@ local function createUI()
     ui.status=fs(ui,24,-49,230,"Нет связи","GameFontNormalSmall",0.8,0.4,0.35); ui.stats=fs(ui,280,-49,420,"","GameFontNormalSmall",0.82,0.75,0.63,"CENTER"); ui.zone=fs(ui,720,-49,230,"","GameFontHighlight",0.93,0.85,0.70,"RIGHT")
     local labels={"Существа","Локации","Таланты","Облики"}; for i,label in ipairs(labels) do tabButtons[i]=raised(ui,26+(i-1)*232,-91,216,34,label,function() switchTab(i) end,i==currentTab,true) end
     content=CreateFrame("Frame",nil,ui); content:SetPoint("TOPLEFT",ui,"TOPLEFT",16,-132); content:SetSize(948,486)
-    fs(ui,0,-616,950,"Forever Encyclopedia 0.9.22 V2.1","GameFontNormalSmall",0.46,0.40,0.33,"RIGHT")
+    fs(ui,0,-616,950,"Forever Encyclopedia 0.9.24 V2.1","GameFontNormalSmall",0.46,0.40,0.33,"RIGHT")
     ui:SetScript("OnShow",function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus(); if currentTab==1 then requestCatalog(state.catalogPage) elseif currentTab==2 then requestZones() end end)
     updateHeader(); Draw()
 end
@@ -623,6 +623,19 @@ local function parseBase(msg)
 end
 
 local function parseRuntime(msg)
+    if msg:sub(1,6)=="EVENT|" then
+        local _,event,amount=strsplit("|",msg)
+        if event=="SKIN_APPLIED" then
+            state.skinDisplay=tonumber(amount) or 0
+            state.skinMissing=nil
+            notifyNative("appearance")
+        elseif event=="SKIN_MISSING" then
+            state.skinDisplay=0
+            state.skinMissing=tonumber(amount) or 0
+            notifyNative("appearance")
+        end
+        return
+    end
     if msg:sub(1,5)~="BOOK|" then return end
     local _,mask,mana,maxMana=strsplit("|",msg)
     local previousMax,previousMask=state.maxMana,state.abilityMask
@@ -639,7 +652,16 @@ local function parseTalent(msg)
     elseif msg:sub(1,5)=="RANK|" then local _,k,r=strsplit("|",msg); state.ranks[k]=tonumber(r) or 0
     elseif msg:sub(1,5)=="BOOK|" then local _,mask,mana,maxMana,info=strsplit("|",msg); local oldInfo=state.infoLevel; state.abilityMask=tonumber(mask) or 0; state.mana=tonumber(mana) or 0; state.maxMana=tonumber(maxMana) or 100; state.infoLevel=tonumber(info) or 0; if state.infoLevel>oldInfo then queueCatalogInfo() end
     elseif msg:sub(1,11)=="APPEARANCE|" then local _,k,u,thr=strsplit("|",msg); state.appearances[k]={unlocked=tonumber(u)==1,threshold=tonumber(thr) or 0}
-    elseif msg:sub(1,9)=="SELECTED|" then local _,k=strsplit("|",msg); state.selectedAppearance=k or "living_book"
+    elseif msg:sub(1,9)=="SELECTED|" then
+        local _,key=strsplit("|",msg)
+        local selected=key or "living_book"
+        local changed=state.selectedAppearance~=selected
+        state.selectedAppearance=selected
+        -- The talent server has committed this key to the character DB.
+        -- Inform the companion runtime so its actual display changes now;
+        -- model selection is never trusted from a raw client-provided ID.
+        if changed then send(RUNTIME_REQ,"skin") end
+        notifyNative("appearance")
     elseif msg:sub(1,9)=="CREATURE|" then local _,entry,level=strsplit("|",msg); pendingCreatureInfo=tonumber(entry) or pendingCreatureInfo; if pendingCreatureInfo then state.creatureInfo[pendingCreatureInfo]=state.creatureInfo[pendingCreatureInfo] or {}; state.creatureInfo[pendingCreatureInfo].level=tonumber(level) or 0 end
     elseif msg:sub(1,6)=="CBASE|" then
         local _,name,ctype,class,minL,maxL,family,unitClass,damageSchool,baseAttack,rangeAttack=strsplit("|",msg)
