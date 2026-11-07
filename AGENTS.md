@@ -87,12 +87,12 @@ Verified Multi 1.9.0 source `16325671a45fd9702d1364db9060e200eac6c920`:
 Windows run 42361020986, artifact 13570041961. 81 launcher tests and 224 worker
 tests passed, with five-language UI, PS5.1 and NSIS/portable; archive/EXE hashes,
 matching GPL worker sources and unchanged CA checked. Chromium verified controls,
-save/reopen/cancel and disabled file mutations. User runtime test is pending;
+save/reopen/cancel and disabled file mutations. User screenshot confirms the AddOns page is in use, but exact EXE version, journal and auto-login runtime checks remain pending;
 working baseline launcher remains 1.7.0, with previous verified release 1.7.1.
 
 Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
 catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
-sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has Ascension 1.12.0 and Encyclopedia 0.9.10. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
+sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has Ascension 1.13.0 and Encyclopedia 0.9.19-v2.1-archive-filters. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
 and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
 synchronize the working branch. Catalogue CI 42359312577 checked the actual pinned
 Git payloads. Metadata-only catalogue edits need no launcher rebuild. Old
@@ -153,17 +153,28 @@ or gameplay. Follow the current user's authorization over historical guidelines.
 
 ## Prepared native multiclass candidate
 
-Active user server is still confirmed 1.11.0. Development source now offers 1.12.0:
-90/10 XP with per-character opt-out, integer carry and capped-subclass refunds; native
-class spell catalogue and native trait browser. Legacy/custom menu and old talent
-allocation are hidden. Native subclass talent allocation is NOT implemented: do not
-claim browse-only entries as learnable or bypass TraitMgr conditions/choices/currencies.
-Old purchases/ranks remain stored. See docs/MULTICLASS-1.12.ru.md.
+Active user server is still confirmed 1.11.0. Development source 1.13.0:
+90/10 XP with per-character opt-out and capped-subclass refunds; native class
+spell catalogue; scrolling abilities; IDs 12/13 removed; Hunter native basics;
+transient weapon/armor/dual-wield grants from active subclass with ownership tracking.
+Native talent branches/grid/edges/ranks use TraitMgr::ValidateConfig for allocation
+and refund. Complex unsupported effects/resources remain blocked. Do not bypass
+native conditions/choices/currencies. Old purchases/ranks remain stored.
+
+User read-only probes identify PlayerSpellsFrame with TabSystem/SpecFrame/
+TalentsFrame/SpellBookFrame. Integration.lua uses AddNamedTab/SetTab to host
+multiclass INSIDE that native window. Preserve other native pages, inspect mode,
+Escape handling and the independently developed Encyclopedia native tab.
+Do not revive the old red shortcut or close native talents to open a separate frame.
+Guide: docs/MULTICLASS-1.13.ru.md. Pinned source ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2.
+CI 42380875759/42380875788/42380875760 passed; 488 local tests, 30 skips.
+These are exact-header syntax compilations and fixtures, not a full user-side build
+or gameplay acceptance. The new native tab has not yet been seen in the actual game.
 
 Use upgrade-clean-gameplay.py prepare for a full build + isolated restored-baseline
-candidate trial, then its exact record and same checkout for apply/rollback. SQL is
-additive preferences only. Rollback restores runtime without importing old databases;
-cancelling a merely prepared candidate must never stop live services. User trial and
-installation of this candidate remain pending. Keep the controller worktrees.
+candidate trial, then its exact record and same checkout for apply/rollback. Accepts
+prior active 1.11/1.12. SQL is additive preferences only. Rollback restores runtime
+without importing old databases; cancelling a merely prepared candidate must never
+stop live services. User trial and installation remain pending. Keep controller worktrees.
 Multi 1.9 moves channel/update/development controls to the AddOns page and reads
 installed TOC versions plus receipt hashes. Journal is a full page with an empty state.

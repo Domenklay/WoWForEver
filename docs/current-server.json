@@ -9,7 +9,8 @@
     "runtime": "user-supplied filtered state, Compose mounts and controller on 2026-11-07",
     "gameplay": "user confirmed general working gameplay; detailed acceptance incomplete",
     "backup_and_database_restore": "user-supplied BASELINE BACKUP VERIFIED and DATABASE RESTORE VERIFIED output on 2026-11-07; source 877b877",
-    "restored_services": "user-supplied RESTORED SERVICES VERIFIED output on source b282fb2; world/modules, login TCP/TLS, web, SQL clone and cleanup passed"
+    "restored_services": "user-supplied RESTORED SERVICES VERIFIED output on source b282fb2; world/modules, login TCP/TLS, web, SQL clone and cleanup passed",
+    "multiclass_ui": "User screenshots show Ascension 1.12 UI with backend 1.11 (XP update-server marker); read-only probes identify PlayerSpellsFrame with TabSystem, SpecFrame, TalentsFrame and SpellBookFrame"
   },
   "server": {
     "phase": "ready",
@@ -177,7 +178,8 @@
       "zip_sha256": "f55aed4ff7f8b141ffa3289b4254b24caffd4c7b090dcd75bd5401a3543d1b96"
     },
     "installed_addons_page": true,
-    "journal_full_page": true
+    "journal_full_page": true,
+    "addons_page_user_seen": true
   },
   "backup": {
     "directory_windows": "E:\\WoWForEver-work\\reports\\baseline-70658-20261107-003902",
@@ -215,8 +217,8 @@
   "checks": {
     "launcher_windows": 81,
     "worker_windows": 224,
-    "combined_core_units": 12,
-    "combined_check_run": 42361579841,
+    "combined_core_units": 14,
+    "combined_check_run": 42380875788,
     "restore_unit_suite_total": 473,
     "restore_unit_suite_skipped": 30,
     "restore_real_mysql_fixture_verified": true,
@@ -226,9 +228,10 @@
     "addon_catalog_ci_run": 42362724077,
     "addon_catalog_pinned_payloads_verified": true,
     "launcher_browser_ui_verified": true,
-    "multiclass_unit_suite_total": 486,
+    "multiclass_unit_suite_total": 488,
     "multiclass_unit_suite_skipped": 30,
-    "advancement_native_core_ci_run": 42362536722
+    "advancement_native_core_ci_run": 42380875759,
+    "native_worker_ci_run": 42380875760
   },
   "known_limits": [
     "Ability Essence economy is incomplete; purchase limit is used",
@@ -238,7 +241,7 @@
     "Scaling damage guard is per event, not a rolling window",
     "Party-size dungeon and loot scaling are not implemented",
     "Previous client ACCESS_VIOLATION root cause remains unproven",
-    "Detailed gameplay acceptance, Multi 1.9.0 AddOn inventory/channel/autologin user test and full-server restore remain pending"
+    "Detailed gameplay acceptance, exact Multi 1.9 install/channel/autologin verification and full-server disaster recovery remain pending; AddOns page was seen in a user screenshot"
   ],
   "privacy": {
     "snapshot_contains_secrets": false,
@@ -252,18 +255,29 @@
     ]
   },
   "development_candidate": {
-    "advancement_version": "1.12.0",
+    "advancement_version": "1.13.0",
     "installed_on_user_pc": false,
     "protocol": 3,
     "experience_share_percent": 90,
     "experience_opt_out_per_character": true,
     "native_spell_catalog": true,
     "legacy_talents_hidden": true,
-    "native_talents_browse_only": true,
-    "native_talents_allocation_implemented": false,
-    "guide": "https://github.com/Domenklay/WoWForEver/blob/main/docs/MULTICLASS-1.12.ru.md",
+    "native_talents_browse_only": false,
+    "native_talents_allocation_implemented": true,
+    "guide": "https://github.com/Domenklay/WoWForEver/blob/main/docs/MULTICLASS-1.13.ru.md",
     "transition_tool": "scripts/upgrade-clean-gameplay.py",
-    "trial_source_commit": "3add1965219c5e3fb3e0b9c893661a0d8e8bdb23",
-    "candidate_user_trial_verified": false
+    "trial_source_commit": "ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2",
+    "candidate_user_trial_verified": false,
+    "source_commit": "ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2",
+    "native_talents_validator": "TraitMgr::ValidateConfig with native conditions, dependencies, choices and currencies; unsupported mechanics remain blocked",
+    "native_talent_tab": "PlayerSpellsFrame:AddNamedTab",
+    "ability_list_scrolling": true,
+    "excluded_classes": [
+      12,
+      13
+    ],
+    "native_hunter_basics": true,
+    "transient_class_equipment_proficiencies": true,
+    "native_tab_user_verified": false
   }
 }
