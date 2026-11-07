@@ -10,7 +10,7 @@
     "gameplay": "user confirmed general working gameplay; detailed acceptance incomplete",
     "backup_and_database_restore": "user-supplied BASELINE BACKUP VERIFIED and DATABASE RESTORE VERIFIED output on 2026-11-07; source 877b877",
     "restored_services": "user-supplied RESTORED SERVICES VERIFIED output on source b282fb2; world/modules, login TCP/TLS, web, SQL clone and cleanup passed",
-    "multiclass_ui": "User screenshot of 1.13 shows missing visible tab and /fa on a hidden retail page. Copied frame diagnostics confirm visible PlayerSpellsFrame.TalentsFrame.TabSystem=301x32; ButtonsParent=1212x641 is the node canvas. AddOn-only 1.13.1 fix awaits in-game confirmation."
+    "multiclass_ui": "User confirmed 1.13.1 tab is visible but rejected its undersized tab, nested gold dialog, shrunken text and empty black talent panel. 1.13.2 replaces it with native TabSystemButtonArtTemplate and full-size Presentation.lua layout; in-game visual acceptance pending."
   },
   "server": {
     "phase": "ready",
@@ -228,12 +228,13 @@
     "addon_catalog_ci_run": 42384627653,
     "addon_catalog_pinned_payloads_verified": true,
     "launcher_browser_ui_verified": true,
-    "multiclass_unit_suite_total": 490,
+    "multiclass_unit_suite_total": 492,
     "multiclass_unit_suite_skipped": 30,
     "advancement_native_core_ci_run": 42380875759,
     "native_worker_ci_run": 42380875760,
-    "multiclass_ui_tests": 27,
-    "multiclass_ui_fix_ci_run": 42384393223
+    "multiclass_ui_tests": 29,
+    "multiclass_ui_fix_ci_run": 42384393223,
+    "multiclass_presentation_ci_run": 42386733996
   },
   "known_limits": [
     "Ability Essence economy is incomplete; purchase limit is used",
@@ -281,10 +282,13 @@
     "native_hunter_basics": true,
     "transient_class_equipment_proficiencies": true,
     "native_tab_user_verified": false,
-    "testing_release": "testing-70658-20261107-15",
-    "addon_version": "1.13.1",
-    "addon_source_commit": "9ae2d724fb9451812fc611501fb10a82d9590619",
+    "testing_release": "testing-70658-20261107-18",
+    "addon_version": "1.13.2",
+    "addon_source_commit": "2622aa788142f1b26b5b78e74f3fc78b981f6b3c",
     "addon_only_fix_requires_server_rebuild": false,
-    "addon_catalog_ci_run": 42384627653
+    "addon_loaded_files": 6,
+    "native_tab_1_13_1_user_visible": true,
+    "presentation_user_verified": false,
+    "presentation": "Full native content area at scale 1; 14px ability/class names; shared Encyclopedia/Dungeon Finder palette; native tab artwork; primary-tree link on legacy server"
   }
 }
