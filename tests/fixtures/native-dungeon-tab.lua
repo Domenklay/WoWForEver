@@ -13,7 +13,7 @@ function methods:SetFrameLevel(v) self.level=v end
 function methods:SetVertexColor(r,g,b,a) self.rgba={r,g,b,a} end
 function methods:SetTexture(v) self.texture=v end
 function methods:EnableMouse(v) self.mouseEnabled=v end
-function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1; self.lastAnchor={...}; self.anchors=self.anchors or {}; table.insert(self.anchors,{...}) end
+function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1; self.lastAnchor={...}; self.anchors=rawget(self,"anchors") or {}; table.insert(self.anchors,{...}) end
 function methods:GetLeft() return rawget(self,"left") end
 function methods:GetRight() return rawget(self,"right") end
 function methods:SetAllPoints() self.points=1 end
