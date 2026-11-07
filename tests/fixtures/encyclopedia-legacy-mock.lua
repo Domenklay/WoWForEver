@@ -220,13 +220,29 @@ api.Refresh("talents")
 assert(click("Коллекция"),"Collection subtab is missing")
 assert(click("Существа"),"Clickable collected-knowledge category missing")
 assert(calls.catalog>=1,"Creature category must request the real catalog")
+-- The archive must show around 10 rows, not 4, without sacrificing 3D.
+local archiveScroll
+for _,f in ipairs(Frames) do
+    if f.type=="ScrollFrame" and currentlyVisible(f) and f.scrollChild
+        and f:GetHeight()==286 and f.parent and f.parent:GetWidth()==390 then
+        archiveScroll=f
+    end
+end
+assert(archiveScroll,"Full-height creature chooser scroll missing")
+assert(archiveScroll.parent:GetHeight()==395,"Creature list should use nearly entire window height")
+local rowWidgets=0
+for _,child in ipairs(archiveScroll.scrollChild.children or {}) do
+    if child.type=="Button" and child:GetHeight()==27 then rowWidgets=rowWidgets+1 end
+end
+assert(rowWidgets>=10 and rowWidgets<=12,
+       "Archive should reuse 10-11 small row widgets, not show just 4")
 assert(click("Волк"),"Known creature row missing")
 assert(not click("Далее"),"Archive must no longer have pagination Next")
 assert(not click("Назад"),"Archive must no longer have pagination Back")
-assert(click("Все типы  ▾"),"Creature type dropdown missing")
+assert(click("Все типы v"),"Creature type dropdown missing")
 assert(click("Звери"),"Creature type option missing")
 assert(not click("???"),"Unknown type should not match a Beast filter")
-assert(click("Звери  ▾"),"Selected creature filter must be visible")
+assert(click("Звери v"),"Selected creature filter must be visible")
 assert(click("Все типы"),"Reset to all creature types missing")
 local preview=visibleModels()
 assert(#preview>=1,"Creature 3D PlayerModel preview missing")
@@ -250,12 +266,12 @@ state.catalogAll={
 }
 state.catalogAllLoaded=true
 api.Refresh("archive")
-assert(click("Все доступные зоны  ▾"),"Location selection menu missing")
+assert(click("Все доступные зоны v"),"Location selection menu missing")
 assert(click("Зона 88"),"Other discovered zone should be an option")
 assert(click("Повелитель пепла"),"A creature from another zone must appear after filtering")
 local otherZoneModel=visibleModels()
 assert(otherZoneModel[#otherZoneModel].modelId==500,"Wrong model after location filtering")
-assert(click("Зона 88  ▾"),"Location selection should show chosen zone")
+assert(click("Зона 88 v"),"Location selection should show chosen zone")
 assert(click("Все доступные зоны"),"Unable to reset zone filter")
 -- Long archives must be virtualised, not create a button per monster.
 for id=10001,11001 do
@@ -278,7 +294,7 @@ assert(monsterScroller and monsterScroller.scripts.OnMouseWheel,
        "Full archive needs a virtualized wheel-scrollable monster list")
 monsterScroller.scripts.OnMouseWheel(monsterScroller,-1)
 assert(monsterScroller:GetVerticalScroll()>0)
-assert(click("Назад к коллекции"),"The in-window archive back button is missing")
+assert(click("К коллекции"),"The compact archive return button is missing")
 assert(click("Локации"),"Zone category missing")
 assert(calls.zones>=1)
 assert(click("Назад к коллекции"))
