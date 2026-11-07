@@ -1,6 +1,6 @@
 {
   "format": "forever-addon-channels-v1",
-  "revision": "70658-20261107-legacy-loot-17",
+  "revision": "70658-20261107T153255772064Z",
   "channels": {
     "stable": {
       "release": "stable-70658-20261107-1",
@@ -102,14 +102,14 @@
       ]
     },
     "testing": {
-      "release": "testing-70658-20261107-17",
+      "release": "testing-70658-20261107-18",
       "clientBuild": 70658,
       "addons": [
         {
           "name": "ForeverAscension",
-          "version": "1.13.1",
+          "version": "1.13.2",
           "protocol": 3,
-          "sourceCommit": "9ae2d724fb9451812fc611501fb10a82d9590619",
+          "sourceCommit": "2622aa788142f1b26b5b78e74f3fc78b981f6b3c",
           "sourcePath": "mods/forever-advancement/addon/ForeverAscension",
           "files": [
             {
@@ -119,23 +119,28 @@
             },
             {
               "name": "ForeverAscension.lua",
-              "size": 43216,
-              "sha256": "fcecda76f182241632e8fb1b483dc9d70a3de8b19ff618ff7b786cb96d8f115c"
+              "size": 45285,
+              "sha256": "1e32f59830dd1129727e8d2dae10e542206af068f8c63c294ed961e4f189f34a"
             },
             {
               "name": "ForeverAscension.toc",
-              "size": 325,
-              "sha256": "57f9cb83146e0d7b334153561d6506f89ff95a52f6958d25a9d8dd8679334bfd"
+              "size": 342,
+              "sha256": "8ae0c06bb756d979b4046de344b78c0283ec307b8a41a086d661cd2d131dddf0"
             },
             {
               "name": "Integration.lua",
-              "size": 18709,
-              "sha256": "6c33cdfe175bad12edb21e876a9f3e1a3144a4488476a8fc7420cbea2bd49e76"
+              "size": 20176,
+              "sha256": "1c30ad16b8227afbca847e350b4d7763710d0f568bedd5354781f2624b4fe22d"
             },
             {
               "name": "Portrait.lua",
               "size": 4465,
               "sha256": "f595bbc1c553cd3b7d5db230bbafa25d44d98b2759824d1c58dd35aec9c815f2"
+            },
+            {
+              "name": "Presentation.lua",
+              "size": 10342,
+              "sha256": "ec40318de3c31499694c8c98874a6473ce221130da310faeb6c468a5bbb1d35f"
             }
           ]
         },

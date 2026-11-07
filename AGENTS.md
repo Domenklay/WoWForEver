@@ -92,7 +92,7 @@ working baseline launcher remains 1.7.0, with previous verified release 1.7.1.
 
 Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
 catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
-sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.13.1 and Encyclopedia 0.9.20-v2.1-archive-layout; server candidate remains Ascension 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
+sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.13.2 and Encyclopedia 0.9.22-v2.1-loot-preview; server candidate remains Ascension 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
 and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
 synchronize the working branch. Catalogue CI 42359312577 checked the actual pinned
 Git payloads. Metadata-only catalogue edits need no launcher rebuild. Old
@@ -170,13 +170,21 @@ high-level node canvas, NEVER the tab's parent. AddOn-only 1.13.1 anchors a sibl
 tab after the INNER strip, keeps that strip visible, and restores native trees
 when selecting Primary/Secondary or closing the page. /fa selects the same native
 TalentsFrame page. Do not add a hidden outer tab or revive a separate window.
-AddOn source: 9ae2d724fb9451812fc611501fb10a82d9590619. Protocol remains 3.
-No server rebuild is needed for this UI fix; server 1.11 still lacks the new trees
+User screenshot then confirmed 1.13.1 tab was visible, but its presentation was
+rejected: tiny tab, nested gold dialog, scaled-down text and an empty black pane.
+AddOn 1.13.2 uses the SAME TabSystemButtonArtTemplate and dimensions as native
+loadout tabs. Presentation.lua fills the native content at scale 1, shares the
+Encyclopedia/Dungeon Finder palette, uses readable names, and offers a link to
+native primary talents when the old server cannot supply subclass trees. Never
+restore the nested standalone dialog or shrink all text to fit fixed 1020x690.
+TOC now loads SIX files including Presentation.lua. Preserve this required file
+when pinning the payload. Source: 2622aa788142f1b26b5b78e74f3fc78b981f6b3c. Protocol remains 3.
+No server rebuild is needed for either UI fix; server 1.11 still lacks the new trees
 and other 1.13 mechanics. Keep Encyclopedia's independent pin unchanged.
 Guide: docs/MULTICLASS-1.13.ru.md. Server source ae6a3f8ed5aa2fd43b65cc704ae88377ee25a8f2.
-Server CI 42380875759/42380875788/42380875760 passed. Full local suite: 490 tests,
-30 skips; final native tab UI suite: 27 tests. New visible tab still needs user
-confirmation in-game. User server remains 1.11 until an actual apply result.
+Server CI 42380875759/42380875788/42380875760 passed. Full local suite: 492 tests,
+30 skips; UI suite: 29 tests. 1.13.1 visibility was confirmed; the redesigned
+1.13.2 presentation still needs user confirmation in-game. User server remains 1.11 until an actual apply result.
 
 Use upgrade-clean-gameplay.py prepare for a full build + isolated restored-baseline
 candidate trial, then its exact record and same checkout for apply/rollback. Accepts
