@@ -66,7 +66,6 @@ local host, pane, tab, refresh
 local filterText, visible, page = "", {}, 0
 local perPage = 8
 local rows = {}
-local opening = false
 local lastRequest = -100
 
 local function notify(message)
@@ -114,15 +113,6 @@ local function findHost()
         local parent = _G.LFGListFrame:GetParent()
         return parent or _G.LFGListFrame
     end
-end
-
-local function line(parent, x1, y1, x2, y2)
-    local t = parent:CreateTexture(nil, "ARTWORK")
-    t:SetTexture("Interface\\Buttons\\WHITE8X8")
-    t:SetVertexColor(0.47, 0.34, 0.16, 0.72)
-    t:SetPoint("TOPLEFT", parent, "TOPLEFT", x1, y1)
-    t:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", x2, y2)
-    return t
 end
 
 local function font(parent, text, style, x, y, width, color)
@@ -197,7 +187,7 @@ local function install()
         end
     end
     if not tab:GetNumPoints() or tab:GetNumPoints() == 0 then
-        tab:SetPoint("TOPLEFT", host, "TOPLEFT", math.floor(host:GetWidth() * 0.745), -78)
+        tab:SetPoint("TOPLEFT", host, "TOPLEFT", math.max(290, math.min(355, math.floor(host:GetWidth() * 0.745))), -78)
     end
 
     tab:SetScript("OnEnter", function(self)
@@ -231,7 +221,7 @@ local function install()
     search:SetMaxLetters(48)
     if search.SetTextInsets then search:SetTextInsets(6, 6, 0, 0) end
     local searchHint = font(pane, "Поиск...", "GameFontDisableSmall", 29, -25, leftW - 20, MUTED)
-    searchHint:EnableMouse(false)
+    if searchHint.EnableMouse then searchHint:EnableMouse(false) end
 
     font(pane, "ПОДЗЕМЕЛЬЯ", "GameFontNormalSmall", 20, -54, leftW, GOLD)
     local divider = pane:CreateTexture(nil, "ARTWORK")
