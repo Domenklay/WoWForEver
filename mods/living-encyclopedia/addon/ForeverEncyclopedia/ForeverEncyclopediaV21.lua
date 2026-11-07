@@ -31,6 +31,8 @@ local state = {
     map=0, zone=0, area=0,
     knowledgeTotal=0, knowledgeSpent=0, knowledgeAvailable=0,
     catalog={}, catalogLoaded=false, catalogPage=1, catalogPages=1,
+    catalogAll={}, catalogAllLoaded=false, catalogAllLoading=false, catalogAllTotal=0, catalogAllZone=0,
+    archiveAll={}, archiveSupported=false, archiveLoaded=false, archiveLoading=false, archiveTotal=0,
     catalogTotal=0, catalogKnown=0, catalogZoneTotal=0, catalogZoneKnown=0,
     recentZones={}, recentZonesLoaded=false,
     recentItems={}, recentItemsLoaded=false,
@@ -70,6 +72,53 @@ local function requestBaseStatus() send(BASE_REQ,"status") end
 local function requestTalentStatus() send(TAL_REQ,"status") end
 local function requestRuntimeStatus() send(RUNTIME_REQ,"status") end
 local function requestCatalog(page) send(BASE_REQ,"catalog "..tostring(page or 1).." 0 0 -1") end
+
+-- Client 70658 / server FEC1 is deliberately paged (8 records per response).
+-- Assemble every page in the background without altering legacy page controls.
+local catalogAllGeneration=0
+local archiveGeneration=0
+local catalogAllSeen={}
+local archiveSeen={}
+local catalogRequestPage=0
+local archiveRequestPage=0
+
+local function requestFullCatalog()
+    catalogAllGeneration=catalogAllGeneration+1
+    state.catalogAll={}
+    state.catalogAllTotal=0
+    state.catalogAllLoaded=false
+    state.catalogAllLoading=true
+    state.catalogAllZone=state.zone
+    catalogAllSeen={}
+    catalogRequestPage=1
+    requestCatalog(1)
+end
+
+local function requestFullArchive()
+    if not state.archiveSupported or state.archiveLoading then return false end
+    archiveGeneration=archiveGeneration+1
+    state.archiveAll={}
+    state.archiveTotal=0
+    state.archiveLoaded=false
+    state.archiveLoading=true
+    archiveSeen={}
+    archiveRequestPage=1
+    send(BASE_REQ,"archive 1")
+    return true
+end
+
+local function scheduleCatalogPage(page,generation)
+    C_Timer.After(0.26,function()
+        if generation~=catalogAllGeneration or not state.catalogAllLoading then return end
+        if page==catalogRequestPage then requestCatalog(page) end
+    end)
+end
+local function scheduleArchivePage(page,generation)
+    C_Timer.After(0.26,function()
+        if generation~=archiveGeneration or not state.archiveLoading then return end
+        if page==archiveRequestPage then send(BASE_REQ,"archive "..page) end
+    end)
+end
 local function requestZones() state.recentZones={}; state.recentZonesLoaded=false; send(BASE_REQ,"recent 3") end
 local function requestItems() state.recentItems={}; state.recentItemsLoaded=false; send(BASE_REQ,"recent 2") end
 
@@ -381,14 +430,73 @@ local function updateDock()
 end
 
 local function parseBase(msg)
-    if msg:sub(1,8)=="CATHEAD|" then local _,zone,page,pages,total,known,zoneTotal,zoneKnown=strsplit("|",msg); state.catalog={}; state.catalogLoaded=false; state.catalogPage=tonumber(page) or 1; state.catalogPages=tonumber(pages) or 1; state.catalogTotal=tonumber(total) or 0; state.catalogKnown=tonumber(known) or 0; state.catalogZoneTotal=tonumber(zoneTotal) or 0; state.catalogZoneKnown=tonumber(zoneKnown) or 0; selectedCreature=1
+    if msg:sub(1,7)=="ARHEAD|" then
+        local _,page,pages,total=strsplit("|",msg)
+        state.archivePage=tonumber(page) or 1
+        state.archivePages=tonumber(pages) or 1
+        state.archiveTotal=tonumber(total) or 0
+    elseif msg:sub(1,3)=="AR|" then
+        local _,entry,ctype,class,name,map,zone=strsplit("|",msg)
+        local id=tonumber(entry) or 0
+        if id>0 and not archiveSeen[id] then
+            archiveSeen[id]=true
+            state.archiveAll[#state.archiveAll+1]={
+                entry=id,known=true,creatureType=tonumber(ctype) or 0,
+                classification=tonumber(class) or 0,name=name or "",
+                map=tonumber(map) or 0,zone=tonumber(zone) or 0
+            }
+        end
+    elseif msg=="AREND" then
+        if state.archiveLoading and state.archivePage==archiveRequestPage then
+            if state.archivePage<state.archivePages and #state.archiveAll<20000 then
+                archiveRequestPage=state.archivePage+1
+                scheduleArchivePage(archiveRequestPage,archiveGeneration)
+            else
+                state.archiveLoading=false
+                state.archiveLoaded=true
+            end
+            notifyNative("archive")
+        end
+    elseif msg:sub(1,8)=="CATHEAD|" then local _,zone,page,pages,total,known,zoneTotal,zoneKnown=strsplit("|",msg); state.catalog={}; state.catalogLoaded=false; state.catalogPage=tonumber(page) or 1; state.catalogPages=tonumber(pages) or 1; state.catalogTotal=tonumber(total) or 0; state.catalogKnown=tonumber(known) or 0; state.catalogZoneTotal=tonumber(zoneTotal) or 0; state.catalogZoneKnown=tonumber(zoneKnown) or 0; state.catalogAllZone=tonumber(zone) or state.zone; selectedCreature=1
     elseif msg:sub(1,4)=="CAT|" then local _,entry,known,ctype,class,name=strsplit("|",msg); state.catalog[#state.catalog+1]={entry=tonumber(entry) or 0,known=tonumber(known)==1,creatureType=tonumber(ctype) or 0,classification=tonumber(class) or 0,name=name or ""}
-    elseif msg=="CATEND" then state.catalogLoaded=true; state.online=true; selectedCreature=math.min(math.max(1,selectedCreature),math.max(1,#state.catalog)); queueCatalogInfo(); if ui and ui:IsShown() and currentTab==1 then Draw() end; notifyNative("collection")
+    elseif msg=="CATEND" then
+        state.catalogLoaded=true
+        state.online=true
+        selectedCreature=math.min(math.max(1,selectedCreature),math.max(1,#state.catalog))
+        queueCatalogInfo()
+        if state.catalogAllLoading and state.catalogPage==catalogRequestPage then
+            for _,rec in ipairs(state.catalog) do
+                if rec.entry>0 and not catalogAllSeen[rec.entry] then
+                    catalogAllSeen[rec.entry]=true
+                    rec.map=state.map
+                    rec.zone=state.catalogAllZone
+                    state.catalogAll[#state.catalogAll+1]=rec
+                end
+            end
+            state.catalogAllTotal=state.catalogTotal
+            if state.catalogPage<state.catalogPages and #state.catalogAll<20000 then
+                catalogRequestPage=state.catalogPage+1
+                scheduleCatalogPage(catalogRequestPage,catalogAllGeneration)
+            else
+                state.catalogAllLoading=false
+                state.catalogAllLoaded=true
+            end
+            if state.catalogPage%4==0 or state.catalogAllLoaded then notifyNative("archive") end
+        else
+            notifyNative("collection")
+        end
+        if ui and ui:IsShown() and currentTab==1 then Draw() end
     else
         local tag,a,b,c,d,e,f=strsplit(" ",msg)
         if tag=="STATE" then state.total=tonumber(a) or 0; state.creatures=tonumber(b) or 0; state.items=tonumber(c) or 0; state.zones=tonumber(d) or 0; state.online=true
         elseif tag=="KNOW" then state.knowledgeTotal=tonumber(a) or 0; state.knowledgeSpent=tonumber(b) or 0; state.knowledgeAvailable=tonumber(c) or 0
         elseif tag=="CURRENT" then state.map=tonumber(a) or 0; state.zone=tonumber(b) or 0; state.area=tonumber(c) or 0
+        elseif tag=="CAPS" and a=="ARCHIVE1" then
+            if not state.archiveSupported then
+                state.archiveSupported=true
+                -- Refresh the archive even if status arrives after the native tab opens.
+                requestFullArchive()
+            end
         elseif tag=="BOOK" and state.maxMana<=100 then state.mana=tonumber(a) or 0; state.maxMana=tonumber(b) or 100
         elseif tag=="REC" and tonumber(a)==3 then state.recentZones[#state.recentZones+1]={entry=tonumber(b) or 0,map=tonumber(c) or 0,zone=tonumber(d) or 0}
         elseif tag=="REC" and tonumber(a)==2 then state.recentItems[#state.recentItems+1]={entry=tonumber(b) or 0,map=tonumber(c) or 0,zone=tonumber(d) or 0}
@@ -439,6 +547,8 @@ _G.ForeverEncyclopediaUIBridge = {
     state=state, catalog=Catalog,
     RequestStatus=function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus() end,
     RequestCatalog=requestCatalog,
+    RequestFullCatalog=requestFullCatalog,
+    RequestFullArchive=requestFullArchive,
     RequestZones=requestZones,
     RequestItems=requestItems,
     RequestCreatureInfo=requestCreatureInfo,
@@ -461,6 +571,11 @@ events:SetScript("OnEvent",function(_,event,...)
     if event=="CHAT_MSG_ADDON" then local p,m=...; if p==BASE_RES then parseBase(tostring(m or "")) elseif p==TAL_RES then parseTalent(tostring(m or "")) elseif p==RUNTIME_RES then parseRuntime(tostring(m or "")) end; return end
     if event=="PLAYER_LOGIN" then createDock() end
     if event=="GET_ITEM_INFO_RECEIVED" then notifyNative("items"); return end
-    if event=="ZONE_CHANGED_NEW_AREA" then state.catalog={}; state.catalogLoaded=false; state.catalogPage=1; selectedCreature=1; notifyNative("collection") end
+    if event=="ZONE_CHANGED_NEW_AREA" then
+        state.catalog={}; state.catalogLoaded=false; state.catalogPage=1; selectedCreature=1
+        catalogAllGeneration=catalogAllGeneration+1
+        state.catalogAll={}; state.catalogAllLoaded=false; state.catalogAllLoading=false
+        notifyNative("zone")
+    end
     C_Timer.After(1.0,function() requestBaseStatus(); requestTalentStatus(); requestRuntimeStatus(); if ui and ui:IsShown() then if currentTab==1 then requestCatalog(1) elseif currentTab==2 then requestZones() end end end)
 end)
