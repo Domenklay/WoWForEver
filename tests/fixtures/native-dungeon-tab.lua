@@ -2,14 +2,14 @@
 local frames, messages = {}, {}
 local function noop() end
 local methods = {}
-function methods:GetWidth() return self.width or 470 end
-function methods:GetHeight() return self.height or 580 end
-function methods:GetFrameLevel() return self.level or 2 end
-function methods:GetNumPoints() return self.points or 0 end
+function methods:GetWidth() return rawget(self,"width") or 470 end
+function methods:GetHeight() return rawget(self,"height") or 580 end
+function methods:GetFrameLevel() return rawget(self,"level") or 2 end
+function methods:GetNumPoints() return rawget(self,"points") or 0 end
 function methods:SetWidth(v) self.width=v end
 function methods:SetHeight(v) self.height=v end
 function methods:SetSize(w,h) self.width=w; self.height=h end
-function methods:SetPoint(...) self.points=(self.points or 0)+1 end
+function methods:SetPoint(...) self.points=(rawget(self,"points") or 0)+1 end
 function methods:SetAllPoints() self.points=1 end
 function methods:SetText(v) self.text=v end
 function methods:GetText() return self.text or "" end
@@ -18,7 +18,7 @@ function methods:SetScript(n,f) self.scripts[n]=f end
 function methods:HookScript(n,f) self.scripts[n]=f end
 function methods:Show() self.shown=true end
 function methods:Hide() self.shown=false end
-function methods:IsShown() return self.shown and (not self.parent or self.parent:IsShown()) end
+function methods:IsShown() return self.shown and (not rawget(self,"parent") or self.parent:IsShown()) end
 function methods:SetChecked(v) self.checked=v end
 local function make(kind, name, parent)
     local o=setmetatable({kind=kind, name=name, parent=parent, shown=true, scripts={}, children={}},{
