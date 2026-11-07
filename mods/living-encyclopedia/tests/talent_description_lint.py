@@ -88,7 +88,7 @@ assert "state->healReady = now +" in runtime
 assert "state->healPending = true;" in runtime
 injector = (root / "server/inject.py").read_text(encoding="utf-8")
 assert "sScriptMgr->OnHealBefore(healer, victim, addhealth);" in injector
-assert injector.index("OnHealBefore(healer, victim, addhealth);") < injector.index("ModifyHealth(int32(addhealth))")
+# Source-level order is checked against a generated core fixture in inject_test.py.
 
 # The stable channel keeps 0.9.8, while the explicit test channel pins this pack.
 repo = root.parents[1]
