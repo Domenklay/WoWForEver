@@ -14,6 +14,8 @@ local selectedAppearance = "living_book"
 local pendingBuy = false
 local ui = {}
 local objects = {}
+local scrollPositions = {}
+local activeScrolls = {}
 
 local GOLD = {0.82, 0.59, 0.24}
 local PALE = {0.96, 0.87, 0.72}
@@ -29,6 +31,10 @@ local function remember(o)
 end
 
 local function wipeView()
+    for key, scroll in pairs(activeScrolls) do
+        if scroll.GetVerticalScroll then scrollPositions[key]=scroll:GetVerticalScroll() end
+    end
+    wipe(activeScrolls)
     for i = 1, #objects do objects[i]:Hide() end
     wipe(objects)
 end
@@ -107,6 +113,92 @@ local function button(parent,x,y,w,h,text,selected,fn)
     return b
 end
 
+-- Native ScrollFrame clips its child, preserving the visible page and
+-- position when a server response redraws the current archive.
+local function scrollArea(parent,x,y,w,h,key,childHeight)
+    local scroll=remember(CreateFrame("ScrollFrame",nil,parent,"UIPanelScrollFrameTemplate"))
+    scroll:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y)
+    scroll:SetSize(w,h)
+    local child=CreateFrame("Frame",nil,scroll)
+    child:SetSize(w-28,math.max(h,childHeight or h))
+    scroll:SetScrollChild(child)
+    if scroll.SetVerticalScroll then
+        scroll:SetVerticalScroll(math.min(scrollPositions[key] or 0,math.max(0,child:GetHeight()-h)))
+    end
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel",function(self,delta)
+        local maxOffset=math.max(0,child:GetHeight()-h)
+        local nextOffset=math.max(0,math.min(maxOffset,(self:GetVerticalScroll() or 0)-delta*44))
+        self:SetVerticalScroll(nextOffset)
+        scrollPositions[key]=nextOffset
+    end)
+    activeScrolls[key]=scroll
+    return child,scroll
+end
+
+local function paragraph(parent,x,y,w,text,style,color,spacing)
+    local f=font(parent,x,y,w,text,style or "GameFontNormalSmall",color or MUTED)
+    if f.SetWordWrap then f:SetWordWrap(true) end
+    local measured=f.GetStringHeight and f:GetStringHeight() or 17
+    return y+math.max(17,measured or 17)+(spacing or 9)
+end
+
+local function modelPreview(parent,x,y,w,h,creatureID,key)
+    local plate=frame(parent,x,y,w,h,{0.017,0.016,0.018,1})
+    if not creatureID or tonumber(creatureID)==0 then
+        label(plate,10,math.floor(h/2)-10,w-20,"3D-образ ещё не открыт",
+              "GameFontNormalSmall",MUTED,"CENTER")
+        return nil
+    end
+    local model=CreateFrame("PlayerModel",nil,plate)
+    model:SetPoint("TOPLEFT",plate,"TOPLEFT",5,-5)
+    model:SetPoint("BOTTOMRIGHT",plate,"BOTTOMRIGHT",-5,5)
+    if model.SetKeepModelOnHide then model:SetKeepModelOnHide(true) end
+    model:EnableMouse(true)
+    model:EnableMouseWheel(true)
+    local rotation,zoom=0.30,1.30
+    local ok=pcall(function()
+        model:ClearModel()
+        model:SetCreature(creatureID)
+        if model.SetPortraitZoom then model:SetPortraitZoom(0) end
+        model:SetCamDistanceScale(zoom)
+        model:SetRotation(rotation,false)
+        model:RefreshCamera()
+    end)
+    if not ok then
+        label(plate,9,math.floor(h/2)-10,w-18,"3D-модель недоступна",
+              "GameFontNormalSmall",MUTED,"CENTER")
+    end
+    local dragX,dragRotation
+    model:SetScript("OnMouseDown",function(_,mouse)
+        if mouse=="LeftButton" then
+            dragX=GetCursorPosition()
+            dragRotation=rotation
+        end
+    end)
+    model:SetScript("OnMouseUp",function() dragX=nil end)
+    model:SetScript("OnHide",function() dragX=nil end)
+    model:SetScript("OnUpdate",function()
+        if dragX then
+            rotation=dragRotation+(GetCursorPosition()-dragX)*0.012
+            model:SetRotation(rotation,false)
+        end
+    end)
+    model:SetScript("OnMouseWheel",function(_,delta)
+        zoom=math.max(0.70,math.min(2.25,zoom-delta*0.12))
+        model:SetCamDistanceScale(zoom)
+        model:RefreshCamera()
+    end)
+    model:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(model,"ANCHOR_RIGHT")
+        GameTooltip:AddLine("3D-предпросмотр",1,0.8,0.3)
+        GameTooltip:AddLine("Мышь: вращение. Колесо: масштаб.",0.85,0.83,0.75,true)
+        GameTooltip:Show()
+    end)
+    model:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    return model
+end
+
 local function emblem(parent,x,y,w,h,path)
     local f=remember(CreateFrame("Frame",nil,parent))
     f:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-y)
@@ -164,17 +256,17 @@ local function drawLine(parent,x,y,w,h,on)
 end
 
 local function drawLink(parent,from,to,enabled)
-    -- Square elbow connectors, in the same direction as the native Legacy tree.
-    local aY=-from.y-25
-    local bY=-to.y+25
-    local mid=(aY+bY)/2
-    local top=math.min(aY,mid)
-    local bottom=math.max(aY,mid)
-    drawLine(parent,from.x-1,-bottom,2,bottom-top,enabled)
-    drawLine(parent,math.min(from.x,to.x),-mid,math.abs(from.x-to.x),2,enabled)
-    local top2=math.min(mid,bY)
-    local bottom2=math.max(mid,bY)
-    drawLine(parent,to.x-1,-bottom2,2,bottom2-top2,enabled)
+    -- Connect nodes *around* their icon bounds rather than through labels.
+    if to.y>from.y+12 then
+        local y1=from.y+25
+        local y2=to.y-25
+        local mid=(y1+y2)/2
+        drawLine(parent,from.x-1,y1,2,math.max(2,mid-y1),enabled)
+        drawLine(parent,math.min(from.x,to.x),mid,math.abs(from.x-to.x),2,enabled)
+        drawLine(parent,to.x-1,mid,2,math.max(2,y2-mid),enabled)
+    elseif math.abs(to.y-from.y)<16 then
+        drawLine(parent,math.min(from.x,to.x)+25,from.y-1,math.max(2,math.abs(from.x-to.x)-50),2,enabled)
+    end
 end
 
 local function node(parent,x,y,n)
@@ -195,8 +287,9 @@ local function node(parent,x,y,n)
     icon:SetTexCoord(0.08,0.92,0.08,0.92)
     icon:SetDesaturated(not eligible and rank==0)
     icon:SetAlpha((eligible or rank>0) and 1 or 0.36)
-    font(b,23,32,42,rank.."/"..n.max,"GameFontNormalSmall",
-                       (eligible or rank>0) and PALE or MUTED,"CENTER")
+    local badge=font(b,15,32,33,rank.."/"..n.max,"GameFontNormalSmall",
+                     (eligible or rank>0) and PALE or MUTED,"RIGHT")
+    if badge.SetMaxLines then badge:SetMaxLines(1) end
     if chosen then
         local glow=b:CreateTexture(nil,"OVERLAY")
         glow:SetAllPoints()
@@ -204,7 +297,10 @@ local function node(parent,x,y,n)
         glow:SetBlendMode("ADD")
         glow:SetVertexColor(1,0.74,0.20,0.90)
     end
-    label(parent,x-67,y+29,134,n.name,"GameFontNormalSmall",eligible and PALE or MUTED,"CENTER")
+    local title=font(parent,x-71,y+37,142,n.name,"GameFontNormalSmall",
+                     eligible and PALE or MUTED,"CENTER")
+    if title.SetWordWrap then title:SetWordWrap(true) end
+    if title.SetMaxLines then title:SetMaxLines(2) end
     b:SetScript("OnClick",function()
         selectedNode=n.key
         pendingBuy=false
@@ -298,77 +394,94 @@ local function selectedTalentDetail(parent,x,y,w)
     end
     if not n then return end
     local rank=state.ranks[n.key] or 0
-    local cost=rank<n.max and ForeverEncyclopediaTalentCost(n,rank) or 0
+    local maxed=rank>=n.max
     local meets=checkPrereq(n)
-    label(parent,x,y,w,n.name,"GameFontHighlight",PALE)
+    local cost=not maxed and ForeverEncyclopediaTalentCost(n,rank) or nil
     local now,nextValue="",""
     if catalog.EffectPreview then now,nextValue=catalog.EffectPreview(n,rank,state.ranks,state.maxMana) end
-    label(parent,x,y+27,w,"Ранг "..rank.."/"..n.max.. "  •  "..tostring(now),
-          "GameFontNormalSmall",GREEN)
-    local detail=label(parent,x,y+54,w,n.desc,"GameFontNormalSmall",MUTED)
-    detail:SetHeight(55)
+    local y0=y
+    y=paragraph(parent,x,y,w,n.name,"GameFontHighlight",PALE,12)
+    y=paragraph(parent,x,y,w,"Ранг "..rank.."/"..n.max,"GameFontNormalSmall",GOLD,5)
+    y=paragraph(parent,x,y,w,"Сейчас: "..tostring(now),"GameFontNormalSmall",GREEN,10)
+    if not maxed then
+        y=paragraph(parent,x,y,w,"Следующий ранг: "..tostring(nextValue),
+                    "GameFontNormalSmall",GREEN,12)
+    end
+    y=paragraph(parent,x,y,w,n.desc,"GameFontNormalSmall",MUTED,15)
     if n.req then
         local requirement=talent(n.req)
-        label(parent,x,y+114,w,"Нужно: "..(requirement and requirement.name or n.req).." ("..(n.reqRank or 1)..")",
-              "GameFontNormalSmall",MUTED)
+        y=paragraph(parent,x,y,w,"Требуется: "..(requirement and requirement.name or n.req)..
+                    " ("..(n.reqRank or 1)..")","GameFontNormalSmall",MUTED,11)
     end
-    local status
-    if not n.implemented then status="В разработке"
-    elseif rank>=n.max then status="Максимальный ранг"
-    elseif not meets then status="Требуется предыдущий талант"
-    elseif state.knowledgeAvailable<cost then status="Не хватает знаний"
-    elseif pendingBuy then status="Ожидание ответа сервера"
-    else status="След. ранг: "..tostring(nextValue).."  •  цена "..cost end
-    label(parent,x,y+143,w,status,"GameFontNormalSmall",n.implemented and GREEN or RED)
-    local buy=button(parent,x+5,y+169,w-10,26,"Изучить за "..cost.." знаний",false,function()
-        if pendingBuy or not n.implemented or rank>=n.max or not meets or state.knowledgeAvailable<cost then return end
-        pendingBuy=true
-        bridge.BuyTalent(n.key) -- server validates prerequisite, budget, rank and combat restrictions
-        _G.ForeverEncyclopediaLegacy.Refresh("view")
-    end)
-    if not n.implemented or rank>=n.max or not meets or state.knowledgeAvailable<cost or pendingBuy then buy:Disable() end
+    if not n.implemented then
+        y=paragraph(parent,x,y,w,"В разработке. Покупка закрыта.","GameFontNormalSmall",RED,12)
+    elseif maxed then
+        y=paragraph(parent,x,y,w,"Максимальный ранг изучен.","GameFontNormalSmall",GREEN,12)
+    elseif not meets then
+        y=paragraph(parent,x,y,w,"Не выполнено требование предыдущего таланта.","GameFontNormalSmall",RED,12)
+    elseif state.knowledgeAvailable<cost then
+        y=paragraph(parent,x,y,w,"Недостаточно знаний. Нужно: "..cost,"GameFontNormalSmall",RED,12)
+    elseif pendingBuy then
+        y=paragraph(parent,x,y,w,"Ожидание подтверждения сервера…","GameFontNormalSmall",GOLD,12)
+    else
+        y=paragraph(parent,x,y,w,"Стоимость: "..cost.." знаний","GameFontNormalSmall",PALE,9)
+        button(parent,x,y,w-6,32,"Изучить за "..cost.." знаний",false,function()
+            if pendingBuy or rank>=n.max or not n.implemented or not meets or state.knowledgeAvailable<cost then return end
+            pendingBuy=true
+            bridge.BuyTalent(n.key)
+            _G.ForeverEncyclopediaLegacy.Refresh("view")
+        end)
+        y=y+40
+    end
+    return math.max(220,y-y0+18)
 end
 
 local function drawTalentView()
     local left=frame(page,13,63,554,444,DEEP)
     local right=frame(page,580,63,307,444,DEEP)
     heading(left,12,10,530,"Таланты книги")
-    label(left,18,38,520,"Выберите одну из пяти веток. Каждый узел — настоящий талант.",
+    label(left,18,38,516,"Пять веток знаний. Прокрутите древо вниз для изучения.",
           "GameFontNormalSmall",MUTED)
     for i,key in ipairs(catalog.order) do
         local d=catalog.branches[key]
         local x=9+(i-1)*108
-        local b=button(left,x,61,103,52,"",key==branch,function()
+        local b=button(left,x,61,103,53,"",key==branch,function()
             branch=key
             selectedNode=nil
             pendingBuy=false
+            scrollPositions["talent-"..key]=0
             _G.ForeverEncyclopediaLegacy.Refresh("view")
         end)
         local icon=b:CreateTexture(nil,"ARTWORK")
-        icon:SetSize(27,27); icon:SetPoint("TOP",b,"TOP",0,-2)
+        icon:SetSize(25,25)
+        icon:SetPoint("TOP",b,"TOP",0,-3)
         icon:SetTexture(d.icon)
-        font(b,0,31,103,d.name,"GameFontNormalSmall",PALE,"CENTER")
-        -- The top icon is visual; click target is the full 103x52 tab.
+        font(b,3,31,97,d.name,"GameFontNormalSmall",PALE,"CENTER")
     end
-    local xPositions={102,276,450}
+
+    local nodes=scrollArea(left,14,127,525,301,"talent-"..branch,659)
+    local xPositions={83,247,410}
     local positions={}
     for _,n in ipairs(catalog.nodes) do
         if n.branch==branch then
-            positions[n.key]={x=xPositions[n.col],y=151+(n.tier-1)*60}
+            positions[n.key]={x=xPositions[n.col],y=43+(n.tier-1)*111}
         end
     end
     for _,n in ipairs(catalog.nodes) do
         if n.branch==branch and n.req and positions[n.req] and positions[n.key] then
-            drawLink(left,positions[n.req],positions[n.key],checkPrereq(n))
+            drawLink(nodes,positions[n.req],positions[n.key],checkPrereq(n))
         end
     end
     for _,n in ipairs(catalog.nodes) do
         if n.branch==branch and positions[n.key] then
-            node(left,positions[n.key].x,positions[n.key].y,n)
+            node(nodes,positions[n.key].x,positions[n.key].y,n)
         end
     end
+
     smallCollections(right,10,8)
-    selectedTalentDetail(right,17,213,274)
+    local details,viewport=scrollArea(right,17,218,282,215,"detail-"..branch,560)
+    local height=selectedTalentDetail(details,3,7,238)
+    if height then details:SetHeight(math.max(215,height)) end
 end
 
 local function drawCollectionView()
@@ -396,49 +509,64 @@ end
 
 local function drawCreatureView()
     local base=frame(page,13,63,874,444,DEEP)
-    drawArchiveHeading(base,"Архив существ","Показываются только записи, доступные через серверный каталог.")
+    drawArchiveHeading(base,"Архив существ","Изученные существа. Выберите запись для 3D-просмотра и сведений.")
     local list=frame(base,16,82,465,292,BROWN)
     local detail=frame(base,496,82,360,292,BROWN)
     if not state.catalogLoaded then
-        label(list,18,18,420,"Получаю записи с сервера…","GameFontHighlight",PALE)
+        label(list,18,18,416,"Синхронизация каталога…","GameFontHighlight",PALE)
         return
     end
-    for i,rec in ipairs(state.catalog or {}) do
-        if i>7 then break end
-        local name=rec.known and (rec.name~="" and rec.name or "Запись "..rec.entry) or "???"
-        local b=button(list,10,8+(i-1)*39,445,34,name,i==selectedCreature,function()
+    local records=state.catalog or {}
+    selectedCreature=math.max(1,math.min(selectedCreature,#records))
+    local rows=scrollArea(list,9,8,445,277,"creature-list",math.max(277,#records*43+10))
+    for i,rec in ipairs(records) do
+        local name=rec.known and (rec.name~="" and rec.name or "Запись #"..rec.entry) or "???"
+        local b=button(rows,3,4+(i-1)*43,410,38,"",i==selectedCreature,function()
             selectedCreature=i
             if rec.known then bridge.RequestCreatureInfo(rec.entry) end
             _G.ForeverEncyclopediaLegacy.Refresh("view")
         end)
-        local badge=font(b,333,9,105,rec.known and "Встречено" or "Неизвестно",
-                         "GameFontNormalSmall",rec.known and GREEN or MUTED,"RIGHT")
+        local title=font(b,9,9,265,name,"GameFontNormalSmall",rec.known and PALE or MUTED)
+        if title.SetMaxLines then title:SetMaxLines(1) end
+        font(b,280,9,123,rec.known and "Встречено" or "Неизвестно",
+             "GameFontNormalSmall",rec.known and GREEN or MUTED,"RIGHT")
     end
-    local rec=state.catalog[selectedCreature]
+    local rec=records[selectedCreature]
     if rec then
         local info=state.creatureInfo[rec.entry] or {}
-        label(detail,16,18,326,rec.known and (rec.name or "Запись") or "Неизвестное существо",
-              "GameFontHighlight",PALE)
-        label(detail,16,61,326,rec.known and "Открыто в бестиарии" or "Не встречено",
-              "GameFontNormal",rec.known and GREEN or MUTED)
-        label(detail,16,93,326,rec.known and ("Номер записи: "..rec.entry) or "Сведения скрыты до открытия",
-              "GameFontNormalSmall",MUTED)
-        if rec.known and state.infoLevel>=3 then
-            label(detail,16,127,326,"Уровни: "..(info.minLevel or "?").."–"..(info.maxLevel or "?"),
-                  "GameFontNormalSmall",MUTED)
+        local name=rec.known and (rec.name or "Запись") or "Неизвестное существо"
+        local title=label(detail,13,8,333,name,"GameFontHighlight",PALE,"CENTER")
+        if rec.known then
+            modelPreview(detail,12,37,336,164,rec.entry,"creature")
         else
-            label(detail,16,127,326,"Дополнительные сведения открываются талантами Познания.",
-                  "GameFontNormalSmall",MUTED)
+            modelPreview(detail,12,37,336,164,nil,"creature")
         end
+        local infoBody=scrollArea(detail,12,211,336,73,"creature-info",252)
+        local y=paragraph(infoBody,3,6,299,rec.known and "Открыто в бестиарии" or
+            "Ещё не встречено","GameFontNormalSmall",rec.known and GREEN or MUTED)
+        y=paragraph(infoBody,3,y,299,rec.known and ("Номер записи: "..rec.entry) or
+            "Дополнительные сведения скрыты.","GameFontNormalSmall",MUTED)
+        if rec.known then
+            if state.infoLevel>=3 then
+                y=paragraph(infoBody,3,y,299,"Уровни: "..tostring(info.minLevel or "?")..
+                    "–"..tostring(info.maxLevel or "?"),"GameFontNormalSmall",PALE)
+                y=paragraph(infoBody,3,y,299,"Семейство: "..tostring(info.family or "?"),
+                    "GameFontNormalSmall",MUTED)
+            else
+                y=paragraph(infoBody,3,y,299,"Подробности открываются талантами Познания.",
+                    "GameFontNormalSmall",MUTED)
+            end
+        end
+        infoBody:SetHeight(math.max(73,y+8))
     else
-        label(detail,16,16,326,"Пока нет записей на этой странице.","GameFontNormal",MUTED)
+        label(detail,16,17,324,"На этой странице пока нет записей.","GameFontNormal",MUTED)
     end
-    label(base,286,394,270,"Страница "..(state.catalogPage or 1).." из "..(state.catalogPages or 1),
-          "GameFontNormalSmall",MUTED,"CENTER")
-    local prev=button(base,575,382,125,33,"Назад",false,function()
+    label(base,281,391,279,"Страница "..(state.catalogPage or 1).." из "..
+        (state.catalogPages or 1),"GameFontNormalSmall",MUTED,"CENTER")
+    local prev=button(base,581,382,120,33,"Назад",false,function()
         if state.catalogPage>1 then bridge.RequestCatalog(state.catalogPage-1) end
     end)
-    local nextPage=button(base,709,382,125,33,"Далее",false,function()
+    local nextPage=button(base,712,382,120,33,"Далее",false,function()
         if state.catalogPage<state.catalogPages then bridge.RequestCatalog(state.catalogPage+1) end
     end)
     if state.catalogPage<=1 then prev:Disable() end
@@ -447,8 +575,7 @@ end
 
 local function drawZoneView()
     local base=frame(page,13,63,874,444,DEEP)
-    drawArchiveHeading(base,"Изученные локации",
-        "Открытия привязаны к учётной записи. Здесь показаны последние записи сервера.")
+    drawArchiveHeading(base,"Изученные локации","Последние открытия вашего аккаунта из серверного архива.")
     if not state.recentZonesLoaded then
         label(base,30,114,780,"Получаю список локаций…","GameFontHighlight",PALE)
         return
@@ -457,13 +584,23 @@ local function drawZoneView()
         label(base,30,114,780,"Пока нет изученных локаций.","GameFontNormal",MUTED)
         return
     end
+    local list=frame(base,18,94,835,271,BROWN)
+    local rows=scrollArea(list,10,8,811,254,"zone-list",
+                          math.max(254,math.ceil(#state.recentZones/2)*65+12))
     for i,rec in ipairs(state.recentZones) do
-        if i>10 then break end
         local col=(i-1)%2
         local row=math.floor((i-1)/2)
-        local title=bridge.AreaName(rec.entry) or ("Локация "..(rec.entry or 0))
-        category(base,20+col*425,99+row*56,408,50,title,
-                 "Открыта", "Interface\\Icons\\INV_Misc_Map_01",nil,false,true)
+        local title=bridge.AreaName(rec.entry) or ("Локация #"..(rec.entry or 0))
+        local tile=button(rows,8+col*387,8+row*65,375,57,"",false,function()
+            GameTooltip:Hide()
+        end)
+        font(tile,12,6,346,title,"GameFontHighlight",PALE)
+        font(tile,12,30,346,"Изучена • карта "..tostring(rec.map or 0),
+             "GameFontNormalSmall",GREEN)
+        tile:SetScript("OnEnter",function()
+            tooltip(tile,title,"Открыто для всей учётной записи.")
+        end)
+        tile:SetScript("OnLeave",function() GameTooltip:Hide() end)
     end
 end
 
@@ -485,7 +622,7 @@ end
 local function drawItemView()
     local base=frame(page,13,63,874,444,DEEP)
     drawArchiveHeading(base,"Коллекция предметов",
-        (state.items or 0).." уникальных предметов изучено. Ниже — 12 последних записей сервера.")
+        (state.items or 0).." предметов изучено. Последние записи поступают с сервера.")
     local list=frame(base,16,82,474,292,BROWN)
     local detail=frame(base,504,82,353,292,BROWN)
     if not state.recentItemsLoaded then
@@ -496,60 +633,88 @@ local function drawItemView()
         label(list,16,18,430,"Пока нет открытых предметов.","GameFontNormal",MUTED)
         return
     end
+    selectedItem=math.max(1,math.min(selectedItem,#state.recentItems))
+    local rows=scrollArea(list,9,8,453,277,"item-list",
+                          math.max(277,#state.recentItems*47+10))
     for i,rec in ipairs(state.recentItems) do
-        if i>12 then break end
-        local col=(i-1)%2
-        local row=math.floor((i-1)/2)
         local name,icon=itemInfo(rec.entry)
-        local b=button(list,7+col*235,8+row*46,229,42,"",i==selectedItem,function()
+        local b=button(rows,5,5+(i-1)*47,418,41,"",i==selectedItem,function()
             selectedItem=i
             _G.ForeverEncyclopediaLegacy.Refresh("view")
         end)
         local t=b:CreateTexture(nil,"ARTWORK")
         t:SetTexture(icon)
         t:SetPoint("TOPLEFT",b,"TOPLEFT",5,-5)
-        t:SetSize(32,32)
-        font(b,42,8,181,name,"GameFontNormalSmall",PALE)
-        font(b,42,25,181,"#"..rec.entry,"GameFontNormalSmall",MUTED)
+        t:SetSize(31,31)
+        local title=font(b,45,5,361,name,"GameFontNormalSmall",PALE)
+        if title.SetMaxLines then title:SetMaxLines(1) end
+        font(b,45,24,361,"Запись #"..rec.entry,"GameFontNormalSmall",MUTED)
     end
-    local rec=state.recentItems[selectedItem] or state.recentItems[1]
+    local rec=state.recentItems[selectedItem]
     if rec then
         local name,icon=itemInfo(rec.entry)
-        emblem(detail,20,20,95,95,icon)
-        label(detail,128,26,209,name,"GameFontHighlight",PALE)
-        label(detail,128,56,209,"Запись #"..rec.entry,"GameFontNormalSmall",GREEN)
+        emblem(detail,17,23,95,95,icon)
+        local itemTitle=font(detail,125,25,210,name,"GameFontHighlight",PALE)
+        if itemTitle.SetWordWrap then itemTitle:SetWordWrap(true) end
+        label(detail,125,97,210,"Запись #"..rec.entry,"GameFontNormalSmall",GREEN)
+        local body=scrollArea(detail,15,137,329,146,"item-detail",230)
         local where=bridge.AreaName(rec.zone) or ("Зона #"..tostring(rec.zone or 0))
-        label(detail,22,146,315,"Впервые найдено: "..where,"GameFontNormalSmall",MUTED)
-        label(detail,22,182,315,"Карта: "..tostring(rec.map or 0),"GameFontNormalSmall",MUTED)
-        label(detail,22,224,315,"Данные изучения принадлежат аккаунту.","GameFontNormalSmall",MUTED)
+        local y=paragraph(body,4,8,290,"Впервые найдено: "..where,"GameFontNormalSmall",MUTED)
+        y=paragraph(body,4,y,290,"Карта: "..tostring(rec.map or 0),
+                    "GameFontNormalSmall",MUTED)
+        y=paragraph(body,4,y,290,"Знания сохранены на учётной записи.",
+                    "GameFontNormalSmall",GREEN)
+        body:SetHeight(math.max(146,y+8))
     end
 end
 
 local function drawAppearanceView()
     local base=frame(page,13,63,874,444,DEEP)
     heading(base,12,12,850,"Облики Живой книги")
-    label(base,25,46,816,"Внешний вид не меняет силу и не расходует ману. Открытия проверяет сервер.",
+    label(base,25,46,816,"Облик влияет только на внешний вид. Выберите его для 3D-предпросмотра.",
           "GameFontNormalSmall",MUTED)
-    for i,a in ipairs(catalog.appearances or {}) do
-        local col=(i-1)%2
-        local row=math.floor((i-1)/2)
-        local x=16+col*427
-        local y=86+row*111
+    local list=frame(base,16,82,407,347,BROWN)
+    local detail=frame(base,437,82,421,347,BROWN)
+    local appearances=catalog.appearances or {}
+    local entries=scrollArea(list,9,9,387,329,"appearance-list",math.max(329,#appearances*79+10))
+    local chosen
+    for i,a in ipairs(appearances) do
+        if a.key==selectedAppearance then chosen=a end
         local unlocked=state.appearances[a.key] and state.appearances[a.key].unlocked
-        local b=frame(base,x,y,408,101,unlocked and BROWN or DEEP)
-        emblem(b,13,10,76,76,"Interface\\Icons\\INV_Misc_Book_09")
-        label(b,114,19,274,a.name,"GameFontHighlight",unlocked and PALE or MUTED)
-        label(b,114,47,274,unlocked and "Открыт" or ("Требуется знаний: "..a.threshold),
-              "GameFontNormalSmall",unlocked and GREEN or MUTED)
-        if state.selectedAppearance==a.key then
-            label(b,114,72,270,"Используется","GameFontNormalSmall",GREEN)
-        elseif unlocked then
-            button(b,116,66,190,30,"Выбрать облик",false,function()
-                bridge.SelectAppearance(a.key)
-            end)
-        else
-            label(b,114,72,274,"Недоступен","GameFontNormalSmall",MUTED)
-        end
+        local b=button(entries,5,5+(i-1)*79,350,72,"",a.key==selectedAppearance,function()
+            selectedAppearance=a.key
+            _G.ForeverEncyclopediaLegacy.Refresh("view")
+        end)
+        local icon=b:CreateTexture(nil,"ARTWORK")
+        icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+        icon:SetSize(50,50)
+        icon:SetPoint("TOPLEFT",b,"TOPLEFT",8,-11)
+        if not unlocked then icon:SetDesaturated(true) end
+        local title=font(b,70,11,266,a.name,"GameFontHighlight",unlocked and PALE or MUTED)
+        if title.SetMaxLines then title:SetMaxLines(1) end
+        font(b,70,40,266,unlocked and "Открыт" or
+            ("Нужно накопить: "..a.threshold.." знаний"),
+            "GameFontNormalSmall",unlocked and GREEN or MUTED)
+    end
+    chosen=chosen or appearances[1]
+    if not chosen then
+        label(detail,16,20,382,"В каталоге нет обликов.","GameFontNormal",MUTED)
+        return
+    end
+    local unlocked=state.appearances[chosen.key] and state.appearances[chosen.key].unlocked
+    label(detail,14,9,390,chosen.name,"GameFontHighlight",PALE,"CENTER")
+    modelPreview(detail,14,40,393,219,chosen.creature,"appearance")
+    label(detail,14,265,390,unlocked and "Облик открыт" or
+          ("Для открытия нужно "..chosen.threshold.." знаний"),
+          "GameFontNormalSmall",unlocked and GREEN or MUTED,"CENTER")
+    if state.selectedAppearance==chosen.key then
+        label(detail,14,301,390,"Используется","GameFontHighlight",GREEN,"CENTER")
+    elseif unlocked then
+        button(detail,79,296,267,36,"Выбрать облик",false,function()
+            bridge.SelectAppearance(chosen.key) -- confirmed by server
+        end)
+    else
+        label(detail,14,300,390,"Пока недоступен","GameFontNormalSmall",MUTED,"CENTER")
     end
 end
 

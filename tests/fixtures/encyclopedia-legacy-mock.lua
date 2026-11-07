@@ -13,6 +13,9 @@ function Region:SetTexture(s) self.texture=s end
 function Region:SetVertexColor(...) self.vertex={...} end
 function Region:SetText(s) self.text=s end
 function Region:SetTextColor(...) self.color={...} end
+function Region:SetWordWrap(flag) self.wrap=flag end
+function Region:SetMaxLines(n) self.maxLines=n end
+function Region:GetStringHeight() return 16+math.floor(#(self.text or "")/44)*12 end
 function Region:SetJustifyH() end
 function Region:SetTexCoord() end
 function Region:SetDesaturated() end
@@ -29,10 +32,25 @@ function Frame:ClearAllPoints() end
 function Frame:SetSize(w,h) self.w=w;self.h=h end
 function Frame:SetWidth(w) self.w=w end
 function Frame:SetHeight(h) self.h=h end
+function Frame:GetHeight() return self.h or 0 end
+function Frame:GetWidth() return self.w or 0 end
 function Frame:SetFrameLevel(n) self.level=n end
 function Frame:GetFrameLevel() return self.level or 100 end
 function Frame:RegisterEvent() end
 function Frame:EnableMouse() end
+function Frame:EnableMouseWheel() end
+function Frame:SetScrollChild(child) self.scrollChild=child end
+function Frame:GetScrollChild() return self.scrollChild end
+function Frame:SetVerticalScroll(n) self.scrollOffset=n end
+function Frame:GetVerticalScroll() return self.scrollOffset or 0 end
+function Frame:GetVerticalScrollRange() return math.max(0,(self.scrollChild and self.scrollChild:GetHeight() or 0)-self:GetHeight()) end
+function Frame:SetKeepModelOnHide() end
+function Frame:ClearModel() self.modelId=nil end
+function Frame:SetCreature(entry) self.modelId=entry end
+function Frame:SetPortraitZoom() end
+function Frame:SetCamDistanceScale(zoom) self.zoom=zoom end
+function Frame:SetRotation(angle) self.rotation=angle end
+function Frame:RefreshCamera() end
 function Frame:SetScript(kind,fn) self.scripts[kind]=fn end
 function Frame:SetShown(yes) if yes then self:Show() else self:Hide() end end
 function Frame:Show()
@@ -79,6 +97,7 @@ function GameTooltip:Hide() end
 function ShowUIPanel(f) f:Show() end
 function HideUIPanel(f) f:Hide() end
 InCombatLockdown=function() return false end
+GetCursorPosition=function() return 200,200 end
 C_Timer={After=function(_,fn) fn() end}
 C_AddOns={LoadAddOn=function() return true end}
 
@@ -135,10 +154,19 @@ assert(ForeverEncyclopediaLegacyTab:GetID()==4)
 assert(ForeverEncyclopediaLegacyTab.iconTexture=="Interface\\Icons\\INV_Misc_Book_09")
 assert(legacy.title==title and legacy.currentPage==3)
 
+local function currentlyVisible(frame)
+    local f=frame
+    while f do
+        if not f.visible then return false end
+        if f==legacy then return true end
+        f=f.parent
+    end
+    return false
+end
 local function click(text)
     for i=#Frames,1,-1 do
         local f=Frames[i]
-        if f.visible and f.scripts.OnClick and not f.disabled then
+        if currentlyVisible(f) and f.scripts.OnClick and not f.disabled then
             for _,r in ipairs(f.regions) do
                 if r.text==text then f.scripts.OnClick(f);return true end
             end
@@ -147,6 +175,20 @@ local function click(text)
     return false
 end
 assert(api.Open(),"Native window should be available")
+local function countObjects(kind)
+    local n=0
+    for _,f in ipairs(Frames) do if f.type==kind then n=n+1 end end
+    return n
+end
+local function visibleModels()
+    local found={}
+    for _,f in ipairs(Frames) do
+        if f.type=="PlayerModel" and currentlyVisible(f) then
+            found[#found+1]=f
+        end
+    end
+    return found
+end
 assert(legacy.currentPage==4 and legacy.Pages[4]:IsShown())
 assert(legacy.title=="Живая энциклопедия")
 assert(not legacy.Pages[1]:IsShown() and not legacy.Pages[3]:IsShown())
@@ -157,10 +199,30 @@ assert(#calls.buy==1)
 -- A pending buy must not be sent repeatedly before the server reply.
 assert(not click("Изучить за 3 знаний"))
 api.Refresh("talents") -- server acknowledges and delivers a new status
+assert(countObjects("ScrollFrame")>=2,"Talent tree/detail ScrollFrame missing")
+local treeScroll
+for _,f in ipairs(Frames) do
+    if f.type=="ScrollFrame" and currentlyVisible(f) and f.scrollChild and f.scrollChild:GetHeight()>600 then treeScroll=f end
+end
+assert(treeScroll and treeScroll.scripts.OnMouseWheel,"Scrollable full talent tree missing")
+treeScroll.scripts.OnMouseWheel(treeScroll,-1)
+assert(treeScroll:GetVerticalScroll()>0,"Mouse wheel must move the talent tree")
+-- A fully studied talent must never show 'Изучить за 0 знаний'.
+state.ranks.aegis_unlock=1
+api.Refresh("talents")
+assert(not click("Изучить за 0 знаний"),"Max-ranked talent must have no buy button")
+state.ranks.aegis_unlock=0
+api.Refresh("talents")
 assert(click("Коллекция"),"Collection subtab is missing")
 assert(click("Существа"),"Clickable collected-knowledge category missing")
 assert(calls.catalog>=1,"Creature category must request the real catalog")
 assert(click("Волк"),"Known creature row missing")
+local preview=visibleModels()
+assert(#preview>=1,"Creature 3D PlayerModel preview missing")
+assert(preview[#preview].modelId==33,"Creature model must use the server entry, not a placeholder")
+assert(preview[#preview].scripts.OnMouseWheel,"Mouse wheel zoom missing")
+preview[#preview].scripts.OnMouseWheel(preview[#preview],1)
+assert(preview[#preview].zoom,"Creature zoom must update camera")
 assert(calls.info[#calls.info]==33,"Clicked creature must request server-backed data")
 assert(click("Назад к коллекции"),"The in-window archive back button is missing")
 assert(click("Локации"),"Zone category missing")
@@ -171,6 +233,12 @@ assert(calls.items>=1,"Clicking items must request existing server REC 2 protoco
 assert(click("Назад к коллекции"))
 api.Refresh("mana")
 assert(legacy.Pages[4]:IsShown(),"Status refresh must not close the page")
+assert(click("Облики"),"Appearance tab missing")
+local appearanceModels=visibleModels()
+assert(#appearanceModels>=1,"Appearance 3D PlayerModel missing")
+assert(appearanceModels[#appearanceModels].modelId==171120,"Appearance preview must use the real unlocked creature")
+assert(appearanceModels[#appearanceModels].scripts.OnMouseDown and appearanceModels[#appearanceModels].scripts.OnMouseWheel)
+assert(click("Таланты"),"Talent view unavailable after appearance preview")
 
 legacy:SelectPage(1)
 assert(not legacy.Pages[4]:IsShown(),"Blizzard's original tab must hide the book")
