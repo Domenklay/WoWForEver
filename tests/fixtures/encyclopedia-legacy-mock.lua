@@ -120,7 +120,15 @@ local catalog=assert(ForeverEncyclopediaTalentCatalog)
 local state={
     online=true,total=21,creatures=9,items=6,zones=6,
     knowledgeTotal=35,knowledgeSpent=6,knowledgeAvailable=29,
-    mana=70,maxMana=106,ranks={},appearances={living_book={unlocked=true}},
+    mana=70,maxMana=106,ranks={},appearances={
+        living_book={unlocked=true},
+        test_lofty_libram={unlocked=true},
+        test_animated_tome={unlocked=true},
+        test_gusting_grimoire={unlocked=true},
+        test_agitated_tome={unlocked=true},
+        test_troubled_tome={unlocked=true},
+        test_chromies_codex={unlocked=true}
+    },
     selectedAppearance="living_book",
     catalogPage=1,catalogPages=2,catalogTotal=42,catalogKnown=9,catalogLoaded=true,
     infoLevel=2,creatureInfo={},recentZones={{entry=7}},recentZonesLoaded=true,
@@ -342,6 +350,23 @@ local appearanceModels=visibleModels()
 assert(#appearanceModels>=1,"Appearance 3D PlayerModel missing")
 assert(appearanceModels[#appearanceModels].modelId==171120,"Appearance preview must use the real unlocked creature")
 assert(appearanceModels[#appearanceModels].scripts.OnMouseDown and appearanceModels[#appearanceModels].scripts.OnMouseWheel)
+local testBooks={
+    {"Парящий манускрипт",68806,"test_lofty_libram"},
+    {"Оживший фолиант",171120,"test_animated_tome"},
+    {"Парящий гримуар",69208,"test_gusting_grimoire"},
+    {"Беспокойная книга",101633,"test_agitated_tome"},
+    {"Драконий фолиант",198511,"test_troubled_tome"},
+    {"Кодекс Хроми",227052,"test_chromies_codex"}
+}
+for _,skin in ipairs(testBooks) do
+    assert(click(skin[1]),"Missing test appearance: "..skin[1])
+    local list=visibleModels()
+    assert(list[#list].modelId==skin[2],"Wrong NPC model for "..skin[1])
+    assert(click("Выбрать облик"),"Available test skin must be selectable: "..skin[1])
+    assert(calls.appearance[#calls.appearance]==skin[3],"Wrong server appearance key for "..skin[1])
+end
+assert(click("Живая книга"),"Cannot return to the original base appearance")
+assert(visibleModels()[#visibleModels()].modelId==171120)
 assert(click("Таланты"),"Talent view unavailable after appearance preview")
 
 legacy:SelectPage(1)
