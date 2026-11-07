@@ -594,11 +594,12 @@ local function archiveRecords()
             ids[r.entry]=record
         end
     end
+    -- Compute Unicode search keys once per render rather than inside every
+    -- O(N log N) comparison; archives can contain thousands of creatures.
+    for _,rec in ipairs(result) do rec.normalizedName=lowerName(archiveRecordName(rec)) end
     table.sort(result,function(a,b)
         if a.known~=b.known then return a.known end
-        local an=lowerName(archiveRecordName(a))
-        local bn=lowerName(archiveRecordName(b))
-        if an~=bn then return an<bn end
+        if a.normalizedName~=b.normalizedName then return a.normalizedName<b.normalizedName end
         return a.entry<b.entry
     end)
     return result
@@ -644,7 +645,7 @@ local function filteredArchiveRecords(rows)
         if matches and activeMonsterFilter=="known" and not rec.known then matches=false end
         if matches and activeMonsterFilter=="unknown" and rec.known then matches=false end
         if matches and search~="" then
-            matches=string.find(lowerName(archiveRecordName(rec)),search,1,true)~=nil
+            matches=string.find(rec.normalizedName or lowerName(archiveRecordName(rec)),search,1,true)~=nil
                 or string.find(tostring(rec.entry),search,1,true)~=nil
         end
         if matches then result[#result+1]=rec end
