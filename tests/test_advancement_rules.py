@@ -296,7 +296,7 @@ template<class T> struct DB2HotfixGenerator {
  explicit DB2HotfixGenerator(std::map<uint32,Ability*>&) {}
  void ApplyHotfix(uint32 id,void(*fix)(T*),bool notify) {assert(notify);fix(sSkillLineAbilityStore.at(id));published.push_back(id);}
 };
-struct Spells {std::multimap<uint32,Ability const*> rows;auto GetSkillLineAbilityMapBounds(uint32 id){return rows.equal_range(id);}} manager;
+struct Spells {std::multimap<uint32,Ability const*> rows;std::map<uint32,uint32> first;auto GetSkillLineAbilityMapBounds(uint32 id){return rows.equal_range(id);}uint32 GetFirstSpellInChain(uint32 id){return first[id];}} manager;
 auto sSpellMgr=&manager;
 struct Definition {uint32 entry,owner,spell,level;};
 std::map<uint32,std::vector<Definition>> Catalog;
@@ -448,17 +448,20 @@ struct Info {uint32 ClassMask;};
 struct Manager {std::map<uint32,std::vector<Info const*>> infos;auto GetSkillRaceClassInfo(uint32 id){return infos[id];}} sDB2Manager;
 struct SkillTree {uint32 ID,SkillLineID,TraitTreeID;};Store<SkillTree> sSkillLineXTraitTreeStore;
 struct Ability {uint32 SkillLine;};
-struct Spells {std::multimap<uint32,Ability const*> rows;auto GetSkillLineAbilityMapBounds(uint32 id){return rows.equal_range(id);}} manager;auto sSpellMgr=&manager;
+struct Spells {std::multimap<uint32,Ability const*> rows;std::map<uint32,uint32> first;auto GetSkillLineAbilityMapBounds(uint32 id){return rows.equal_range(id);}uint32 GetFirstSpellInChain(uint32 id){return first[id];}} manager;auto sSpellMgr=&manager;
 struct Talent {uint32 ID,ClassID,SpellID,TabID=0,SpecID=0;std::array<uint32,9> SpellRank={};};Store<Talent> sTalentStore;
 struct Spec {uint32 ID,ClassID;int OrderIndex=0;};Store<Spec> sChrSpecializationStore;
 struct Edge {uint32 ID,RightTraitNodeID,LeftTraitNodeID;};Store<Edge> sTraitEdgeStore;
-struct Menu {uint32 owner,spell;};std::map<uint32,Menu> NativeMenu;
+struct TraitEntry {uint32 ID,TraitDefinitionID;};Store<TraitEntry> sTraitNodeEntryStore;
+struct TraitDef {uint32 ID;int VisibleSpellID;};Store<TraitDef> sTraitDefinitionStore;
+struct GroupLink {uint32 ID,TraitNodeID,TraitNodeGroupID;};Store<GroupLink> sTraitNodeGroupXTraitNodeStore;
+struct Menu {uint32 owner,spell,traitEntry=0;};std::map<uint32,Menu> NativeMenu;
 struct Layout {uint32 node,tree;int32 x,y;float offset=0,col=0,row=0;std::string tag={};};
 std::map<uint32,Layout> TalentLayout;
 std::map<uint32,std::string> TreeTitles;
 std::map<std::string,std::string> BranchTitles;
 std::map<uint32,std::vector<uint32>> TalentParents;
-'''+function(source,'static bool PlayerClassSchool(')+function(source,'static uint32 SchoolClassMask(')+function(source,'static uint32 ClassSchoolForSpec(')+function(source,'static bool OwnedSchool(')+function(source,'static uint32 TalentSchool(')+'''
+'''+function(source,'static bool PlayerClassSchool(')+function(source,'static uint32 SchoolClassMask(')+function(source,'static uint32 ClassSchoolForSpec(')+function(source,'static bool OwnedSchool(')+function(source,'static uint32 TalentSchool(')+function(source,'static uint32 TraitSchool(')+'''
 static std::map<std::string,uint32> BranchSchools,BranchTrees;
 '''+function(source,'static void BuildTalentLayout()')+r'''
 int main() {
@@ -485,13 +488,48 @@ int main() {
  // A cross-school dependency must never relabel an ambiguous/unlisted node.
  Edge cross{2,11,14};sTraitEdgeStore.rows={&edge,&cross};BuildTalentLayout();
  assert(!BranchSchools[TalentLayout[4].tag]);
+ // Runtime failures include new native spell IDs with missing SLA membership.
+ // Synthetic coordinates here reproduce separated schools, NOT a claimed dump
+ // of the user's node coordinates. All seven nodes stay real native menu rows.
+ sTraitEdgeStore.rows.clear();NativeMenu.clear();TalentLayout.clear();
+ for(uint32 band=0;band<3;++band) for(uint32 column=0;column<4;++column) {
+  uint32 id=10+band*10+column;NativeMenu[id]={1,100+band*100};
+  TalentLayout[id]={id,1117,int32(1000+band*2000+column*100),0};
+ }
+ std::array<uint32,7> spells={1290261,1323963,29787,1310317,1310315,1289682,999999};
+ for(uint32 i=0;i<spells.size();++i) {uint32 id=100+i;NativeMenu[id]={1,spells[i]};TalentLayout[id]={id,1117,int32(1000+(i%3)*2000+(i%4)*100),600};}
+ BuildTalentLayout();
+ std::array<uint32,3> expectedSchools={26,256,257};
+ for(uint32 i=0;i<spells.size();++i)assert(BranchSchools[TalentLayout[100+i].tag]==expectedSchools[i%3]);
+ // Never extrapolate to a new column, fill a gap, cross a tree or extrapolate
+ // across overlapping native school bands.
+ NativeMenu[110]={1,999};TalentLayout[110]={110,1117,1050,0};
+ NativeMenu[111]={1,999};TalentLayout[111]={111,1117,8000,0};
+ NativeMenu[112]={1,999};TalentLayout[112]={112,2222,1000,0};BuildTalentLayout();
+ for(uint32 id:{110,111,112})assert(!BranchSchools[TalentLayout[id].tag]);
+ TalentLayout[10].x=3000;BuildTalentLayout();assert(!BranchSchools[TalentLayout[100].tag]);
+ TalentLayout[10].x=1000;
+ // A display alias or first rank is direct metadata for the same native talent.
+ TraitEntry te{20,30};TraitDef td{30,201};sTraitNodeEntryStore.rows={&te};sTraitDefinitionStore.rows={&td};
+ assert(TalentSchool(1117,1,201)==256);assert(sTraitDefinitionStore.LookupEntry(30)->VisibleSpellID==201);assert(!TalentSchool(1117,1,1290261));
+ assert(TraitSchool(1,1117,1290261,20)==256);manager.first[1323963]=300;
+ assert(TraitSchool(1,1117,1323963,0)==257);
+ // Native groups can resolve disconnected, unlisted entries outside the known
+ // columns. Conflicting groups do not win by iteration order.
+ GroupLink g1{1,111,900},g2{2,10,900},g3{3,111,901},g4{4,20,901};
+ sTraitNodeGroupXTraitNodeStore.rows={&g1,&g2};BuildTalentLayout();assert(BranchSchools[TalentLayout[111].tag]==26);
+ sTraitNodeGroupXTraitNodeStore.rows={&g1,&g2,&g3,&g4};BuildTalentLayout();assert(!BranchSchools[TalentLayout[111].tag]);
+ // Choices at one native node share its school even without a dependency edge.
+ sTraitNodeGroupXTraitNodeStore.rows.clear();NativeMenu[113]={1,999};TalentLayout[113]={10,1117,1000,0};
+ BuildTalentLayout();assert(BranchSchools[TalentLayout[113].tag]==26);
 }
 '''
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);(root/'test.cpp').write_text(code)
             result=subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)
-            subprocess.run([str(root/'test')],check=True,capture_output=True)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
 
     def test_trait_rank_bridge_preserves_native_config_and_never_learns_spells(self):
         code=r'''#include <cassert>

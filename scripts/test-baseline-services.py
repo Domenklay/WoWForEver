@@ -151,7 +151,7 @@ class ServicesTrial:
                             'org.wowforever.encyclopedia': game['encyclopedia'],
                             'org.wowforever.scaling': '0.2.0'}
                 self.advancement_version=labels.get('org.wowforever.advancement')
-                if self.advancement_version not in ('1.11.0','1.12.0','1.13.0','1.14.0','1.14.1') or any(labels.get(k) != v for k, v in expected.items()):
+                if self.advancement_version not in ('1.11.0','1.12.0','1.13.0','1.14.0','1.14.1','1.14.2') or any(labels.get(k) != v for k, v in expected.items()):
                     raise ValueError('Saved gameplay image labels differ from the backup')
         if self.candidate:
             item=base.game.adv.image(self.candidate)

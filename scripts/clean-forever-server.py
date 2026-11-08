@@ -609,7 +609,7 @@ def load_state(path):
     if Path(state['compose']) != path.parent.resolve() / 'compose.private.json':
         raise ValueError('Unexpected Compose path')
     advancement = state.get('advancement')
-    if advancement and (advancement.get('version') not in ('1.11.0','1.12.0','1.13.0','1.14.0','1.14.1') or advancement.get('protocol') != 3
+    if advancement and (advancement.get('version') not in ('1.11.0','1.12.0','1.13.0','1.14.0','1.14.1','1.14.2') or advancement.get('protocol') != 3
         or not re.fullmatch('[0-9a-f]{64}', advancement.get('source_sha256', ''))
         or not re.fullmatch(re.escape(str(path.parent.resolve() / 'advancement')) + r'/[0-9a-f]{12}/install.json', advancement.get('backup', ''))):
         raise ValueError('Unsupported Advancement state identity')

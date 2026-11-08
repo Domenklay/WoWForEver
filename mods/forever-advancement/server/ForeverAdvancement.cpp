@@ -134,12 +134,57 @@ static uint32 TalentSchool(uint32 tree,uint32 owner,uint32 spell)
     if(talents.size()==1&&(matches.empty()||matches.count(*talents.begin()))) return *talents.begin();
     return matches.size()==1?*matches.begin():0;
 }
+static uint32 TraitSchool(uint32 owner,uint32 tree,uint32 spell,uint32 entryId)
+{
+    if(auto school=TalentSchool(tree,owner,spell)) return school;
+    // Display aliases and ranks are the same native talent, not name substitutions.
+    std::set<uint32> schools;
+    if(auto entry=sTraitNodeEntryStore.LookupEntry(entryId))
+        if(auto definition=sTraitDefinitionStore.LookupEntry(entry->TraitDefinitionID);definition&&definition->VisibleSpellID>0)
+            if(auto school=TalentSchool(tree,owner,definition->VisibleSpellID)) schools.insert(school);
+    if(auto first=sSpellMgr->GetFirstSpellInChain(spell);first&&first!=spell)
+        if(auto school=TalentSchool(tree,owner,first)) schools.insert(school);
+    return schools.size()==1?*schools.begin():0;
+}
 static std::map<std::string,uint32> BranchSchools,BranchTrees;
 static void BuildTalentLayout()
 {
     std::map<uint32,uint32> schools;
     std::map<uint32,std::set<uint32>> neighbours;
-    for(auto const& [id,l]:TalentLayout) schools[id]=TalentSchool(l.tree,NativeMenu.at(id).owner,NativeMenu.at(id).spell);
+    for(auto const& [id,l]:TalentLayout) schools[id]=TraitSchool(NativeMenu.at(id).owner,l.tree,NativeMenu.at(id).spell,NativeMenu.at(id).traitEntry);
+    // All choices of the same native node belong to the same visual school.
+    for(auto const& [id,l]:TalentLayout) for(auto const& [other,p]:TalentLayout)
+        if(id!=other&&l.node&&l.node==p.node&&l.tree==p.tree&&NativeMenu.at(id).owner==NativeMenu.at(other).owner)
+            neighbours[id].insert(other);
+    // A native node group is evidence only when its resolved members agree.
+    // Accumulate proposals first: two conflicting groups must never win by order.
+    using GroupKey=std::array<uint32,3>;
+    std::map<GroupKey,std::set<uint32>> groups;
+    for(auto link:sTraitNodeGroupXTraitNodeStore) for(auto const& [id,l]:TalentLayout)
+        if(l.node==uint32(link->TraitNodeID)) groups[{NativeMenu.at(id).owner,l.tree,link->TraitNodeGroupID}].insert(id);
+    std::map<uint32,std::set<uint32>> proposals;
+    for(auto const& [key,ids]:groups)
+    {
+        std::set<uint32> evidence;for(auto id:ids) if(schools[id]) evidence.insert(schools[id]);
+        if(evidence.size()==1) for(auto id:ids) if(!schools[id]) proposals[id].insert(*evidence.begin());
+    }
+    std::set<uint32> conflictingGroups;
+    for(auto const& [id,choices]:proposals)
+        if(choices.size()==1) schools[id]=*choices.begin();else conflictingGroups.insert(id);
+    // Forever lays out the three schools in distinct horizontal native bands.
+    // Use only existing columns, only after all three bands are independently
+    // identified and disjoint. No nearest-school, gap splitting, or magic IDs.
+    using TreeKey=std::pair<uint32,uint32>;
+    std::map<TreeKey,std::map<uint32,std::set<int32>>> schoolColumns;
+    for(auto const& [id,l]:TalentLayout) if(schools[id]) schoolColumns[{NativeMenu.at(id).owner,l.tree}][schools[id]].insert(l.x);
+    std::set<TreeKey> distinctBands;
+    for(auto const& [key,bands]:schoolColumns) if(bands.size()==3)
+    {
+        bool distinct=true;
+        for(auto const& [school,xs]:bands) for(auto const& [other,ys]:bands)
+            if(school!=other&&!(*xs.rbegin()<*ys.begin()||*ys.rbegin()<*xs.begin())) distinct=false;
+        if(distinct) distinctBands.insert(key);
+    }
     for(auto edge:sTraitEdgeStore) for(auto const& [child,l]:TalentLayout)
         if(l.node==uint32(edge->RightTraitNodeID)) for(auto const& [parent,p]:TalentLayout)
             if(p.node==uint32(edge->LeftTraitNodeID)&&p.tree==l.tree&&NativeMenu.at(child).owner==NativeMenu.at(parent).owner)
@@ -152,6 +197,19 @@ static void BuildTalentLayout()
         {
             auto node=component[i];if(schools[node]) evidence.insert(schools[node]);
             for(auto next:neighbours[node]) if(visited.insert(next).second) component.push_back(next);
+        }
+        if(std::any_of(component.begin(),component.end(),[&](uint32 node){return conflictingGroups.count(node);})) continue;
+        if(evidence.empty())
+        {
+            std::set<uint32> positions;bool complete=true;
+            for(auto node:component)
+            {
+                auto const& l=TalentLayout.at(node);TreeKey key={NativeMenu.at(node).owner,l.tree};
+                uint32 school=0;
+                if(distinctBands.count(key)) for(auto const& [candidate,xs]:schoolColumns.at(key)) if(xs.count(l.x)) school=candidate;
+                if(school) positions.insert(school);else complete=false;
+            }
+            if(complete&&positions.size()==1) evidence=positions;
         }
         if(evidence.size()==1) for(auto node:component) if(!schools[node]) schools[node]=*evidence.begin();
     }
@@ -1016,6 +1074,7 @@ public:
         if(Catalog.empty()) { TC_LOG_ERROR("scripts","ForeverAdvancement native catalog empty; disabled");return; }
         TC_LOG_INFO("scripts","ForeverAdvancement equipment metadata: {} proficiency skill records",EquipmentCatalog.size());
         BuildTalentLayout();
+        uint32 failedClasses=0;
         for(uint32 owner:{1u,2u,3u,4u,5u,7u,8u,9u,11u})
         {
             std::set<uint32> schools;
@@ -1023,17 +1082,18 @@ public:
             uint32 unresolved=0;
             for(auto const& [id,layout]:TalentLayout) if(NativeMenu.at(id).owner==owner&&!BranchSchools[layout.tag])
             {
-                if(unresolved<6) TC_LOG_ERROR("scripts","ForeverAdvancement unresolved school: class {} spell {} node {} tree {}",owner,NativeMenu.at(id).spell,layout.node,layout.tree);
+                TC_LOG_ERROR("scripts","ForeverAdvancement unresolved school: class {} spell {} entry {} node {} tree {} xy {},{}",owner,NativeMenu.at(id).spell,NativeMenu.at(id).traitEntry,layout.node,layout.tree,layout.x,layout.y);
                 ++unresolved;
             }
-            if(schools.size()!=3||unresolved) {TC_LOG_ERROR("scripts","ForeverAdvancement player school audit failed: class {} has {} schools, expected 3; {} unresolved nodes; original runtime must be retained",owner,schools.size(),unresolved);return;}
+            if(schools.size()!=3||unresolved) {TC_LOG_ERROR("scripts","ForeverAdvancement player school audit mismatch: class {} has {} schools, expected 3; {} unresolved nodes",owner,schools.size(),unresolved);++failedClasses;}
         }
+        if(failedClasses) {TC_LOG_ERROR("scripts","ForeverAdvancement player school audit failed: {} classes have incomplete metadata; original runtime must be retained",failedClasses);return;}
         TC_LOG_INFO("scripts","ForeverAdvancement player school audit passed: three native schools for each classic class; pets and collections excluded");
         PublishBookSchoolMetadata();PublishBookMetadata();
         TC_LOG_INFO("scripts","ForeverAdvancement native catalogue: {} supported records; {} resource exclusions; {} native trait entries",accepted,rejected,seenTraits.size());
         TC_LOG_INFO("scripts","ForeverAdvancement catalog audit: {}; legacy talents hidden; no name substitutions",audit?"written to ForeverAdvancement-catalog.tsv":"could not open audit file");
         TC_LOG_INFO("scripts","ForeverAdvancement trait ranks: {} purchasable native nodes; native TraitMgr validation",TalentCatalog.size());
-        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: 0 visible abilities; protocol=3; version=1.14.1");
+        TC_LOG_INFO("scripts","ForeverAdvancement custom rules: 0 visible abilities; protocol=3; version=1.14.2");
         Ready=true;TC_LOG_INFO("scripts","ForeverAdvancement ready: {} native ability entries; {} native talent nodes; {} slots",Catalog.size(),TalentCatalog.size(),Limit);
     }
 };
