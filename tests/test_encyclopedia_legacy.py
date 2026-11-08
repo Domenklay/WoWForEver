@@ -12,7 +12,7 @@ source = (ADDON / "ForeverEncyclopediaTalentData.lua").read_text(encoding="utf-8
 overrides = (ADDON / "ForeverEncyclopediaTalentOverrides.lua").read_text(encoding="utf-8")
 
 version = re.search(r"^## Version: (.+)$", toc, re.MULTILINE)
-assert version and version.group(1) == "0.9.24-v2.1-flying-skins", version
+assert version and version.group(1) == "0.9.25-v2.1-model-preview", version
 assert "## Interface: 16001" in toc
 entries = [line for line in toc.splitlines() if line and not line.startswith("#")]
 assert len(entries) == len(set(entries)), "Duplicate TOC file"
@@ -50,7 +50,7 @@ assert "bridge.RequestCreatureInfo(selected.entry)" in legacy
 for key in ("protection", "healing", "support", "wisdom", "knowledge"):
     assert key in source
 assert "node.implemented" in overrides
-assert '0.9.24-v2.1-flying-skins' not in source, "Server talents must remain version-independent"
+assert '0.9.25-v2.1-model-preview' not in source, "Server talents must remain version-independent"
 # Archive UX must use the entire current-zone catalogue, not legacy pages.
 creature_view=legacy.split("local function drawCreatureView()",1)[1].split("local function drawZoneView()",1)[0]
 assert 'local list=frame(base,16,39,390,395,BROWN)' in creature_view
@@ -64,6 +64,19 @@ assert 'local viewHeight=286' in creature_view, "List must reclaim wasted vertic
 assert 'button(base,16,5,135,28,"К коллекции"' in creature_view
 assert 'modelPreview(detail,12,39,182,233' in creature_view
 assert 'drawCreatureLoot(detail,selected)' in creature_view
+assert 'local function petDisplayId(species)' in legacy
+assert 'C_PetJournal.GetPetInfoBySpeciesID(species)' in legacy
+assert 'model:SetDisplayInfo(display)' in legacy
+assert 'model:SetCreature(creature,display or 0)' in legacy
+assert 'model:SetScript("OnModelLoaded"' in legacy
+assert 'C_Timer.After(1.65' in legacy
+assert 'Не загружено:' in legacy
+assert 'Проверить 3D' in legacy
+assert 'model:SetUnit("player")' in legacy
+assert 'modelPreview(detail,14,40,393,219,chosen.creature,"appearance",chosen)' in legacy
+assert 'species=1159' in source and 'display=46938' in source
+assert 'species=1174' in source and 'display=47348' in source
+assert 'species=2893' in source and 'species=3416' in source
 assert 'local panel=frame(parent,202,39,223,233,BROWN)' in legacy
 assert 'GameTooltip:SetHyperlink("item:"..item.entry)' in legacy
 assert 'rawChanceLabel(item)' in legacy

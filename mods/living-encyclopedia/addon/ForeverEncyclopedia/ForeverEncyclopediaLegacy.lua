@@ -166,9 +166,32 @@ local function paragraph(parent,x,y,w,text,style,color,spacing)
     return y+math.max(17,measured or 17)+(spacing or 9)
 end
 
-local function modelPreview(parent,x,y,w,h,creatureID,key)
+-- A creature entry is NOT a display ID. In the Classic 70658 client,
+-- SetCreature(entry) can silently render nothing if the creature cache has
+-- never encountered that NPC. Resolve display IDs from the pet journal (when
+-- available) and use a verified display-first path instead of a blank panel.
+local function petDisplayId(species)
+    if not species or not C_PetJournal then return nil end
+    local id
+    if C_PetJournal.GetPetInfoBySpeciesID then
+        local ok,found=pcall(function()
+            return select(12,C_PetJournal.GetPetInfoBySpeciesID(species))
+        end)
+        if ok then id=tonumber(found) end
+    end
+    if (not id or id==0) and C_PetJournal.GetPetInfoTableBySpeciesID then
+        local ok,record=pcall(C_PetJournal.GetPetInfoTableBySpeciesID,species)
+        if ok and type(record)=="table" then
+            id=tonumber(record.creatureDisplayID or record.displayID)
+        end
+    end
+    return id and id>0 and id or nil
+end
+
+local function modelPreview(parent,x,y,w,h,creatureID,key,appearance)
     local plate=frame(parent,x,y,w,h,{0.017,0.016,0.018,1})
-    if not creatureID or tonumber(creatureID)==0 then
+    local creature=tonumber(creatureID)
+    if not creature or creature==0 then
         label(plate,10,math.floor(h/2)-10,w-20,"3D-образ ещё не открыт",
               "GameFontNormalSmall",MUTED,"CENTER")
         return nil
@@ -179,28 +202,106 @@ local function modelPreview(parent,x,y,w,h,creatureID,key)
     if model.SetKeepModelOnHide then model:SetKeepModelOnHide(true) end
     model:EnableMouse(true)
     model:EnableMouseWheel(true)
-    local viewKey=tostring(key or "preview")..":"..tostring(creatureID)
+
+    local viewKey=tostring(key or "preview")..":"..tostring(creature)
     local remembered=modelOrientation[viewKey]
     local rotation,zoom=remembered and remembered.rotation or 0.30,
                         remembered and remembered.zoom or (key=="creature" and 1.62 or 1.30)
-    local ok=pcall(function()
-        model:ClearModel()
-        model:SetCreature(creatureID)
-        if model.SetPortraitZoom then model:SetPortraitZoom(0) end
-        model:SetCamDistanceScale(zoom)
-        model:SetRotation(rotation,false)
-        model:RefreshCamera()
-    end)
-    if not ok then
-        label(plate,9,math.floor(h/2)-10,w-18,"3D-модель недоступна",
-              "GameFontNormalSmall",MUTED,"CENTER")
+    local display=appearance and
+        (petDisplayId(appearance.species) or tonumber(appearance.display)) or nil
+    if not display or display<=0 then display=nil end
+
+    -- A separate layer above the model must report silent loading failures.
+    -- In particular, pcall(SetCreature) succeeding does NOT prove it rendered.
+    local overlay=CreateFrame("Frame",nil,plate)
+    overlay:SetAllPoints()
+    if overlay.EnableMouse then overlay:EnableMouse(false) end
+    if overlay.SetFrameLevel and model.GetFrameLevel then
+        overlay:SetFrameLevel(model:GetFrameLevel()+2)
     end
+    local status=font(overlay,9,math.floor(h/2)-28,w-18,"Загрузка 3D-модели…",
+                      "GameFontNormalSmall",MUTED,"CENTER")
+    if status.SetWordWrap then status:SetWordWrap(true) end
+    local loaded=false
+    local attempted={}
+    local function camera()
+        if model.SetCamera then pcall(model.SetCamera,model,0) end
+        if model.SetPortraitZoom then pcall(model.SetPortraitZoom,model,0) end
+        if model.SetCamDistanceScale then pcall(model.SetCamDistanceScale,model,zoom) end
+        if model.SetRotation then pcall(model.SetRotation,model,rotation,false) end
+        if model.RefreshCamera then pcall(model.RefreshCamera,model) end
+    end
+    if model.SetScript then
+        pcall(function() model:SetScript("OnModelLoaded",function()
+            loaded=true
+            overlay:Hide()
+            camera()
+        end) end)
+    end
+    local function attempt(which)
+        attempted[#attempted+1]=which
+        local ok,reason=pcall(function()
+            if model.ClearModel then model:ClearModel() end
+            if which=="display" then
+                model:SetDisplayInfo(display)
+            else
+                model:SetCreature(creature,display or 0)
+            end
+            camera()
+        end)
+        if not ok then
+            status:SetText("Не удалось открыть модель: "..tostring(reason):sub(1,65))
+        end
+        return ok
+    end
+    if display and model.SetDisplayInfo then
+        attempt("display")
+    else
+        attempt("npc")
+    end
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0.75,function()
+            if loaded or (model.IsShown and not model:IsShown()) then return end
+            if display and model.SetDisplayInfo and #attempted==1 then
+                -- If the display-first route silently failed, try NPC+display.
+                attempt("npc")
+            end
+        end)
+        C_Timer.After(1.65,function()
+            if loaded or (model.IsShown and not model:IsShown()) then return end
+            local source=display and ("Display "..display) or ("NPC "..creature)
+            status:SetText("Не загружено: "..source..
+              ". Возможно, этих данных нет в клиенте 70658.")
+            overlay:Show()
+        end)
+    else
+        status:SetText("Проверка 3D: NPC "..creature..
+          (display and (" / Display "..display) or ""))
+    end
+    if key=="appearance" then
+        local check=button(plate,w-155,h-32,148,25,"Проверить 3D",false,function()
+            -- Only a rendering control. Never substitute a player for the
+            -- selected book and never save it as an appearance.
+            loaded=false
+            overlay:Show()
+            status:SetText("Контрольный персонаж (не облик книги)")
+            local ok=pcall(function()
+                model:ClearModel()
+                model:SetUnit("player")
+                camera()
+            end)
+            if not ok then
+                status:SetText("Контрольный 3D также недоступен")
+            end
+        end)
+        if check.SetFrameLevel and model.GetFrameLevel then
+            check:SetFrameLevel(model:GetFrameLevel()+5)
+        end
+    end
+
     local dragX,dragRotation
     model:SetScript("OnMouseDown",function(_,mouse)
-        if mouse=="LeftButton" then
-            dragX=GetCursorPosition()
-            dragRotation=rotation
-        end
+        if mouse=="LeftButton" then dragX=GetCursorPosition();dragRotation=rotation end
     end)
     model:SetScript("OnMouseUp",function() dragX=nil end)
     model:SetScript("OnHide",function() dragX=nil end)
@@ -220,6 +321,7 @@ local function modelPreview(parent,x,y,w,h,creatureID,key)
     model:SetScript("OnEnter",function()
         GameTooltip:SetOwner(model,"ANCHOR_RIGHT")
         GameTooltip:AddLine("3D-предпросмотр",1,0.8,0.3)
+        GameTooltip:AddLine("NPC "..creature..(display and (", Display "..display) or ""),0.85,0.83,0.75)
         GameTooltip:AddLine("Мышь: вращение. Колесо: масштаб.",0.85,0.83,0.75,true)
         GameTooltip:Show()
     end)
@@ -1105,7 +1207,7 @@ local function drawAppearanceView()
     end
     local unlocked=state.appearances[chosen.key] and state.appearances[chosen.key].unlocked
     label(detail,14,9,390,chosen.name,"GameFontHighlight",PALE,"CENTER")
-    modelPreview(detail,14,40,393,219,chosen.creature,"appearance")
+    modelPreview(detail,14,40,393,219,chosen.creature,"appearance",chosen)
     if chosen.testing then
         -- The creature ID remains visible for model troubleshooting.
         -- Some retail-only 2024+ assets may be missing in client 70658.
