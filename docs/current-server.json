@@ -1,6 +1,6 @@
 {
   "format": "forever-current-server-v1",
-  "updated_on": "2026-11-07",
+  "updated_on": "2026-11-08",
   "timezone": "Europe/Moscow",
   "repository": "Domenklay/WoWForEver",
   "working_branch": "codex/native-cdn-70658-20261106",
@@ -226,7 +226,7 @@
     "launcher_windows": 81,
     "worker_windows": 224,
     "combined_core_units": 15,
-    "combined_check_run": 42415961803,
+    "combined_check_run": 42465947560,
     "restore_unit_suite_total": 473,
     "restore_unit_suite_skipped": 30,
     "restore_real_mysql_fixture_verified": true,
@@ -238,8 +238,8 @@
     "launcher_browser_ui_verified": true,
     "multiclass_unit_suite_total": 502,
     "multiclass_unit_suite_skipped": 30,
-    "advancement_native_core_ci_run": 42415961780,
-    "native_worker_ci_run": 42398310384,
+    "advancement_native_core_ci_run": 42465947612,
+    "native_worker_ci_run": 42465947531,
     "multiclass_ui_tests": 31,
     "multiclass_ui_fix_ci_run": 42384393223,
     "multiclass_presentation_ci_run": 42386733996
@@ -266,7 +266,7 @@
     ]
   },
   "development_candidate": {
-    "advancement_version": "1.14.1",
+    "advancement_version": "1.14.2",
     "installed_on_user_pc": false,
     "protocol": 3,
     "experience_share_percent": 90,
@@ -277,9 +277,9 @@
     "native_talents_allocation_implemented": true,
     "guide": "https://github.com/Domenklay/WoWForEver/blob/main/docs/MULTICLASS-1.14.ru.md",
     "transition_tool": "scripts/upgrade-clean-gameplay.py",
-    "trial_source_commit": "80abf81afa1eecd977f4b172894db4c63d49411c",
+    "trial_source_commit": "335c9192e6ddb576095c0323499bcb39ee3499c6",
     "candidate_user_trial_verified": false,
-    "source_commit": "80abf81afa1eecd977f4b172894db4c63d49411c",
+    "source_commit": "335c9192e6ddb576095c0323499bcb39ee3499c6",
     "native_talents_validator": "TraitMgr::ValidateConfig with native conditions, dependencies, choices and currencies; unsupported mechanics remain blocked",
     "native_talent_tab": "Sibling tab after PlayerSpellsFrame.TalentsFrame.TabSystem (301x32), inside TalentsFrame and above ButtonsParent node canvas",
     "ability_list_scrolling": true,
@@ -308,20 +308,41 @@
     "active_previous_transition": "/home/Kayter/WoWForEver-clean/advancement/347c815174f8/transition.json",
     "complete_catalogue_fix_requires_server_rebuild": true,
     "addon_catalog_ci_run": 42399343781,
-    "source_sha256": "dd9ed66dd33912ffda2b19b51272952c0864644c4c68cf4f24a480959fbf336a",
-    "advancement_source_sha256": "7d20dcf22f8dda014a1208eb55253f84cedf566c327c832af62ac51ea6fe80b8",
+    "source_sha256": "a6776c3372f105fcf847bb3fe6ae1a9110a09f851ea129340860293d683a1971",
+    "advancement_source_sha256": "683335c0f0eb2e03f4157297ee42c0af131b3113b22965661edc1fa2c2aa7180",
     "known_failed_trial": {
-      "source_commit": "c13cdbff6cc0623e24a8667d42f343b80f8005a8",
-      "candidate_tag": "forever-trinitycore:gameplay-70658-ca79ccc1c1eb",
-      "report": "/home/Kayter/WoWForEver-restore-trials/forever-services-check-ce722b2f8d81/report.json",
+      "source_commit": "80abf81afa1eecd977f4b172894db4c63d49411c",
+      "candidate_tag": "forever-trinitycore:gameplay-70658-dd9ed66dd339",
+      "report": "/home/Kayter/WoWForEver-restore-trials/forever-services-check-34d3a8de1d72/report.json",
       "phase": "failed-cleaned",
-      "error": "class 1 has 1 schools, expected 3",
+      "error": "class 1 has 3 schools, expected 3; 7 unresolved nodes",
       "live_server_switched": false
     },
     "class_tree_root_is_not_school": true,
     "explicit_startup_failure_stops_trial_immediately": true,
     "native_compile_verified": true,
-    "combined_core_ci_run": 42415961803,
-    "native_core_ci_run": 42415961780
+    "known_failed_trials": [
+      {
+        "source_commit": "c13cdbff6cc0623e24a8667d42f343b80f8005a8",
+        "candidate_tag": "forever-trinitycore:gameplay-70658-ca79ccc1c1eb",
+        "report": "/home/Kayter/WoWForEver-restore-trials/forever-services-check-ce722b2f8d81/report.json",
+        "phase": "failed-cleaned",
+        "error": "class 1 has 1 schools, expected 3",
+        "live_server_switched": false
+      },
+      {
+        "source_commit": "80abf81afa1eecd977f4b172894db4c63d49411c",
+        "candidate_tag": "forever-trinitycore:gameplay-70658-dd9ed66dd339",
+        "report": "/home/Kayter/WoWForEver-restore-trials/forever-services-check-34d3a8de1d72/report.json",
+        "phase": "failed-cleaned",
+        "error": "class 1 has 3 schools, expected 3; 7 unresolved nodes",
+        "live_server_switched": false
+      }
+    ],
+    "disconnected_native_talent_school_metadata": true,
+    "native_column_fallback": "Exact existing columns only, same owner/tree, three independently identified disjoint school ranges; never nearest/gap filling",
+    "audit_reports_all_classes": true,
+    "native_core_ci_run": 42465947612,
+    "combined_core_ci_run": 42465947560
   }
 }
