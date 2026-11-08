@@ -64,6 +64,19 @@ assert 'local viewHeight=286' in creature_view, "List must reclaim wasted vertic
 assert 'button(base,16,5,135,28,"К коллекции"' in creature_view
 assert 'modelPreview(detail,12,39,182,233' in creature_view
 assert 'drawCreatureLoot(detail,selected)' in creature_view
+assert 'local function petDisplayId(species)' in legacy
+assert 'C_PetJournal.GetPetInfoBySpeciesID(species)' in legacy
+assert 'model:SetDisplayInfo(display)' in legacy
+assert 'model:SetCreature(creature,display or 0)' in legacy
+assert 'model:SetScript("OnModelLoaded"' in legacy
+assert 'C_Timer.After(1.65' in legacy
+assert 'Не загружено:' in legacy
+assert 'Проверить 3D' in legacy
+assert 'model:SetUnit("player")' in legacy
+assert 'modelPreview(detail,14,40,393,219,chosen.creature,"appearance",chosen)' in legacy
+assert 'species=1159' in source and 'display=46938' in source
+assert 'species=1174' in source and 'display=47348' in source
+assert 'species=2893' in source and 'species=3416' in source
 assert 'local panel=frame(parent,202,39,223,233,BROWN)' in legacy
 assert 'GameTooltip:SetHyperlink("item:"..item.entry)' in legacy
 assert 'rawChanceLabel(item)' in legacy
