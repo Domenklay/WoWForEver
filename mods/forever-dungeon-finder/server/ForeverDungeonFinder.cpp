@@ -20,6 +20,12 @@
 namespace ForeverDungeonFinder
 {
 static constexpr std::string_view AddonPrefix = "FDF";
+static constexpr std::string_view AddonPrefixV2 = "FDF1";
+
+static bool IsRequestPrefix(std::string const& prefix)
+{
+    return prefix == AddonPrefix || prefix == AddonPrefixV2;
+}
 static constexpr std::string_view SoloPrefix = "SOLO:";
 static constexpr std::string_view GroupPrefix = "GROUP:";
 
@@ -62,7 +68,7 @@ static void Reply(Player* player, std::string const& message)
     WorldPackets::Chat::Chat packet;
     packet.Initialize(CHAT_MSG_WHISPER, LANG_ADDON, player, player, message, 0, "", LOCALE_enUS, "FDFR");
     player->GetSession()->SendPacket(packet.Write());
-    TC_LOG_INFO("forever.dungeonfinder", "FDF response: player={} result={}", player->GetName(), message);
+    TC_LOG_INFO("server", "ForeverDungeonFinder v2 response: player={} result={}", player->GetName(), message);
 }
 
 static void Notify(Player* player, char const* message)
@@ -228,7 +234,7 @@ static bool EnterDungeon(Player* requester, uint32 mapId, EntryMode mode)
 static bool ParseAddonRequest(Player* player, std::string const& prefix, std::string const& text,
     EntryMode& mode, uint32& mapId)
 {
-    return player && prefix == AddonPrefix && ParseRequest(text, mode, mapId);
+    return player && IsRequestPrefix(prefix) && ParseRequest(text, mode, mapId);
 }
 
 class DirectEntryPlayerScript final : public PlayerScript
@@ -241,10 +247,13 @@ public:
     {
         // Solo requests are self-whispers. A targeted request may never move a
         // different character, even if another addon sends the FDF prefix.
-        if (!player || prefix != AddonPrefix || receiver != player)
+        if (!player || !IsRequestPrefix(prefix) || receiver != player)
             return;
 
-        TC_LOG_INFO("forever.dungeonfinder", "FDF received: player={} channel=WHISPER request={}", player->GetName(), text);
+        // "server" is enabled at INFO in the active 70658 configuration;
+        // the custom "forever.dungeonfinder" logger inherits root=ERROR.
+        TC_LOG_INFO("server", "ForeverDungeonFinder transport-v2 received: player={} prefix={} channel=WHISPER request={}",
+            player->GetName(), prefix, text);
         if (text == "PING")
         {
             Reply(player, "PONG v0.2.1");
@@ -267,10 +276,11 @@ public:
     {
         // Group entry is sent through PARTY and still requires the sender to be
         // the current group's leader inside CollectGroup().
-        if (!player || prefix != AddonPrefix || !group || player->GetGroup() != group)
+        if (!player || !IsRequestPrefix(prefix) || !group || player->GetGroup() != group)
             return;
 
-        TC_LOG_INFO("forever.dungeonfinder", "FDF received: player={} channel=PARTY request={}", player->GetName(), text);
+        TC_LOG_INFO("server", "ForeverDungeonFinder transport-v2 received: player={} prefix={} channel=PARTY request={}",
+            player->GetName(), prefix, text);
         EntryMode mode = EntryMode::Group;
         uint32 mapId = 0;
         if (!ParseAddonRequest(player, prefix, text, mode, mapId) || mode != EntryMode::Group)
