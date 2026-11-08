@@ -368,7 +368,7 @@ assert(legacy.Pages[4]:IsShown(),"Status refresh must not close the page")
 assert(click("Облики"),"Appearance tab missing")
 local appearanceModels=visibleModels()
 assert(#appearanceModels>=1,"Appearance 3D PlayerModel missing")
-assert(appearanceModels[#appearanceModels].modelId==171120,"Appearance preview must use the real unlocked creature")
+assert(appearanceModels[#appearanceModels].displayId==97329,"Base appearance must resolve the real pet display instead of an uncached NPC ID")
 assert(appearanceModels[#appearanceModels].scripts.OnMouseDown and appearanceModels[#appearanceModels].scripts.OnMouseWheel)
 local testBooks={
     {"Парящий манускрипт",68806,"test_lofty_libram"},
