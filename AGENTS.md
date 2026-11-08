@@ -1,6 +1,6 @@
 # Instructions for assistants — current WoWForEver
 
-Updated 2026-11-07, Europe/Moscow. Start with:
+Updated 2026-11-08, Europe/Moscow. Start with:
 
 1. [Current server handoff](https://github.com/Domenklay/WoWForEver/blob/main/docs/CURRENT-SERVER.ru.md).
 2. [Machine-readable state](https://github.com/Domenklay/WoWForEver/blob/main/docs/current-server.json).
@@ -93,7 +93,7 @@ working baseline launcher remains 1.7.0, with previous verified release 1.7.1.
 
 Authoritative public AddOn list: main/addons/channels.json. Runtime fetches this
 catalogue; exact payload commit/size/SHA256 pins define the complete stable/testing
-sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.14.0 and the independently updated Encyclopedia pin from main; server candidate is Ascension 1.14.1, active server remains 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
+sets. Stable remains Ascension 1.11.0/Encyclopedia 0.9.8; testing now has AddOn Ascension 1.14.0 and the independently updated Encyclopedia pin from main; server candidate is Ascension 1.14.2, active server remains 1.13.0. Read main catalogue fresh before editing; another chat updates Encyclopedia independently. Do not overwrite the independently pinned Encyclopedia payload. Use scripts/update-addon-channel.py
 and docs/ADDON-CHANNELS.ru.md for pin/promote; publish the catalogue to MAIN and
 synchronize the working branch. Catalogue CI 42399343781 checked the actual pinned
 1.14 Git payloads, including all seven loaded files and the preserved stable/Encyclopedia pins. Metadata-only catalogue edits need no launcher rebuild. Old
@@ -203,3 +203,24 @@ user trial/gameplay as passed from fixture tests or CI compilation.
 
 1.14.1 pinned-core CI 42415961780 and combined gameplay CI 42415961803 PASSED;
 backup tooling CI 42415961890 PASSED. These are not a user-data startup pass.
+
+## 2026-11-08: 1.14.1 also failed; current candidate 1.14.2
+
+80abf81 candidate built but audit found 3 warrior schools AND 7 unresolved nodes.
+Report /home/Kayter/WoWForEver-restore-trials/forever-services-check-34d3a8de1d72/report.json
+is failed-cleaned. gameplay-70658-dd9ed66dd339 is NOT a verified candidate.
+First six spell/node pairs: 1290261/105944, 1323963/105953, 29787/105961,
+1310317/105966, 1310315/105977, 1289682/110524, tree1117. Don't delete these talents
+or invent membership by their names. Live server remains 1.13/Scaling0.4/Finder0.2.
+1.14.2 source 335c9192e6ddb576095c0323499bcb39ee3499c6 adds display-spell/rank aliases,
+same-node choices, unambiguous native node groups, and exact existing columns ONLY
+when all three native school bands are independently identified and disjoint.
+No nearest-school inference, gap filling or foreign class/tree association.
+Groups with conflicting suggestions remain unresolved. Native validation stays.
+Audit remains mandatory; now reports every failing class/all nodes with entry/x/y.
+502 tests/30 skips passed. Coordinate fixtures are synthetic, NOT a user DB2 dump.
+Addon stays 1.14.0; user-data audit/gameplay for 1.14.2 remains pending. Updated guide
+contains the exact source command; old c13cdb/80abf81 candidates cannot be applied.
+
+1.14.2 Ascension CI 42465947612 and combined CI 42465947560 passed on pinned
+70658; backup tooling CI 42465947523 passed. Actual user-data startup is pending.
