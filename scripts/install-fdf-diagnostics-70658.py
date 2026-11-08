@@ -13,8 +13,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_ROOT = Path.home() / 'WoWForEver-clean'
-EXPECTED_SOURCE_PREFIX = 'af619309eb0e'
-EXPECTED_IMAGE = 'forever-trinitycore:gameplay-70658-af619309eb0e'
+EXPECTED_SOURCE_PREFIX = '042cfe96a06f'
+EXPECTED_IMAGE = 'forever-trinitycore:gameplay-70658-042cfe96a06f'
 FMT = 'forever-fdf-diagnostic-hotfix-v1'
 
 def load_tools():
@@ -42,7 +42,7 @@ def has_ping(image):
     # Version-specific long log markers distinguish this upgrade from the
     # already-running first diagnostic image. Short PONG may be optimized away.
     binary = '/opt/trinitycore/bin/worldserver'
-    check = ('grep -aqF "ForeverDungeonFinder transport-v2 received:" ' + binary +
+    check = ('grep -aqF "ForeverDungeonFinder bridge-v3 received:" ' + binary +
              ' && grep -aqF "ForeverDungeonFinder v2 response:" ' + binary)
     result = subprocess.run(
         ['docker', 'run', '--rm', '--network', 'none', '--entrypoint', '/bin/sh', image,
@@ -77,14 +77,14 @@ def prepare(game, root, jobs):
         raise ValueError('Unexpected running worldserver; no changes made')
     game.check_image(game.adv.image(before['image']), before)
     if has_ping(before['image']):
-        raise ValueError('Old image already contains FDF transport-v2; inspect deployed worldserver')
+        raise ValueError('Old image already contains FDF bridge-v3; inspect deployed worldserver')
     game.wait_module(before)
     if game.adv.source_id() != before['advancement']['source_sha256']:
         raise ValueError('Advancement source differs from installed version')
     candidate = game.build(before, jobs)
     game.check_image(game.adv.image(candidate), before, candidate=True)
     if not has_ping(candidate):
-        raise ValueError('New worldserver lacks FDF transport-v2 markers; live service unchanged')
+        raise ValueError('New worldserver lacks FDF bridge-v3 markers; live service unchanged')
     if (game.clean.load_state(root / 'state.json') != before
         or (root / 'compose.private.json').read_text() != existing_compose):
         raise ValueError('Live server changed during compilation; no swap performed')
@@ -126,7 +126,7 @@ def apply(game, root, record):
     if game.source_id() != record['source_sha256'] or game.adv.source_id() != record['advancement_sha256']:
         raise ValueError('Source changed since build')
     if game.adv.image(record['candidate'])['Id'] != record['candidate_id'] or not has_ping(record['candidate']):
-        raise ValueError('Candidate Docker image changed or lacks FDF transport-v2')
+        raise ValueError('Candidate Docker image changed or lacks FDF bridge-v3')
     marker = root / '.fdf-hotfix-in-progress.json'
     if marker.exists():
         raise ValueError('Another FDF update is in progress')
@@ -144,7 +144,7 @@ def apply(game, root, record):
         game.clean.compose(new_state, 'up', '-d', '--no-build', '--no-deps', '--force-recreate', 'worldserver')
         game.wait_module(new_state)
         if not has_ping(new_state['image']):
-            raise RuntimeError('FDF transport-v2 absent from active image')
+            raise RuntimeError('FDF bridge-v3 absent from active image')
         game.clean.save(new_state)
         record['phase'] = 'active'
         save_record(game, record)
