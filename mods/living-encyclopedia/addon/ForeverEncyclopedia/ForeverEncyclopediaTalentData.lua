@@ -56,7 +56,7 @@ ForeverEncyclopediaTalentCatalog = {
         { key="knowledge_mastery", branch="knowledge", name="Мастерство архивариуса", max=15, base=90, step=18, quad=1, tier=5, col=2, req="identify_rares", reqRank=1, icon="Interface\\Icons\\INV_Misc_Book_04", desc="Долгосрочный архивный sink: дополнительные заметки, удобство поиска и косметические бонусы без роста боевой мощи." },
     },
     appearances = {
-        { key="living_book", name="Живая книга", threshold=0, creature=171120, source="Базовый облик" },
+        { key="living_book", name="Живая книга", threshold=0, creature=171120, species=2893, source="Базовый облик" },
         { key="archivist", name="Архивариус", threshold=100, creature=205781, source="100 накопленных знаний" },
         { key="knowledge_spirit", name="Дух знаний", threshold=500, creature=161896, source="500 накопленных знаний" },
         { key="small_construct", name="Малый конструкт", threshold=1500, creature=183783, source="1500 накопленных знаний" },
@@ -64,11 +64,11 @@ ForeverEncyclopediaTalentCatalog = {
         -- Free testing appearances. IDs are Creature Entries (NOT display IDs).
         -- Preview is possible immediately; a live pet selection also requires
         -- the matching worldserver FET1/companion skin update.
-        { key="test_lofty_libram", name="Парящий манускрипт", threshold=0, creature=68806, source="WoW: Lofty Libram · NPC 68806", testing=true },
-        { key="test_animated_tome", name="Оживший фолиант", threshold=0, creature=171120, source="WoW: Animated Tome · NPC 171120", testing=true },
-        { key="test_gusting_grimoire", name="Парящий гримуар", threshold=0, creature=69208, source="WoW: Gusting Grimoire · NPC 69208", testing=true },
+        { key="test_lofty_libram", name="Парящий манускрипт", threshold=0, creature=68806, display=46938, species=1159, source="WoW: Lofty Libram · NPC 68806", testing=true },
+        { key="test_animated_tome", name="Оживший фолиант", threshold=0, creature=171120, species=2893, source="WoW: Animated Tome · NPC 171120", testing=true },
+        { key="test_gusting_grimoire", name="Парящий гримуар", threshold=0, creature=69208, display=47348, species=1174, source="WoW: Gusting Grimoire · NPC 69208", testing=true },
         { key="test_agitated_tome", name="Беспокойная книга", threshold=0, creature=101633, source="WoW: Agitated Tome · NPC 101633", testing=true },
-        { key="test_troubled_tome", name="Драконий фолиант", threshold=0, creature=198511, source="WoW: Troubled Tome · NPC 198511", testing=true },
+        { key="test_troubled_tome", name="Драконий фолиант", threshold=0, creature=198511, species=3416, source="WoW: Troubled Tome · NPC 198511", testing=true },
         { key="test_chromies_codex", name="Кодекс Хроми", threshold=0, creature=227052, source="WoW: Chromie's Codex · NPC 227052", testing=true },
     },
 }
