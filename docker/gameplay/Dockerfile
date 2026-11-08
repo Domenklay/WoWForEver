@@ -1,5 +1,7 @@
-ARG CLEAN_BUILD_IMAGE
-ARG CLEAN_RUNTIME_IMAGE
+# Build installer always overrides both image arguments with pinned images.
+# Valid defaults avoid BuildKit InvalidDefaultArgInFrom lint warnings.
+ARG CLEAN_BUILD_IMAGE=ubuntu:24.04
+ARG CLEAN_RUNTIME_IMAGE=ubuntu:24.04
 FROM ${CLEAN_BUILD_IMAGE} AS build
 COPY mods/forever-advancement /gameplay/mods/forever-advancement
 COPY mods/living-encyclopedia /gameplay/mods/living-encyclopedia
