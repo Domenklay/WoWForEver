@@ -52,8 +52,21 @@ function Frame:SetVerticalScroll(n) self.scrollOffset=n end
 function Frame:GetVerticalScroll() return self.scrollOffset or 0 end
 function Frame:GetVerticalScrollRange() return math.max(0,(self.scrollChild and self.scrollChild:GetHeight() or 0)-self:GetHeight()) end
 function Frame:SetKeepModelOnHide() end
+function Frame:EnableMouse(x) self.mouse=x end
 function Frame:ClearModel() self.modelId=nil end
-function Frame:SetCreature(entry) self.modelId=entry end
+function Frame:SetCreature(entry,display)
+    self.creatureEntry=entry
+    self.modelId=entry
+    self.requestedDisplay=display
+end
+function Frame:SetDisplayInfo(display)
+    self.displayId=display
+    self.modelId=display
+    if self.scripts.OnModelLoaded then self.scripts.OnModelLoaded(self) end
+end
+function Frame:GetDisplayInfo() return self.displayId or 0 end
+function Frame:SetCamera() end
+function Frame:SetUnit(unit) self.unit=unit;self.modelId="player"; if self.scripts.OnModelLoaded then self.scripts.OnModelLoaded(self) end end
 function Frame:SetPortraitZoom() end
 function Frame:SetCamDistanceScale(zoom) self.zoom=zoom end
 function Frame:SetRotation(angle) self.rotation=angle end
@@ -103,6 +116,13 @@ function GameTooltip:Show() end
 function GameTooltip:Hide() end
 function GameTooltip:SetHyperlink(link) self.lastLink=link end
 function GameTooltip:ClearLines() self.lastLink=nil end
+-- This simulation models the actual 70658 pet journal display-ID path.
+C_PetJournal={
+  GetPetInfoBySpeciesID=function(species)
+    local display=({[1159]=46938,[1174]=47348,[2893]=97329})[species]
+    return nil,nil,nil,nil,nil,nil,nil,nil,nil,nil,nil,display
+  end
+}
 C_Item={
   GetItemInfo=function(entry) return entry==1001 and "Древнее перо" or "Редкий предмет" end,
   GetItemIconByID=function() return "Interface\\Icons\\INV_Feather_01" end,
@@ -361,12 +381,24 @@ local testBooks={
 for _,skin in ipairs(testBooks) do
     assert(click(skin[1]),"Missing test appearance: "..skin[1])
     local list=visibleModels()
-    assert(list[#list].modelId==skin[2],"Wrong NPC model for "..skin[1])
+    if skin[2]==68806 then
+        assert(list[#list].displayId==46938,"Lofty Libram should use real Display ID")
+    elseif skin[2]==69208 then
+        assert(list[#list].displayId==47348,"Gusting Grimoire should use real Display ID")
+    elseif skin[2]==171120 then
+        assert(list[#list].displayId==97329,"Animated Tome should use pet-journal display ID")
+    else
+        assert(list[#list].creatureEntry==skin[2],"Wrong NPC model for "..skin[1])
+    end
     assert(click("Выбрать облик"),"Available test skin must be selectable: "..skin[1])
     assert(calls.appearance[#calls.appearance]==skin[3],"Wrong server appearance key for "..skin[1])
 end
 assert(click("Живая книга"),"Cannot return to the original base appearance")
-assert(visibleModels()[#visibleModels()].modelId==171120)
+assert(visibleModels()[#visibleModels()].displayId==97329,
+       "The default base skin must use the pet journal rather than a silent creature-cache lookup")
+assert(click("Проверить 3D"),"The player render-control button is missing")
+assert(visibleModels()[#visibleModels()].unit=="player",
+       "3D control must load a visibly distinct player without changing the selected book skin")
 assert(click("Таланты"),"Talent view unavailable after appearance preview")
 
 legacy:SelectPage(1)
