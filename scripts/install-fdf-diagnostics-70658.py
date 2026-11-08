@@ -39,10 +39,20 @@ def check_state(game, state, *, new=False):
         raise ValueError('Another server update is in progress')
 
 def has_ping(image):
+    # The short PONG literal is eligible for GCC's short-string optimisation:
+    # it can be assembled as immediate machine words and absent from 'strings'.
+    # The two long, unique FDF diagnostic log format strings are retained in
+    # read-only data by the compiler. Verify both, and distinguish a Docker
+    # failure from a binary that simply lacks the markers.
+    binary = '/opt/trinitycore/bin/worldserver'
+    check = ('grep -aqF "FDF received: player=" ' + binary +
+             ' && grep -aqF "FDF response: player=" ' + binary)
     result = subprocess.run(
         ['docker', 'run', '--rm', '--network', 'none', '--entrypoint', '/bin/sh', image,
-         '-c', 'grep -aqF "PONG v0.2.1" /opt/trinitycore/bin/worldserver'],
+         '-c', check],
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if result.returncode not in (0, 1):
+        raise ValueError('Docker could not inspect the candidate worldserver binary')
     return result.returncode == 0
 
 def read_record(root, filename):
@@ -70,14 +80,14 @@ def prepare(game, root, jobs):
         raise ValueError('Unexpected running worldserver; no changes made')
     game.check_image(game.adv.image(before['image']), before)
     if has_ping(before['image']):
-        raise ValueError('Old image already contains PONG; inspect deployed worldserver')
+        raise ValueError('Old image already contains FDF diagnostics; inspect deployed worldserver')
     game.wait_module(before)
     if game.adv.source_id() != before['advancement']['source_sha256']:
         raise ValueError('Advancement source differs from installed version')
     candidate = game.build(before, jobs)
     game.check_image(game.adv.image(candidate), before, candidate=True)
     if not has_ping(candidate):
-        raise ValueError('New worldserver lacks FDF PONG; live service unchanged')
+        raise ValueError('New worldserver lacks FDF diagnostic markers; live service unchanged')
     if (game.clean.load_state(root / 'state.json') != before
         or (root / 'compose.private.json').read_text() != existing_compose):
         raise ValueError('Live server changed during compilation; no swap performed')
@@ -119,7 +129,7 @@ def apply(game, root, record):
     if game.source_id() != record['source_sha256'] or game.adv.source_id() != record['advancement_sha256']:
         raise ValueError('Source changed since build')
     if game.adv.image(record['candidate'])['Id'] != record['candidate_id'] or not has_ping(record['candidate']):
-        raise ValueError('Candidate Docker image changed or lacks FDF PONG')
+        raise ValueError('Candidate Docker image changed or lacks FDF diagnostics')
     marker = root / '.fdf-hotfix-in-progress.json'
     if marker.exists():
         raise ValueError('Another FDF update is in progress')
@@ -137,7 +147,7 @@ def apply(game, root, record):
         game.clean.compose(new_state, 'up', '-d', '--no-build', '--no-deps', '--force-recreate', 'worldserver')
         game.wait_module(new_state)
         if not has_ping(new_state['image']):
-            raise RuntimeError('FDF PONG absent from active image')
+            raise RuntimeError('FDF diagnostics absent from active image')
         game.clean.save(new_state)
         record['phase'] = 'active'
         save_record(game, record)
