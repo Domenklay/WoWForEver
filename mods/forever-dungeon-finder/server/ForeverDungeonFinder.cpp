@@ -247,7 +247,20 @@ public:
     {
         // Solo requests are self-whispers. A targeted request may never move a
         // different character, even if another addon sends the FDF prefix.
-        if (!player || !IsRequestPrefix(prefix) || receiver != player)
+        if (!player || receiver != player)
+            return;
+
+        // Isolated diagnostic only: FAC1 is proven working in client 70658.
+        // The existing Ascension handler may also reply with invalid_request,
+        // but this probe never mutates character or dungeon state.
+        if (prefix == "FAC1" && text == "FDF_BRIDGE_PROBE_70658")
+        {
+            TC_LOG_INFO("server", "ForeverDungeonFinder bridge-v3 received: player={} via=FAC1", player->GetName());
+            Reply(player, "BRIDGE v0.2.2");
+            return;
+        }
+
+        if (!IsRequestPrefix(prefix))
             return;
 
         // "server" is enabled at INFO in the active 70658 configuration;
